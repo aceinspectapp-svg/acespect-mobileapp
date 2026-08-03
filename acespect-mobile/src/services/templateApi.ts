@@ -31,6 +31,8 @@ export interface RepeatConfig {
   addButtonLabel?: string;
   minInstances?: number;
   maxInstances?: number;
+  /** When set, an addable instance's card title uses that instance's answer for this itemField key instead of generic numbering. */
+  titleFieldKey?: string;
 }
 
 export interface TemplateField {

@@ -86,9 +86,15 @@ const PUBLIC_ASSETS_SECTION_IDS = new Set([
   'report_signoff',
 ]);
 
-/** Per-property-type title overrides -- "Elevations" doesn't make sense for a road/laneway survey. */
+/**
+ * Per-property-type title overrides -- "Elevations" doesn't make sense for a
+ * road/laneway survey. "Site Survey" (rather than "Road & Laneway Survey")
+ * because each Part the inspector adds is freely named and can carry any mix
+ * of categories (footpaths, kerbs, fencing, ...) -- it's no longer a rigid
+ * choice between "this part is a road" or "this part is a laneway".
+ */
 const PUBLIC_ASSETS_TITLE_OVERRIDES: Record<string, { group?: string; section?: string }> = {
-  elevations: { group: 'Road & Laneway Survey', section: 'Road & Laneway Survey' },
+  elevations: { group: 'Site Survey', section: 'Site Survey' },
 };
 
 /**

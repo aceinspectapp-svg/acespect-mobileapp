@@ -54,6 +54,10 @@ const repeatConfigSchema = z.object({
   addButtonLabel: z.string().max(60).optional(),
   minInstances: z.number().int().min(0).optional(),
   maxInstances: z.number().int().min(1).optional(),
+  // When set, an addable instance's card title uses that instance's answer
+  // for this itemField key (e.g. an inspector-typed "partName") instead of
+  // the generic "<Label> 1, 2, 3..." numbering.
+  titleFieldKey: z.string().min(1).max(120).optional(),
 });
 
 const baseFieldShape = {
@@ -70,7 +74,10 @@ const baseFieldShape = {
   allowOther: z.boolean().optional(),
   gate: fieldGateSchema.optional(),
   repeat: repeatConfigSchema.optional(),
-  sectionLetter: z.string().max(4).optional(),
+  // Despite the name (kept for backward compatibility with early single-letter
+  // groupings like GarageCarport's A/B/C), this holds a full group heading
+  // shown above consecutive fields sharing the same value -- see FieldListRenderer.
+  sectionLetter: z.string().max(100).optional(),
 };
 
 // Recursive: repeating-group / damage-list fields nest their own itemFields.
@@ -111,6 +118,7 @@ export interface RepeatConfig {
   addButtonLabel?: string;
   minInstances?: number;
   maxInstances?: number;
+  titleFieldKey?: string;
 }
 export interface TemplateField {
   key: string;

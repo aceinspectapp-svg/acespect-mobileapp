@@ -5,7 +5,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "sh -c \"./node_modules/.bin/prisma migrate deploy && exec node dist/server.js\"",
+    "startCommand": "sh -c \"./node_modules/.bin/prisma migrate deploy && node dist/scripts/seed-public-assets-parts-restructure.js && exec node dist/server.js\"",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }

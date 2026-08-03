@@ -183,11 +183,16 @@ function StripListRenderer({ field, value, onChange, path }: FieldRendererProps)
   return (
     <View style={styles.block}>
       <Text style={styles.groupLabel}>{field.label}</Text>
-      {list.map((instScope, idx) => (
+      {list.map((instScope, idx) => {
+        const titleKey = field.repeat?.titleFieldKey;
+        const customTitle = titleKey ? (instScope[titleKey] as string | undefined) : undefined;
+        return (
         <View key={idx} style={styles.instanceCard}>
           <View style={styles.instanceHeader}>
             <Text style={styles.instanceTitle}>
-              {field.type === 'damage-list' ? `Item ${idx + 1}` : `${field.label} ${idx + 1}`}
+              {customTitle?.trim()
+                ? customTitle
+                : field.type === 'damage-list' ? `Item ${idx + 1}` : `${field.label} ${idx + 1}`}
             </Text>
             {(list.length > 1 || field.type === 'damage-list') && (
               <Pressable onPress={() => removeInstance(idx)} hitSlop={8}>
@@ -202,7 +207,8 @@ function StripListRenderer({ field, value, onChange, path }: FieldRendererProps)
             path={[...path, String(idx)]}
           />
         </View>
-      ))}
+        );
+      })}
       {(field.repeat?.addable ?? true) && (
         <Pressable onPress={addInstance} style={styles.addBtn}>
           <Ionicons name="add" size={14} color={colors.barBlue} />
