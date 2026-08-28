@@ -6,49 +6,7 @@ import {
   SCOPE_PHOTOS_REF,
   SITE_IMAGE_NOTE,
 } from "../report";
-
-/** Blue full-width section heading (matches the Word blue-highlight headings). */
-function Heading({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        background: "#cfe2f3",
-        color: "#0f1d35",
-        fontWeight: 700,
-        padding: "4px 8px",
-        margin: "18px 0 10px",
-        letterSpacing: "0.02em",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** Yellow-highlighted template instruction / fill-in. */
-function Fill({ children }: { children: React.ReactNode }) {
-  return (
-    <p style={{ background: "#fff2a8", padding: "4px 6px", margin: "0 0 10px", lineHeight: 1.6 }}>
-      {children}
-    </p>
-  );
-}
-
-function Para({ children, justify = true }: { children: React.ReactNode; justify?: boolean }) {
-  return (
-    <p style={{ margin: "0 0 10px", textAlign: justify ? "justify" : "left", lineHeight: 1.6 }}>
-      {children}
-    </p>
-  );
-}
-
-function Note({ children }: { children: React.ReactNode }) {
-  return (
-    <p style={{ fontStyle: "italic", fontSize: "0.85em", color: "#555", margin: "0 0 10px", lineHeight: 1.5 }}>
-      {children}
-    </p>
-  );
-}
+import { Note, Para, Placeholder, reportTextStyle, SectionBand } from "./reportKit";
 
 /**
  * The Description & Overview report section, in the standard Houspect layout:
@@ -72,23 +30,16 @@ export function ReportDescription({
   const property = `${inspection.address}, ${inspection.suburb}`;
 
   return (
-    <div
-      style={{
-        fontFamily: "'Calibri', 'Segoe UI', Arial, sans-serif",
-        color: "#111",
-        fontSize: compact ? "12.5px" : "15px",
-        lineHeight: 1.5,
-      }}
-    >
-      <Heading>DESCRIPTION AND OVERVIEW</Heading>
+    <div style={reportTextStyle(compact)}>
+      <SectionBand compact={compact}>Description and Overview</SectionBand>
       {paras.length > 0 ? (
         paras.map((p, i) => <Para key={i}>{p}</Para>)
       ) : (
-        <Fill>Insert property description (storeys, orientation, construction, roof, windows).</Fill>
+        <Placeholder>Insert property description (storeys, orientation, construction, roof, windows).</Placeholder>
       )}
-      <Fill>{DESCRIPTION_PHOTO_PLACEHOLDER}</Fill>
+      <Placeholder>{DESCRIPTION_PHOTO_PLACEHOLDER}</Placeholder>
 
-      <Heading>PHOTOGRAPHS</Heading>
+      <SectionBand compact={compact}>Photographs</SectionBand>
       <Para>
         Selected photographs are included in the body of this report. For a full download please{" "}
         <a style={{ color: "#2563eb", textDecoration: "underline" }} href="#photos" onClick={(e) => e.preventDefault()}>
@@ -99,26 +50,16 @@ export function ReportDescription({
       </Para>
       <Note>{PHOTOGRAPHS_NOTE}</Note>
 
-      <Heading>SCOPE OF INSPECTION AND COMMENTS</Heading>
-      <Fill>
+      <SectionBand compact={compact}>Scope of Inspection and Comments</SectionBand>
+      <Placeholder>
         The project works are to the property at {property}, which is at the [direction] – approximately
         [compass point] – of the site of this inspection.
-      </Fill>
+      </Placeholder>
       <Para>{SCOPE_BOILERPLATE}</Para>
       <Para>{SCOPE_PHOTOS_REF}</Para>
 
-      <div
-        style={{
-          background: "#fff2a8",
-          color: "#0f1d35",
-          fontWeight: 700,
-          padding: "4px 8px",
-          margin: "18px 0 10px",
-        }}
-      >
-        Site Image
-      </div>
-      <Fill>Mark-up by inspector indicating areas surveyed.</Fill>
+      <SectionBand compact={compact} tone="neutral">Site Image</SectionBand>
+      <Placeholder>Mark-up by inspector indicating areas surveyed.</Placeholder>
       <Para justify={false}>North is approximately to the top of the image.</Para>
       <Note>{SITE_IMAGE_NOTE}</Note>
     </div>

@@ -33,16 +33,15 @@ Stack: **Railway** (backend API + Postgres + Redis) · **Vercel** (web) · **EAS
   git add -A && git commit -m "Deploy configs" && git push
   ```
 
-**Both Redis and real photo uploads are required for this deploy** — not optional. Redis backs the review queue that submit depends on; Supabase Storage is where inspection photos actually live (without it, any submit containing a photo fails).
+**Both Redis and real photo uploads are required for this deploy** — not optional. Redis backs the review queue that submit depends on; Egnyte is where inspection photos actually live (without it, any submit containing a photo fails).
 
 ---
 
-## 1. Supabase — photo storage (do this first)
-1. [supabase.com](https://supabase.com) → **New Project** (pick any region/name, save the DB password somewhere — not used by this app, but Supabase requires one).
-2. Project → **Settings → API**. Copy:
-   - **Project URL** → `SUPABASE_URL`
-   - **service_role secret** (NOT the `anon` key — the backend needs write access) → `SUPABASE_SERVICE_ROLE_KEY`
-3. That's it — you do **not** need to create the bucket by hand. The backend calls `ensureBucket()` on boot and creates a public bucket named `inspection-photos` automatically the first time it starts with these two vars set.
+## 1. Egnyte — photo storage (do this first)
+1. In your Egnyte domain's admin console, register/locate a Public API application and generate a **long-lived API token** for it — this is `EGNYTE_API_TOKEN`. Never commit this value or paste it into chat; set it directly as an environment variable on the backend host.
+2. `EGNYTE_DOMAIN` is just the subdomain part of your org's Egnyte URL (e.g. `houspect` for `houspect.egnyte.com`).
+3. `EGNYTE_ROOT_FOLDER` is the folder inspection photos are stored under (default `/Shared/Inspection Photos`) — the backend creates it on boot if it doesn't exist.
+4. Egnyte's own shareable links open a web viewer page rather than serving a raw image, so the app never hands out Egnyte URLs directly. The backend proxies photos itself at `GET /api/v1/media/:id` (public, no auth — same trust model the old Supabase public bucket had) using the token server-side; `PUBLIC_BASE_URL` must be set to this backend's own public URL so uploaded photos get a working link.
 
 ---
 
@@ -60,9 +59,10 @@ Stack: **Railway** (backend API + Postgres + Redis) · **Vercel** (web) · **EAS
    JWT_ACCESS_SECRET=8e4b5792050bbfcca674902100f3414749f4f5c273fd5f9479da84f85d72f2de
    JWT_REFRESH_SECRET=35a0394e433b3653a98a58cc2df4734e85b11dd9e4589e20b8e58bda6c6277fc
    CORS_ORIGIN=*
-   SUPABASE_URL=<Project URL from Supabase step 1>
-   SUPABASE_SERVICE_ROLE_KEY=<service_role secret from Supabase step 1>
-   SUPABASE_STORAGE_BUCKET=inspection-photos
+   EGNYTE_DOMAIN=<subdomain from Egnyte step 1, e.g. houspect>
+   EGNYTE_API_TOKEN=<long-lived API token from Egnyte step 1>
+   EGNYTE_ROOT_FOLDER=/Shared/Inspection Photos
+   PUBLIC_BASE_URL=<this backend's public URL, e.g. https://acespect-backend-production.up.railway.app>
    ```
    (`${{Postgres.DATABASE_URL}}` / `${{Redis.REDIS_URL}}` are Railway reference variables — pick them from the dropdown, don't type them by hand.)
 5. **Networking → Generate Domain**. Copy the URL, e.g. `https://acespect-backend-production.up.railway.app`.
@@ -114,11 +114,12 @@ Stack: **Railway** (backend API + Postgres + Redis) · **Vercel** (web) · **EAS
 | `DATABASE_URL` | ✅ | Railway Postgres reference |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | ✅ | ≥16 chars (generated values above) |
 | `REDIS_URL` | ✅ | Railway Redis reference — mobile submit fails without it |
-| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | ✅ | from Supabase step 1 — photo upload returns 503 without it |
-| `SUPABASE_STORAGE_BUCKET` | ✅ | `inspection-photos` — auto-created on boot if missing |
+| `EGNYTE_DOMAIN` / `EGNYTE_API_TOKEN` | ✅ | from Egnyte step 1 — photo upload returns 503 without it |
+| `EGNYTE_ROOT_FOLDER` | ✅ | `/Shared/Inspection Photos` — auto-created on boot if missing |
+| `PUBLIC_BASE_URL` | ✅ | this backend's own public URL — used to build the /api/v1/media proxy links returned for uploaded photos |
 | `CORS_ORIGIN` | recommended | set to the Vercel URL |
 | `AI_SERVICE_URL` | optional | empty → worker simulates review |
 | `PORT` | auto | Railway sets it; app defaults 4000 |
 
 ## Deploy order recap
-Supabase (photo storage creds) → backend (Railway, incl. Redis) → get backend URL → web `VITE_API_URL` (Vercel) + mobile `eas.json` URL → build web + APK.
+Egnyte (photo storage creds) → backend (Railway, incl. Redis) → get backend URL → web `VITE_API_URL` (Vercel) + mobile `eas.json` URL → build web + APK.

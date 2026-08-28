@@ -58,3 +58,57 @@ export interface InspectionDetail {
     results: AgentResult[];
   }[];
 }
+
+/* ── Inspector-facing shapes (from /web/inspections) ─────────────────────── */
+
+export type InspectionStatus =
+  | "draft"
+  | "submitted"
+  | "in-review"
+  | "approved"
+  | "rejected";
+
+export interface WebDamage {
+  id: string;
+  type: string;
+  location: string;
+  direction: string;
+  widthMm: number;
+  lengthMm: number;
+  notes: string;
+  photos: string[];
+}
+
+export interface WebSection {
+  id: string;
+  key: string;
+  name: string;
+  icon: string;
+  status: string;
+  reviewStatus: string;
+  reviewComment: string;
+  reportText: string;
+  fields: Record<string, unknown>;
+  /** Raw un-flattened answers; null for inspections submitted before this existed. */
+  answers: Record<string, unknown> | null;
+  damages: WebDamage[];
+  photos: string[];
+}
+
+export interface WebInspection {
+  id: string;
+  jobNo: string;
+  address: string;
+  suburb: string;
+  client: string;
+  inspectorId: string;
+  reviewerId: string | null;
+  date: string;
+  submittedAt: string | null;
+  type: string;
+  propertyType: string;
+  status: InspectionStatus;
+  overallProgress: number;
+  notes: string;
+  sections: WebSection[];
+}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { AppTextInput, SegmentedToggle } from '../../ui';
+import { AppTextInput, DateField, SegmentedToggle } from '../../ui';
 import { ChoiceTileGrid, TileOption } from '../ChoiceTile';
 import { ChipMultiSelect, ColorSelect, FieldLabel, PillSelect, PlainTextInput } from '../fieldKit';
 import { colors, radius, spacing } from '../../../theme';
@@ -29,14 +29,13 @@ export function TextFieldRenderer({ field, value, onChange }: FieldRendererProps
 export function DateFieldRenderer({ field, value, onChange }: FieldRendererProps) {
   return (
     <View style={styles.block}>
-      <AppTextInput
+      <DateField
         label={field.label}
         required={field.required}
         readOnly={field.readOnly}
-        rightIcon="calendar-outline"
         placeholder={field.placeholder}
         value={asString(value)}
-        onChangeText={onChange}
+        onChange={onChange}
       />
     </View>
   );

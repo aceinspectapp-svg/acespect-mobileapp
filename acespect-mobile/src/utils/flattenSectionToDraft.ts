@@ -21,17 +21,29 @@ function asString(v: AnswerValue): string {
 
 function resolveInstances(field: TemplateField, value: AnswerValue): { label: string; scope: AnswerTree }[] {
   const repeat = field.repeat ?? { presentation: 'strip' as const };
+  // An instance the inspector named (a renamed room, a "Part A") reports under
+  // that name rather than "<Label> 3" -- this is what carries the name into
+  // damage locations and the report prose.
+  const titleKey = repeat.titleFieldKey;
+  const named = (scope: AnswerTree, fallback: string): string => {
+    const v = titleKey ? scope[titleKey] : undefined;
+    return typeof v === 'string' && v.trim() ? v.trim() : fallback;
+  };
+
   if (repeat.presentation === 'strip' || field.type === 'damage-list') {
     const list = Array.isArray(value) ? (value as AnswerTree[]) : [];
-    return list.map((scope, i) => ({ label: `${field.label} ${i + 1}`, scope }));
+    return list.map((scope, i) => ({ label: named(scope, `${field.label} ${i + 1}`), scope }));
   }
   // fixed-tabs / nested / checklist: Record<instanceKey, AnswerTree>
   const record = asAnswerTree(value) as unknown as Record<string, AnswerTree>;
   const fixed = repeat.fixedInstances ?? [];
   const seen = new Set(fixed.map((f) => f.key));
-  const out = fixed.map((f) => ({ label: f.label, scope: record[f.key] ?? {} }));
+  const out = fixed.map((f) => ({ label: named(record[f.key] ?? {}, f.label), scope: record[f.key] ?? {} }));
+  let extra = 0;
   for (const [key, scope] of Object.entries(record)) {
-    if (!seen.has(key)) out.push({ label: field.label, scope });
+    if (seen.has(key)) continue;
+    extra += 1;
+    out.push({ label: named(scope, `${field.label} ${fixed.length + extra}`), scope });
   }
   return out;
 }

@@ -13,6 +13,7 @@ export function serializeTemplate(t: InspectionTemplate) {
     version: t.version,
     status: STATUS_TO_WEB[t.status],
     fields: t.fields,
+    layout: t.layout,
     createdById: t.createdById,
     publishedAt: t.publishedAt ? t.publishedAt.toISOString() : null,
     createdAt: t.createdAt.toISOString(),

@@ -8,6 +8,7 @@ import { ReportDescription } from "../components/ReportDescription";
 import { ReportScope } from "../components/ReportScope";
 import { ReportConditions } from "../components/ReportConditions";
 import { ReportSection } from "../components/ReportSection";
+import { Para, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
 const slug = (s: Pick<FormSection, "id" | "key">): string => s.key ?? s.id;
@@ -55,7 +56,7 @@ export function ReportView() {
   return (
     <div
       className="report-scroll"
-      style={{ minHeight: "100vh", background: "#eef1f6", padding: "24px 16px", fontFamily: "Inter, sans-serif" }}
+      style={{ minHeight: "100vh", background: "#eef1f6", padding: "24px 16px", fontFamily: reportTokens.font }}
     >
       {/* Toolbar (hidden when printing) */}
       <div
@@ -97,7 +98,7 @@ export function ReportView() {
             padding: "9px 18px",
             borderRadius: "8px",
             border: "none",
-            background: "linear-gradient(135deg, #0f1d35, #1a2a4a)",
+            background: `linear-gradient(135deg, #0f1d35, ${reportTokens.accent})`,
             color: "white",
             fontSize: "13px",
             fontWeight: 700,
@@ -116,12 +117,10 @@ export function ReportView() {
           maxWidth: "820px",
           margin: "0 auto",
           background: "white",
-          padding: "70px 78px",
+          padding: "64px 72px",
+          borderRadius: "10px",
           boxShadow: "0 4px 28px rgba(0,0,0,0.12)",
-          fontFamily: "'Calibri', 'Segoe UI', Arial, sans-serif",
-          color: "#111",
-          fontSize: "15px",
-          lineHeight: 1.5,
+          ...reportTextStyle(false),
         }}
       >
         {/* Cover / front matter, generated from Job Information */}
@@ -132,19 +131,9 @@ export function ReportView() {
           <div style={{ marginTop: "40px" }}>
             {renderList.map((item, i) =>
               item.type === "banner" ? (
-                <div
-                  key={item.label}
-                  style={{
-                    background: "#f8d2b0",
-                    color: "#1a2a4a",
-                    fontWeight: 700,
-                    padding: "5px 10px",
-                    margin: i === 0 ? "0 0 12px" : "24px 0 12px",
-                    letterSpacing: "0.04em",
-                  }}
-                >
+                <SectionBand key={item.label} compact={false}>
                   {item.label}
-                </div>
+                </SectionBand>
               ) : (
                 renderSection(item.section, i)
               ),
@@ -153,7 +142,7 @@ export function ReportView() {
         ) : (
           <p
             className="screen-only"
-            style={{ marginTop: "32px", fontStyle: "italic", color: "#94a3b8", fontSize: "13px" }}
+            style={{ marginTop: "32px", fontStyle: "italic", color: reportTokens.inkFaint, fontSize: "13px" }}
           >
             No section report text has been approved yet — once the reviewer approves a section, its
             report text appears here on the official report.
@@ -172,15 +161,13 @@ export function ReportView() {
         ) : slug(s).startsWith("notes") ? (
           /* Notes & Post Project: notes text + standard SCOPE / Conditions appendices */
           <>
-            <p style={{ fontWeight: 700, margin: "0 0 8px", textDecoration: "underline" }}>{s.name}</p>
+            <p style={{ fontWeight: 700, margin: "0 0 10px", color: reportTokens.ink }}>{s.name}</p>
             {s.reportText
               .split(/\n{2,}|\n/)
               .map((para) => para.trim())
               .filter(Boolean)
               .map((para, j) => (
-                <p key={j} style={{ margin: "0 0 10px", textAlign: "justify", lineHeight: 1.6 }}>
-                  {para}
-                </p>
+                <Para key={j}>{para}</Para>
               ))}
             <div style={{ marginTop: "18px" }}>
               <ReportScope />

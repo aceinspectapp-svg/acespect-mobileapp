@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import type { ActiveTemplate } from '../services/templateApi';
+import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
 
 /**
  * In-memory draft of the inspection being filled. Each section screen writes its
@@ -25,6 +26,8 @@ export interface DraftSection {
   status?: 'complete' | 'partial' | 'pending';
   reportText?: string;
   fields?: Record<string, unknown>;
+  /** Raw un-flattened answers, sent so the section can be reopened for editing. */
+  answers?: Record<string, unknown>;
   photos?: string[]; // local file:// URIs until uploaded
   damages?: DraftDamage[];
 }
@@ -71,6 +74,16 @@ interface DraftValue {
    */
   getActiveTemplate: (sectionKey: string) => ActiveTemplate | undefined;
   setActiveTemplate: (sectionKey: string, template: ActiveTemplate) => void;
+  /**
+   * A section screen's raw, in-progress answer tree -- distinct from
+   * `setSection`'s flattened `fields` (which collapses repeating-group
+   * instances down to a joined labels string for the report/submit payload
+   * and can't be read back into an editable form). Persisted here so
+   * navigating away (e.g. back to the hub) and returning to the same
+   * section restores exactly what was filled in, not a blank form.
+   */
+  getAnswers: (sectionKey: string) => AnswerTree | undefined;
+  setAnswers: (sectionKey: string, answers: AnswerTree) => void;
 }
 
 const Ctx = createContext<DraftValue | null>(null);
@@ -86,6 +99,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
   const sectionsRef = useRef<Record<string, DraftSection>>({});
   const photosRef = useRef<Record<string, string[]>>({});
   const templatesRef = useRef<Record<string, ActiveTemplate>>({});
+  const answersRef = useRef<Record<string, AnswerTree>>({});
 
   const setTop = useCallback((patch: Partial<DraftTop>) => {
     topRef.current = { ...topRef.current, ...patch };
@@ -107,6 +121,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     sectionsRef.current = {};
     photosRef.current = {};
     templatesRef.current = {};
+    answersRef.current = {};
   }, []);
 
   const getActiveTemplate = useCallback(
@@ -116,6 +131,15 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
 
   const setActiveTemplate = useCallback((sectionKey: string, template: ActiveTemplate) => {
     templatesRef.current = { ...templatesRef.current, [sectionKey]: template };
+  }, []);
+
+  const getAnswers = useCallback(
+    (sectionKey: string) => answersRef.current[sectionKey],
+    [],
+  );
+
+  const setAnswers = useCallback((sectionKey: string, answers: AnswerTree) => {
+    answersRef.current = { ...answersRef.current, [sectionKey]: answers };
   }, []);
 
   // Photos registered under a section key or any "key:n" sub-key.
@@ -145,6 +169,9 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
           return {
             ...s,
             photos,
+            // Ship the raw answer tree alongside the flattened `fields`, so the
+            // dashboard can reopen this section as an editable form later.
+            answers: answersRef.current[s.key] as Record<string, unknown> | undefined,
             damages: (s.damages ?? []).map((d) => ({ ...d, photos: (d.photos ?? []).map(resolve) })),
           };
         }),
@@ -165,8 +192,22 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       buildPayload,
       getActiveTemplate,
       setActiveTemplate,
+      getAnswers,
+      setAnswers,
     }),
-    [setTop, getTop, setSection, addPhoto, reset, collectPhotoUris, buildPayload, getActiveTemplate, setActiveTemplate],
+    [
+      setTop,
+      getTop,
+      setSection,
+      addPhoto,
+      reset,
+      collectPhotoUris,
+      buildPayload,
+      getActiveTemplate,
+      setActiveTemplate,
+      getAnswers,
+      setAnswers,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -58,6 +58,21 @@ const repeatConfigSchema = z.object({
   // for this itemField key (e.g. an inspector-typed "partName") instead of
   // the generic "<Label> 1, 2, 3..." numbering.
   titleFieldKey: z.string().min(1).max(120).optional(),
+  // When set, each instance card starts collapsed to just its title (new
+  // instances start expanded) -- for repeating groups with many conditional
+  // itemFields (e.g. a checklist-gated Part), keeping every instance fully
+  // expanded at once doesn't scale.
+  collapsible: z.boolean().optional(),
+  // When set, itemFields carrying a `sectionLetter` are grouped by it and
+  // rendered as a tap-to-open list (one full-screen form per group) instead
+  // of inline, once the named chip-multiselect field has a selection. Lets
+  // e.g. a "what's present here?" checklist fan out into one form per
+  // selected item without dumping every selected category's fields into one
+  // long scroll.
+  categoryNav: z.object({ selectorFieldKey: z.string().min(1).max(120) }).optional(),
+  // Singular noun for one instance ("room", "part"), used only for progress
+  // copy above a collapsible list -- "3 of 11 rooms recorded".
+  itemNoun: z.string().max(40).optional(),
 });
 
 const baseFieldShape = {
@@ -93,12 +108,12 @@ export const createTemplateSchema = z.object({
   propertyType: z.enum(PROPERTY_TYPE_IDS),
   sectionKey: z.string().min(1).max(120),
   name: z.string().min(1).max(200),
-  fields: z.array(templateFieldSchema).max(100).default([]),
+  fields: z.array(templateFieldSchema).max(300).default([]),
 });
 
 export const updateTemplateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
-  fields: z.array(templateFieldSchema).max(100).optional(),
+  fields: z.array(templateFieldSchema).max(300).optional(),
 });
 
 export interface TemplateFieldOption {
@@ -119,6 +134,9 @@ export interface RepeatConfig {
   minInstances?: number;
   maxInstances?: number;
   titleFieldKey?: string;
+  collapsible?: boolean;
+  categoryNav?: { selectorFieldKey: string };
+  itemNoun?: string;
 }
 export interface TemplateField {
   key: string;

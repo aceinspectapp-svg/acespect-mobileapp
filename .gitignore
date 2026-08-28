@@ -37,3 +37,8 @@ AGENTS.md
 # Python
 __pycache__/
 *.pyc
+
+# Embedded repos / temp files
+acespect/
+gfail.txt
+gfail_br.bin

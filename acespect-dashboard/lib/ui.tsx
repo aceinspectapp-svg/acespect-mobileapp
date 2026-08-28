@@ -1,15 +1,28 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { clearToken } from "./api";
+import { clearToken, getRole } from "./api";
 import type { JobStatus, SummaryStatus } from "./types";
+
+const ROLE_LABEL: Record<string, string> = {
+  INSPECTOR: "Inspector",
+  REVIEWER: "Reviewer",
+  ADMIN: "Admin",
+};
 
 export function TopBar() {
   const router = useRouter();
+  // Read after mount: localStorage isn't available during SSR, and rendering a
+  // different label on the server would trip a hydration mismatch.
+  const [role, setRoleState] = useState<string | null>(null);
+  useEffect(() => setRoleState(getRole()), []);
+
   return (
     <div className="topbar">
       <div className="brand">
-        ACE <span>SPECT</span> · Reviewer
+        ACE <span>SPECT</span>
+        {role ? ` · ${ROLE_LABEL[role] ?? role}` : ""}
       </div>
       <button
         onClick={() => {

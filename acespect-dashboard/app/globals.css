@@ -120,3 +120,13 @@ pre.json { margin: 0; font-size: 12px; white-space: pre-wrap; word-break: break-
 .kv { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .kv:last-child { border-bottom: none; }
 .kv .k { color: var(--muted); }
+
+/* Inspector dashboard: two-column detail fields, success note, inline text button. */
+.grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+@media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+.ok-note { color: var(--green); background: var(--green-bg); padding: 10px 14px; border-radius: 8px; margin: 12px 0; }
+button.link {
+  background: none; border: none; padding: 0; color: var(--brand);
+  font-weight: 600; cursor: pointer; width: auto;
+}
+button.link:hover { text-decoration: underline; }

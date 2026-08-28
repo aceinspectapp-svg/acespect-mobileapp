@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
 import { env } from '../config/env';
 
@@ -13,60 +12,32 @@ const REPORT_MAX_HEIGHT = 768;
 const REPORT_JPEG_QUALITY = 82;
 
 /**
- * Supabase Storage for inspection photos. Express owns the upload (service-role
- * key) — the mobile app never writes to Supabase directly. The bucket is public
- * so returned URLs render directly in the web app.
+ * Egnyte Storage for inspection photos, via Egnyte's Public API. Express owns
+ * the upload (long-lived API token) -- the mobile app never talks to Egnyte
+ * directly, and the token never reaches the client. Egnyte's own shareable
+ * links open a web viewer page rather than serving raw image bytes, so
+ * uploadPhoto() hands back a URL on THIS backend (see media.routes.ts) which
+ * proxies the file through using the same token.
  */
-let _client: SupabaseClient | null = null;
+function egnyteBase(): string {
+  return `https://${env.EGNYTE_DOMAIN}.egnyte.com`;
+}
 
-function client(): SupabaseClient | null {
-  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
-  if (!_client) {
-    // createClient() also wires up a Realtime websocket client, which throws
-    // synchronously on runtimes without a native WebSocket global (Node < 22).
-    // We only use Storage here, so a Realtime init failure shouldn't be fatal —
-    // treat it the same as "not configured" rather than crashing the process.
-    try {
-      _client = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { persistSession: false },
-      });
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('⚠️  Failed to initialize the Supabase client.', err);
-      return null;
-    }
-  }
-  return _client;
+function authHeaders(): Record<string, string> {
+  return { Authorization: `Bearer ${env.EGNYTE_API_TOKEN}` };
 }
 
 export function isStorageEnabled(): boolean {
-  return client() !== null;
-}
-
-/** Create the public bucket if it doesn't exist. Safe to call on boot. */
-export async function ensureBucket(): Promise<boolean> {
-  const c = client();
-  if (!c) return false;
-  const { data } = await c.storage.getBucket(env.SUPABASE_STORAGE_BUCKET);
-  if (!data) {
-    await c.storage.createBucket(env.SUPABASE_STORAGE_BUCKET, { public: true });
-  }
-  return true;
-}
-
-export interface UploadedPhoto {
-  id: string;
-  storageKey: string;
-  url: string;
+  return !!env.EGNYTE_DOMAIN && !!env.EGNYTE_API_TOKEN;
 }
 
 /**
- * Outbound calls to Supabase occasionally fail with a generic "fetch failed"
- * whose root cause (confirmed via logging) is a transient DNS resolution
- * miss (ENOTFOUND) from the container's resolver -- the same host resolves
- * fine moments before/after. Node's fetch/undici doesn't retry DNS misses on
- * its own, so a short bounded retry absorbs the blip instead of failing the
- * whole request.
+ * Outbound calls to Egnyte occasionally fail with a generic "fetch failed"
+ * whose root cause (confirmed via logging, same symptom as the old Supabase
+ * integration) is a transient DNS resolution miss (ENOTFOUND) from the
+ * container's resolver -- the same host resolves fine moments before/after.
+ * Node's fetch/undici doesn't retry DNS misses on its own, so a short bounded
+ * retry absorbs the blip instead of failing the whole request.
  */
 async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   let lastErr: unknown;
@@ -81,14 +52,61 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   throw lastErr;
 }
 
-/** Upload one image; resizes it for the report/UI and returns its storage key + public URL. */
+/** Create the root inspection-photos folder if it doesn't exist. Safe to call on boot. */
+export async function ensureBucket(): Promise<boolean> {
+  if (!isStorageEnabled()) return false;
+  const path = encodeEgnytePath(env.EGNYTE_ROOT_FOLDER);
+  const res = await withRetry(() =>
+    fetch(`${egnyteBase()}/pubapi/v1/fs${path}`, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add_folder' }),
+    }),
+  );
+  // 200/201 created, 409 already exists -- both fine. Anything else is a real problem.
+  if (!res.ok && res.status !== 409) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Failed to create Egnyte root folder (${res.status}): ${body}`);
+  }
+  return true;
+}
+
+export interface UploadedPhoto {
+  id: string;
+  storageKey: string;
+  url: string;
+}
+
+/** Egnyte paths are slash-separated but each segment must be URI-encoded individually. */
+function encodeEgnytePath(path: string): string {
+  return path.split('/').map(encodeURIComponent).join('/');
+}
+
+function photoPath(id: string, suffix = ''): string {
+  return `${env.EGNYTE_ROOT_FOLDER}/inspections/${id}${suffix}`;
+}
+
+async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string): Promise<void> {
+  const res = await withRetry(() =>
+    fetch(`${egnyteBase()}/pubapi/v1/fs-content${encodeEgnytePath(path)}`, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': contentType },
+      body: buffer,
+    }),
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Egnyte upload failed (${res.status}): ${body}`, { cause: body });
+  }
+}
+
+/** Upload one image; resizes it for the report/UI and returns its storage key + this backend's proxy URL. */
 export async function uploadPhoto(
   buffer: Buffer,
   contentType: string,
   ext: string,
 ): Promise<UploadedPhoto> {
-  const c = client();
-  if (!c) throw new Error('Photo storage is not configured');
+  if (!isStorageEnabled()) throw new Error('Photo storage is not configured');
 
   const id = randomUUID();
 
@@ -106,29 +124,36 @@ export async function uploadPhoto(
     .jpeg({ quality: REPORT_JPEG_QUALITY })
     .toBuffer();
 
-  const storageKey = `inspections/${id}.jpg`;
-  const { error } = await withRetry(() =>
-    c.storage.from(env.SUPABASE_STORAGE_BUCKET).upload(storageKey, resized, {
-      contentType: 'image/jpeg',
-      upsert: false,
-    }),
-  );
-  if (error) throw new Error(`Supabase upload failed: ${error.message}`, { cause: error });
+  const storageKey = photoPath(id, '.jpg');
+  await uploadToEgnyte(storageKey, resized, 'image/jpeg');
 
   // Keep the untouched original alongside it -- not linked anywhere in the
   // app today, but preserved in case a full-resolution copy is ever needed.
   // Non-fatal: the report copy above is what the app actually depends on.
-  const originalKey = `inspections/${id}-original.${ext}`;
   try {
-    const { error: originalError } = await withRetry(() =>
-      c.storage.from(env.SUPABASE_STORAGE_BUCKET).upload(originalKey, buffer, { contentType, upsert: false }),
-    );
-    if (originalError) throw originalError;
+    await uploadToEgnyte(photoPath(id, `-original.${ext}`), buffer, contentType);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('⚠️  Failed to store the original photo (resized report copy still saved).', err);
   }
 
-  const { data } = c.storage.from(env.SUPABASE_STORAGE_BUCKET).getPublicUrl(storageKey);
-  return { id, storageKey, url: data.publicUrl };
+  return { id, storageKey, url: `${env.PUBLIC_BASE_URL}/api/v1/media/${id}` };
+}
+
+/** Streams the resized report copy for a given photo id straight from Egnyte. Used by the media proxy route. */
+export async function fetchPhotoStream(
+  id: string,
+): Promise<{ body: ReadableStream; contentType: string } | null> {
+  if (!isStorageEnabled()) return null;
+  const res = await withRetry(() =>
+    fetch(`${egnyteBase()}/pubapi/v1/fs-content${encodeEgnytePath(photoPath(id, '.jpg'))}`, {
+      headers: authHeaders(),
+    }),
+  );
+  if (res.status === 404) return null;
+  if (!res.ok || !res.body) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Egnyte fetch failed (${res.status}): ${body}`);
+  }
+  return { body: res.body, contentType: res.headers.get('content-type') ?? 'image/jpeg' };
 }

@@ -18,21 +18,21 @@ async function main() {
     console.error('⚠️  Could not connect to the database. Check DATABASE_URL.', err);
   }
 
-  // Create the Supabase photo bucket if it doesn't exist yet. No-op (returns
-  // false) when SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY aren't set. Guarded as a
+  // Create the Egnyte root folder if it doesn't exist yet. No-op (returns
+  // false) when EGNYTE_DOMAIN/EGNYTE_API_TOKEN aren't set. Guarded as a
   // whole — a storage hiccup must never stop the API from serving requests.
   try {
     if (isStorageEnabled()) {
       await ensureBucket();
       // eslint-disable-next-line no-console
-      console.log(`✅ Photo storage ready (bucket "${env.SUPABASE_STORAGE_BUCKET}")`);
+      console.log(`✅ Photo storage ready (Egnyte folder "${env.EGNYTE_ROOT_FOLDER}")`);
     } else {
       // eslint-disable-next-line no-console
-      console.warn('⚠️  Photo storage disabled — set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to enable photo uploads.');
+      console.warn('⚠️  Photo storage disabled — set EGNYTE_DOMAIN and EGNYTE_API_TOKEN to enable photo uploads.');
     }
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('⚠️  Could not verify/create the Supabase storage bucket.', err);
+    console.error('⚠️  Could not verify/create the Egnyte root folder.', err);
   }
 
   const server = app.listen(env.PORT, () => {

@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, setToken } from "@/lib/api";
+import { api, setTokens, setRole, homeForRole } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("reviewer@acespect.app");
-  const [password, setPassword] = useState("Review123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -16,15 +16,20 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await api<{ accessToken: string; user: { role: string } }>(
-        "/auth/login",
-        { method: "POST", body: JSON.stringify({ email, password }) },
-      );
-      if (res.user.role !== "REVIEWER" && res.user.role !== "ADMIN") {
-        throw new Error("This account is not a reviewer.");
+      const res = await api<{
+        accessToken: string;
+        refreshToken: string;
+        user: { role: string };
+      }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+      // Inspectors sign in here too — they land on their own drafts rather
+      // than the reviewer queue.
+      const role = res.user.role;
+      if (role !== "REVIEWER" && role !== "ADMIN" && role !== "INSPECTOR") {
+        throw new Error("This account cannot access the dashboard.");
       }
-      setToken(res.accessToken);
-      router.push("/inspections");
+      setTokens(res.accessToken, res.refreshToken);
+      setRole(role);
+      router.push(homeForRole(role));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -39,7 +44,7 @@ export default function LoginPage() {
           ACE <span>SPECT</span>
         </div>
         <p className="muted" style={{ marginTop: 0 }}>
-          Reviewer sign in
+          Inspector &amp; reviewer sign in
         </p>
         {error && <div className="error" style={{ marginBottom: 12 }}>{error}</div>}
         <label>Email</label>

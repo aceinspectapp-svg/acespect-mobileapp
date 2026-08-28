@@ -39,7 +39,12 @@ function SignaturePad({ onChange }: { onChange: (signed: boolean) => void }) {
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (e) => {
         const { locationX, locationY } = e.nativeEvent;
-        currentRef.current = `M${locationX.toFixed(1)},${locationY.toFixed(1)}`;
+        const x = locationX.toFixed(1);
+        const y = locationY.toFixed(1);
+        // Seed with a zero-length line so a tap that never moves still draws a
+        // round dot (strokeLinecap) rather than nothing -- otherwise the pad
+        // reads as "signed" while looking blank.
+        currentRef.current = `M${x},${y} L${x},${y}`;
         setCurrent(currentRef.current);
         onChange(true);
       },
@@ -49,9 +54,15 @@ function SignaturePad({ onChange }: { onChange: (signed: boolean) => void }) {
         setCurrent(currentRef.current);
       },
       onPanResponderRelease: () => {
-        setPaths((prev) => [...prev, currentRef.current]);
+        // Read the stroke into a local BEFORE clearing the ref: `setPaths`'s
+        // updater runs at render time, so a `() => [...prev, currentRef.current]`
+        // closure would read the ref after the line below had already emptied
+        // it -- committing an empty path and making the signature vanish the
+        // moment the finger lifted.
+        const stroke = currentRef.current;
         currentRef.current = '';
         setCurrent('');
+        if (stroke) setPaths((prev) => [...prev, stroke]);
       },
     }),
   ).current;
@@ -112,7 +123,10 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
   const draft = useInspectionDraft();
   const [submitting, setSubmitting] = useState(false);
 
-  const sectionGroups = getSectionGroupsForProperty(data.selection.propertyTypeId);
+  const sectionGroups = getSectionGroupsForProperty(
+    data.selection.propertyTypeId,
+    data.selection.inspectionTypeId,
+  );
   const sections = sectionGroups.flatMap((g) => g.sections);
   const totalSections = sections.length;
 
@@ -166,8 +180,8 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
 
       const res = await submitInspection(payload);
       Alert.alert(
-        'Report submitted',
-        `Inspection submitted for review (ref ${res.inspectionId.slice(0, 8)}…).`,
+        'Saved to your dashboard',
+        `Inspection saved as a draft (ref ${res.inspectionId.slice(0, 8)}…). Review and edit it on your dashboard, then finalize it to send for review.`,
         [
           {
             text: 'OK',
@@ -301,7 +315,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
         {/* Submit */}
         <Pressable onPress={onGenerate} disabled={!canSubmit} style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}>
           <Ionicons name="document-text-outline" size={18} color={colors.white} />
-          <Text style={styles.submitText}>{canSubmit ? 'Submit & Generate Report' : 'Confirm & Sign to Submit'}</Text>
+          <Text style={styles.submitText}>{canSubmit ? 'Save to Dashboard' : 'Confirm & Sign to Continue'}</Text>
         </Pressable>
 
         <Pressable onPress={() => navigation.goBack()} style={styles.draftBtn}>

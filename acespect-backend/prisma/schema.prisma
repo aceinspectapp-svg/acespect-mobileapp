@@ -166,6 +166,12 @@ model Section {
   reviewComment String              @default("")
   reportText    String              @default("")
   fields        Json                @default("{}")
+  /// The inspector's raw, un-flattened answer tree for this section, exactly as
+  /// the mobile form held it. `fields` above is the flattened report view, which
+  /// collapses repeating-group instances into a joined label string and so
+  /// cannot be turned back into an editable form -- this is what makes
+  /// "edit a submitted inspection" possible without losing per-instance detail.
+  answers       Json?
   photos        Json                @default("[]")
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
@@ -221,6 +227,12 @@ model InspectionTemplate {
   version        Int // increments per (inspectionType, propertyType, sectionKey) lineage
   status         TemplateStatus @default(DRAFT)
   fields         Json // TemplateField[]
+  /// Optional presentation hint for the mobile renderer. Today the only mode
+  /// is { mode: "section-nav", groups: [{ letter, icon, hint }] }, which makes
+  /// a long template render as a tap-through list of its `sectionLetter`
+  /// groups (one full-screen form each) rather than one endless scroll --
+  /// needed for profiles like Apartment whose sections carry 8-13 sub-areas.
+  layout         Json?
   createdBy      User           @relation(fields: [createdById], references: [id])
   createdById    String
   publishedAt    DateTime?

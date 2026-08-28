@@ -6,13 +6,14 @@ import { colors, spacing, typography } from '../../theme';
 import { Button, ProgressBar } from '../../components/ui';
 import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { SectionCard } from '../../components/inspection/SectionCard';
-import { FieldListRenderer } from '../../components/inspection/fieldRenderers';
+import { FieldListRenderer, SectionNavRenderer } from '../../components/inspection/fieldRenderers';
 import type { AnswerTree, AnswerValue } from '../../components/inspection/fieldRenderers/types';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
 import { ActiveTemplate, getActiveTemplate } from '../../services/templateApi';
 import { flattenSectionToDraft } from '../../utils/flattenSectionToDraft';
 import { InspectionDraftSelection } from '../../types/inspection';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
+import { getSectionTitle } from '../../constants/inspectionSections';
 
 export interface DynamicSectionScreenProps {
   sectionKey: string;
@@ -49,7 +50,11 @@ export function DynamicSectionScreen({
   const draft = useInspectionDraft();
   const [template, setTemplate] = useState<ActiveTemplate | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const [answers, setAnswers] = useState<AnswerTree>({});
+  // Restore whatever was already filled in for this section -- a fresh {}
+  // here is what made revisiting a section (hub -> section -> hub -> same
+  // section again, which remounts this screen) show a blank form even
+  // though the answers were already captured.
+  const [answers, setAnswers] = useState<AnswerTree>(() => draft.getAnswers(sectionKey) ?? {});
 
   // Job Information is first in the flow and owns the wizard's fresh
   // selection -- pin the raw ids onto the draft so every later section can
@@ -68,6 +73,7 @@ export function DynamicSectionScreen({
 
   const { inspectionTypeId, propertyTypeId } = draft.getTop();
   const pinKey = `${inspectionTypeId}:${propertyTypeId}:${sectionKey}`;
+  const displayName = getSectionTitle(sectionKey, propertyTypeId, sectionName, inspectionTypeId);
 
   useEffect(() => {
     if (!inspectionTypeId || !propertyTypeId) return;
@@ -87,7 +93,11 @@ export function DynamicSectionScreen({
   }, [inspectionTypeId, propertyTypeId, sectionKey]);
 
   function setAnswer(key: string, value: AnswerValue) {
-    setAnswers((prev) => ({ ...prev, [key]: value }));
+    setAnswers((prev) => {
+      const next = { ...prev, [key]: value };
+      draft.setAnswers(sectionKey, next);
+      return next;
+    });
   }
 
   function retry() {
@@ -108,7 +118,7 @@ export function DynamicSectionScreen({
     const { fields, damages, reportText } = flattenSectionToDraft(template.fields, answers);
     draft.setSection({
       key: sectionKey,
-      name: sectionName,
+      name: displayName,
       icon,
       order,
       status: canComplete ? 'complete' : 'partial',
@@ -123,11 +133,11 @@ export function DynamicSectionScreen({
     <View style={styles.root}>
       <StatusBar style="light" />
       <InspectionHeader
-        title={sectionName}
+        title={displayName}
         subtitle={icon}
         onBack={onBack}
         actions={[
-          { icon: 'save-outline', accessibilityLabel: 'Save draft', onPress: () => Alert.alert('Draft saved', `${sectionName} saved locally.`) },
+          { icon: 'save-outline', accessibilityLabel: 'Save draft', onPress: () => Alert.alert('Draft saved', `${displayName} saved locally.`) },
           { icon: 'home-outline', accessibilityLabel: 'Home', onPress: onGoHome },
         ]}
       />
@@ -148,13 +158,23 @@ export function DynamicSectionScreen({
         </View>
       ) : (
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
-          <SectionCard title={sectionName.toUpperCase()} accent="blue">
-            <FieldListRenderer
-              fields={template.fields}
-              scope={answers}
-              onChange={setAnswer}
-              path={[sectionKey]}
-            />
+          <SectionCard title={displayName.toUpperCase()} accent="blue">
+            {template.layout?.mode === 'section-nav' ? (
+              <SectionNavRenderer
+                fields={template.fields}
+                layout={template.layout}
+                scope={answers}
+                onChange={setAnswer}
+                path={[sectionKey]}
+              />
+            ) : (
+              <FieldListRenderer
+                fields={template.fields}
+                scope={answers}
+                onChange={setAnswer}
+                path={[sectionKey]}
+              />
+            )}
           </SectionCard>
         </ScrollView>
       )}

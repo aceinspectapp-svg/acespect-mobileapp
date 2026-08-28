@@ -78,6 +78,8 @@ export function serializeSection(s: Section & { damages: Damage[] }) {
     reviewComment: s.reviewComment,
     reportText: s.reportText,
     fields: s.fields ?? {},
+    // Raw answer tree — what the inspector dashboard reopens for editing.
+    answers: s.answers ?? null,
     damages: s.damages.map(serializeDamage),
     photos: s.photos ?? [],
   };

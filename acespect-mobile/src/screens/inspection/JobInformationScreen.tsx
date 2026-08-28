@@ -4,12 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../theme';
-import { AppTextInput, Button, ProgressBar, SegmentedToggle } from '../../components/ui';
+import { AppTextInput, Button, DateField, ProgressBar, SegmentedToggle } from '../../components/ui';
 import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { SectionCard } from '../../components/inspection/SectionCard';
 import { ChoiceTileGrid } from '../../components/inspection/ChoiceTile';
 import { StatusRow } from '../../components/inspection/StatusRow';
-import { MOCK_JOB_DETAILS } from '../../constants/jobSetupData';
 import { PropertyUse, WeatherId } from '../../types/jobSetup';
 import { AppScreenProps } from '../../navigation/types';
 import { useSystemStatus } from '../../hooks/useSystemStatus';
@@ -68,15 +67,19 @@ export function JobInformationScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Seed answers once the template arrives — pre-fill from the mock
-  // "admin platform" job for any field key that matches, same UX as before.
+  // Every field starts blank for the inspector to fill in -- except dates,
+  // which default to today, since an inspection is all but always dated the
+  // day it's carried out. The calendar stays available to change it.
+  // (This used to seed from a MOCK_JOB_DETAILS sample job, which put a fake
+  // inspector, client and address into every real inspection.)
   useEffect(() => {
     if (!template) return;
-    const mock = MOCK_JOB_DETAILS as unknown as Record<string, string>;
+    const d = new Date();
+    const todayIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     setAnswers((prev) => {
       const next = { ...prev };
       for (const f of template.fields) {
-        if (next[f.key] === undefined) next[f.key] = mock[f.key] ?? '';
+        if (next[f.key] === undefined) next[f.key] = f.type === 'date' ? todayIso : '';
       }
       return next;
     });
@@ -108,7 +111,7 @@ export function JobInformationScreen({
           clientName: answers.clientName ?? '',
           inspectionAddress: answers.inspectionAddress ?? '',
           assignedInspector: answers.assignedInspector ?? '',
-          gpsConfirmed: MOCK_JOB_DETAILS.gpsConfirmed,
+          gpsConfirmed: !!answers.inspectionAddress?.trim(),
         },
         weather: (answers.weather ?? '') as WeatherId,
         usedAsBusiness: (answers.usedAsBusiness ?? '') as PropertyUse,
@@ -176,8 +179,7 @@ export function JobInformationScreen({
           <View style={styles.banner}>
             <Ionicons name="information-circle" size={18} color={colors.infoFg} />
             <Text style={styles.bannerText}>
-              Verify and confirm all job details before beginning the inspection.
-              Pre-loaded information comes from the admin platform.
+              Enter and confirm all job details before beginning the inspection.
             </Text>
           </View>
 
@@ -187,17 +189,27 @@ export function JobInformationScreen({
               {textFields.map((field, idx) => (
                 <React.Fragment key={field.key}>
                   {idx > 0 && <Spacer />}
-                  <AppTextInput
-                    label={field.label}
-                    required={field.required}
-                    readOnly={field.readOnly}
-                    rightIcon={field.type === 'date' ? 'calendar-outline' : undefined}
-                    value={answers[field.key] ?? ''}
-                    onChangeText={setAnswer(field.key)}
-                  />
+                  {field.type === 'date' ? (
+                    <DateField
+                      label={field.label}
+                      required={field.required}
+                      readOnly={field.readOnly}
+                      value={answers[field.key] ?? ''}
+                      onChange={setAnswer(field.key)}
+                    />
+                  ) : (
+                    <AppTextInput
+                      label={field.label}
+                      required={field.required}
+                      readOnly={field.readOnly}
+                      value={answers[field.key] ?? ''}
+                      onChangeText={setAnswer(field.key)}
+                    />
+                  )}
                 </React.Fragment>
               ))}
-              {MOCK_JOB_DETAILS.gpsConfirmed && (
+              {/* Only meaningful once an address has actually been entered. */}
+              {!!answers.inspectionAddress?.trim() && (
                 <View style={styles.gpsNote}>
                   <Ionicons name="location" size={14} color={colors.barGreen} />
                   <Text style={styles.gpsText}>
@@ -209,13 +221,15 @@ export function JobInformationScreen({
             </SectionCard>
           )}
 
-          {/* Single-select tile fields (e.g. weather) */}
+          {/* Single-select tile fields (e.g. weather). The card title already
+              states the question -- repeating it as a field label underneath
+              just read as the same question asked twice. */}
           {tileFields.map((field) => (
-            <SectionCard key={field.key} title={field.label.toUpperCase()} accent="orange">
-              <Text style={styles.fieldLabel}>
-                {field.label}
-                {field.required && <Text style={styles.req}> *</Text>}
-              </Text>
+            <SectionCard
+              key={field.key}
+              title={`${field.label.toUpperCase()}${field.required ? ' *' : ''}`}
+              accent="orange"
+            >
               <ChoiceTileGrid
                 options={(field.options ?? []).map((o) => ({
                   value: o.value,
@@ -231,12 +245,11 @@ export function JobInformationScreen({
 
           {/* Yes/No fields (e.g. used as business) */}
           {yesNoFields.map((field) => (
-            <SectionCard key={field.key} title={field.label.toUpperCase()} accent="purple">
-              <Text style={styles.fieldLabel}>
-                {field.label}
-                {field.required && <Text style={styles.req}> *</Text>}
-              </Text>
-              <View style={{ height: spacing.md }} />
+            <SectionCard
+              key={field.key}
+              title={`${field.label.toUpperCase()}${field.required ? ' *' : ''}`}
+              accent="purple"
+            >
               <SegmentedToggle
                 options={(field.options ?? []).map((o) => ({ value: o.value, label: o.label }))}
                 value={answers[field.key] ?? null}

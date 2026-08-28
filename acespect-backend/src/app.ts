@@ -10,6 +10,7 @@ import { inspectionsRouter } from './modules/inspections/inspections.routes';
 import { reviewRouter } from './modules/review/review.routes';
 import { templatesRouter } from './modules/templates/templates.routes';
 import { webRouter } from './modules/web/web.routes';
+import { mediaRouter } from './modules/media/media.routes';
 
 export function createApp() {
   const app = express();
@@ -32,7 +33,10 @@ export function createApp() {
     res.json({ status: 'ok', service: 'acespect-backend', timestamp: new Date().toISOString() });
   });
 
-  // API v1
+  // API v1 — media is exempt from the general rate limiter: a single report
+  // page can load dozens of photos, which isn't the kind of traffic the
+  // limiter exists to blunt.
+  app.use('/api/v1/media', mediaRouter);
   app.use('/api/v1', apiLimiter);
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/inspections', inspectionsRouter);

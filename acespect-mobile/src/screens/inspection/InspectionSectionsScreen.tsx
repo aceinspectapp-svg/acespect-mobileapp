@@ -27,9 +27,9 @@ export function InspectionSectionsScreen({
 }: AppScreenProps<'InspectionSections'>) {
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const draft = useInspectionDraft();
-  const { propertyTypeId } = draft.getTop();
+  const { propertyTypeId, inspectionTypeId } = draft.getTop();
 
-  const sectionGroups = getSectionGroupsForProperty(propertyTypeId);
+  const sectionGroups = getSectionGroupsForProperty(propertyTypeId, inspectionTypeId);
   const sections = sectionGroups.flatMap((g) => g.sections);
   const totalSections = sections.length;
 

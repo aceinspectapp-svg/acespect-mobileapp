@@ -33,6 +33,12 @@ export interface RepeatConfig {
   maxInstances?: number;
   /** When set, an addable instance's card title uses that instance's answer for this itemField key instead of generic numbering. */
   titleFieldKey?: string;
+  /** When set, each instance starts collapsed to just its title (newly-added ones start expanded). */
+  collapsible?: boolean;
+  /** When set, itemFields sharing a `sectionLetter` are grouped and opened one at a time in a full-screen view instead of rendered inline, once this chip-multiselect field has a selection. */
+  categoryNav?: { selectorFieldKey: string };
+  /** Singular noun for one instance ("room", "part") -- progress copy only. */
+  itemNoun?: string;
 }
 
 export interface TemplateField {
@@ -53,6 +59,18 @@ export interface TemplateField {
   sectionLetter?: string;
 }
 
+/**
+ * Optional presentation hint. `section-nav` makes a long template render as a
+ * tap-through list of its `sectionLetter` groups -- one full-screen form per
+ * group -- instead of a single endless scroll. `groups` carries the per-group
+ * icon/hint chrome for that list; a group with no entry still renders, just
+ * without them.
+ */
+export interface TemplateLayout {
+  mode?: 'section-nav';
+  groups?: { letter: string; icon?: string; hint?: string }[];
+}
+
 export interface ActiveTemplate {
   id: string;
   inspectionType: string;
@@ -60,6 +78,7 @@ export interface ActiveTemplate {
   sectionKey: string;
   version: number;
   fields: TemplateField[];
+  layout?: TemplateLayout | null;
 }
 
 /** The current published template for a profile + section. */

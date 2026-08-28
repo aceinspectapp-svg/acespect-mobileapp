@@ -5,14 +5,31 @@ import { inspectionsService } from './inspections.service';
 
 /** Thin HTTP layer for inspection submission + lookup. */
 export const inspectionsController = {
-  // Returns 202 — accepted for async review, not "done".
+  // Saves as a DRAFT the inspector still owns — review only starts at finalize.
   submit: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
-    const { inspection, reviewJob } = await inspectionsService.submit(req.user.id, req.body);
+    const { inspection } = await inspectionsService.submit(req.user.id, req.body);
+    res.status(201).json({ inspectionId: inspection.id, status: inspection.status });
+  }),
+
+  update: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    const inspection = await inspectionsService.update(id, req.user.id, req.body);
+    res.status(200).json({ inspectionId: inspection.id, status: inspection.status });
+  }),
+
+  // Point of no return: assigns a reviewer and enqueues the async review.
+  finalize: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    const { inspection, reviewJob } = await inspectionsService.finalize(id, req.user.id);
     res.status(202).json({
       inspectionId: inspection.id,
       reviewJobId: reviewJob.id,
-      status: reviewJob.status,
+      status: inspection.status,
     });
   }),
 

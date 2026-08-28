@@ -15,15 +15,10 @@ export const WEATHER_OPTIONS: TileOption[] = [
   { value: 'other', label: 'Other', icon: 'help-circle-outline' },
 ];
 
-/** Mock job pulled from the admin platform. Replace with a real fetch later. */
-export const MOCK_JOB_DETAILS: JobDetails = {
-  jobNumber: 'JOB-2026-0145',
-  inspectionDate: '05/28/2026',
-  clientName: 'Sarah & Mark Thompson',
-  inspectionAddress: '47 Riverside Drive, Kew VIC 3101',
-  assignedInspector: 'James Mitchell',
-  gpsConfirmed: true,
-};
+// The sample job that used to live here (MOCK_JOB_DETAILS) has been removed:
+// it pre-filled every real inspection with a fake inspector, client and
+// address, which the inspector then had to notice and clear. Job Information
+// now starts blank.
 
 // System status is no longer mocked — see src/hooks/useSystemStatus.ts for the
 // live device clock / GPS / network / photo-count / offline-storage values.

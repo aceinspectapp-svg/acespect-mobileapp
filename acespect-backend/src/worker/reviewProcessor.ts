@@ -29,8 +29,9 @@ interface PhotoRef {
 /**
  * Call the Python LangGraph agent service (hybrid mode). We read the inspection
  * here and ship the data to the stateless AI service — Python never touches the
- * DB. Photo `url`s are Supabase Storage links the Photo agent fetches (absent
- * until storage is wired, in which case the Photo agent no-ops).
+ * DB. Photo `url`s point at this backend's /api/v1/media proxy (which streams
+ * the file from Egnyte) and are fetched by the Photo agent (absent until
+ * storage is wired, in which case the Photo agent no-ops).
  */
 async function callAiService(inspectionId: string, version: number): Promise<AiReviewResponse> {
   const inspection = await prisma.inspection.findUnique({ where: { id: inspectionId } });

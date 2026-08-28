@@ -1,5 +1,6 @@
 export { Button } from './Button';
 export { AppTextInput } from './AppTextInput';
+export { DateField } from './DateField';
 export { Checkbox } from './Checkbox';
 export { Radio } from './Radio';
 export { Tag } from './Tag';
