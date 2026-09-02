@@ -33,6 +33,20 @@ export const inspectionsController = {
     });
   }),
 
+  listAssigned: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const jobs = await inspectionsService.listAssigned(req.user.id);
+    res.status(200).json({ jobs });
+  }),
+
+  getBaselineSections: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    const sections = await inspectionsService.getBaselineSections(id, req.user.id);
+    res.status(200).json({ sections });
+  }),
+
   getById: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;

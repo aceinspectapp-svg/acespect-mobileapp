@@ -35,6 +35,12 @@ export interface ReviewDecision {
   reviewer: Person | null;
 }
 
+export interface Inspector {
+  id: string;
+  name: string | null;
+  email: string;
+}
+
 export interface InspectionDetail {
   id: string;
   inspectionType: string;

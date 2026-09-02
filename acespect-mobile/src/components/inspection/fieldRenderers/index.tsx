@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../../theme';
 import { Button, ProgressBar } from '../../ui';
 import type { TemplateField, TemplateFieldType, TemplateLayout } from '../../../services/templateApi';
-import { AnswerTree, AnswerValue, FieldRendererProps, isGateSatisfied } from './types';
+import { AnswerTree, AnswerValue, FieldRendererProps, isGateSatisfied, isRepeatRequirementMet } from './types';
 import {
   ChipMultiSelectFieldRenderer,
   ColorSelectFieldRenderer,
@@ -61,6 +61,7 @@ export function FieldListRenderer({
               value={scope[field.key]}
               onChange={(v) => onChange(field.key, v)}
               path={[...path, field.key]}
+              scope={scope}
             />
           </React.Fragment>
         );
@@ -301,6 +302,13 @@ function isAnswered(v: AnswerValue): boolean {
   return v !== undefined && v !== '';
 }
 
+/** "average, poor" -> "Average or Poor" for the requireWhen inline warning. */
+function humanizeList(values: string[]): string {
+  const titled = values.map((v) => v.charAt(0).toUpperCase() + v.slice(1));
+  if (titled.length <= 1) return titled[0] ?? '';
+  return `${titled.slice(0, -1).join(', ')} or ${titled[titled.length - 1]}`;
+}
+
 /**
  * A Part's fields split into always-visible "lead" fields plus a tap-to-open
  * list of the categories the inspector checked off in the selector
@@ -530,9 +538,11 @@ function FixedListRenderer({ field, value, onChange, path }: FieldRendererProps)
 }
 
 /** Scrollable, freely addable list of instances (most sections) or a damage-list. State mostly lives in the answer tree; only which modal (if any) is open is local. */
-function StripListRenderer({ field, value, onChange, path }: FieldRendererProps) {
+function StripListRenderer({ field, value, onChange, path, scope }: FieldRendererProps) {
   const itemFields = field.itemFields ?? [];
   const list = Array.isArray(value) ? (value as AnswerTree[]) : [];
+  const requirementMet = isRepeatRequirementMet(field, value, scope);
+  const requireWhen = field.repeat?.requireWhen;
   // "collapsible" means: don't render instances inline at all -- show a
   // tap-to-open list of just their titles, each opening its full form in a
   // full-screen window (mirrors CategoryNavForm's own drill-down one level
@@ -570,6 +580,14 @@ function StripListRenderer({ field, value, onChange, path }: FieldRendererProps)
     return (
       <View style={styles.block}>
         <Text style={styles.groupLabel}>{field.label}</Text>
+        {!requirementMet && requireWhen && (
+          <View style={styles.requireWarning}>
+            <Ionicons name="alert-circle" size={16} color={colors.danger} />
+            <Text style={styles.requireWarningText}>
+              Add at least one defect — required because {requireWhen.fieldKey} is {humanizeList(requireWhen.equals)}.
+            </Text>
+          </View>
+        )}
         {list.map((instScope, idx) => (
           <Pressable key={idx} style={styles.categoryRow} onPress={() => setOpenIdx(idx)}>
             <View style={styles.instanceHeaderTitleRow}>
@@ -643,6 +661,14 @@ function StripListRenderer({ field, value, onChange, path }: FieldRendererProps)
   return (
     <View style={styles.block}>
       <Text style={styles.groupLabel}>{field.label}</Text>
+      {!requirementMet && requireWhen && (
+        <View style={styles.requireWarning}>
+          <Ionicons name="alert-circle" size={16} color={colors.danger} />
+          <Text style={styles.requireWarningText}>
+            Add at least one defect — required because {requireWhen.fieldKey} is {humanizeList(requireWhen.equals)}.
+          </Text>
+        </View>
+      )}
       {list.map((instScope, idx) => (
         <View key={idx} style={styles.instanceCard}>
           <View style={styles.instanceHeader}>
@@ -662,9 +688,13 @@ function StripListRenderer({ field, value, onChange, path }: FieldRendererProps)
         </View>
       ))}
       {(field.repeat?.addable ?? true) && (
-        <Pressable onPress={addInstance} style={styles.addBtn}>
-          <Ionicons name="add" size={14} color={colors.barBlue} />
-          <Text style={styles.addBtnText}>{field.repeat?.addButtonLabel ?? `Add ${field.label}`}</Text>
+        <Pressable
+          onPress={addInstance}
+          style={[styles.addBtn, !requirementMet && requireWhen && styles.addBtnRequired]}
+        >
+          <Ionicons name="add" size={14} color={!requirementMet && requireWhen ? colors.danger : colors.barBlue} />
+          <Text style={[styles.addBtnText, !requirementMet && requireWhen && styles.addBtnTextRequired]}>
+            {field.repeat?.addButtonLabel ?? `Add ${field.label}`}</Text>
         </Pressable>
       )}
     </View>
@@ -748,6 +778,20 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   addBtnText: { ...typography.bodySm, color: colors.barBlue, fontWeight: '600' },
+  requireWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  requireWarningText: { ...typography.caption, color: colors.danger, flex: 1, fontWeight: '600' },
+  addBtnRequired: { borderColor: colors.danger },
+  addBtnTextRequired: { color: colors.danger },
   categoryNavBlock: { marginTop: spacing.sm },
   categoryRow: {
     flexDirection: 'row',

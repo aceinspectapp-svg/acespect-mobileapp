@@ -142,12 +142,25 @@ model Inspection {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
+  /// Set only on a Post-Dilapidation job: the earlier, already-submitted
+  /// inspection this one is being assessed against. Its presence (not a
+  /// separate inspectionType) is what makes an inspection "post-dilap" --
+  /// admin sets it once, when creating the job (see POST
+  /// /review/inspections/:id/create-post-dilapidation), and the mobile app
+  /// uses it both to know to render the comparison UI and to fetch the
+  /// baseline's own section data as read-only reference.
+  baselineInspection   Inspection?  @relation("PostDilapidationBaseline", fields: [baselineInspectionId], references: [id])
+  baselineInspectionId String?
+  /// The reverse side -- every later inspection that used this one as its baseline.
+  postDilapidationJobs Inspection[] @relation("PostDilapidationBaseline")
+
   sections      Section[]
   reviewJobs    ReviewJob[]
   reviewSummary ReviewSummary?
 
   @@index([inspectorId])
   @@index([reviewerId])
+  @@index([baselineInspectionId])
   @@map("inspections")
 }
 

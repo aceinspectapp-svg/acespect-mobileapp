@@ -7,6 +7,8 @@ import { InspectionSetupStep2Screen } from '../screens/inspection/InspectionSetu
 import { InspectionSectionsScreen } from '../screens/inspection/InspectionSectionsScreen';
 import { DynamicSectionScreen } from '../screens/inspection/DynamicSectionScreen';
 import { ReportSummaryScreen } from '../screens/inspection/ReportSummaryScreen';
+import { AddCustomSectionScreen } from '../screens/inspection/AddCustomSectionScreen';
+import { AssignedJobsScreen } from '../screens/inspection/AssignedJobsScreen';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
@@ -14,6 +16,7 @@ export function AppNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="SelectInspectionType" component={SelectInspectionTypeScreen} />
+      <Stack.Screen name="AssignedJobs" component={AssignedJobsScreen} />
       <Stack.Screen name="JobInformation" component={JobInformationScreen} />
       <Stack.Screen name="InspectionSetupStep2" component={InspectionSetupStep2Screen} />
       <Stack.Screen name="InspectionSections" component={InspectionSectionsScreen} />
@@ -175,6 +178,26 @@ export function AppNavigator() {
             onComplete={() =>
               navigation.navigate({ name: 'InspectionSections', params: { completedId: 'notes_defects' }, merge: true })
             }
+            onGoHome={() => navigation.popToTop()}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="AddCustomSection" component={AddCustomSectionScreen} />
+      <Stack.Screen name="CustomSection">
+        {({ navigation, route }) => (
+          <DynamicSectionScreen
+            sectionKey={route.params.sectionKey}
+            sectionName={route.params.sectionName}
+            templateKey="custom_structure"
+            icon="🏚️"
+            // Custom sections aren't part of the fixed 13, so their `order`
+            // doesn't need to slot in anywhere meaningful -- 100+ keeps them
+            // out of the way of the real ones if this is ever surfaced.
+            order={100}
+            onBack={() => navigation.goBack()}
+            // AddCustomSection replaced itself with this screen, so the hub
+            // sits directly below in the stack -- same as `onBack`.
+            onComplete={() => navigation.goBack()}
             onGoHome={() => navigation.popToTop()}
           />
         )}

@@ -57,7 +57,7 @@ const SIZE = (): Field[] => [
 function externalDamages(label = 'Cracking / gaps / other deterioration — note the 2 or 3 most significant items'): Field {
   return {
     key: 'damages', type: 'damage-list', label,
-    repeat: { presentation: 'strip', addable: true, addButtonLabel: 'Add damage item' },
+    repeat: { presentation: 'strip', addable: true, addButtonLabel: 'Add damage/defect' },
     itemFields: numbered([
       { key: 'location', type: 'text', label: 'Damage location' },
       { key: 'damageType', type: 'pill-select', label: 'Description', options: opts('Crack', 'Subsidence', 'Gap', 'Hole', 'Chipping') },
@@ -70,7 +70,7 @@ function externalDamages(label = 'Cracking / gaps / other deterioration — note
 function interiorDamages(locationOptions: string[], label = 'Damage — the most significant items are'): Field {
   return {
     key: 'damages', type: 'damage-list', label,
-    repeat: { presentation: 'strip', addable: true, addButtonLabel: 'Add damage item' },
+    repeat: { presentation: 'strip', addable: true, addButtonLabel: 'Add damage/defect' },
     itemFields: numbered([
       { key: 'location', type: 'pill-select', label: 'Location', options: opts(...locationOptions) },
       { key: 'locationDetail', type: 'text', label: 'Location detail' },
@@ -84,7 +84,7 @@ function interiorDamages(locationOptions: string[], label = 'Damage — the most
 function aisleDamages(label: string): Field {
   return {
     key: 'damages', type: 'damage-list', label,
-    repeat: { presentation: 'strip', addable: true, addButtonLabel: 'Add damage item' },
+    repeat: { presentation: 'strip', addable: true, addButtonLabel: 'Add damage/defect' },
     itemFields: numbered([
       { key: 'location', type: 'text', label: 'Aisle No / painted marking' },
       { key: 'damageType', type: 'pill-select', label: 'Description', options: opts('Crack', 'Gap', 'Stains') },

@@ -12,6 +12,11 @@ export const reviewController = {
     res.status(200).json({ job });
   }),
 
+  listInspectors: asyncHandler(async (_req: Request, res: Response) => {
+    const inspectors = await reviewService.listInspectors();
+    res.status(200).json({ inspectors });
+  }),
+
   listInspections: asyncHandler(async (_req: Request, res: Response) => {
     const inspections = await reviewService.listInspections();
     res.status(200).json({ inspections });
@@ -22,6 +27,14 @@ export const reviewController = {
     if (!id) throw ApiError.badRequest('Inspection id is required');
     const inspection = await reviewService.getInspectionDetail(id);
     res.status(200).json({ inspection });
+  }),
+
+  createPostDilapidation: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    const { inspectorId } = req.body as { inspectorId: string };
+    const assignment = await reviewService.createPostDilapidation(id, inspectorId);
+    res.status(201).json({ assignment });
   }),
 
   decide: asyncHandler(async (req: Request, res: Response) => {

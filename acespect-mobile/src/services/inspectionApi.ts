@@ -24,3 +24,34 @@ export async function submitInspection(
   const { data } = await api.post('/inspections/submit', payload);
   return data;
 }
+
+/** A Post-Dilapidation job admin has pushed to the signed-in inspector, not yet picked up. */
+export interface AssignedJob {
+  id: string;
+  inspectionType: string;
+  propertyType: string;
+  jobNo: string | null;
+  address: string | null;
+  suburb: string | null;
+  client: string | null;
+  baseline: { id: string; jobNo: string | null; address: string | null; client: string | null; propertyType: string } | null;
+}
+
+export async function getAssignedJobs(): Promise<AssignedJob[]> {
+  const { data } = await api.get<{ jobs: AssignedJob[] }>('/inspections/assigned');
+  return data.jobs;
+}
+
+/** One section of a Post-Dilapidation job's baseline, as last recorded -- read-only reference. */
+export interface BaselineSection {
+  key: string;
+  name: string;
+  reportText: string;
+  fields: Record<string, unknown>;
+  photos: string[];
+}
+
+export async function getBaselineSections(assignedInspectionId: string): Promise<BaselineSection[]> {
+  const { data } = await api.get<{ sections: BaselineSection[] }>(`/inspections/${assignedInspectionId}/baseline-sections`);
+  return data.sections;
+}

@@ -48,6 +48,16 @@ export interface DraftTop {
   date?: string;
   notes?: string;
   overallProgress?: number;
+  /**
+   * Post-Dilapidation job, picked up from the inspector's assigned list --
+   * `assignmentId` is the placeholder Inspection admin created (submit fills
+   * it in rather than creating a new one); `baselineInspectionId` is the
+   * earlier inspection being compared against, which is what tells every
+   * section screen to render the comparison UI and fetch the baseline's own
+   * data for reference. Unset for a normal, non-comparison inspection.
+   */
+  assignmentId?: string;
+  baselineInspectionId?: string;
 }
 
 export interface SubmitPayload extends DraftTop {
@@ -58,6 +68,10 @@ interface DraftValue {
   setTop: (patch: Partial<DraftTop>) => void;
   getTop: () => DraftTop;
   setSection: (section: DraftSection) => void;
+  /** Read back a section's persisted status/data (e.g. for the hub's completion ticks) -- keyed the same as `setSection`. */
+  getSection: (key: string) => DraftSection | undefined;
+  /** Every section saved so far, fixed template sections and inspector-added custom ones alike. */
+  getAllSections: () => DraftSection[];
   /** Register a captured photo under its sectionKey (e.g. "driveway:1", "overview"). */
   addPhoto: (sectionKey: string, uri: string) => void;
   reset: () => void;
@@ -84,6 +98,24 @@ interface DraftValue {
    */
   getAnswers: (sectionKey: string) => AnswerTree | undefined;
   setAnswers: (sectionKey: string, answers: AnswerTree) => void;
+  /**
+   * Post-Dilapidation baseline sections (previous inspection's data, read-only
+   * reference), fetched once per draft and cached here the same way a
+   * section's active template is -- every section screen looks up its own
+   * key from this one shared list rather than each re-fetching the whole
+   * baseline. `null` until the first fetch completes.
+   */
+  getBaselineSections: () => BaselineSectionRef[] | null;
+  setBaselineSections: (sections: BaselineSectionRef[]) => void;
+}
+
+/** Local mirror of services/inspectionApi.ts's BaselineSection -- kept separate to avoid a circular import (that module imports SubmitPayload from this file). */
+export interface BaselineSectionRef {
+  key: string;
+  name: string;
+  reportText: string;
+  fields: Record<string, unknown>;
+  photos: string[];
 }
 
 const Ctx = createContext<DraftValue | null>(null);
@@ -99,6 +131,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
   const sectionsRef = useRef<Record<string, DraftSection>>({});
   const photosRef = useRef<Record<string, string[]>>({});
   const templatesRef = useRef<Record<string, ActiveTemplate>>({});
+  const baselineSectionsRef = useRef<BaselineSectionRef[] | null>(null);
   const answersRef = useRef<Record<string, AnswerTree>>({});
 
   const setTop = useCallback((patch: Partial<DraftTop>) => {
@@ -111,6 +144,10 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     sectionsRef.current = { ...sectionsRef.current, [section.key]: section };
   }, []);
 
+  const getSection = useCallback((key: string) => sectionsRef.current[key], []);
+
+  const getAllSections = useCallback(() => Object.values(sectionsRef.current), []);
+
   const addPhoto = useCallback((sectionKey: string, uri: string) => {
     const cur = photosRef.current[sectionKey] ?? [];
     photosRef.current = { ...photosRef.current, [sectionKey]: [...cur, uri] };
@@ -122,6 +159,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     photosRef.current = {};
     templatesRef.current = {};
     answersRef.current = {};
+    baselineSectionsRef.current = null;
   }, []);
 
   const getActiveTemplate = useCallback(
@@ -131,6 +169,11 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
 
   const setActiveTemplate = useCallback((sectionKey: string, template: ActiveTemplate) => {
     templatesRef.current = { ...templatesRef.current, [sectionKey]: template };
+  }, []);
+
+  const getBaselineSections = useCallback(() => baselineSectionsRef.current, []);
+  const setBaselineSections = useCallback((sections: BaselineSectionRef[]) => {
+    baselineSectionsRef.current = sections;
   }, []);
 
   const getAnswers = useCallback(
@@ -186,6 +229,8 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       setTop,
       getTop,
       setSection,
+      getSection,
+      getAllSections,
       addPhoto,
       reset,
       collectPhotoUris,
@@ -194,11 +239,15 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       setActiveTemplate,
       getAnswers,
       setAnswers,
+      getBaselineSections,
+      setBaselineSections,
     }),
     [
       setTop,
       getTop,
       setSection,
+      getSection,
+      getAllSections,
       addPhoto,
       reset,
       collectPhotoUris,
@@ -207,6 +256,8 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       setActiveTemplate,
       getAnswers,
       setAnswers,
+      getBaselineSections,
+      setBaselineSections,
     ],
   );
 

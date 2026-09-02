@@ -21,7 +21,9 @@ export interface TemplateFieldOption {
 /** Generalizes "hasDamage === 'yes' reveals the damages list" to any field. */
 export interface FieldGate {
   fieldKey: string;
-  equals: string;
+  equals?: string;
+  /** OR-of-many alternative to `equals` -- fires when the sibling's value is any one of these. One of equals/equalsAny is always set. */
+  equalsAny?: string[];
 }
 
 export interface RepeatConfig {
@@ -39,6 +41,8 @@ export interface RepeatConfig {
   categoryNav?: { selectorFieldKey: string };
   /** Singular noun for one instance ("room", "part") -- progress copy only. */
   itemNoun?: string;
+  /** When set, at least one instance is required once the named sibling field's value is one of `equals` (e.g. Condition = Average/Poor requires a recorded defect). Soft validation -- same non-blocking treatment as `required` fields. */
+  requireWhen?: { fieldKey: string; equals: string[] };
 }
 
 export interface TemplateField {
@@ -47,6 +51,8 @@ export interface TemplateField {
   type: TemplateFieldType;
   order: number;
   required?: boolean;
+  /** Fields sharing a requiredGroup are "either/or" required -- satisfied once any one of them has an answer. Ignored unless `required` is also set. */
+  requiredGroup?: string;
   readOnly?: boolean;
   placeholder?: string;
   maxLength?: number;

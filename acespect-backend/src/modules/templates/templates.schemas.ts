@@ -41,7 +41,14 @@ const templateFieldOptionSchema = z.object({
 
 const fieldGateSchema = z.object({
   fieldKey: z.string().min(1).max(120),
-  equals: z.string().max(200),
+  equals: z.string().max(200).optional(),
+  // OR-of-many alternative to `equals`, for a gate that should fire on more
+  // than one of the sibling's possible values (e.g. reveal/require a comment
+  // when scope is "Internal only" OR "External only", but not the other two
+  // options) -- one of `equals`/`equalsAny` must be set.
+  equalsAny: z.array(z.string().max(200)).min(1).optional(),
+}).refine((g) => g.equals !== undefined || g.equalsAny !== undefined, {
+  message: 'gate needs either equals or equalsAny',
 });
 
 const repeatConfigSchema = z.object({
@@ -73,6 +80,14 @@ const repeatConfigSchema = z.object({
   // Singular noun for one instance ("room", "part"), used only for progress
   // copy above a collapsible list -- "3 of 11 rooms recorded".
   itemNoun: z.string().max(40).optional(),
+  // When set, this repeating-group/damage-list must have at least one
+  // instance once the named sibling field's value is one of `equals` (e.g.
+  // Condition = Average/Poor makes at least one recorded defect mandatory).
+  // Enforced as a soft validation, same as `required` fields elsewhere in
+  // this app: surfaced inline and marks the section "partial" rather than
+  // hard-blocking -- an inspector on a site with no signal shouldn't be
+  // locked out of moving on.
+  requireWhen: z.object({ fieldKey: z.string().min(1).max(120), equals: z.array(z.string().max(200)).min(1) }).optional(),
 });
 
 const baseFieldShape = {
@@ -81,6 +96,11 @@ const baseFieldShape = {
   type: z.enum(FIELD_TYPES),
   order: z.number().int(),
   required: z.boolean().optional(),
+  // Fields sharing the same requiredGroup are "either/or" required: the
+  // group is satisfied once ANY one of them has an answer (e.g. "Constructed
+  // year" OR "Under construction at stage" -- exactly one usually applies).
+  // Ignored unless `required` is also set on the field.
+  requiredGroup: z.string().max(80).optional(),
   readOnly: z.boolean().optional(),
   placeholder: z.string().max(200).optional(),
   maxLength: z.number().int().positive().optional(),
@@ -124,7 +144,8 @@ export interface TemplateFieldOption {
 }
 export interface FieldGate {
   fieldKey: string;
-  equals: string;
+  equals?: string;
+  equalsAny?: string[];
 }
 export interface RepeatConfig {
   presentation: 'strip' | 'fixed-tabs' | 'nested' | 'checklist';
@@ -137,6 +158,7 @@ export interface RepeatConfig {
   collapsible?: boolean;
   categoryNav?: { selectorFieldKey: string };
   itemNoun?: string;
+  requireWhen?: { fieldKey: string; equals: string[] };
 }
 export interface TemplateField {
   key: string;
@@ -144,6 +166,7 @@ export interface TemplateField {
   type: (typeof FIELD_TYPES)[number];
   order: number;
   required?: boolean;
+  requiredGroup?: string;
   readOnly?: boolean;
   placeholder?: string;
   maxLength?: number;

@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -13,6 +13,7 @@ import { ConfirmStartModal } from '../../components/inspection/ConfirmStartModal
 import { INSPECTION_TYPES, PROPERTY_TYPES } from '../../constants/inspectionData';
 import { InspectionTypeId, PropertyTypeId } from '../../types/inspection';
 import { AppScreenProps } from '../../navigation/types';
+import { getAssignedJobs } from '../../services/inspectionApi';
 
 const STEPS = [
   { label: 'Inspection Type' },
@@ -26,6 +27,16 @@ export function SelectInspectionTypeScreen({
   const [typeId, setTypeId] = useState<InspectionTypeId | null>(null);
   const [propertyId, setPropertyId] = useState<PropertyTypeId | null>(null);
   const [confirmVisible, setConfirmVisible] = useState(false);
+
+  // Post-Dilapidation jobs admin has pushed to this inspector. Failure is
+  // silent -- this is a convenience banner, not core to starting a normal
+  // inspection, so it just doesn't show rather than blocking the screen.
+  const [assignedCount, setAssignedCount] = useState(0);
+  useEffect(() => {
+    getAssignedJobs()
+      .then((jobs) => setAssignedCount(jobs.length))
+      .catch(() => {});
+  }, []);
 
   // Auto-scroll to the Property Type section once an inspection type is picked.
   const scrollRef = useRef<ScrollView>(null);
@@ -106,6 +117,16 @@ export function SelectInspectionTypeScreen({
         contentContainerStyle={styles.bodyContent}
         showsVerticalScrollIndicator={false}
       >
+        {assignedCount > 0 && (
+          <Pressable style={styles.assignedBanner} onPress={() => navigation.navigate('AssignedJobs')}>
+            <Ionicons name="briefcase-outline" size={20} color={colors.accentBlueFg} />
+            <Text style={styles.assignedBannerText}>
+              {assignedCount} assigned job{assignedCount === 1 ? '' : 's'} waiting — tap to continue
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.accentBlueFg} />
+          </Pressable>
+        )}
+
         <SectionHeader index={1} title="INSPECTION TYPE" />
         {INSPECTION_TYPES.map((type) => (
           <InspectionTypeCard
@@ -197,6 +218,16 @@ const styles = StyleSheet.create({
   stepperWrap: { marginTop: spacing.xl },
   body: { flex: 1 },
   bodyContent: { padding: spacing.xl, paddingBottom: spacing.xxxl },
+  assignedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  assignedBannerText: { ...typography.bodySm, fontWeight: '600', color: colors.accentBlueFg, flex: 1 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
   sectionBadge: {
     width: 22,

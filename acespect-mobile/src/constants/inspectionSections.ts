@@ -94,6 +94,23 @@ const SECTION_ID_BY_TEMPLATE_KEY: Record<string, string> = {
   notes: 'notes_defects',
 };
 
+/** The inverse of the map above, e.g. 'description_overview' -> 'description'. */
+const TEMPLATE_KEY_BY_SECTION_ID: Record<string, string> = Object.fromEntries(
+  Object.entries(SECTION_ID_BY_TEMPLATE_KEY).map(([templateKey, sectionId]) => [sectionId, templateKey]),
+);
+
+/**
+ * A hub section id (e.g. "description_overview") is not always what its
+ * screen persists progress under -- `DynamicSectionScreen` saves using its
+ * own `sectionKey` prop (e.g. "description"), the same string it addresses
+ * templates with. Translate before reading `draft.getSection(...)`, or a
+ * finished section never shows as complete on the hub. Ids that don't
+ * differ (the majority) pass through unchanged.
+ */
+export function templateKeyForSectionId(sectionId: string): string {
+  return TEMPLATE_KEY_BY_SECTION_ID[sectionId] ?? sectionId;
+}
+
 /**
  * Keyed by `"<inspectionType>:<propertyType>"` for profiles that need their own
  * layout, falling back to `"<propertyType>"` for the ones where the property

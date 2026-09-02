@@ -1,25 +1,59 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { colors, spacing, typography } from '../../theme';
+import { colors, radius, spacing, typography } from '../../theme';
 import { Button, ProgressBar } from '../../components/ui';
 import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { SectionCard } from '../../components/inspection/SectionCard';
 import { FieldListRenderer, SectionNavRenderer } from '../../components/inspection/fieldRenderers';
 import type { AnswerTree, AnswerValue } from '../../components/inspection/fieldRenderers/types';
-import { useInspectionDraft } from '../../context/InspectionDraftContext';
-import { ActiveTemplate, getActiveTemplate } from '../../services/templateApi';
-import { flattenSectionToDraft } from '../../utils/flattenSectionToDraft';
+import { useInspectionDraft, BaselineSectionRef } from '../../context/InspectionDraftContext';
+import { ActiveTemplate, getActiveTemplate, TemplateField } from '../../services/templateApi';
+import { flattenSectionToDraft, meetsAllRequireWhen, meetsAllRequiredFields } from '../../utils/flattenSectionToDraft';
 import { InspectionDraftSelection } from '../../types/inspection';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
 import { getSectionTitle } from '../../constants/inspectionSections';
+import { getBaselineSections as fetchBaselineSections } from '../../services/inspectionApi';
+
+/**
+ * Every Post-Dilapidation job asks the same opinion of every section, on top
+ * of whatever that section's own template already asks: has anything
+ * changed since the baseline was recorded? Built here rather than stored on
+ * the template, since it's the same three fields for every section
+ * regardless of inspectionType/propertyType.
+ */
+const COMPARISON_FIELDS: TemplateField[] = [
+  {
+    key: 'comparisonResult', type: 'pill-select', label: 'Compared to the previous inspection', order: 0, required: true,
+    options: [
+      { value: 'no_change', label: 'No visibly significant change' },
+      { value: 'changes', label: 'There are changes' },
+    ],
+  },
+  {
+    key: 'comparisonExplanation', type: 'textarea', label: 'What has changed?', order: 1, required: true,
+    gate: { fieldKey: 'comparisonResult', equals: 'changes' },
+  },
+  {
+    key: 'comparisonPhotos', type: 'photos', label: 'Photographic evidence of the change', order: 2, required: true,
+    gate: { fieldKey: 'comparisonResult', equals: 'changes' },
+  },
+];
 
 export interface DynamicSectionScreenProps {
   sectionKey: string;
   sectionName: string;
   icon: string;
   order: number;
+  /**
+   * Which template to fetch/render, if different from `sectionKey` itself --
+   * every inspector-added custom section ("Add extra structure") gets its
+   * own unique `sectionKey` for draft persistence, but they all render and
+   * fetch the one shared `custom_structure` template. Defaults to
+   * `sectionKey`, matching every fixed section screen.
+   */
+  templateKey?: string;
   onBack: () => void;
   onComplete: () => void;
   onGoHome: () => void;
@@ -42,6 +76,7 @@ export function DynamicSectionScreen({
   sectionName,
   icon,
   order,
+  templateKey = sectionKey,
   onBack,
   onComplete,
   onGoHome,
@@ -55,6 +90,30 @@ export function DynamicSectionScreen({
   // section again, which remounts this screen) show a blank form even
   // though the answers were already captured.
   const [answers, setAnswers] = useState<AnswerTree>(() => draft.getAnswers(sectionKey) ?? {});
+
+  // Post-Dilapidation: this job is being assessed against an earlier
+  // inspection. `undefined` = not checked yet, `null` = checked, no entry
+  // for this section (a normal job, or a section the baseline never had).
+  const isPostDilapidation = !!draft.getTop().baselineInspectionId;
+  const [baselineSection, setBaselineSection] = useState<BaselineSectionRef | null | undefined>(undefined);
+  useEffect(() => {
+    if (!isPostDilapidation || !draft.getTop().assignmentId) {
+      setBaselineSection(null);
+      return;
+    }
+    const cached = draft.getBaselineSections();
+    if (cached) {
+      setBaselineSection(cached.find((s) => s.key === sectionKey) ?? null);
+      return;
+    }
+    fetchBaselineSections(draft.getTop().assignmentId as string)
+      .then((sections) => {
+        draft.setBaselineSections(sections);
+        setBaselineSection(sections.find((s) => s.key === sectionKey) ?? null);
+      })
+      .catch(() => setBaselineSection(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionKey, isPostDilapidation]);
 
   // Job Information is first in the flow and owns the wizard's fresh
   // selection -- pin the raw ids onto the draft so every later section can
@@ -72,7 +131,7 @@ export function DynamicSectionScreen({
   }, []);
 
   const { inspectionTypeId, propertyTypeId } = draft.getTop();
-  const pinKey = `${inspectionTypeId}:${propertyTypeId}:${sectionKey}`;
+  const pinKey = `${inspectionTypeId}:${propertyTypeId}:${templateKey}`;
   const displayName = getSectionTitle(sectionKey, propertyTypeId, sectionName, inspectionTypeId);
 
   useEffect(() => {
@@ -83,14 +142,14 @@ export function DynamicSectionScreen({
       return;
     }
     setLoadError(false);
-    getActiveTemplate(inspectionTypeId, propertyTypeId, sectionKey)
+    getActiveTemplate(inspectionTypeId, propertyTypeId, templateKey)
       .then((t) => {
         draft.setActiveTemplate(pinKey, t);
         setTemplate(t);
       })
       .catch(() => setLoadError(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inspectionTypeId, propertyTypeId, sectionKey]);
+  }, [inspectionTypeId, propertyTypeId, templateKey]);
 
   function setAnswer(key: string, value: AnswerValue) {
     setAnswers((prev) => {
@@ -103,7 +162,7 @@ export function DynamicSectionScreen({
   function retry() {
     if (!inspectionTypeId || !propertyTypeId) return;
     setLoadError(false);
-    getActiveTemplate(inspectionTypeId, propertyTypeId, sectionKey)
+    getActiveTemplate(inspectionTypeId, propertyTypeId, templateKey)
       .then((t) => {
         draft.setActiveTemplate(pinKey, t);
         setTemplate(t);
@@ -111,22 +170,53 @@ export function DynamicSectionScreen({
       .catch(() => setLoadError(true));
   }
 
-  const canComplete = !!template && template.fields.filter((f) => f.required).every((f) => !!answers[f.key]);
+  // Comparison fields fold into the same completion/save checks as the
+  // section's own template fields -- they live in the same `answers` tree,
+  // just under their own keys, so this is a plain concat rather than a
+  // second parallel completion mechanism.
+  const allFields = useMemo(
+    () => (isPostDilapidation ? [...(template?.fields ?? []), ...COMPARISON_FIELDS] : template?.fields ?? []),
+    [template, isPostDilapidation],
+  );
 
-  function handleComplete() {
+  const canComplete =
+    !!template &&
+    meetsAllRequiredFields(allFields, answers) &&
+    meetsAllRequireWhen(allFields, answers);
+
+  function saveSection(status: 'complete' | 'partial') {
     if (!template) return;
-    const { fields, damages, reportText } = flattenSectionToDraft(template.fields, answers);
+    const { fields, damages, reportText } = flattenSectionToDraft(allFields, answers);
     draft.setSection({
       key: sectionKey,
       name: displayName,
       icon,
       order,
-      status: canComplete ? 'complete' : 'partial',
+      status,
       reportText,
       fields,
       damages,
     });
     onComplete();
+  }
+
+  function handleComplete() {
+    if (!template) return;
+    if (canComplete) {
+      saveSection('complete');
+      return;
+    }
+    // Explicit prompt rather than silently saving as partial and moving on
+    // -- e.g. Paving has four sides and it's easy to complete the first one,
+    // hit Next, and not notice the other three were skipped.
+    Alert.alert(
+      'Section incomplete',
+      "Not everything here has been filled in yet, so this will be saved as partially done rather than complete. You can come back and finish it later.",
+      [
+        { text: 'Keep editing', style: 'cancel' },
+        { text: 'Save as partial', onPress: () => saveSection('partial') },
+      ],
+    );
   }
 
   return (
@@ -158,6 +248,29 @@ export function DynamicSectionScreen({
         </View>
       ) : (
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+          {isPostDilapidation && baselineSection && (
+            <View style={styles.baselineCard}>
+              <Text style={styles.baselineLabel}>PREVIOUSLY RECORDED</Text>
+              <Text style={styles.baselineText}>
+                {baselineSection.reportText || 'No summary was recorded for this section.'}
+              </Text>
+              {baselineSection.photos.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.baselinePhotos}>
+                  {baselineSection.photos.map((uri) => (
+                    <Image key={uri} source={{ uri }} style={styles.baselinePhoto} />
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
+          {isPostDilapidation && baselineSection === null && (
+            <View style={styles.baselineCard}>
+              <Text style={styles.baselineText}>
+                The previous inspection didn't record this section — give your own assessment below.
+              </Text>
+            </View>
+          )}
+
           <SectionCard title={displayName.toUpperCase()} accent="blue">
             {template.layout?.mode === 'section-nav' ? (
               <SectionNavRenderer
@@ -176,6 +289,17 @@ export function DynamicSectionScreen({
               />
             )}
           </SectionCard>
+
+          {isPostDilapidation && (
+            <SectionCard title="COMPARED TO PREVIOUS INSPECTION" accent="blue">
+              <FieldListRenderer
+                fields={COMPARISON_FIELDS}
+                scope={answers}
+                onChange={setAnswer}
+                path={[sectionKey, 'comparison']}
+              />
+            </SectionCard>
+          )}
         </ScrollView>
       )}
 
@@ -191,8 +315,10 @@ export function DynamicSectionScreen({
             style={styles.completeBtn}
           />
         </View>
-        {template && !canComplete && template.fields.some((f) => f.required) && (
-          <Text style={styles.footerHint}>You can complete with required fields blank, but they're recommended</Text>
+        {template && !canComplete && (
+          <Text style={styles.footerHint}>
+            You can complete with required fields blank, but they're recommended
+          </Text>
         )}
       </SafeAreaView>
     </View>
@@ -202,6 +328,18 @@ export function DynamicSectionScreen({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   progressWrap: { backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  baselineCard: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  baselineLabel: { ...typography.caption, fontWeight: '700', color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing.xs },
+  baselineText: { ...typography.bodySm, color: colors.textPrimary },
+  baselinePhotos: { marginTop: spacing.sm },
+  baselinePhoto: { width: 72, height: 72, borderRadius: radius.md, marginRight: spacing.sm, backgroundColor: colors.border },
   body: { flex: 1 },
   bodyContent: { padding: spacing.lg, paddingBottom: spacing.xxxl },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },

@@ -2,6 +2,39 @@ import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { DecisionInput } from './review.schemas';
 
+/**
+ * Admin "pushes" a submitted inspection to an inspector as the baseline for a
+ * new Post-Dilapidation job: creates an empty placeholder Inspection (no
+ * sections yet) carrying the baseline link + the original job's metadata as
+ * a head start. It shows up in that inspector's mobile "Assigned Jobs" list
+ * (GET /inspections/assigned) until they pick it up and submit, at which
+ * point `inspectionsService.submit`'s `assignmentId` path fills this same
+ * row in rather than creating a second one.
+ */
+async function createPostDilapidation(baselineId: string, inspectorId: string) {
+  const baseline = await prisma.inspection.findUnique({ where: { id: baselineId } });
+  if (!baseline) throw ApiError.notFound('Inspection not found');
+  if (!baseline.submittedAt) throw ApiError.badRequest('Only a submitted inspection can be used as a baseline');
+
+  const inspector = await prisma.user.findUnique({ where: { id: inspectorId } });
+  if (!inspector) throw ApiError.notFound('Inspector not found');
+
+  const assignment = await prisma.inspection.create({
+    data: {
+      inspectorId,
+      baselineInspectionId: baseline.id,
+      inspectionType: baseline.inspectionType,
+      propertyType: baseline.propertyType,
+      jobNo: baseline.jobNo,
+      address: baseline.address,
+      suburb: baseline.suburb,
+      client: baseline.client,
+      status: 'DRAFT',
+    },
+  });
+  return assignment;
+}
+
 /** Review job + its per-agent results — what the dashboard polls for status. */
 async function getJob(id: string) {
   const job = await prisma.reviewJob.findUnique({
@@ -10,6 +43,15 @@ async function getJob(id: string) {
   });
   if (!job) throw ApiError.notFound('Review job not found');
   return job;
+}
+
+/** Inspector picker for the "push as Post-Dilapidation baseline" dashboard action. */
+async function listInspectors() {
+  return prisma.user.findMany({
+    where: { role: 'INSPECTOR' },
+    select: { id: true, name: true, email: true },
+    orderBy: { name: 'asc' },
+  });
 }
 
 /** Reviewer dashboard list: every inspection with its latest job status + summary. */
@@ -81,4 +123,4 @@ async function recordDecision(summaryId: string, reviewerId: string, input: Deci
   return decision;
 }
 
-export const reviewService = { getJob, listInspections, getInspectionDetail, recordDecision };
+export const reviewService = { getJob, listInspections, getInspectionDetail, recordDecision, createPostDilapidation, listInspectors };

@@ -45,6 +45,14 @@ export const submitInspectionSchema = z.object({
 
   sections: z.array(sectionSchema).max(50).default([]),
 
+  /** Set when submitting a Post-Dilapidation job the inspector picked up from
+   *  their assigned list (GET /inspections/assigned) -- the id of the
+   *  placeholder Inspection admin created via
+   *  POST /review/inspections/:id/create-post-dilapidation, which already
+   *  carries inspectorId/baselineInspectionId/job metadata. When present,
+   *  `submit` fills that row in rather than creating a second one. */
+  assignmentId: z.string().uuid().optional(),
+
   // Legacy AI-pipeline slots (optional).
   payload: z.record(z.string(), z.unknown()).optional(),
 });

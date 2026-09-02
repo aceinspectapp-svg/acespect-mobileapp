@@ -43,7 +43,7 @@ function numbered(fields: Field[]): TemplateField[] {
 function externalDamages(label = 'Cracking / gaps / other deterioration — note the 2 or 3 most significant items'): Field {
   return {
     key: 'damages', type: 'damage-list', label,
-    repeat: { presentation: 'strip', addable: true, addButtonLabel: 'Add damage item' },
+    repeat: { presentation: 'strip', addable: true, addButtonLabel: 'Add damage/defect' },
     itemFields: numbered([
       { key: 'location', type: 'text', label: 'Damage location' },
       { key: 'damageType', type: 'pill-select', label: 'Description', options: opts('Crack', 'Subsidence', 'Gap', 'Hole', 'Chipping') },
@@ -60,7 +60,7 @@ function externalDamages(label = 'Cracking / gaps / other deterioration — note
 function internalDamages(): Field {
   return {
     key: 'damages', type: 'damage-list', label: 'Cracks / gaps / defects',
-    repeat: { presentation: 'strip', addable: true, addButtonLabel: 'Add damage item' },
+    repeat: { presentation: 'strip', addable: true, addButtonLabel: 'Add damage/defect' },
     itemFields: numbered([
       { key: 'location', type: 'pill-select', label: 'Location', options: opts('Cornice mitres', 'Wall', 'Ceiling', 'Door', 'Arch', 'Other') },
       { key: 'locationDetail', type: 'text', label: 'Location detail' },

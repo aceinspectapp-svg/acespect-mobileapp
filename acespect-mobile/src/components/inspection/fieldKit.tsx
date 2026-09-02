@@ -97,6 +97,25 @@ export function ChipMultiSelect({
   );
 }
 
+/**
+ * Traffic-light fallback for a color-select option that wasn't given an
+ * explicit `color` -- most templates built after the original seed don't set
+ * one, which used to fall back to flat grey (every row, selected or not,
+ * looked identically disabled). Matches on the option label so it works
+ * without any template changes; anything that isn't a recognized
+ * condition word (e.g. "Varying", "Other") falls back to the app's own blue
+ * rather than grey.
+ */
+function inferConditionColor(label: string): string {
+  const l = label.toLowerCase();
+  if (l.includes('poor') || l.includes('unsafe')) return '#DC2626';
+  if (l.includes('average')) return '#EA580C';
+  if (l.includes('fair')) return '#D97706';
+  if (l.includes('satisfactory') || l.includes('good')) return '#65A30D';
+  if (l.includes('new') || l.includes('excellent')) return '#16A34A';
+  return colors.barBlue;
+}
+
 /** Single-select, color-coded list (e.g. condition ratings). */
 export function ColorSelect({
   options,
@@ -111,7 +130,7 @@ export function ColorSelect({
     <View style={{ gap: spacing.sm }}>
       {options.map((o) => {
         const active = value === o.value;
-        const color = o.color ?? colors.textMuted;
+        const color = o.color ?? inferConditionColor(o.label);
         return (
           <Pressable
             key={o.value}

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../theme';
@@ -9,6 +10,7 @@ import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import {
   getSectionGroupsForProperty,
   InspectionSectionItem,
+  templateKeyForSectionId,
 } from '../../constants/inspectionSections';
 import { AppScreenProps } from '../../navigation/types';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
@@ -17,45 +19,79 @@ import { useInspectionDraft } from '../../context/InspectionDraftContext';
  * Inspection Sections hub — the landing screen after Setup Step 2.
  *
  * Lists all 13 sections grouped by area with per-section completion and an
- * overall progress bar. Tapping a section opens its screen (only Driveway is
- * wired today); the rest are placeholders until built. A section reports back
- * as complete via the `completedId` navigation param (see DrivewaySection).
+ * overall progress bar. Completion is read straight from the draft each time
+ * this screen gains focus (not tracked as this component's own state) --
+ * `draft.setSection(...)` writes to a ref, which doesn't trigger a re-render
+ * on its own, so `useFocusEffect` is what notices "a section screen just
+ * completed and popped back here" and prompts a fresh read. This used to be
+ * a local `completed` map seeded from a one-shot `completedId` route param,
+ * which forgot everything the moment this screen unmounted (e.g. leaving via
+ * Home and coming back) and had no way to report more than one id at a time
+ * -- both Job Information and Description & Overview relied on exactly that
+ * missing second case and so could never show as done.
  */
 export function InspectionSectionsScreen({
   navigation,
   route,
 }: AppScreenProps<'InspectionSections'>) {
-  const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const draft = useInspectionDraft();
   const { propertyTypeId, inspectionTypeId } = draft.getTop();
+
+  // Bumped on focus purely to force this render to re-read the draft below --
+  // its value is never itself read.
+  const [, bumpOnFocus] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      bumpOnFocus((n) => n + 1);
+    }, []),
+  );
 
   const sectionGroups = getSectionGroupsForProperty(propertyTypeId, inspectionTypeId);
   const sections = sectionGroups.flatMap((g) => g.sections);
   const totalSections = sections.length;
 
-  // A finished section navigates back here with its id — fold it into progress.
-  const completedId = route.params?.completedId;
-  useEffect(() => {
-    if (completedId) setCompleted((prev) => ({ ...prev, [completedId]: true }));
-  }, [completedId]);
+  const sectionStatus = (section: InspectionSectionItem): 'complete' | 'partial' | undefined => {
+    const status = draft.getSection(templateKeyForSectionId(section.id))?.status;
+    return status === 'complete' || status === 'partial' ? status : undefined;
+  };
+  const isSectionDone = (section: InspectionSectionItem): boolean => sectionStatus(section) === 'complete';
 
-  const completedCount = sections.filter((s) => completed[s.id]).length;
+  // Only fully-complete sections count toward "X of 13 completed" -- a
+  // partially-filled section (e.g. Paving with some but not all four sides
+  // done) shows its own amber indicator on the row instead, but doesn't
+  // count as done here.
+  const completedCount = sections.filter(isSectionDone).length;
+  const partialCount = sections.filter((s) => sectionStatus(s) === 'partial').length;
+  const customSections = draft.getAllSections().filter((s) => s.key.startsWith('custom_'));
   const progress = totalSections ? completedCount / totalSections : 0;
   const pct = Math.round(progress * 100);
 
   const openSection = (section: InspectionSectionItem) => {
     if (section.route === 'ReportSummary') {
-      // The summary needs the live completion map + job setup to render its overview.
-      navigation.navigate('ReportSummary', { completed, data: route.params.data });
+      // The summary needs its own copy of the completion map + job setup to
+      // render its overview -- built fresh from the draft, same as this
+      // screen's own ticks.
+      const completedMap = Object.fromEntries(sections.map((s) => [s.id, isSectionDone(s)]));
+      navigation.navigate('ReportSummary', { completed: completedMap, data: route.params.data });
       return;
     }
     if (section.route === 'JobInformation') {
-      // Re-enter to review/edit what was already captured for this inspection.
-      navigation.navigate('JobInformation', { selection: route.params.data.selection });
+      // `push`, not `navigate`: Job Information already sits earlier in the
+      // stack from the original SelectInspectionType -> JobInformation ->
+      // Step2 -> Sections setup flow, and `navigate` to an already-present
+      // route pops back to THAT instance -- silently dropping Step 2 and
+      // this Sections screen from the stack in the process, so its own back
+      // arrow would then go past the hub instead of returning to it. `push`
+      // stacks a fresh instance on top instead, directly above this screen.
+      // `fromHub` tells it to return here on Next instead of continuing the
+      // linear new-inspection flow into Step 2.
+      navigation.push('JobInformation', { selection: route.params.data.selection, fromHub: true });
       return;
     }
     if (section.route === 'InspectionSetupStep2') {
-      navigation.navigate('InspectionSetupStep2', { data: route.params.data });
+      // Same reasoning as JobInformation above -- push a fresh instance so
+      // its own back arrow returns here rather than past this screen.
+      navigation.push('InspectionSetupStep2', { data: route.params.data });
       return;
     }
     if (section.route) {
@@ -66,7 +102,7 @@ export function InspectionSectionsScreen({
   };
 
   const onNext = () => {
-    const next = sections.find((s) => s.route && !completed[s.id]);
+    const next = sections.find((s) => s.route && !isSectionDone(s));
     if (next) {
       openSection(next);
     } else {
@@ -101,6 +137,7 @@ export function InspectionSectionsScreen({
         </View>
         <Text style={styles.progressMeta}>
           {completedCount} of {totalSections} sections completed
+          {partialCount > 0 ? ` · ${partialCount} partially done` : ''}
         </Text>
       </View>
 
@@ -113,17 +150,21 @@ export function InspectionSectionsScreen({
           <View key={group.title}>
             <Text style={styles.groupTitle}>{group.title.toUpperCase()}</Text>
             {group.sections.map((section) => {
-              const isDone = !!completed[section.id];
+              const status = sectionStatus(section);
+              const isDone = status === 'complete';
+              const isPartial = status === 'partial';
+              const a11ySuffix = isDone ? ', completed' : isPartial ? ', partially completed' : '';
               return (
                 <Pressable
                   key={section.id}
                   onPress={() => openSection(section)}
                   style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                   accessibilityRole="button"
-                  accessibilityLabel={`${section.title}${isDone ? ', completed' : ''}`}
+                  accessibilityLabel={`${section.title}${a11ySuffix}`}
                 >
-                  <View style={[styles.circle, isDone && styles.circleDone]}>
+                  <View style={[styles.circle, isDone && styles.circleDone, isPartial && styles.circlePartial]}>
                     {isDone && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                    {isPartial && <View style={styles.partialDot} />}
                   </View>
                   <Text style={styles.rowTitle} numberOfLines={1}>
                     {section.number}. {section.title}
@@ -134,6 +175,46 @@ export function InspectionSectionsScreen({
             })}
           </View>
         ))}
+
+        {/* Inspector-added extras — a pergola, granny flat, spare room found
+            on site, anything the fixed 13 sections don't cover. Not counted
+            in the "X of 13" total above; each gets its own status dot. */}
+        <View>
+          <Text style={styles.groupTitle}>ADDITIONAL</Text>
+          {customSections.map((s) => (
+            <Pressable
+              key={s.key}
+              onPress={() => navigation.navigate('CustomSection', { sectionKey: s.key, sectionName: s.name })}
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`${s.name}${s.status === 'complete' ? ', completed' : s.status === 'partial' ? ', partially completed' : ''}`}
+            >
+              <View
+                style={[
+                  styles.circle,
+                  s.status === 'complete' && styles.circleDone,
+                  s.status === 'partial' && styles.circlePartial,
+                ]}
+              >
+                {s.status === 'complete' && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                {s.status === 'partial' && <View style={styles.partialDot} />}
+              </View>
+              <Text style={styles.rowTitle} numberOfLines={1}>
+                {s.name}
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </Pressable>
+          ))}
+          <Pressable
+            onPress={() => navigation.navigate('AddCustomSection')}
+            style={({ pressed }) => [styles.addRow, pressed && styles.rowPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Add extra structure or room"
+          >
+            <Ionicons name="add-circle-outline" size={20} color={colors.barBlue} />
+            <Text style={styles.addRowText}>Add extra structure / room</Text>
+          </Pressable>
+        </View>
       </ScrollView>
 
       {/* Sticky footer */}
@@ -210,6 +291,20 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   circleDone: { backgroundColor: colors.success, borderColor: colors.success },
+  circlePartial: { backgroundColor: colors.warning, borderColor: colors.warning },
+  partialDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.white },
+
+  addRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    gap: spacing.sm,
+  },
+  addRowText: { ...typography.bodySm, fontWeight: '600', color: colors.barBlue },
   rowTitle: { ...typography.bodySm, fontWeight: '600', color: colors.barBlue, flex: 1 },
 
   footer: {

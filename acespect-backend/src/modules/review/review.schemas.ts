@@ -8,3 +8,10 @@ export const decisionSchema = z.object({
 });
 
 export type DecisionInput = z.infer<typeof decisionSchema>;
+
+/** Admin pushing a submitted inspection to an inspector as a Post-Dilapidation baseline. */
+export const createPostDilapidationSchema = z.object({
+  inspectorId: z.string().uuid(),
+});
+
+export type CreatePostDilapidationInput = z.infer<typeof createPostDilapidationSchema>;

@@ -9,11 +9,12 @@ import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { SectionCard } from '../../components/inspection/SectionCard';
 import { ChoiceTileGrid } from '../../components/inspection/ChoiceTile';
 import { StatusRow } from '../../components/inspection/StatusRow';
-import { PropertyUse, WeatherId } from '../../types/jobSetup';
+import { JobSetupData, PropertyUse, WeatherId } from '../../types/jobSetup';
 import { AppScreenProps } from '../../navigation/types';
 import { useSystemStatus } from '../../hooks/useSystemStatus';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
 import { ActiveTemplate, getActiveTemplate } from '../../services/templateApi';
+import { meetsAllRequiredFields } from '../../utils/flattenSectionToDraft';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
 
 const SECTION_KEY = 'job-info';
@@ -22,15 +23,20 @@ export function JobInformationScreen({
   route,
   navigation,
 }: AppScreenProps<'JobInformation'>) {
-  const { selection } = route.params;
+  const { selection, fromHub } = route.params;
   const draft = useInspectionDraft();
   const systemStatus = useSystemStatus();
 
   const [template, setTemplate] = useState<ActiveTemplate | null>(null);
   const [loadError, setLoadError] = useState(false);
   // Generic answers keyed by field.key — replaces the old fixed `details` shape
-  // so the form renders whatever fields the admin's template defines.
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  // so the form renders whatever fields the admin's template defines. Restored
+  // from the draft rather than always starting blank -- every field on this
+  // screen is a plain string (text/date/select-tiles/yesno), so the cast from
+  // the general AnswerTree shape is safe here specifically.
+  const [answers, setAnswers] = useState<Record<string, string>>(
+    () => (draft.getAnswers(SECTION_KEY) as Record<string, string> | undefined) ?? {},
+  );
 
   const pinKey = `${selection.inspectionTypeId}:${selection.propertyTypeId}:${SECTION_KEY}`;
 
@@ -85,7 +91,15 @@ export function JobInformationScreen({
     });
   }, [template]);
 
-  const setAnswer = (key: string) => (value: string) => setAnswers((a) => ({ ...a, [key]: value }));
+  const setAnswer = (key: string) => (value: string) =>
+    setAnswers((a) => {
+      const next = { ...a, [key]: value };
+      // Persisted live (not just on Next) so navigating away mid-fill and
+      // reopening this screen -- from the hub or the Back button -- restores
+      // what was typed, the same guarantee every other section already has.
+      draft.setAnswers(SECTION_KEY, next);
+      return next;
+    });
 
   const textFields = (template?.fields ?? [])
     .filter((f) => f.type === 'text' || f.type === 'date')
@@ -97,27 +111,50 @@ export function JobInformationScreen({
     .filter((f) => f.type === 'yesno')
     .sort((a, b) => a.order - b.order);
 
-  const canContinue =
-    !!template && template.fields.filter((f) => f.required).every((f) => !!answers[f.key]);
+  const canContinue = !!template && meetsAllRequiredFields(template.fields, answers);
 
   const onNext = () => {
-    if (!template || !canContinue) return;
-    navigation.navigate('InspectionSetupStep2', {
-      data: {
-        selection,
-        details: {
-          jobNumber: answers.jobNumber ?? '',
-          inspectionDate: answers.inspectionDate ?? '',
-          clientName: answers.clientName ?? '',
-          inspectionAddress: answers.inspectionAddress ?? '',
-          assignedInspector: answers.assignedInspector ?? '',
-          gpsConfirmed: !!answers.inspectionAddress?.trim(),
-        },
-        weather: (answers.weather ?? '') as WeatherId,
-        usedAsBusiness: (answers.usedAsBusiness ?? '') as PropertyUse,
-        systemStatus: systemStatus.snapshot,
-      },
+    if (!template) return;
+
+    // Register this as a completed (or partial) section the same way every
+    // other section does, so the hub's progress ticks and count can actually
+    // see it -- previously Job Information only ever wrote into
+    // `draft.setTop()`, never a section entry, so it could never show as done.
+    draft.setSection({
+      key: SECTION_KEY,
+      name: 'Job Information',
+      order: 1,
+      status: canContinue ? 'complete' : 'partial',
+      fields: answers,
     });
+
+    const data: JobSetupData = {
+      selection,
+      details: {
+        jobNumber: answers.jobNumber ?? '',
+        inspectionDate: answers.inspectionDate ?? '',
+        clientName: answers.clientName ?? '',
+        inspectionAddress: answers.inspectionAddress ?? '',
+        assignedInspector: answers.assignedInspector ?? '',
+        gpsConfirmed: !!answers.inspectionAddress?.trim(),
+      },
+      weather: (answers.weather ?? '') as WeatherId,
+      usedAsBusiness: (answers.usedAsBusiness ?? '') as PropertyUse,
+      systemStatus: systemStatus.snapshot,
+    };
+
+    if (fromHub) {
+      // Opened from the hub to review/edit -- return there directly rather
+      // than forcing the inspector back through Step 2, which isn't what
+      // they came here to touch. `merge: true` keeps whatever the hub's own
+      // route entry already had; this `data` is only a type-correct
+      // fallback for the (should-never-happen) case that entry is missing.
+      navigation.navigate({ name: 'InspectionSections', params: { data }, merge: true });
+      return;
+    }
+
+    if (!canContinue) return;
+    navigation.navigate('InspectionSetupStep2', { data });
   };
 
   return (

@@ -47,24 +47,34 @@ function sectionCreateData(s: SubmitInspectionInput['sections'][number]) {
  * correct a mistake.)
  */
 async function submit(inspectorId: string, input: SubmitInspectionInput) {
-  const inspection = await prisma.inspection.create({
-    data: {
-      inspectorId,
-      inspectionType: input.inspectionType,
-      propertyType: input.propertyType,
-      jobNo: input.jobNo,
-      address: input.address,
-      suburb: input.suburb,
-      client: input.client,
-      date: input.date ? new Date(input.date) : new Date(),
-      notes: input.notes ?? '',
-      overallProgress: input.overallProgress ?? 0,
-      status: 'DRAFT',
-      ...(input.payload ? { payload: input.payload as Prisma.InputJsonValue } : {}),
-      sections: { create: input.sections.map(sectionCreateData) },
-    },
-  });
+  const data = {
+    inspectionType: input.inspectionType,
+    propertyType: input.propertyType,
+    jobNo: input.jobNo,
+    address: input.address,
+    suburb: input.suburb,
+    client: input.client,
+    date: input.date ? new Date(input.date) : new Date(),
+    notes: input.notes ?? '',
+    overallProgress: input.overallProgress ?? 0,
+    status: 'DRAFT' as const,
+    ...(input.payload ? { payload: input.payload as Prisma.InputJsonValue } : {}),
+    sections: { create: input.sections.map(sectionCreateData) },
+  };
 
+  if (input.assignmentId) {
+    // Picked up from the inspector's assigned list -- fill in the
+    // placeholder row admin created rather than creating a second
+    // Inspection, so baselineInspectionId (and the job metadata admin
+    // already set) stay on the one record.
+    const assignment = await prisma.inspection.findUnique({ where: { id: input.assignmentId } });
+    if (!assignment) throw ApiError.notFound('Assigned job not found');
+    if (assignment.inspectorId !== inspectorId) throw ApiError.forbidden('This job is not assigned to you');
+    const inspection = await prisma.inspection.update({ where: { id: input.assignmentId }, data });
+    return { inspection };
+  }
+
+  const inspection = await prisma.inspection.create({ data: { ...data, inspectorId } });
   return { inspection };
 }
 
@@ -151,6 +161,55 @@ async function finalize(id: string, inspectorId: string) {
   return { inspection, reviewJob };
 }
 
+/**
+ * Jobs admin has pushed to this inspector as a Post-Dilapidation baseline
+ * comparison, not yet picked up (no sections filled in yet -- once the
+ * inspector submits, `submit`'s `assignmentId` path fills the row in and it
+ * naturally drops off this list). What the mobile app's "Assigned Jobs"
+ * entry point polls.
+ */
+async function listAssigned(inspectorId: string) {
+  const rows = await prisma.inspection.findMany({
+    where: { inspectorId, baselineInspectionId: { not: null }, sections: { none: {} } },
+    include: { baselineInspection: { select: { id: true, jobNo: true, address: true, client: true, propertyType: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    inspectionType: r.inspectionType,
+    propertyType: r.propertyType,
+    jobNo: r.jobNo,
+    address: r.address,
+    suburb: r.suburb,
+    client: r.client,
+    baseline: r.baselineInspection,
+  }));
+}
+
+/**
+ * Read-only reference data for a Post-Dilapidation job: every section of the
+ * assigned job's baseline, as last recorded. Restricted to the inspector the
+ * job is assigned to -- this is what lets DynamicSectionScreen show "what
+ * was recorded last time" while the inspector fills in the comparison.
+ */
+async function getBaselineSections(assignedInspectionId: string, inspectorId: string) {
+  const assigned = await prisma.inspection.findUnique({
+    where: { id: assignedInspectionId },
+    include: { baselineInspection: { include: { sections: true } } },
+  });
+  if (!assigned) throw ApiError.notFound('Inspection not found');
+  if (assigned.inspectorId !== inspectorId) throw ApiError.forbidden('This job is not assigned to you');
+  if (!assigned.baselineInspection) throw ApiError.notFound('This job has no baseline set');
+
+  return assigned.baselineInspection.sections.map((s) => ({
+    key: s.key,
+    name: s.name,
+    reportText: s.reportText,
+    fields: s.fields,
+    photos: s.photos,
+  }));
+}
+
 /** Fetch an inspection with its latest review job + summary. */
 async function getById(id: string) {
   const inspection = await prisma.inspection.findUnique({
@@ -178,4 +237,4 @@ async function uploadPhoto(buffer: Buffer, contentType: string, originalName: st
   return store(buffer, contentType || 'image/jpeg', ext);
 }
 
-export const inspectionsService = { submit, update, finalize, getById, uploadPhoto };
+export const inspectionsService = { submit, update, finalize, getById, uploadPhoto, listAssigned, getBaselineSections };
