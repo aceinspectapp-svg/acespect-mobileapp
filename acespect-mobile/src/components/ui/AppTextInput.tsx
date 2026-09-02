@@ -21,6 +21,10 @@ interface AppTextInputProps extends TextInputProps {
   /** Read-only / admin-assigned field — greys the fill, blocks editing. */
   readOnly?: boolean;
   error?: string;
+  /** Locked text shown before the editable input, inside the same field box
+   * (e.g. "VIC-" ahead of a job number). Static — not part of the TextInput,
+   * so it can't be selected, edited, or deleted from the keyboard. */
+  prefix?: string;
 }
 
 /** Labeled text field. Supports required marker, icons, password, read-only. */
@@ -32,6 +36,7 @@ export function AppTextInput({
   password = false,
   readOnly = false,
   error,
+  prefix,
   style,
   ...rest
 }: AppTextInputProps) {
@@ -62,6 +67,7 @@ export function AppTextInput({
             style={styles.leftIcon}
           />
         )}
+        {!!prefix && <Text style={styles.prefixText}>{prefix}</Text>}
         <TextInput
           style={[styles.input, readOnly && styles.inputReadOnly, style]}
           placeholderTextColor={colors.textMuted}
@@ -119,6 +125,12 @@ const styles = StyleSheet.create({
   fieldReadOnly: { backgroundColor: colors.surfaceAlt, borderStyle: 'dashed' },
   fieldError: { borderColor: colors.danger },
   leftIcon: { marginRight: spacing.md },
+  prefixText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontWeight: '700',
+    marginRight: 2,
+  },
   input: {
     flex: 1,
     ...typography.body,

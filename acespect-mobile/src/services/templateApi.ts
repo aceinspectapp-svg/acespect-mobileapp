@@ -57,6 +57,10 @@ export interface TemplateField {
   placeholder?: string;
   maxLength?: number;
   unit?: string;
+  /** A locked, non-editable prefix baked into a text field (e.g. "VIC-" ahead
+   * of a job number). Rendered as static text the inspector can't select or
+   * delete; the stored value always includes it. */
+  prefix?: string;
   options?: TemplateFieldOption[];
   allowOther?: boolean;
   gate?: FieldGate;

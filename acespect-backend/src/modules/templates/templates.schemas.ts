@@ -105,6 +105,12 @@ const baseFieldShape = {
   placeholder: z.string().max(200).optional(),
   maxLength: z.number().int().positive().optional(),
   unit: z.string().max(20).optional(),
+  // A locked, non-editable prefix baked into a text field's value (e.g.
+  // "VIC-" ahead of a job number) -- rendered as static text the inspector
+  // can't select or delete, not just a placeholder. The stored value always
+  // includes it (TextFieldRenderer prepends it on every change), so nothing
+  // downstream (report summary, submission, dashboard) needs its own change.
+  prefix: z.string().max(20).optional(),
   options: z.array(templateFieldOptionSchema).max(30).optional(),
   allowOther: z.boolean().optional(),
   gate: fieldGateSchema.optional(),
@@ -171,6 +177,7 @@ export interface TemplateField {
   placeholder?: string;
   maxLength?: number;
   unit?: string;
+  prefix?: string;
   options?: TemplateFieldOption[];
   allowOther?: boolean;
   gate?: FieldGate;

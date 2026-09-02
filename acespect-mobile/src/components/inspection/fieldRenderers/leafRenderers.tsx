@@ -12,6 +12,13 @@ const asString = (v: unknown): string => (typeof v === 'string' ? v : '');
 const asStringArray = (v: unknown): string[] => (Array.isArray(v) ? (v as string[]) : []);
 
 export function TextFieldRenderer({ field, value, onChange }: FieldRendererProps) {
+  const { prefix } = field;
+  // A prefixed field (e.g. "VIC-" ahead of a job number) is never editable
+  // itself -- it's rendered as static text outside the TextInput, which only
+  // ever holds the suffix. `onChange` always writes prefix + suffix back, so
+  // the stored value is permanently prefixed with no downstream change needed.
+  const raw = asString(value);
+  const suffix = prefix && raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
   return (
     <View style={styles.block}>
       <AppTextInput
@@ -19,8 +26,9 @@ export function TextFieldRenderer({ field, value, onChange }: FieldRendererProps
         required={field.required}
         readOnly={field.readOnly}
         placeholder={field.placeholder}
-        value={asString(value)}
-        onChangeText={onChange}
+        prefix={prefix}
+        value={prefix ? suffix : raw}
+        onChangeText={(text) => onChange(prefix ? `${prefix}${text}` : text)}
       />
     </View>
   );

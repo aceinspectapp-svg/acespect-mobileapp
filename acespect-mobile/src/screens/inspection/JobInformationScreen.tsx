@@ -239,8 +239,13 @@ export function JobInformationScreen({
                       label={field.label}
                       required={field.required}
                       readOnly={field.readOnly}
-                      value={answers[field.key] ?? ''}
-                      onChangeText={setAnswer(field.key)}
+                      prefix={field.prefix}
+                      value={
+                        field.prefix && (answers[field.key] ?? '').startsWith(field.prefix)
+                          ? (answers[field.key] ?? '').slice(field.prefix.length)
+                          : answers[field.key] ?? ''
+                      }
+                      onChangeText={(text) => setAnswer(field.key)(field.prefix ? `${field.prefix}${text}` : text)}
                     />
                   )}
                 </React.Fragment>
