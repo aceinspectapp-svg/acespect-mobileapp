@@ -44,7 +44,8 @@
           "locationWhenInUsePermission": "ACE SPECT uses your location to GPS-stamp inspections and confirm the property address."
         }
       ],
-      "expo-build-properties"
+      "expo-build-properties",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {

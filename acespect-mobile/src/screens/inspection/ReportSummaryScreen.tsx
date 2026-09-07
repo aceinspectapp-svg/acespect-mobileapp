@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
   sigLabel: { ...typography.label, fontWeight: '700', color: colors.textSecondary, marginTop: spacing.lg, marginBottom: spacing.sm },
   sigPad: { height: 140, borderRadius: radius.md, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   sigPadSigned: { borderColor: colors.success },
-  sigPlaceholder: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  sigPlaceholder: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', gap: 2 },
   sigPlaceholderText: { ...typography.caption, color: colors.textMuted },
   sigClear: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: spacing.xs, paddingVertical: 2 },
   sigClearText: { ...typography.caption, color: colors.textMuted },
