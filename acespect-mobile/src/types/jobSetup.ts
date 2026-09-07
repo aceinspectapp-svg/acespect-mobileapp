@@ -36,7 +36,12 @@ export interface SystemStatus {
 export interface JobSetupData {
   selection: InspectionDraftSelection;
   details: JobDetails;
-  weather: WeatherId;
+  // Display-only summary string (e.g. "Sunny, Windy") -- Weather is a
+  // multi-select on the template now, so this is a joined string rather
+  // than a single WeatherId. The full per-option answer lives in the
+  // draft's own answer tree (job-info section), which is what anything
+  // other than this one summary card should read.
+  weather: string;
   usedAsBusiness: PropertyUse;
   systemStatus: SystemStatus;
 }

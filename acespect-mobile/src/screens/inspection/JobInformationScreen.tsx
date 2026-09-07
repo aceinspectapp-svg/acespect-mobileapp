@@ -9,15 +9,25 @@ import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { SectionCard } from '../../components/inspection/SectionCard';
 import { ChoiceTileGrid } from '../../components/inspection/ChoiceTile';
 import { StatusRow } from '../../components/inspection/StatusRow';
-import { JobSetupData, PropertyUse, WeatherId } from '../../types/jobSetup';
+import { JobSetupData, PropertyUse } from '../../types/jobSetup';
 import { AppScreenProps } from '../../navigation/types';
 import { useSystemStatus } from '../../hooks/useSystemStatus';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
-import { ActiveTemplate, getActiveTemplate } from '../../services/templateApi';
+import { ActiveTemplate, getActiveTemplate, TemplateField } from '../../services/templateApi';
 import { meetsAllRequiredFields } from '../../utils/flattenSectionToDraft';
+import { FieldListRenderer } from '../../components/inspection/fieldRenderers';
+import type { AnswerTree, AnswerValue } from '../../components/inspection/fieldRenderers/types';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
 
 const SECTION_KEY = 'job-info';
+
+/** Narrows an answer to a plain string -- safe wherever the field is known
+ * by construction to be single-valued (text/date/select-tiles/yesno; not
+ * chip-multiselect or anything nested), same idea as leafRenderers' own
+ * asString. */
+function asStr(v: AnswerValue | undefined): string {
+  return typeof v === 'string' ? v : '';
+}
 
 export function JobInformationScreen({
   route,
@@ -31,11 +41,12 @@ export function JobInformationScreen({
   const [loadError, setLoadError] = useState(false);
   // Generic answers keyed by field.key — replaces the old fixed `details` shape
   // so the form renders whatever fields the admin's template defines. Restored
-  // from the draft rather than always starting blank -- every field on this
-  // screen is a plain string (text/date/select-tiles/yesno), so the cast from
-  // the general AnswerTree shape is safe here specifically.
-  const [answers, setAnswers] = useState<Record<string, string>>(
-    () => (draft.getAnswers(SECTION_KEY) as Record<string, string> | undefined) ?? {},
+  // from the draft rather than always starting blank. Most fields here are a
+  // plain string (text/date/select-tiles/yesno, hand-rendered below), but not
+  // all any more -- e.g. Weather is a chip-multiselect (string[]) -- so this
+  // is the general AnswerTree shape, not narrowed to string.
+  const [answers, setAnswers] = useState<AnswerTree>(
+    () => (draft.getAnswers(SECTION_KEY) as AnswerTree | undefined) ?? {},
   );
 
   const pinKey = `${selection.inspectionTypeId}:${selection.propertyTypeId}:${SECTION_KEY}`;
@@ -91,7 +102,7 @@ export function JobInformationScreen({
     });
   }, [template]);
 
-  const setAnswer = (key: string) => (value: string) =>
+  const setAnswer = (key: string) => (value: AnswerValue) =>
     setAnswers((a) => {
       const next = { ...a, [key]: value };
       // Persisted live (not just on Next) so navigating away mid-fill and
@@ -109,6 +120,16 @@ export function JobInformationScreen({
     .sort((a, b) => a.order - b.order);
   const yesNoFields = (template?.fields ?? [])
     .filter((f) => f.type === 'yesno')
+    .sort((a, b) => a.order - b.order);
+  // Anything not one of the three hand-rendered shapes above (chip-multiselect
+  // like Weather, its gated "Other" textarea, or any future field type) --
+  // rendered through the same generic engine every other section uses,
+  // rather than needing its own bespoke branch here each time. This is what
+  // makes a template field type actually show up regardless of what it is,
+  // instead of silently vanishing because this screen didn't special-case it.
+  const handledKeys = new Set([...textFields, ...tileFields, ...yesNoFields].map((f) => f.key));
+  const remainingFields: TemplateField[] = (template?.fields ?? [])
+    .filter((f) => !handledKeys.has(f.key))
     .sort((a, b) => a.order - b.order);
 
   const canContinue = !!template && meetsAllRequiredFields(template.fields, answers);
@@ -131,14 +152,17 @@ export function JobInformationScreen({
     const data: JobSetupData = {
       selection,
       details: {
-        jobNumber: answers.jobNumber ?? '',
-        inspectionDate: answers.inspectionDate ?? '',
-        clientName: answers.clientName ?? '',
-        inspectionAddress: answers.inspectionAddress ?? '',
-        assignedInspector: answers.assignedInspector ?? '',
-        gpsConfirmed: !!answers.inspectionAddress?.trim(),
+        jobNumber: asStr(answers.jobNumber),
+        inspectionDate: asStr(answers.inspectionDate),
+        clientName: asStr(answers.clientName),
+        inspectionAddress: asStr(answers.inspectionAddress),
+        assignedInspector: asStr(answers.assignedInspector),
+        gpsConfirmed: !!asStr(answers.inspectionAddress).trim(),
       },
-      weather: (answers.weather ?? '') as WeatherId,
+      // Weather is multi-select now (chip-multiselect on the template) --
+      // this is only a display summary string for the report card; the full
+      // per-option answer is what's actually persisted via draft.setAnswers.
+      weather: Array.isArray(answers.weather) ? (answers.weather as string[]).join(', ') : asStr(answers.weather),
       usedAsBusiness: (answers.usedAsBusiness ?? '') as PropertyUse,
       systemStatus: systemStatus.snapshot,
     };
@@ -231,7 +255,7 @@ export function JobInformationScreen({
                       label={field.label}
                       required={field.required}
                       readOnly={field.readOnly}
-                      value={answers[field.key] ?? ''}
+                      value={asStr(answers[field.key])}
                       onChange={setAnswer(field.key)}
                     />
                   ) : (
@@ -241,9 +265,9 @@ export function JobInformationScreen({
                       readOnly={field.readOnly}
                       prefix={field.prefix}
                       value={
-                        field.prefix && (answers[field.key] ?? '').startsWith(field.prefix)
-                          ? (answers[field.key] ?? '').slice(field.prefix.length)
-                          : answers[field.key] ?? ''
+                        field.prefix && asStr(answers[field.key]).startsWith(field.prefix)
+                          ? asStr(answers[field.key]).slice(field.prefix.length)
+                          : asStr(answers[field.key])
                       }
                       onChangeText={(text) => setAnswer(field.key)(field.prefix ? `${field.prefix}${text}` : text)}
                     />
@@ -251,12 +275,12 @@ export function JobInformationScreen({
                 </React.Fragment>
               ))}
               {/* Only meaningful once an address has actually been entered. */}
-              {!!answers.inspectionAddress?.trim() && (
+              {!!asStr(answers.inspectionAddress).trim() && (
                 <View style={styles.gpsNote}>
                   <Ionicons name="location" size={14} color={colors.barGreen} />
                   <Text style={styles.gpsText}>
                     <Text style={styles.gpsBold}>Confirmed: </Text>
-                    {answers.inspectionAddress ?? ''} · GPS locked
+                    {asStr(answers.inspectionAddress)} · GPS locked
                   </Text>
                 </View>
               )}
@@ -278,7 +302,7 @@ export function JobInformationScreen({
                   label: o.label,
                   icon: (o.icon ?? 'help-circle-outline') as React.ComponentProps<typeof ChoiceTileGrid>['options'][number]['icon'],
                 }))}
-                value={answers[field.key] ?? null}
+                value={typeof answers[field.key] === 'string' ? (answers[field.key] as string) : null}
                 onChange={setAnswer(field.key)}
                 columns={3}
               />
@@ -294,11 +318,26 @@ export function JobInformationScreen({
             >
               <SegmentedToggle
                 options={(field.options ?? []).map((o) => ({ value: o.value, label: o.label }))}
-                value={answers[field.key] ?? null}
+                value={typeof answers[field.key] === 'string' ? (answers[field.key] as string) : null}
                 onChange={setAnswer(field.key)}
               />
             </SectionCard>
           ))}
+
+          {/* Everything else the template defines (chip-multiselect, gated
+              "Other" textareas, etc.) -- the generic renderer, same as every
+              other section, so a field type doesn't need its own bespoke
+              branch above just to actually appear. */}
+          {remainingFields.length > 0 && (
+            <SectionCard title="ADDITIONAL DETAILS" accent="blue">
+              <FieldListRenderer
+                fields={remainingFields}
+                scope={answers}
+                onChange={(key, value) => setAnswer(key)(value)}
+                path={[SECTION_KEY]}
+              />
+            </SectionCard>
+          )}
 
           {/* SYSTEM STATUS — not part of the template, always device/system telemetry */}
           <SectionCard title="SYSTEM STATUS" accent="green">
