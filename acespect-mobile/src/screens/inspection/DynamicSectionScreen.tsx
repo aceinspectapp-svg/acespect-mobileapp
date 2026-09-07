@@ -179,12 +179,18 @@ export function DynamicSectionScreen({
     [template, isPostDilapidation],
   );
 
-  const canComplete =
-    !!template &&
-    meetsAllRequiredFields(allFields, answers) &&
-    meetsAllRequireWhen(allFields, answers);
+  // Split from the general softness every other `required` field gets
+  // (recommended, never blocking -- see the footer hint below): a
+  // mandatory-defect rule exists specifically because Condition = Average/
+  // Poor without a recorded defect is a real inspection gap, not a
+  // forgotten nice-to-have, so it's the one thing in this screen that
+  // actually blocks leaving rather than just nagging.
+  const defectsComplete = !!template && meetsAllRequireWhen(allFields, answers);
+  const requiredFieldsComplete = !!template && meetsAllRequiredFields(allFields, answers);
+  const canComplete = defectsComplete && requiredFieldsComplete;
 
-  function saveSection(status: 'complete' | 'partial') {
+  /** Pure save -- no navigation. Shared by every leave path below. */
+  function persistSection(status: 'complete' | 'partial') {
     if (!template) return;
     const { fields, damages, reportText } = flattenSectionToDraft(allFields, answers);
     draft.setSection({
@@ -197,27 +203,54 @@ export function DynamicSectionScreen({
       fields,
       damages,
     });
-    onComplete();
   }
 
-  function handleComplete() {
-    if (!template) return;
-    if (canComplete) {
-      saveSection('complete');
+  /**
+   * Gate for every way to leave this screen -- the header/footer Back, the
+   * Home icon, and the Complete Section button all route through this, each
+   * passing its own actual destination as `leaveFn` (they're not the same:
+   * Home goes to `popToTop`, Back/Complete land on the hub).
+   *   - Defects unmet: hard block, no escape hatch -- `leaveFn` is never
+   *     called. This is the one case with no way out except fixing it.
+   *   - Other required fields unmet: same choice `handleComplete` always
+   *     offered, just now available from every exit, not only the button --
+   *     stay and finish, or save partial and go.
+   *   - Fully valid: no prompt, just persist as complete and go -- so
+   *     leaving via Back after correctly finishing every field doesn't
+   *     silently leave the section's status stuck on whatever it was
+   *     before, unlike tapping Complete Section explicitly.
+   */
+  function attemptLeave(leaveFn: () => void) {
+    if (!template) {
+      leaveFn();
       return;
     }
-    // Explicit prompt rather than silently saving as partial and moving on
-    // -- e.g. Paving has four sides and it's easy to complete the first one,
-    // hit Next, and not notice the other three were skipped.
-    Alert.alert(
-      'Section incomplete',
-      "Not everything here has been filled in yet, so this will be saved as partially done rather than complete. You can come back and finish it later.",
-      [
-        { text: 'Keep editing', style: 'cancel' },
-        { text: 'Save as partial', onPress: () => saveSection('partial') },
-      ],
-    );
+    if (!defectsComplete) {
+      Alert.alert(
+        'Defect details required',
+        'The condition here is Average or Poor, so at least one defect must be recorded before you can leave this section.',
+        [{ text: 'OK' }],
+      );
+      return;
+    }
+    if (!requiredFieldsComplete) {
+      Alert.alert(
+        'Section incomplete',
+        'Not everything here has been filled in yet. Save this as a draft and finish it later, or stay and complete it now.',
+        [
+          { text: 'Complete Section', style: 'cancel' },
+          { text: 'Save as Draft', onPress: () => { persistSection('partial'); leaveFn(); } },
+        ],
+      );
+      return;
+    }
+    persistSection('complete');
+    leaveFn();
   }
+
+  const handleBack = () => attemptLeave(onBack);
+  const handleGoHome = () => attemptLeave(onGoHome);
+  const handleComplete = () => attemptLeave(onComplete);
 
   return (
     <View style={styles.root}>
@@ -225,10 +258,20 @@ export function DynamicSectionScreen({
       <InspectionHeader
         title={displayName}
         subtitle={icon}
-        onBack={onBack}
+        onBack={handleBack}
         actions={[
-          { icon: 'save-outline', accessibilityLabel: 'Save draft', onPress: () => Alert.alert('Draft saved', `${displayName} saved locally.`) },
-          { icon: 'home-outline', accessibilityLabel: 'Home', onPress: onGoHome },
+          {
+            icon: 'save-outline',
+            accessibilityLabel: 'Save draft',
+            // Was a no-op alert -- claimed to save without ever calling
+            // persistSection. Now actually writes the current answers as
+            // partial, same as the Save as Draft choice everywhere else.
+            onPress: () => {
+              persistSection('partial');
+              Alert.alert('Draft saved', `${displayName} saved locally.`);
+            },
+          },
+          { icon: 'home-outline', accessibilityLabel: 'Home', onPress: handleGoHome },
         ]}
       />
       <View style={styles.progressWrap}>
@@ -305,7 +348,7 @@ export function DynamicSectionScreen({
 
       <SafeAreaView edges={['bottom']} style={styles.footer}>
         <View style={styles.footerRow}>
-          <Button label="Back" variant="outline" leftIcon="chevron-back" fitContent onPress={onBack} />
+          <Button label="Back" variant="outline" leftIcon="chevron-back" fitContent onPress={handleBack} />
           <Button
             label="Complete Section"
             variant="primaryGradient"
@@ -315,7 +358,12 @@ export function DynamicSectionScreen({
             style={styles.completeBtn}
           />
         </View>
-        {template && !canComplete && (
+        {template && !defectsComplete && (
+          <Text style={styles.footerHintBlocking}>
+            Defect details are required before you can leave this section
+          </Text>
+        )}
+        {template && defectsComplete && !requiredFieldsComplete && (
           <Text style={styles.footerHint}>
             You can complete with required fields blank, but they're recommended
           </Text>
@@ -348,4 +396,5 @@ const styles = StyleSheet.create({
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   completeBtn: { flex: 1 },
   footerHint: { ...typography.caption, color: colors.textMuted, textAlign: 'center', marginTop: spacing.sm },
+  footerHintBlocking: { ...typography.caption, color: colors.danger, fontWeight: '700', textAlign: 'center', marginTop: spacing.sm },
 });
