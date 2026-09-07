@@ -16,7 +16,7 @@ import { useInspectionDraft } from '../../context/InspectionDraftContext';
 import { ActiveTemplate, getActiveTemplate, TemplateField } from '../../services/templateApi';
 import { meetsAllRequiredFields } from '../../utils/flattenSectionToDraft';
 import { FieldListRenderer } from '../../components/inspection/fieldRenderers';
-import type { AnswerTree, AnswerValue } from '../../components/inspection/fieldRenderers/types';
+import { isGateSatisfied, type AnswerTree, type AnswerValue } from '../../components/inspection/fieldRenderers/types';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
 
 const SECTION_KEY = 'job-info';
@@ -327,8 +327,13 @@ export function JobInformationScreen({
           {/* Everything else the template defines (chip-multiselect, gated
               "Other" textareas, etc.) -- the generic renderer, same as every
               other section, so a field type doesn't need its own bespoke
-              branch above just to actually appear. */}
-          {remainingFields.length > 0 && (
+              branch above just to actually appear. Gated on whether anything
+              in here would actually be visible, not just whether the list is
+              non-empty -- a field that's only a gated "Other" companion (e.g.
+              weatherOther) is legitimately hidden until that's selected, and
+              counting it as "there's content" left an empty card showing
+              with nothing inside it. */}
+          {remainingFields.some((f) => isGateSatisfied(f, answers)) && (
             <SectionCard title="ADDITIONAL DETAILS" accent="blue">
               <FieldListRenderer
                 fields={remainingFields}

@@ -14,6 +14,7 @@ import {
 } from '../../constants/inspectionSections';
 import { AppScreenProps } from '../../navigation/types';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
+import { JobSetupData } from '../../types/jobSetup';
 
 /**
  * Inspection Sections hub — the landing screen after Setup Step 2.
@@ -36,6 +37,30 @@ export function InspectionSectionsScreen({
 }: AppScreenProps<'InspectionSections'>) {
   const draft = useInspectionDraft();
   const { propertyTypeId, inspectionTypeId } = draft.getTop();
+
+  // `route.params.data` has arrived here undefined in practice -- some path
+  // reaches this hub without ever merging it in (`navigate({..., merge:
+  // true})` folds new params into an *existing* stack entry; there isn't
+  // always one to fold into). Rather than let that crash whichever screen
+  // reads `data.selection` next, rebuild the same shape from the draft's own
+  // state, which is already this screen's own source of truth for
+  // propertyTypeId/inspectionTypeId above.
+  const jobAnswers = draft.getAnswers('job-info');
+  const asStr = (v: unknown): string => (typeof v === 'string' ? v : '');
+  const data: JobSetupData = route.params.data ?? {
+    selection: { propertyTypeId: propertyTypeId ?? '', inspectionTypeId: inspectionTypeId ?? '' },
+    details: {
+      jobNumber: asStr(jobAnswers?.jobNumber),
+      inspectionDate: asStr(jobAnswers?.inspectionDate),
+      clientName: asStr(jobAnswers?.clientName),
+      inspectionAddress: asStr(jobAnswers?.inspectionAddress),
+      assignedInspector: asStr(jobAnswers?.assignedInspector),
+      gpsConfirmed: !!asStr(jobAnswers?.inspectionAddress).trim(),
+    },
+    weather: Array.isArray(jobAnswers?.weather) ? (jobAnswers!.weather as unknown as string[]).join(', ') : asStr(jobAnswers?.weather),
+    usedAsBusiness: (asStr(jobAnswers?.usedAsBusiness) || 'no') as JobSetupData['usedAsBusiness'],
+    systemStatus: { startedAt: '', gpsLocation: '', photoSequence: '', cloudSync: 'Offline', offlineSave: 'Inactive' },
+  };
 
   // Bumped on focus purely to force this render to re-read the draft below --
   // its value is never itself read.
@@ -72,7 +97,7 @@ export function InspectionSectionsScreen({
       // render its overview -- built fresh from the draft, same as this
       // screen's own ticks.
       const completedMap = Object.fromEntries(sections.map((s) => [s.id, isSectionDone(s)]));
-      navigation.navigate('ReportSummary', { completed: completedMap, data: route.params.data });
+      navigation.navigate('ReportSummary', { completed: completedMap, data });
       return;
     }
     if (section.route === 'JobInformation') {
@@ -85,13 +110,13 @@ export function InspectionSectionsScreen({
       // stacks a fresh instance on top instead, directly above this screen.
       // `fromHub` tells it to return here on Next instead of continuing the
       // linear new-inspection flow into Step 2.
-      navigation.push('JobInformation', { selection: route.params.data.selection, fromHub: true });
+      navigation.push('JobInformation', { selection: data.selection, fromHub: true });
       return;
     }
     if (section.route === 'InspectionSetupStep2') {
       // Same reasoning as JobInformation above -- push a fresh instance so
       // its own back arrow returns here rather than past this screen.
-      navigation.push('InspectionSetupStep2', { data: route.params.data });
+      navigation.push('InspectionSetupStep2', { data });
       return;
     }
     if (section.route) {

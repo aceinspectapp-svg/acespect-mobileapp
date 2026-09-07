@@ -19,6 +19,7 @@ import { INSPECTION_TYPES } from '../../constants/inspectionData';
 import { AppScreenProps } from '../../navigation/types';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
 import { uploadPhoto, submitInspection } from '../../services/inspectionApi';
+import { JobSetupData } from '../../types/jobSetup';
 
 const PROPERTY_LABELS: Record<string, string> = {
   residential_house: 'Residential House',
@@ -117,11 +118,39 @@ function StatCard({ value, label, color, icon }: { value: string | number; label
 
 /* ─── Screen ───────────────────────────────────────────────────────── */
 export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'ReportSummary'>) {
-  const { completed, data } = route.params;
+  const { completed } = route.params;
   const [confirmed, setConfirmed] = useState<'yes' | 'no' | null>(null);
   const [signed, setSigned] = useState(false);
   const draft = useInspectionDraft();
   const [submitting, setSubmitting] = useState(false);
+
+  // `route.params.data` has been seen arriving undefined here -- every
+  // caller does pass it, but `navigate({..., merge: true})` folds new params
+  // into whatever's already on this screen's existing stack entry rather
+  // than replacing it wholesale, so a path that reaches this screen without
+  // ever having merged `data` in leaves it missing despite every call site
+  // looking correct in isolation. Rather than crash (`data.selection...`)
+  // or silently show an empty report, this rebuilds the same shape from the
+  // draft's own state -- `getTop()` for the ids, the Job Information
+  // section's own persisted answers for everything else -- which is what
+  // every other screen already treats as the authoritative source anyway.
+  const { propertyTypeId, inspectionTypeId } = draft.getTop();
+  const jobAnswers = draft.getAnswers('job-info');
+  const asStr = (v: unknown): string => (typeof v === 'string' ? v : '');
+  const data: JobSetupData = route.params.data ?? {
+    selection: { propertyTypeId: propertyTypeId ?? '', inspectionTypeId: inspectionTypeId ?? '' },
+    details: {
+      jobNumber: asStr(jobAnswers?.jobNumber),
+      inspectionDate: asStr(jobAnswers?.inspectionDate),
+      clientName: asStr(jobAnswers?.clientName),
+      inspectionAddress: asStr(jobAnswers?.inspectionAddress),
+      assignedInspector: asStr(jobAnswers?.assignedInspector),
+      gpsConfirmed: !!asStr(jobAnswers?.inspectionAddress).trim(),
+    },
+    weather: Array.isArray(jobAnswers?.weather) ? (jobAnswers!.weather as unknown as string[]).join(', ') : asStr(jobAnswers?.weather),
+    usedAsBusiness: (asStr(jobAnswers?.usedAsBusiness) || 'no') as JobSetupData['usedAsBusiness'],
+    systemStatus: { startedAt: '', gpsLocation: '', photoSequence: '', cloudSync: 'Offline', offlineSave: 'Inactive' },
+  };
 
   const sectionGroups = getSectionGroupsForProperty(
     data.selection.propertyTypeId,
