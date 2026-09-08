@@ -4,19 +4,31 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { TopBar } from "@/lib/ui";
-import { StatusBadge, AnswerValue, humanizeKey } from "@/lib/inspectorUi";
-import type { WebInspection, WebSection, WebDamage } from "@/lib/types";
+import { StatusBadge, AnswerValue as AnswerValueDisplay, humanizeKey } from "@/lib/inspectorUi";
+import type { WebInspection, WebSection } from "@/lib/types";
+import { SectionFieldEditor } from "@/lib/SectionFieldEditor";
+import {
+  ActiveTemplate,
+  AnswerTree,
+  AnswerValue,
+  fetchActiveTemplate,
+  flattenSectionToDraft,
+  listMissingRequiredFields,
+  meetsAllRequireWhen,
+} from "@/lib/templateFields";
 
 /**
  * One inspection, from the inspector's side. A draft is editable and can be
- * finalized (which hands it to a reviewer and locks it); anything already sent
- * is read-only.
+ * finalized (which hands it to a reviewer and locks it); anything already
+ * sent is read-only.
  *
- * Editing covers the job details, each section's report text and its damage
- * records -- i.e. everything that ends up in the written report. The captured
- * field answers are shown read-only: they're rendered by template-driven form
- * controls that only exist in the mobile app, so correcting one there and
- * re-saving is the reliable path rather than a partial re-implementation here.
+ * Each section's captured answers are rendered with SectionFieldEditor --
+ * the same template-field-driven form the mobile app uses -- rather than a
+ * flat key/value dump, so a section started on mobile can be reviewed and
+ * finished here field-by-field, in the same layout the inspector already
+ * knows. A section's `reportText`/`damages` are derived from its answers on
+ * save (matching how the mobile app derives them), so they're shown
+ * read-only for any section backed by a template.
  */
 export default function MyInspectionDetailPage() {
   const router = useRouter();
@@ -33,6 +45,13 @@ export default function MyInspectionDetailPage() {
   // Local edit buffer — only written back to the server on Save.
   const [draft, setDraft] = useState<WebInspection | null>(null);
 
+  // sectionKey -> its current published template (or null if that section
+  // key isn't template-backed, e.g. an older/custom section).
+  const [templates, setTemplates] = useState<Record<string, ActiveTemplate | null>>({});
+  // sectionId -> labels of required fields still missing, shown after a
+  // "Mark complete" attempt that couldn't succeed yet.
+  const [sectionIssues, setSectionIssues] = useState<Record<string, string[]>>({});
+
   const load = useCallback(() => {
     if (!id) return;
     api<{ inspection: WebInspection }>(`/web/inspections/${id}`)
@@ -47,6 +66,31 @@ export default function MyInspectionDetailPage() {
   }, [id, router]);
 
   useEffect(load, [load]);
+
+  // Load each distinct section's active template once we know what sections
+  // exist. Missing templates (404) resolve to null and just fall back to the
+  // old flat view for that section.
+  useEffect(() => {
+    if (!insp) return;
+    const keys = Array.from(new Set(insp.sections.map((s) => s.key)));
+    const missing = keys.filter((k) => !(k in templates));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      missing.map((key) => fetchActiveTemplate(insp.type, insp.propertyType, key).then((t) => [key, t] as const)),
+    ).then((pairs) => {
+      if (cancelled) return;
+      setTemplates((prev) => {
+        const next = { ...prev };
+        for (const [key, t] of pairs) next[key] = t;
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insp]);
 
   if (error) {
     return (
@@ -83,32 +127,42 @@ export default function MyInspectionDetailPage() {
     );
   }
 
-  function patchDamage(sectionId: string, damageId: string, p: Partial<WebDamage>) {
+  function setAnswer(sectionId: string, key: string, value: AnswerValue) {
     setDraft((d) =>
       d
         ? {
             ...d,
             sections: d.sections.map((s) =>
-              s.id === sectionId
-                ? { ...s, damages: s.damages.map((x) => (x.id === damageId ? { ...x, ...p } : x)) }
-                : s,
+              s.id === sectionId ? { ...s, answers: { ...(s.answers ?? {}), [key]: value } } : s,
             ),
           }
         : d,
     );
   }
 
-  function removeDamage(sectionId: string, damageId: string) {
-    setDraft((d) =>
-      d
-        ? {
-            ...d,
-            sections: d.sections.map((s) =>
-              s.id === sectionId ? { ...s, damages: s.damages.filter((x) => x.id !== damageId) } : s,
-            ),
-          }
-        : d,
-    );
+  function markComplete(section: WebSection) {
+    const template = templates[section.key];
+    if (!template) {
+      // No template to validate against — nothing to check, just mark it.
+      patchSection(section.id, { status: "complete" });
+      setSectionIssues((prev) => ({ ...prev, [section.id]: [] }));
+      return;
+    }
+    const scope = (section.answers ?? {}) as AnswerTree;
+    if (!meetsAllRequireWhen(template.fields, scope)) {
+      setSectionIssues((prev) => ({
+        ...prev,
+        [section.id]: ["Add at least one recorded defect where required — see the warning above."],
+      }));
+      return;
+    }
+    const missing = listMissingRequiredFields(template.fields, scope);
+    if (missing.length > 0) {
+      setSectionIssues((prev) => ({ ...prev, [section.id]: missing }));
+      return;
+    }
+    setSectionIssues((prev) => ({ ...prev, [section.id]: [] }));
+    patchSection(section.id, { status: "complete" });
   }
 
   async function save() {
@@ -116,7 +170,37 @@ export default function MyInspectionDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      // Sections are sent whole — the API replaces the stored set.
+      // Sections are sent whole — the API replaces the stored set. Any
+      // template-backed section has its report fields/damages/text
+      // re-derived from its (possibly just-edited) answers, so the report
+      // never drifts out of sync with what's shown here.
+      const sections = draft.sections.map((s, idx) => {
+        const template = templates[s.key];
+        const answers = s.answers ?? undefined;
+        const derived = template && answers ? flattenSectionToDraft(template.fields, answers as AnswerTree) : null;
+        const status = (s.status as "complete" | "partial" | "pending") ?? "pending";
+        return {
+          key: s.key,
+          name: s.name,
+          icon: s.icon ?? "",
+          order: idx,
+          status,
+          reportText: derived ? derived.reportText : s.reportText ?? "",
+          fields: derived ? derived.fields : s.fields ?? {},
+          answers,
+          photos: s.photos ?? [],
+          damages: (derived ? derived.damages : s.damages ?? []).map((dm, dIdx) => ({
+            type: dm.type || "Damage",
+            location: dm.location ?? "",
+            direction: dm.direction ?? "",
+            widthMm: Number(dm.widthMm) || 0,
+            lengthMm: Number(dm.lengthMm) || 0,
+            notes: dm.notes ?? "",
+            photos: dm.photos ?? [],
+            order: dIdx,
+          })),
+        };
+      });
       await api(`/inspections/${id}`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -126,27 +210,7 @@ export default function MyInspectionDetailPage() {
           client: draft.client,
           date: draft.date,
           notes: draft.notes,
-          sections: draft.sections.map((s, idx) => ({
-            key: s.key,
-            name: s.name,
-            icon: s.icon ?? "",
-            order: idx,
-            status: (s.status as "complete" | "partial" | "pending") ?? "pending",
-            reportText: s.reportText ?? "",
-            fields: s.fields ?? {},
-            answers: s.answers ?? undefined,
-            photos: s.photos ?? [],
-            damages: (s.damages ?? []).map((dm, dIdx) => ({
-              type: dm.type || "Damage",
-              location: dm.location ?? "",
-              direction: dm.direction ?? "",
-              widthMm: Number(dm.widthMm) || 0,
-              lengthMm: Number(dm.lengthMm) || 0,
-              notes: dm.notes ?? "",
-              photos: dm.photos ?? [],
-              order: dIdx,
-            })),
-          })),
+          sections,
         }),
       });
       setEditing(false);
@@ -175,9 +239,6 @@ export default function MyInspectionDetailPage() {
       load();
     } catch (e) {
       const err = e as ApiError;
-      // The wrapper already tried a token refresh; a 401 here means the session
-      // is genuinely gone, so send them to sign in rather than showing "token
-      // expired" over a form full of unsaved edits.
       if (err.status === 401) router.replace("/login");
       else setError(err.message);
     } finally {
@@ -284,111 +345,196 @@ export default function MyInspectionDetailPage() {
         </div>
 
         {/* Sections */}
-        {view.sections.map((s) => (
-          <div className="card" key={s.id}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <h2 style={{ margin: 0 }}>
-                {s.icon} {s.name}
-              </h2>
-              <span className="badge">{s.status}</span>
-            </div>
+        {view.sections.map((s) => {
+          const template = templates[s.key];
+          const issues = sectionIssues[s.id] ?? [];
+          return (
+            <div className="card" key={s.id}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h2 style={{ margin: 0 }}>
+                  {s.icon} {s.name}
+                </h2>
+                <span className={`badge${s.status === "complete" ? " green" : s.status === "partial" ? " amber" : " slate"}`}>
+                  {s.status}
+                </span>
+              </div>
 
-            <label style={{ marginTop: 12, display: "block" }}>Report text</label>
-            {editing ? (
-              <textarea
-                rows={4}
-                value={s.reportText}
-                onChange={(e) => patchSection(s.id, { reportText: e.target.value })}
-              />
-            ) : (
-              <p style={{ marginTop: 4 }}>{s.reportText || <span className="muted">—</span>}</p>
-            )}
-
-            {/* Damages */}
-            {s.damages.length > 0 && (
-              <>
-                <h3 style={{ marginBottom: 6 }}>Damage records ({s.damages.length})</h3>
-                <div style={{ overflowX: "auto" }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Type</th>
-                        <th>Location</th>
-                        <th>Runs</th>
-                        <th>Width</th>
-                        <th>Length</th>
-                        <th>Notes</th>
-                        {editing && <th />}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {s.damages.map((dm) => (
-                        <tr key={dm.id}>
-                          <td>
-                            <Cell v={dm.type} editing={editing} onChange={(v) => patchDamage(s.id, dm.id, { type: v })} />
-                          </td>
-                          <td>
-                            <Cell v={dm.location} editing={editing} onChange={(v) => patchDamage(s.id, dm.id, { location: v })} />
-                          </td>
-                          <td>
-                            <Cell v={dm.direction} editing={editing} onChange={(v) => patchDamage(s.id, dm.id, { direction: v })} />
-                          </td>
-                          <td>
-                            <Cell v={String(dm.widthMm)} editing={editing} onChange={(v) => patchDamage(s.id, dm.id, { widthMm: Number(v) || 0 })} />
-                          </td>
-                          <td>
-                            <Cell v={String(dm.lengthMm)} editing={editing} onChange={(v) => patchDamage(s.id, dm.id, { lengthMm: Number(v) || 0 })} />
-                          </td>
-                          <td>
-                            <Cell v={dm.notes} editing={editing} onChange={(v) => patchDamage(s.id, dm.id, { notes: v })} />
-                          </td>
-                          {editing && (
-                            <td>
-                              <button className="link" onClick={() => removeDamage(s.id, dm.id)}>
-                                Remove
-                              </button>
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              {isDraft && editing && (
+                <div className="section-status-row">
+                  <button
+                    onClick={() => markComplete(s)}
+                    disabled={s.status === "complete"}
+                  >
+                    {s.status === "complete" ? "Section complete ✓" : "Mark section complete"}
+                  </button>
+                  {s.status !== "pending" && (
+                    <button onClick={() => patchSection(s.id, { status: "pending" })}>Reset to pending</button>
+                  )}
                 </div>
-              </>
-            )}
+              )}
+              {issues.length > 0 && (
+                <p className="missing-note">
+                  Still needed: {issues.slice(0, 6).join(", ")}
+                  {issues.length > 6 ? `, +${issues.length - 6} more` : ""}
+                </p>
+              )}
 
-            {/* Captured answers — read-only, see the component doc above. */}
-            {s.answers && Object.keys(s.answers).length > 0 && (
-              <details style={{ marginTop: 12 }}>
-                <summary className="muted">
-                  Captured answers ({Object.keys(s.answers).length}) — edit these in the mobile app
-                </summary>
-                <table style={{ marginTop: 8 }}>
-                  <tbody>
-                    {Object.entries(s.answers).map(([k, v]) => (
-                      <tr key={k}>
-                        <td style={{ width: "45%" }} className="muted">
-                          {humanizeKey(k)}
-                        </td>
-                        <td>
-                          <AnswerValue value={v} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </details>
-            )}
+              {template ? (
+                <>
+                  <div style={{ marginTop: 12 }}>
+                    <SectionFieldEditor
+                      fields={template.fields}
+                      scope={(s.answers ?? {}) as AnswerTree}
+                      onChange={(key, value) => setAnswer(s.id, key, value)}
+                      path={[s.key]}
+                      readOnly={!(isDraft && editing)}
+                    />
+                  </div>
+                  {s.reportText && (
+                    <details style={{ marginTop: 8 }}>
+                      <summary className="muted">Report text (derived)</summary>
+                      <p style={{ marginTop: 6 }}>{s.reportText}</p>
+                    </details>
+                  )}
+                </>
+              ) : (
+                <>
+                  <label style={{ marginTop: 12, display: "block" }}>Report text</label>
+                  {editing ? (
+                    <textarea
+                      rows={4}
+                      value={s.reportText}
+                      onChange={(e) => patchSection(s.id, { reportText: e.target.value })}
+                    />
+                  ) : (
+                    <p style={{ marginTop: 4 }}>{s.reportText || <span className="muted">—</span>}</p>
+                  )}
 
-            {s.photos.length > 0 && (
-              <p className="muted" style={{ marginTop: 10 }}>
-                {s.photos.length} photo{s.photos.length === 1 ? "" : "s"} attached
-              </p>
-            )}
-          </div>
-        ))}
+                  {s.damages.length > 0 && (
+                    <>
+                      <h3 style={{ marginBottom: 6 }}>Damage records ({s.damages.length})</h3>
+                      <div style={{ overflowX: "auto" }}>
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Type</th>
+                              <th>Location</th>
+                              <th>Runs</th>
+                              <th>Width</th>
+                              <th>Length</th>
+                              <th>Notes</th>
+                              {editing && <th />}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {s.damages.map((dm) => (
+                              <tr key={dm.id}>
+                                <td>
+                                  <Cell v={dm.type} editing={editing} onChange={(v) => patchDamageLegacy(dm.id, s.id, "type", v, setDraft)} />
+                                </td>
+                                <td>
+                                  <Cell v={dm.location} editing={editing} onChange={(v) => patchDamageLegacy(dm.id, s.id, "location", v, setDraft)} />
+                                </td>
+                                <td>
+                                  <Cell v={dm.direction} editing={editing} onChange={(v) => patchDamageLegacy(dm.id, s.id, "direction", v, setDraft)} />
+                                </td>
+                                <td>
+                                  <Cell v={String(dm.widthMm)} editing={editing} onChange={(v) => patchDamageLegacy(dm.id, s.id, "widthMm", Number(v) || 0, setDraft)} />
+                                </td>
+                                <td>
+                                  <Cell v={String(dm.lengthMm)} editing={editing} onChange={(v) => patchDamageLegacy(dm.id, s.id, "lengthMm", Number(v) || 0, setDraft)} />
+                                </td>
+                                <td>
+                                  <Cell v={dm.notes} editing={editing} onChange={(v) => patchDamageLegacy(dm.id, s.id, "notes", v, setDraft)} />
+                                </td>
+                                {editing && (
+                                  <td>
+                                    <button
+                                      className="link"
+                                      onClick={() =>
+                                        setDraft((d) =>
+                                          d
+                                            ? {
+                                                ...d,
+                                                sections: d.sections.map((sec) =>
+                                                  sec.id === s.id
+                                                    ? { ...sec, damages: sec.damages.filter((x) => x.id !== dm.id) }
+                                                    : sec,
+                                                ),
+                                              }
+                                            : d,
+                                        )
+                                      }
+                                    >
+                                      Remove
+                                    </button>
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+
+                  {s.answers && Object.keys(s.answers).length > 0 && (
+                    <details style={{ marginTop: 12 }}>
+                      <summary className="muted">Captured answers ({Object.keys(s.answers).length})</summary>
+                      <table style={{ marginTop: 8 }}>
+                        <tbody>
+                          {Object.entries(s.answers).map(([k, v]) => (
+                            <tr key={k}>
+                              <td style={{ width: "45%" }} className="muted">
+                                {humanizeKey(k)}
+                              </td>
+                              <td>
+                                <AnswerValueDisplay value={v} />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </details>
+                  )}
+                </>
+              )}
+
+              {s.photos.length > 0 && (
+                <p className="muted" style={{ marginTop: 10 }}>
+                  {s.photos.length} photo{s.photos.length === 1 ? "" : "s"} attached
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
     </>
+  );
+}
+
+/** Helper for the legacy (no-template) damages table, kept out of the main body for readability. */
+function patchDamageLegacy(
+  damageId: string,
+  sectionId: string,
+  key: "type" | "location" | "direction" | "widthMm" | "lengthMm" | "notes",
+  value: string | number,
+  setDraft: (fn: (d: WebInspection | null) => WebInspection | null) => void,
+) {
+  setDraft((d) =>
+    d
+      ? {
+          ...d,
+          sections: d.sections.map((s) =>
+            s.id === sectionId
+              ? {
+                  ...s,
+                  damages: s.damages.map((x) => (x.id === damageId ? { ...x, [key]: value } : x)),
+                }
+              : s,
+          ),
+        }
+      : d,
   );
 }
 

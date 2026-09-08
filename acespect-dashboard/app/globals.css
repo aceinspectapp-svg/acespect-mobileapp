@@ -130,3 +130,66 @@ button.link {
   font-weight: 600; cursor: pointer; width: auto;
 }
 button.link:hover { text-decoration: underline; }
+
+/* Full section field view -- mirrors the mobile app's per-field form so the
+   dashboard's 3rd column shows exactly what the inspector filled in there. */
+.field-block { margin-bottom: 16px; }
+.field-block label { margin-bottom: 6px; }
+.field-readvalue { margin: 4px 0 0; }
+.field-letter-band {
+  background: #e6f0fb;
+  border-left: 4px solid var(--brand);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 16px 0 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--brand-dark);
+}
+.toggle-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.toggle-btn {
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-weight: 600;
+  font-size: 13px;
+}
+.toggle-btn.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.toggle-btn.chip { border-radius: 8px; }
+.instance-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.instance-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.instance-card-title { font-weight: 700; }
+.checklist-row { border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px; }
+.checklist-row:last-child { border-bottom: none; }
+.add-instance-btn {
+  border: 1px dashed var(--brand);
+  background: #fff;
+  color: var(--brand);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 600;
+}
+.add-instance-btn.required { border-color: var(--red); color: var(--red); }
+.require-warning {
+  color: var(--red);
+  background: var(--red-bg);
+  border: 1px solid var(--red);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.photo-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.photo-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+.section-status-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; }
+.missing-note { color: var(--amber); font-size: 13px; margin-top: 6px; }
