@@ -112,8 +112,6 @@ async function main() {
   await publishOverlay('job-info', (existing) => [
     ...existing,
     text('inspectorInitials', 'Inspector initials') as TemplateField,
-    yesno('egnytePhotosLoaded', 'Photos loaded to Egnyte?') as TemplateField,
-    { key: 'egnytePhotoCount', label: 'Total photos', type: 'numeric' } as TemplateField,
     { key: 'businessSignage', label: 'Business name / signage (take photos)', type: 'photos' } as TemplateField,
     text('firstPicNo', '1st pic No (entire job sequence)') as TemplateField,
     text('lastPicNo', 'Last pic No (entire job sequence)') as TemplateField,

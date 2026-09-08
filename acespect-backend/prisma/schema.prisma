@@ -326,3 +326,17 @@ model ReviewDecision {
   @@index([reviewSummaryId])
   @@map("review_decisions")
 }
+
+/// Inspection photos, stored directly in Postgres as bytes -- replaces the
+/// Egnyte-backed storage (removed; no external storage dependency needed to
+/// get real submissions working end to end). Served back through the same
+/// /api/v1/media/:id proxy route as before, so nothing downstream (mobile,
+/// dashboard, generated reports) needed to change.
+model Photo {
+  id          String   @id @default(uuid())
+  data        Bytes
+  contentType String
+  createdAt   DateTime @default(now())
+
+  @@map("photos")
+}

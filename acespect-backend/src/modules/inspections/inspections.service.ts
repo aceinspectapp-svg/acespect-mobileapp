@@ -223,16 +223,9 @@ async function getById(id: string) {
   return inspection;
 }
 
-/** Upload one inspection photo to Egnyte; returns a URL that proxies through this backend. */
+/** Upload one inspection photo; returns a URL that proxies through this backend. Stored directly in Postgres -- always available, nothing to configure. */
 async function uploadPhoto(buffer: Buffer, contentType: string, originalName: string) {
-  const { isStorageEnabled, uploadPhoto: store } = await import('../../lib/storage');
-  if (!isStorageEnabled()) {
-    throw new ApiError(
-      503,
-      'Photo storage is not configured (set EGNYTE_DOMAIN + EGNYTE_API_TOKEN)',
-      'STORAGE_DISABLED',
-    );
-  }
+  const { uploadPhoto: store } = await import('../../lib/storage');
   const ext = (originalName.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
   return store(buffer, contentType || 'image/jpeg', ext);
 }

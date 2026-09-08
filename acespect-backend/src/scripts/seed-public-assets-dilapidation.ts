@@ -190,8 +190,6 @@ async function publishOverlay(sectionKey: string, buildFields: (existing: Templa
 async function main() {
   await publishOverlay('job-info', (existing) => [
     ...existing,
-    yesno('egnytePhotosLoaded', 'Photos loaded to Egnyte?') as TemplateField,
-    { key: 'egnytePhotoCount', label: 'How many photos?', type: 'numeric' } as TemplateField,
     { key: 'businessSignage', label: 'Business signage (name/signage on site — take photos)', type: 'photos' } as TemplateField,
   ]);
 

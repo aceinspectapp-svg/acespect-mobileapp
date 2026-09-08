@@ -29,17 +29,9 @@ const schema = z.object({
   // How many review jobs the worker processes concurrently.
   REVIEW_QUEUE_CONCURRENCY: z.coerce.number().int().positive().default(2),
 
-  // Egnyte Storage for inspection photos. Empty = storage disabled (photo
-  // upload returns 503; the rest of the app runs fine). EGNYTE_DOMAIN is the
-  // subdomain part of the org's Egnyte URL (e.g. "houspect" for
-  // houspect.egnyte.com). Egnyte's shareable links open a web viewer rather
-  // than serving raw bytes, so the app never hands out Egnyte URLs directly —
-  // uploadPhoto() returns a URL on this backend (PUBLIC_BASE_URL + /api/v1/media/:id)
-  // which proxies the file through using EGNYTE_API_TOKEN server-side.
-  EGNYTE_DOMAIN: z.string().default(''),
-  EGNYTE_API_TOKEN: z.string().default(''),
-  EGNYTE_ROOT_FOLDER: z.string().default('/Shared/Inspection Photos'),
-  // This backend's own public URL, used to build photo URLs that proxy to Egnyte.
+  // This backend's own public URL, used to build photo URLs
+  // (PUBLIC_BASE_URL + /api/v1/media/:id) that proxy to Postgres-stored
+  // photo bytes -- see lib/storage.ts.
   PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),
 });
 
