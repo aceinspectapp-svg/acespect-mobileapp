@@ -52,6 +52,12 @@ export default function MyInspectionDetailPage() {
   // "Mark complete" attempt that couldn't succeed yet.
   const [sectionIssues, setSectionIssues] = useState<Record<string, string[]>>({});
 
+  // Which section's full detail shows in the right-hand column. Tracked by
+  // `key` rather than `id` -- saving replaces every section row server-side
+  // (new ids), so an id-based selection would silently reset after every
+  // Save.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
   const load = useCallback(() => {
     if (!id) return;
     api<{ inspection: WebInspection }>(`/web/inspections/${id}`)
@@ -344,22 +350,64 @@ export default function MyInspectionDetailPage() {
           )}
         </div>
 
-        {/* Sections */}
-        {view.sections.map((s) => {
-          const template = templates[s.key];
-          const issues = sectionIssues[s.id] ?? [];
-          return (
-            <div className="card" key={s.id}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <h2 style={{ margin: 0 }}>
-                  {s.icon} {s.name}
-                </h2>
-                <span className={`badge${s.status === "complete" ? " green" : s.status === "partial" ? " amber" : " slate"}`}>
-                  {s.status}
-                </span>
-              </div>
+        {/* Sections — a list on the left, the selected section's full detail
+            on the right (the same layout the inspector fills in on mobile,
+            not a summary). */}
+        <div className="section-layout">
+          <div className="section-nav">
+            {view.sections.map((s) => {
+              const active = (selectedKey ?? view.sections[0]?.key) === s.key;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`section-nav-item${active ? " active" : ""}`}
+                  onClick={() => setSelectedKey(s.key)}
+                >
+                  <span className="section-nav-icon">{s.icon}</span>
+                  <span className="section-nav-text">
+                    <span className="section-nav-name">{s.name}</span>
+                    {s.photos.length > 0 && (
+                      <span className="section-nav-sub">
+                        {s.photos.length} photo{s.photos.length === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </span>
+                  <span className={`badge${s.status === "complete" ? " green" : s.status === "partial" ? " amber" : " slate"}`}>
+                    {s.status}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-              {isDraft && editing && (
+          <div className="section-detail">
+            {(() => {
+              const s = view.sections.find((sec) => sec.key === (selectedKey ?? view.sections[0]?.key)) ?? view.sections[0];
+              if (!s) return <div className="card muted">No sections.</div>;
+              return <SectionDetail s={s} />;
+            })()}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  function SectionDetail({ s }: { s: WebSection }) {
+    const template = templates[s.key];
+    const issues = sectionIssues[s.id] ?? [];
+    return (
+      <div className="card">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <h2 style={{ margin: 0 }}>
+            {s.icon} {s.name}
+          </h2>
+          <span className={`badge${s.status === "complete" ? " green" : s.status === "partial" ? " amber" : " slate"}`}>
+            {s.status}
+          </span>
+        </div>
+
+        {isDraft && editing && (
                 <div className="section-status-row">
                   <button
                     onClick={() => markComplete(s)}
@@ -500,17 +548,14 @@ export default function MyInspectionDetailPage() {
                 </>
               )}
 
-              {s.photos.length > 0 && (
-                <p className="muted" style={{ marginTop: 10 }}>
-                  {s.photos.length} photo{s.photos.length === 1 ? "" : "s"} attached
-                </p>
-              )}
-            </div>
-          );
-        })}
+        {s.photos.length > 0 && (
+          <p className="muted" style={{ marginTop: 10 }}>
+            {s.photos.length} photo{s.photos.length === 1 ? "" : "s"} attached
+          </p>
+        )}
       </div>
-    </>
-  );
+    );
+  }
 }
 
 /** Helper for the legacy (no-template) damages table, kept out of the main body for readability. */
