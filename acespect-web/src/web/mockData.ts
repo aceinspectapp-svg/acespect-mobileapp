@@ -33,6 +33,8 @@ export interface FormSection {
   reviewComment: string;
   reportText: string;
   fields: Record<string, string | string[] | number | boolean>;
+  /** Raw un-flattened answer tree captured on mobile; null for inspections submitted before this existed. */
+  answers?: Record<string, unknown> | null;
   damages: DamageRecord[];
   photos: string[];
 }

@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ArrowLeft, Plus, Camera, Save, Send, CheckCircle, MessageSquare } from "lucide-react";
 import { STATUS_CONFIG } from "../../mockData";
 import { useAppData } from "../../data";
 import { StatusBadge } from "../../components/WebLayout";
+import { SectionFieldView } from "../../components/SectionFieldView";
+import { ActiveTemplate, AnswerTree, fetchActiveTemplate } from "../../templateFields";
 
 export function InspectorFormEditor() {
   const { id } = useParams<{ id: string }>();
@@ -14,29 +16,34 @@ export function InspectorFormEditor() {
   const [saved, setSaved] = useState(false);
   const [photoHover, setPhotoHover] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
-  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  // sectionKey -> its current published template (or null once we know none
+  // exists for that key, e.g. a legacy/custom section).
+  const [templates, setTemplates] = useState<Record<string, ActiveTemplate | null>>({});
 
   const isCompleted = inspection ? (inspection.status === "approved" || inspection.status === "in-review") : false;
   const selectedSection = inspection?.sections.find(s => s.id === selectedSectionId) ?? null;
-  const isInternal = (selectedSection?.key ?? selectedSection?.id) === "internal";
 
-  const INSP_ROOMS = [
-    { id: "r1", name: "Front Entry & Hallway", icon: "🚪", floorLevel: "Ground Floor", condition: "Satisfactory", damages: 0, photos: 2, notes: "No significant damage observed. Typical wear and tear for age of dwelling.", moisture: "No issues observed" },
-    { id: "r2", name: "Living Room",           icon: "🛋️", floorLevel: "Ground Floor", condition: "Fair",          damages: 1, photos: 3, notes: "Minor crack at cornice junction, north wall. Consistent with normal building movement.", moisture: "No issues observed" },
-    { id: "r3", name: "Dining Area",           icon: "🍽️", floorLevel: "Ground Floor", condition: "Satisfactory", damages: 0, photos: 2, notes: "No significant damage observed.", moisture: "No issues observed" },
-    { id: "r4", name: "Kitchen",               icon: "🍳", floorLevel: "Ground Floor", condition: "Fair",          damages: 0, photos: 3, notes: "Minor grout deterioration to splashback tiles. Typical for age.", moisture: "No issues observed" },
-    { id: "r5", name: "Bedroom 1",             icon: "🛏️", floorLevel: "Ground Floor", condition: "Satisfactory", damages: 0, photos: 2, notes: "No significant damage observed.", moisture: "No issues observed" },
-    { id: "r6", name: "Bedroom 2",             icon: "🛏️", floorLevel: "Ground Floor", condition: "Satisfactory", damages: 0, photos: 2, notes: "No significant damage observed.", moisture: "No issues observed" },
-    { id: "r7", name: "Bathroom",              icon: "🚿", floorLevel: "Ground Floor", condition: "Fair",          damages: 0, photos: 3, notes: "Minor grout deterioration. Typical for age of dwelling.", moisture: "Water staining at base of shower screen — minor" },
-    { id: "r8", name: "Laundry",               icon: "🧺", floorLevel: "Ground Floor", condition: "Satisfactory", damages: 0, photos: 2, notes: "No significant damage observed.", moisture: "No issues observed" },
-    { id: "r9", name: "Toilet",                icon: "🚽", floorLevel: "Ground Floor", condition: "Satisfactory", damages: 0, photos: 1, notes: "No significant damage observed.", moisture: "No issues observed" },
-  ];
-  const COND_STYLE: Record<string, { color: string; bg: string }> = {
-    Satisfactory: { color: "#16a34a", bg: "#f0fdf4" },
-    Fair:         { color: "#d97706", bg: "#fef3c7" },
-    Poor:         { color: "#dc2626", bg: "#fee2e2" },
-  };
-  const selectedRoom = INSP_ROOMS.find(r => r.id === selectedRoomId) ?? null;
+  // Load each distinct section's active template once the inspection is
+  // known, so the detail panel can show every field the inspector filled in
+  // on mobile instead of a flat one-line-per-key summary.
+  useEffect(() => {
+    if (!inspection) return;
+    const keys = Array.from(new Set(inspection.sections.map(s => s.key ?? s.id)));
+    const missing = keys.filter(k => !(k in templates));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(missing.map(key => fetchActiveTemplate(inspection.type, inspection.propertyType, key).then(t => [key, t] as const)))
+      .then(pairs => {
+        if (cancelled) return;
+        setTemplates(prev => {
+          const next = { ...prev };
+          for (const [key, t] of pairs) next[key] = t;
+          return next;
+        });
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inspection]);
 
   if (!inspection) {
     return (
@@ -116,7 +123,7 @@ export function InspectorFormEditor() {
                   return (
                     <button
                       key={section.id}
-                      onClick={() => { setSelectedSectionId(isActive ? null : section.id); setSelectedRoomId(null); }}
+                      onClick={() => setSelectedSectionId(isActive ? null : section.id)}
                       style={{
                         width: "100%", background: "white", borderRadius: "12px",
                         border: `1px solid ${isActive ? "#2563eb" : "#e5e7eb"}`,
@@ -154,146 +161,73 @@ export function InspectorFormEditor() {
           {/* Right panel: section detail OR add note/photo (for draft only) */}
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {selectedSection ? (
-              /* Section detail view */
-              isInternal ? (
-                /* ── Internal Areas: room list or room detail ── */
-                selectedRoom ? (
-                  /* Room detail */
-                  <>
-                    <button
-                      onClick={() => setSelectedRoomId(null)}
-                      style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", border: "1px solid #e5e7eb", background: "white", cursor: "pointer", fontSize: "12px", fontWeight: 600, color: "#374151", alignSelf: "flex-start" }}
-                    >
-                      ← Back to Rooms
-                    </button>
-                    <div style={{ background: "white", borderRadius: "12px", border: "1px solid #2563eb", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                      <div style={{ padding: "14px 18px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: "10px", background: "#f0f4ff" }}>
-                        <span style={{ fontSize: "22px" }}>{selectedRoom.icon}</span>
-                        <div style={{ flex: 1 }}>
-                          <h4 style={{ fontSize: "14px", fontWeight: 700, color: "#1a2a4a", margin: 0 }}>{selectedRoom.name}</h4>
-                          <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0 0" }}>Room {INSP_ROOMS.findIndex(r => r.id === selectedRoom.id) + 1} of {INSP_ROOMS.length}</p>
-                        </div>
-                        <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: (COND_STYLE[selectedRoom.condition] ?? COND_STYLE.Fair).bg, color: (COND_STYLE[selectedRoom.condition] ?? COND_STYLE.Fair).color }}>
-                          {selectedRoom.condition}
-                        </span>
-                      </div>
-                      {[
-                        ["Floor Level",    selectedRoom.floorLevel],
-                        ["General Condition", selectedRoom.condition],
-                        ["Damage Records", String(selectedRoom.damages)],
-                        ["Photos Taken",   String(selectedRoom.photos)],
-                        ["Moisture",       selectedRoom.moisture],
-                      ].map(([label, value], i, arr) => (
-                        <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", padding: "10px 18px", borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                          <span style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", minWidth: "130px" }}>{label}</span>
-                          <span style={{ fontSize: "12px", color: "#1a2a4a", textAlign: "right" }}>{value}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "14px 16px", border: "1px solid #e5e7eb" }}>
-                      <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 8px" }}>Inspector Notes</p>
-                      <p style={{ fontSize: "13px", color: "#374151", margin: 0, lineHeight: 1.6 }}>{selectedRoom.notes}</p>
-                    </div>
-                  </>
-                ) : (
-                  /* Room list */
+              /* Section detail view — every field the inspector filled in on
+                 mobile, in the same order/grouping, driven by the section's
+                 actual template (not a hand-picked summary). */
+              (() => {
+                const template = templates[selectedSection.key ?? selectedSection.id];
+                return (
                   <>
                     <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                      <div style={{ padding: "12px 18px", borderBottom: "1px solid #f1f5f9", background: "#f8fafc", display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontSize: "16px" }}>🛋️</span>
-                        <div>
-                          <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#1a2a4a", margin: 0 }}>Internal Areas</h4>
-                          <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0 0" }}>{INSP_ROOMS.length} rooms — click to view details</p>
+                      <div style={{ padding: "14px 18px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: "10px", background: "#f8fafc" }}>
+                        <span style={{ fontSize: "20px" }}>{selectedSection.icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#1a2a4a", margin: 0 }}>{selectedSection.name}</h4>
+                          <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0 0" }}>Inspector's recorded data</p>
+                        </div>
+                        <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: selectedSection.status === "complete" ? "#dcfce7" : "#f1f5f9", color: selectedSection.status === "complete" ? "#15803d" : "#64748b" }}>
+                          {selectedSection.status === "complete" ? "Complete" : "Pending"}
+                        </span>
+                      </div>
+                      {template ? (
+                        <SectionFieldView fields={template.fields} scope={(selectedSection.answers ?? {}) as AnswerTree} />
+                      ) : (
+                        // No template for this section key (legacy/custom data) —
+                        // fall back to the flat report fields, still better than nothing.
+                        Object.entries(selectedSection.fields).map(([key, val], i, arr) => (
+                          <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", padding: "10px 18px", borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                            <span style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", minWidth: "120px" }}>
+                              {key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
+                            </span>
+                            <span style={{ fontSize: "12px", color: "#1a2a4a", textAlign: "right" }}>
+                              {Array.isArray(val) ? val.join(", ") : typeof val === "boolean" ? (val ? "Yes" : "No") : String(val)}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {/* Damage records — shown as its own card only when there's no
+                        template (a template-backed section already shows every
+                        damage-list instance, in full, inside the card above). */}
+                    {!template && selectedSection.damages.length > 0 && (
+                      <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                        <div style={{ padding: "12px 18px", borderBottom: "1px solid #f1f5f9", background: "#fff5f5" }}>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "#dc2626", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
+                            Damage Records ({selectedSection.damages.length})
+                          </p>
+                        </div>
+                        {selectedSection.damages.map((d, i) => (
+                          <div key={d.id} style={{ padding: "12px 18px", borderBottom: i < selectedSection.damages.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                            <p style={{ fontSize: "12px", fontWeight: 700, color: "#1a2a4a", margin: "0 0 4px" }}>{d.type} — {d.direction}</p>
+                            <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 4px" }}>{d.location}</p>
+                            <p style={{ fontSize: "11px", color: "#94a3b8", margin: 0 }}>{d.widthMm}mm × {d.lengthMm}mm</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {selectedSection.photos.length > 0 && (
+                      <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", padding: "16px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                        <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 10px" }}>Photos</p>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" }}>
+                          {selectedSection.photos.map((url, i) => (
+                            <img key={i} src={url} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: "8px", border: "1px solid #e5e7eb" }} />
+                          ))}
                         </div>
                       </div>
-                      {INSP_ROOMS.map((room, idx) => {
-                        const cs = COND_STYLE[room.condition] ?? COND_STYLE.Fair;
-                        return (
-                          <button
-                            key={room.id}
-                            onClick={() => setSelectedRoomId(room.id)}
-                            style={{
-                              width: "100%", display: "flex", alignItems: "center", gap: "12px",
-                              padding: "12px 18px", background: "transparent", border: "none",
-                              borderBottom: idx < INSP_ROOMS.length - 1 ? "1px solid #f1f5f9" : "none",
-                              cursor: "pointer", textAlign: "left", transition: "background 0.1s",
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.background = "#f8fafc")}
-                            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                          >
-                            <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                              <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b" }}>{idx + 1}</span>
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <p style={{ fontSize: "13px", fontWeight: 600, color: "#1a2a4a", margin: 0 }}>{room.name}</p>
-                              <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0 0" }}>
-                                {room.floorLevel} · {room.photos} photo{room.photos !== 1 ? "s" : ""}
-                                {room.damages > 0 ? ` · ${room.damages} damage` : ""}
-                              </p>
-                            </div>
-                            <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: cs.bg, color: cs.color, flexShrink: 0 }}>
-                              {room.condition}
-                            </span>
-                            <span style={{ fontSize: "16px", color: "#d1d5db", flexShrink: 0 }}>›</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    )}
                   </>
-                )
-              ) : (
-              /* Generic section detail view */
-              <>
-                <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                  <div style={{ padding: "14px 18px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: "10px", background: "#f8fafc" }}>
-                    <span style={{ fontSize: "20px" }}>{selectedSection.icon}</span>
-                    <div style={{ flex: 1 }}>
-                      <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#1a2a4a", margin: 0 }}>{selectedSection.name}</h4>
-                      <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0 0" }}>Inspector's recorded data</p>
-                    </div>
-                    <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: selectedSection.status === "complete" ? "#dcfce7" : "#f1f5f9", color: selectedSection.status === "complete" ? "#15803d" : "#64748b" }}>
-                      {selectedSection.status === "complete" ? "Complete" : "Pending"}
-                    </span>
-                  </div>
-                  {Object.entries(selectedSection.fields).map(([key, val], i, arr) => (
-                    <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", padding: "10px 18px", borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                      <span style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", minWidth: "120px" }}>
-                        {key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
-                      </span>
-                      <span style={{ fontSize: "12px", color: "#1a2a4a", textAlign: "right" }}>
-                        {Array.isArray(val) ? val.join(", ") : typeof val === "boolean" ? (val ? "Yes" : "No") : String(val)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {selectedSection.damages.length > 0 && (
-                  <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                    <div style={{ padding: "12px 18px", borderBottom: "1px solid #f1f5f9", background: "#fff5f5" }}>
-                      <p style={{ fontSize: "11px", fontWeight: 700, color: "#dc2626", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
-                        Damage Records ({selectedSection.damages.length})
-                      </p>
-                    </div>
-                    {selectedSection.damages.map((d, i) => (
-                      <div key={d.id} style={{ padding: "12px 18px", borderBottom: i < selectedSection.damages.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                        <p style={{ fontSize: "12px", fontWeight: 700, color: "#1a2a4a", margin: "0 0 4px" }}>{d.type} — {d.direction}</p>
-                        <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 4px" }}>{d.location}</p>
-                        <p style={{ fontSize: "11px", color: "#94a3b8", margin: 0 }}>{d.widthMm}mm × {d.lengthMm}mm</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {selectedSection.photos.length > 0 && (
-                  <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", padding: "16px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                    <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 10px" }}>Photos</p>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" }}>
-                      {selectedSection.photos.map((url, i) => (
-                        <img key={i} src={url} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: "8px", border: "1px solid #e5e7eb" }} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-              )
+                );
+              })()
             ) : (
               /* Default right panel */
               <>

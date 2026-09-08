@@ -18,6 +18,8 @@ import { ReportScope } from "../../components/ReportScope";
 import { ReportConditions } from "../../components/ReportConditions";
 import { ReportSection } from "../../components/ReportSection";
 import { buildReportHeader } from "../../report";
+import { SectionFieldView } from "../../components/SectionFieldView";
+import { ActiveTemplate, AnswerTree, fetchActiveTemplate } from "../../templateFields";
 
 /* ─── helpers ─────────────────────────────────────────────────────── */
 function formatFieldKey(key: string): string {
@@ -380,91 +382,6 @@ function ReviewStatusPill({ status }: { status: SectionReviewStatus }) {
   );
 }
 
-/* ─── Internal Areas room list (mobile-style) ───────────────────── */
-const ROOMS = [
-  { id: "r1", name: "Front Entry & Hallway", condition: "Satisfactory", damages: 0, photos: 2, note: "No significant damage observed." },
-  { id: "r2", name: "Living Room",           condition: "Fair",          damages: 1, photos: 3, note: "Minor crack at cornice junction, north wall." },
-  { id: "r3", name: "Dining Area",           condition: "Satisfactory",  damages: 0, photos: 2, note: "No significant damage observed." },
-  { id: "r4", name: "Kitchen",               condition: "Fair",          damages: 0, photos: 3, note: "Minor grout deterioration to splashback tiles." },
-  { id: "r5", name: "Bedroom 1",             condition: "Satisfactory",  damages: 0, photos: 2, note: "No significant damage observed." },
-  { id: "r6", name: "Bedroom 2",             condition: "Satisfactory",  damages: 0, photos: 2, note: "No significant damage observed." },
-  { id: "r7", name: "Bathroom",              condition: "Fair",          damages: 0, photos: 3, note: "Minor grout deterioration. Typical for age of dwelling." },
-  { id: "r8", name: "Laundry",               condition: "Satisfactory",  damages: 0, photos: 2, note: "No significant damage observed." },
-  { id: "r9", name: "Toilet",                condition: "Satisfactory",  damages: 0, photos: 1, note: "No significant damage observed." },
-];
-
-const COND_COLOR: Record<string, { color: string; bg: string }> = {
-  Satisfactory: { color: "#16a34a", bg: "#f0fdf4" },
-  Fair:         { color: "#d97706", bg: "#fef3c7" },
-  Poor:         { color: "#dc2626", bg: "#fee2e2" },
-};
-
-function InternalRoomList() {
-  const [expanded, setExpanded] = useState<string | null>(null);
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-      <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>
-        Internal Areas — {ROOMS.length} rooms
-      </p>
-      {ROOMS.map((room, idx) => {
-        const isOpen = expanded === room.id;
-        const cc = COND_COLOR[room.condition] ?? COND_COLOR.Fair;
-        return (
-          <div key={room.id} style={{ background: "white", borderRadius: "12px", border: `1px solid ${isOpen ? "#2563eb" : "#e5e7eb"}`, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", transition: "border-color 0.15s" }}>
-            <button
-              onClick={() => setExpanded(isOpen ? null : room.id)}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: "12px",
-                padding: "12px 14px", background: "transparent", border: "none",
-                cursor: "pointer", textAlign: "left",
-              }}
-            >
-              <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: isOpen ? "#2563eb" : "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                {isOpen ? (
-                  <span style={{ fontSize: "12px", fontWeight: 800, color: "white" }}>{idx + 1}</span>
-                ) : (
-                  <span style={{ fontSize: "12px", fontWeight: 700, color: "#64748b" }}>{idx + 1}</span>
-                )}
-              </div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: "13px", fontWeight: 600, color: isOpen ? "#2563eb" : "#1a2a4a", margin: 0 }}>{room.name}</p>
-                <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0 0" }}>
-                  {room.damages > 0 ? `${room.damages} damage · ` : ""}{room.photos} photos
-                </p>
-              </div>
-              <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: cc.bg, color: cc.color, flexShrink: 0 }}>
-                {room.condition}
-              </span>
-              <span style={{ fontSize: "16px", color: "#94a3b8", flexShrink: 0, transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>›</span>
-            </button>
-            {isOpen && (
-              <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f1f5f9" }}>
-                <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "10px 12px", marginTop: "10px" }}>
-                  <p style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", margin: "0 0 4px" }}>Inspector Notes</p>
-                  <p style={{ fontSize: "12px", color: "#374151", margin: 0, lineHeight: 1.5 }}>{room.note}</p>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
-                  {[
-                    { label: "Condition", value: room.condition },
-                    { label: "Damage Records", value: String(room.damages) },
-                    { label: "Photos Taken", value: String(room.photos) },
-                    { label: "Floor Level", value: "Ground Floor" },
-                  ].map(({ label, value }) => (
-                    <div key={label} style={{ background: "white", borderRadius: "6px", padding: "8px 10px", border: "1px solid #f1f5f9" }}>
-                      <p style={{ fontSize: "10px", fontWeight: 600, color: "#94a3b8", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</p>
-                      <p style={{ fontSize: "12px", fontWeight: 600, color: "#1a2a4a", margin: 0 }}>{value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 /* ─── main component ─────────────────────────────────────────────── */
 export function ReviewerFormView() {
   const navigate = useNavigate();
@@ -475,6 +392,9 @@ export function ReviewerFormView() {
   const [selectedSectionId, setSelectedSectionId] = useState<string>("");
   const [reviewComments, setReviewComments] = useState<Record<string, string>>({});
   const [, setBusy] = useState(false);
+  // sectionKey -> its current published template (or null once we know none
+  // exists for that key, e.g. a legacy/custom section).
+  const [templates, setTemplates] = useState<Record<string, ActiveTemplate | null>>({});
 
   // Seed selection + comment drafts once the inspection is loaded.
   useEffect(() => {
@@ -485,6 +405,31 @@ export function ReviewerFormView() {
         ? prev
         : Object.fromEntries(inspection.sections.map((s) => [s.id, s.reviewComment])),
     );
+  }, [inspection]);
+
+  // Load each distinct section's active template, so the "Inspector's Form"
+  // column can show every field captured on mobile instead of a flat
+  // one-line-per-key summary.
+  useEffect(() => {
+    if (!inspection) return;
+    const keys = Array.from(new Set(inspection.sections.map((s) => s.key ?? s.id)));
+    const missing = keys.filter((k) => !(k in templates));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      missing.map((key) => fetchActiveTemplate(inspection.type, inspection.propertyType, key).then((t) => [key, t] as const)),
+    ).then((pairs) => {
+      if (cancelled) return;
+      setTemplates((prev) => {
+        const next = { ...prev };
+        for (const [key, t] of pairs) next[key] = t;
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inspection]);
 
   if (!inspection) {
@@ -765,56 +710,72 @@ export function ReviewerFormView() {
           <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
             {!selectedSection ? (
               <EmptyState message="Select an area from the list to view its data" />
-            ) : selectedSection.id === "internal" || selectedSection.id === "internal-2" ? (
-              <InternalRoomList />
-            ) : (
-              <>
-                {/* Fields card */}
-                {(selectedSection.key ?? selectedSection.id).startsWith("job-info") ? (
-                  <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                    <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
-                      <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, display: "flex", alignItems: "center", gap: "5px" }}>
-                        <FileText size={12} /> Field Data — editable, feeds the report header
-                      </p>
+            ) : (() => {
+              const template = templates[selectedSection.key ?? selectedSection.id];
+              const isJobInfo = (selectedSection.key ?? selectedSection.id).startsWith("job-info");
+              return (
+                <>
+                  {/* Fields card — the full template-driven view of every field
+                      the inspector filled in on mobile, not a flat summary.
+                      Job Information keeps its editable form (feeds the report
+                      header) since a reviewer can correct it directly. */}
+                  {isJobInfo ? (
+                    <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                      <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
+                        <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, display: "flex", alignItems: "center", gap: "5px" }}>
+                          <FileText size={12} /> Field Data — editable, feeds the report header
+                        </p>
+                      </div>
+                      <JobInfoFieldsForm
+                        section={selectedSection}
+                        onSave={(fields) => updateSectionFields(selectedSection.id, fields)}
+                      />
                     </div>
-                    <JobInfoFieldsForm
-                      section={selectedSection}
-                      onSave={(fields) => updateSectionFields(selectedSection.id, fields)}
-                    />
-                  </div>
-                ) : Object.keys(selectedSection.fields).length > 0 && (
-                  <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                    <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
-                      <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, display: "flex", alignItems: "center", gap: "5px" }}>
-                        <FileText size={12} /> Field Data
-                      </p>
+                  ) : template ? (
+                    <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                      <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
+                        <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, display: "flex", alignItems: "center", gap: "5px" }}>
+                          <FileText size={12} /> Field Data
+                        </p>
+                      </div>
+                      <SectionFieldView fields={template.fields} scope={(selectedSection.answers ?? {}) as AnswerTree} />
                     </div>
-                    <FieldsView section={selectedSection} />
-                  </div>
-                )}
+                  ) : Object.keys(selectedSection.fields).length > 0 && (
+                    <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                      <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
+                        <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, display: "flex", alignItems: "center", gap: "5px" }}>
+                          <FileText size={12} /> Field Data
+                        </p>
+                      </div>
+                      <FieldsView section={selectedSection} />
+                    </div>
+                  )}
 
-                {/* Damages */}
-                {selectedSection.damages.length > 0 && (
-                  <div style={{ marginBottom: "16px" }}>
-                    <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px", display: "flex", alignItems: "center", gap: "5px" }}>
-                      <AlertTriangle size={12} /> Damage Records ({selectedSection.damages.length})
-                    </p>
-                    {selectedSection.damages.map(d => <DamageCard key={d.id} damage={d} />)}
-                  </div>
-                )}
+                  {/* Damages — shown as its own card only when there's no
+                      template (a template-backed section already shows every
+                      damage-list instance, in full, inside the Field Data card). */}
+                  {!template && selectedSection.damages.length > 0 && (
+                    <div style={{ marginBottom: "16px" }}>
+                      <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px", display: "flex", alignItems: "center", gap: "5px" }}>
+                        <AlertTriangle size={12} /> Damage Records ({selectedSection.damages.length})
+                      </p>
+                      {selectedSection.damages.map(d => <DamageCard key={d.id} damage={d} />)}
+                    </div>
+                  )}
 
-                {/* Photos */}
-                {selectedSection.photos.length > 0 && (
-                  <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "16px 20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                    <PhotosGrid photos={selectedSection.photos} />
-                  </div>
-                )}
+                  {/* Photos */}
+                  {selectedSection.photos.length > 0 && (
+                    <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "16px 20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                      <PhotosGrid photos={selectedSection.photos} />
+                    </div>
+                  )}
 
-                {Object.keys(selectedSection.fields).length === 0 && selectedSection.damages.length === 0 && selectedSection.photos.length === 0 && (
-                  <EmptyState message="No data recorded for this section" />
-                )}
-              </>
-            )}
+                  {!template && Object.keys(selectedSection.fields).length === 0 && selectedSection.damages.length === 0 && selectedSection.photos.length === 0 && (
+                    <EmptyState message="No data recorded for this section" />
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
 
