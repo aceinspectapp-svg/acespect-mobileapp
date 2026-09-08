@@ -4,24 +4,36 @@ import { ArrowLeft, Plus, Camera, Save, Send, CheckCircle, MessageSquare } from 
 import { STATUS_CONFIG } from "../../mockData";
 import { useAppData } from "../../data";
 import { StatusBadge } from "../../components/WebLayout";
-import { SectionFieldView } from "../../components/SectionFieldView";
-import { ActiveTemplate, AnswerTree, fetchActiveTemplate } from "../../templateFields";
+import { SectionFieldEditor } from "../../components/SectionFieldEditor";
+import { ActiveTemplate, AnswerTree, AnswerValue, fetchActiveTemplate, flattenSectionToDraft } from "../../templateFields";
 
 export function InspectorFormEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getInspectionById } = useAppData();
+  const { getInspectionById, saveInspectionDraft, finalizeInspection } = useAppData();
   const inspection = id ? getInspectionById(id) ?? null : null;
   const [note, setNote] = useState("");
   const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [photoHover, setPhotoHover] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   // sectionKey -> its current published template (or null once we know none
   // exists for that key, e.g. a legacy/custom section).
   const [templates, setTemplates] = useState<Record<string, ActiveTemplate | null>>({});
+  // sectionId -> its answers as edited here, not yet saved. Overrides
+  // section.answers only for display/save purposes until Save Draft succeeds.
+  const [answerEdits, setAnswerEdits] = useState<Record<string, AnswerTree>>({});
 
+  const isDraft = inspection?.status === "draft";
   const isCompleted = inspection ? (inspection.status === "approved" || inspection.status === "in-review") : false;
   const selectedSection = inspection?.sections.find(s => s.id === selectedSectionId) ?? null;
+
+  // A different inspection loaded (or none) -- drop any unsaved edits so
+  // they can't bleed from one job into another.
+  useEffect(() => {
+    setAnswerEdits({});
+  }, [id]);
 
   // Load each distinct section's active template once the inspection is
   // known, so the detail panel can show every field the inspector filled in
@@ -61,6 +73,86 @@ export function InspectorFormEditor() {
 
   const sc = STATUS_CONFIG[inspection.status];
 
+  function setAnswer(sectionId: string, key: string, value: AnswerValue) {
+    setAnswerEdits(prev => {
+      const base = prev[sectionId] ?? ((inspection!.sections.find(s => s.id === sectionId)?.answers as AnswerTree | undefined) ?? {});
+      return { ...prev, [sectionId]: { ...base, [key]: value } };
+    });
+  }
+
+  // Sections are sent whole — the API replaces the stored set. Any
+  // template-backed section has its report fields/damages/text re-derived
+  // from its (possibly just-edited) answers, so the report view and the
+  // damages list never drift out of sync with what was edited here.
+  function buildSectionsPayload() {
+    return inspection!.sections.map((s, idx) => {
+      const template = templates[s.key ?? s.id];
+      const answers = answerEdits[s.id] ?? (s.answers as AnswerTree | null | undefined) ?? undefined;
+      const derived = template && answers ? flattenSectionToDraft(template.fields, answers) : null;
+      return {
+        key: s.key ?? s.id,
+        name: s.name,
+        icon: s.icon ?? "",
+        order: idx,
+        status: s.status ?? "pending",
+        reportText: derived ? derived.reportText : s.reportText ?? "",
+        fields: derived ? derived.fields : s.fields ?? {},
+        answers: answers as Record<string, unknown> | undefined,
+        photos: s.photos ?? [],
+        damages: (derived ? derived.damages : s.damages ?? []).map((dm, dIdx) => ({
+          type: dm.type || "Damage",
+          location: dm.location ?? "",
+          direction: dm.direction ?? "",
+          widthMm: Number(dm.widthMm) || 0,
+          lengthMm: Number(dm.lengthMm) || 0,
+          notes: dm.notes ?? "",
+          photos: dm.photos ?? [],
+          order: dIdx,
+        })),
+      };
+    });
+  }
+
+  async function saveDraft(): Promise<boolean> {
+    if (!isDraft) return true;
+    setBusy(true);
+    setSaveError(null);
+    try {
+      await saveInspectionDraft(inspection!.id, { sections: buildSectionsPayload() });
+      setAnswerEdits({});
+      return true;
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Failed to save");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSaveDraftClick() {
+    const ok = await saveDraft();
+    if (ok) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!isDraft) return;
+    if (!window.confirm("Send this inspection for review? You will not be able to edit it afterwards.")) return;
+    const ok = await saveDraft();
+    if (!ok) return;
+    setBusy(true);
+    setSaveError(null);
+    try {
+      await finalizeInspection(inspection!.id);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Failed to submit");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div style={{ fontFamily: "Inter, -apple-system, sans-serif", height: "calc(100vh - 56px)", display: "flex", flexDirection: "column", background: "#f5f6fa" }}>
       {/* Header */}
@@ -84,18 +176,27 @@ export function InspectorFormEditor() {
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
           <button
-            onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2000); }}
-            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "8px", border: "1px solid #e5e7eb", background: "white", cursor: "pointer", fontSize: "13px", fontWeight: 600, color: "#374151" }}
+            onClick={handleSaveDraftClick}
+            disabled={!isDraft || busy}
+            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "8px", border: "1px solid #e5e7eb", background: "white", cursor: !isDraft || busy ? "default" : "pointer", fontSize: "13px", fontWeight: 600, color: "#374151", opacity: !isDraft ? 0.5 : 1 }}
           >
-            {saved ? <><CheckCircle size={14} color="#16a34a" /> Saved!</> : <><Save size={14} /> Save Draft</>}
+            {saved ? <><CheckCircle size={14} color="#16a34a" /> Saved!</> : <><Save size={14} /> {busy ? "Saving…" : "Save Draft"}</>}
           </button>
           <button
-            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "8px", border: "none", background: "linear-gradient(135deg, #0f1d35, #1a2a4a)", cursor: "pointer", fontSize: "13px", fontWeight: 600, color: "white" }}
+            onClick={handleSubmit}
+            disabled={!isDraft || busy}
+            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "8px", border: "none", background: "linear-gradient(135deg, #0f1d35, #1a2a4a)", cursor: !isDraft || busy ? "default" : "pointer", fontSize: "13px", fontWeight: 600, color: "white", opacity: !isDraft ? 0.5 : 1 }}
           >
             <Send size={14} /> Submit
           </button>
         </div>
       </div>
+
+      {saveError && (
+        <div style={{ background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#dc2626", padding: "10px 24px", fontSize: "13px", fontWeight: 600, flexShrink: 0 }}>
+          {saveError}
+        </div>
+      )}
 
       {/* Body */}
       <div style={{ flex: 1, overflow: "auto", padding: "28px 32px" }}>
@@ -180,7 +281,14 @@ export function InspectorFormEditor() {
                         </span>
                       </div>
                       {template ? (
-                        <SectionFieldView fields={template.fields} scope={(selectedSection.answers ?? {}) as AnswerTree} />
+                        <div style={{ padding: "16px 18px" }}>
+                          <SectionFieldEditor
+                            fields={template.fields}
+                            scope={answerEdits[selectedSection.id] ?? (selectedSection.answers as AnswerTree | null | undefined) ?? {}}
+                            onChange={(key, value) => setAnswer(selectedSection.id, key, value)}
+                            readOnly={!isDraft}
+                          />
+                        </div>
                       ) : (
                         // No template for this section key (legacy/custom data) —
                         // fall back to the flat report fields, still better than nothing.

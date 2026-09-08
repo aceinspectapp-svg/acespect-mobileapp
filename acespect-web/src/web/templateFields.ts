@@ -107,6 +107,17 @@ export function isGateSatisfied(field: TemplateField, scope: AnswerTree): boolea
   return equals !== undefined && matches(equals);
 }
 
+export function isRepeatRequirementMet(field: TemplateField, value: AnswerValue, scope: AnswerTree | undefined): boolean {
+  const req = field.repeat?.requireWhen;
+  if (!req || !scope) return true;
+  const triggerVal = scope[req.fieldKey];
+  const triggered = Array.isArray(triggerVal)
+    ? triggerVal.some((v) => typeof v === "string" && req.equals.includes(v))
+    : typeof triggerVal === "string" && req.equals.includes(triggerVal);
+  if (!triggered) return true;
+  return Array.isArray(value) && value.length > 0;
+}
+
 export function asAnswerTree(v: AnswerValue): AnswerTree {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as AnswerTree) : {};
 }
@@ -156,4 +167,85 @@ export function displayValue(field: TemplateField, value: AnswerValue): string {
   }
   if (typeof value === "string") return optionLabel(value) || "—";
   return String(value);
+}
+
+export interface FlattenedSection {
+  fields: Record<string, unknown>;
+  damages: {
+    type: string;
+    location: string;
+    direction: string;
+    widthMm: number;
+    lengthMm: number;
+    notes: string;
+    photos: string[];
+  }[];
+  reportText: string;
+}
+
+/**
+ * Derives the flattened report `fields`, the flat `damages[]` array, and a
+ * summary `reportText` from a raw answer tree -- the same walk
+ * acespect-mobile's flattenSectionToDraft does. Run on save so editing
+ * answers here never leaves the report/damages view stale.
+ */
+export function flattenSectionToDraft(templateFields: TemplateField[], answers: AnswerTree): FlattenedSection {
+  return walk(templateFields, answers, []);
+}
+
+function walk(templateFields: TemplateField[], scope: AnswerTree, ancestorLabels: string[]): FlattenedSection {
+  const fields: Record<string, unknown> = {};
+  const damages: FlattenedSection["damages"] = [];
+  const textParts: string[] = [];
+
+  for (const field of templateFields) {
+    if (!isGateSatisfied(field, scope)) continue;
+    const value = scope[field.key];
+
+    if (field.type === "damage-list") {
+      const itemFields = field.itemFields ?? [];
+      const damageTypeField = itemFields.find((f) => f.key === "damageType");
+      for (const { scope: inst } of resolveInstances(field, value)) {
+        const typeRaw = asString(inst.damageType);
+        const typeLabel = damageTypeField?.options?.find((o) => o.value === typeRaw)?.label || typeRaw;
+        const subField = itemFields.find((f) => f.gate?.fieldKey === "damageType" && f.gate.equals === typeRaw);
+        const subRaw = subField ? asString(inst[subField.key]) : "";
+        const subLabel = subField?.options?.find((o) => o.value === subRaw)?.label || subRaw;
+
+        const locationParts = [asString(inst.location), asString(inst.element), asString(inst.crackStartLocation)];
+        damages.push({
+          type: [typeLabel, subLabel].filter(Boolean).join(" — ") || "Damage",
+          location: [...ancestorLabels, ...locationParts.filter(Boolean)].join(" — "),
+          direction: asString(inst.direction),
+          widthMm: Number(inst.widthMm) || 0,
+          lengthMm: Number(inst.lengthMm) || 0,
+          notes: asString(inst.notes),
+          photos: asStringArray(inst.photos),
+        });
+      }
+      continue;
+    }
+
+    if (field.type === "repeating-group") {
+      const instances = resolveInstances(field, value);
+      const labels: string[] = [];
+      for (const { label, scope: inst } of instances) {
+        const sub = walk(field.itemFields ?? [], inst, [...ancestorLabels, label]);
+        damages.push(...sub.damages);
+        labels.push(label);
+        if (sub.reportText) textParts.push(`${label}: ${sub.reportText}`.trim());
+      }
+      fields[field.key] = labels.join(", ");
+      continue;
+    }
+
+    if (field.type === "photos") continue;
+
+    if (value === undefined || value === "") continue;
+    const strValue = Array.isArray(value) ? value.filter((v) => typeof v === "string").join(", ") : String(value);
+    fields[field.key] = strValue;
+    textParts.push(`${field.label}: ${strValue}.`);
+  }
+
+  return { fields, damages, reportText: textParts.join(" ") };
 }

@@ -110,6 +110,47 @@ export const api = {
   updateInspection: (id: string, patch: { status?: InspectionStatus; notes?: string; reviewerId?: string | null }) =>
     req<{ inspection: Inspection }>(`/web/inspections/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
+  /**
+   * The inspector's own draft-editing endpoint (same one the mobile app and
+   * acespect-dashboard use) -- `sections`, when given, replaces the stored
+   * set wholesale. Only works while the inspection is still a draft owned
+   * by the calling inspector.
+   */
+  updateInspectionDraft: (
+    id: string,
+    patch: {
+      jobNo?: string;
+      address?: string;
+      suburb?: string;
+      client?: string;
+      date?: string;
+      notes?: string;
+      sections?: Array<{
+        key: string;
+        name: string;
+        icon: string;
+        order: number;
+        status: "complete" | "partial" | "pending";
+        reportText: string;
+        fields: Record<string, unknown>;
+        answers?: Record<string, unknown>;
+        photos: string[];
+        damages: Array<{
+          type: string;
+          location: string;
+          direction: string;
+          widthMm: number;
+          lengthMm: number;
+          notes: string;
+          photos: string[];
+          order: number;
+        }>;
+      }>;
+    },
+  ) => req<{ inspection: unknown }>(`/inspections/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+
+  finalizeInspection: (id: string) => req<{ inspection: unknown }>(`/inspections/${id}/finalize`, { method: "POST" }),
+
   getTemplateSummary: (inspectionType: string, propertyType: string) =>
     req<{ summary: TemplateSummaryRow[] }>(
       `/templates/summary?inspectionType=${encodeURIComponent(inspectionType)}&propertyType=${encodeURIComponent(propertyType)}`,

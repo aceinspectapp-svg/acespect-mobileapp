@@ -25,6 +25,10 @@ interface AppData {
     },
   ) => Promise<void>;
   patchInspection: (id: string, patch: { status?: Inspection["status"]; notes?: string }) => Promise<void>;
+  /** Inspector's own draft save -- replaces the section set. Refreshes the inspection on success. */
+  saveInspectionDraft: (id: string, patch: Parameters<typeof api.updateInspectionDraft>[1]) => Promise<void>;
+  /** Sends a draft for review -- one-way. Refreshes the inspection on success. */
+  finalizeInspection: (id: string) => Promise<void>;
 }
 
 const Ctx = createContext<AppData | null>(null);
@@ -136,6 +140,22 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [replaceInspection],
   );
 
+  const saveInspectionDraft = useCallback<AppData["saveInspectionDraft"]>(
+    async (id, patch) => {
+      await api.updateInspectionDraft(id, patch);
+      await replaceInspection(id);
+    },
+    [replaceInspection],
+  );
+
+  const finalizeInspection = useCallback<AppData["finalizeInspection"]>(
+    async (id) => {
+      await api.finalizeInspection(id);
+      await replaceInspection(id);
+    },
+    [replaceInspection],
+  );
+
   const value: AppData = {
     currentUser,
     loading,
@@ -151,6 +171,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     refresh,
     patchSection,
     patchInspection,
+    saveInspectionDraft,
+    finalizeInspection,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
