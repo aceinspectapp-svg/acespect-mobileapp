@@ -18,14 +18,17 @@ async function main() {
     console.error('⚠️  Could not connect to the database. Check DATABASE_URL.', err);
   }
 
-  // Photo storage is Postgres-backed now (see lib/storage.ts) -- always
-  // available, nothing external to provision. ensureBucket()/isStorageEnabled()
-  // are kept as no-ops so this startup shape doesn't need its own special case.
+  // Photo storage is Egnyte-backed (see lib/storage.ts) -- requires
+  // EGNYTE_DOMAIN/EGNYTE_API_TOKEN to be set, or uploads fail loudly at
+  // request time rather than silently.
   try {
     if (isStorageEnabled()) {
       await ensureBucket();
       // eslint-disable-next-line no-console
-      console.log('✅ Photo storage ready (Postgres)');
+      console.log('✅ Photo storage ready (Egnyte)');
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn('⚠️  EGNYTE_DOMAIN/EGNYTE_API_TOKEN not set — photo uploads will fail.');
     }
   } catch (err) {
     // eslint-disable-next-line no-console

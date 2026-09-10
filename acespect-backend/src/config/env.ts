@@ -30,9 +30,16 @@ const schema = z.object({
   REVIEW_QUEUE_CONCURRENCY: z.coerce.number().int().positive().default(2),
 
   // This backend's own public URL, used to build photo URLs
-  // (PUBLIC_BASE_URL + /api/v1/media/:id) that proxy to Postgres-stored
-  // photo bytes -- see lib/storage.ts.
+  // (PUBLIC_BASE_URL + /api/v1/media/:id) that proxy through to wherever the
+  // bytes actually live -- see lib/storage.ts.
   PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),
+
+  // Egnyte-backed photo storage (see lib/storage.ts). Empty EGNYTE_DOMAIN/
+  // EGNYTE_API_TOKEN means storage is unconfigured -- isStorageEnabled()
+  // returns false and photo uploads fail loudly rather than silently.
+  EGNYTE_DOMAIN: z.string().default(''),
+  EGNYTE_API_TOKEN: z.string().default(''),
+  EGNYTE_ROOT_FOLDER: z.string().default('/Shared/ACE SPECT/inspection-photos'),
 });
 
 const parsed = schema.safeParse(process.env);

@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Readable } from 'stream';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
 import { fetchPhotoStream } from '../../lib/storage';
@@ -18,6 +19,6 @@ export const mediaController = {
 
     res.setHeader('Content-Type', photo.contentType);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.send(photo.data);
+    Readable.fromWeb(photo.body as import('stream/web').ReadableStream).pipe(res);
   }),
 };
