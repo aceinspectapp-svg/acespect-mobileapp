@@ -78,16 +78,48 @@ export interface AnswerTree {
   [fieldKey: string]: AnswerValue;
 }
 
+/**
+ * Mobile only ever submits (and the backend only ever stores) the
+ * human-readable display labels for inspectionType/propertyType --
+ * "Dilapidation", "Residential House" -- never the lowercase slugs
+ * ("dilapidation", "residential_house") templates are keyed by; those slugs
+ * are mobile-local state used for its own live template fetching and are
+ * never sent to the backend. So a section's stored inspection carries only
+ * the display label, and any template lookup from it needs to map back to
+ * the slug first. Table covers every current INSPECTION_TYPES/
+ * PROPERTY_TYPES entry (acespect-mobile/src/constants/inspectionData.ts);
+ * the fallback (lowercase, spaces/hyphens -> underscore) handles anything
+ * added later without needing this file touched, and is a no-op if a slug
+ * was already passed in.
+ */
+const TYPE_LABEL_TO_SLUG: Record<string, string> = {
+  "Dilapidation": "dilapidation",
+  "Pre-Purchase": "pre_purchase",
+  "Construction Stage": "construction_stage",
+  "Investigations": "investigations",
+  "Residential House": "residential_house",
+  "Apartment": "apartment",
+  "Commercial Properties": "commercial_properties",
+  "Public Assets": "public_assets",
+};
+
+function toSlug(value: string): string {
+  return TYPE_LABEL_TO_SLUG[value] ?? value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
 /** The current published template for a profile + section; null if none exists (not every section key is templatable). */
 export async function fetchActiveTemplate(
   inspectionType: string,
   propertyType: string,
   sectionKey: string,
 ): Promise<ActiveTemplate | null> {
+  // Some older/malformed records have no type or property type stored at
+  // all (predates this field being required) -- nothing to look up.
+  if (!inspectionType || !propertyType) return null;
   try {
     const token = getToken();
     const res = await fetch(
-      `${API_BASE}/templates/active/${encodeURIComponent(inspectionType)}/${encodeURIComponent(propertyType)}/${encodeURIComponent(sectionKey)}`,
+      `${API_BASE}/templates/active/${encodeURIComponent(toSlug(inspectionType))}/${encodeURIComponent(toSlug(propertyType))}/${encodeURIComponent(sectionKey)}`,
       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     );
     if (!res.ok) return null;
