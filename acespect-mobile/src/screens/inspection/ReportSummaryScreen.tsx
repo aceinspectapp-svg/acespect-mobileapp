@@ -173,13 +173,21 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
     setSubmitting(true);
     try {
       // Upload every locally-captured photo → map local URI to its public URL.
-      const uris = draft.collectPhotoUris();
+      // Grouped by section so each lands in that section's own Egnyte
+      // folder (…/{inspectionId}/{sectionKey}/…) rather than one flat pile.
+      const inspectionId = draft.getFolderId();
+      const pairs = draft.collectPhotoUrisBySection();
       const urlByUri = new Map<string, string>();
-      for (const uri of uris) urlByUri.set(uri, await uploadPhoto(uri));
+      for (const { sectionKey, uri } of pairs) {
+        urlByUri.set(uri, await uploadPhoto(uri, { inspectionId, sectionKey }));
+      }
 
       // Build the structured payload from the section draft, then fill top-level
       // job fields + ensure a Job Information section from the job setup data.
       const payload = draft.buildPayload((u) => urlByUri.get(u) ?? u);
+      // Reuse the same id the photos above were just uploaded under, so the
+      // created row's Egnyte folder matches without needing anything moved.
+      payload.id = inspectionId;
       payload.inspectionType = inspectionTypeLabel;
       payload.propertyType =
         PROPERTY_LABELS[data.selection.propertyTypeId] ?? data.selection.propertyTypeId;

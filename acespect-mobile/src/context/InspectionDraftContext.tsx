@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import * as Crypto from 'expo-crypto';
 import type { ActiveTemplate } from '../services/templateApi';
 import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
 
@@ -41,6 +42,13 @@ export interface DraftTop {
    *  the wizard's InspectionDraftSelection (today: Job Information). */
   inspectionTypeId?: string;
   propertyTypeId?: string;
+  /** This draft's own id, generated the moment it starts (well before
+   *  submit) — used as the Egnyte inspection folder for every photo
+   *  uploaded along the way, and sent as `id` at submit time so the created
+   *  row's id matches the folder those photos already live under. A
+   *  Post-Dilapidation job picked up via `assignmentId` uses that instead
+   *  (see `folderId` below) since its row already exists. */
+  draftId: string;
   jobNo?: string;
   address?: string;
   suburb?: string;
@@ -61,6 +69,10 @@ export interface DraftTop {
 }
 
 export interface SubmitPayload extends DraftTop {
+  /** The backend's Inspection.id to create (or reuse) this row under — set
+   *  at submit time from `getFolderId()`, matching the Egnyte folder every
+   *  photo was already uploaded into along the way. */
+  id?: string;
   sections: DraftSection[];
 }
 
@@ -77,6 +89,10 @@ interface DraftValue {
   reset: () => void;
   /** All local photo URIs across sections + damages + the registry (to upload). */
   collectPhotoUris: () => string[];
+  /** Same set as `collectPhotoUris`, each tagged with its top-level section key — for uploading into that section's own Egnyte folder. */
+  collectPhotoUrisBySection: () => { sectionKey: string; uri: string }[];
+  /** The id every photo for this draft is (or should be) uploaded under in Egnyte — the assigned job's existing row id if picked up from the assigned list, else this draft's own generated id. */
+  getFolderId: () => string;
   /** Build the submit payload, mapping each local photo URI via `resolve`. */
   buildPayload: (resolve: (uri: string) => string) => SubmitPayload;
   /**
@@ -127,7 +143,11 @@ export function useInspectionDraft(): DraftValue {
 }
 
 export function InspectionDraftProvider({ children }: { children: React.ReactNode }) {
-  const topRef = useRef<DraftTop>({ inspectionType: 'Dilapidation', propertyType: 'Residential House' });
+  const topRef = useRef<DraftTop>({
+    inspectionType: 'Dilapidation',
+    propertyType: 'Residential House',
+    draftId: Crypto.randomUUID(),
+  });
   const sectionsRef = useRef<Record<string, DraftSection>>({});
   const photosRef = useRef<Record<string, string[]>>({});
   const templatesRef = useRef<Record<string, ActiveTemplate>>({});
@@ -154,7 +174,11 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
   }, []);
 
   const reset = useCallback(() => {
-    topRef.current = { inspectionType: 'Dilapidation', propertyType: 'Residential House' };
+    topRef.current = {
+      inspectionType: 'Dilapidation',
+      propertyType: 'Residential House',
+      draftId: Crypto.randomUUID(),
+    };
     sectionsRef.current = {};
     photosRef.current = {};
     templatesRef.current = {};
@@ -202,6 +226,27 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     return [...uris].filter((u) => u.startsWith('file:'));
   }, []);
 
+  const collectPhotoUrisBySection = useCallback((): { sectionKey: string; uri: string }[] => {
+    const seen = new Set<string>();
+    const out: { sectionKey: string; uri: string }[] = [];
+    const add = (sectionKey: string, uri: string) => {
+      if (!uri.startsWith('file:') || seen.has(uri)) return;
+      seen.add(uri);
+      // photosRef is keyed by the field's full nesting path (e.g.
+      // "driveway:0:photos" for a damage-list instance's photos) — the
+      // Egnyte folder groups by the top-level section only.
+      out.push({ sectionKey: sectionKey.split(':')[0] ?? sectionKey, uri });
+    };
+    Object.entries(photosRef.current).forEach(([key, arr]) => arr.forEach((u) => add(key, u)));
+    Object.values(sectionsRef.current).forEach((s) => {
+      (s.photos ?? []).forEach((u) => add(s.key, u));
+      (s.damages ?? []).forEach((d) => (d.photos ?? []).forEach((u) => add(s.key, u)));
+    });
+    return out;
+  }, []);
+
+  const getFolderId = useCallback((): string => topRef.current.assignmentId ?? topRef.current.draftId, []);
+
   const buildPayload = useCallback(
     (resolve: (uri: string) => string): SubmitPayload => ({
       ...topRef.current,
@@ -234,6 +279,8 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       addPhoto,
       reset,
       collectPhotoUris,
+      collectPhotoUrisBySection,
+      getFolderId,
       buildPayload,
       getActiveTemplate,
       setActiveTemplate,
@@ -251,6 +298,8 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       addPhoto,
       reset,
       collectPhotoUris,
+      collectPhotoUrisBySection,
+      getFolderId,
       buildPayload,
       getActiveTemplate,
       setActiveTemplate,

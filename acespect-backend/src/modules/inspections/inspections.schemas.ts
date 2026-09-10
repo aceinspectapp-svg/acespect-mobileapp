@@ -32,6 +32,13 @@ const sectionSchema = z.object({
  * the filled sections. `payload` is kept optional for the AI review pipeline.
  */
 export const submitInspectionSchema = z.object({
+  /** Mobile's own draft-local id, generated when the inspection starts (well
+   *  before submit) so photos captured along the way can already be
+   *  uploaded into this same inspection's Egnyte folder. When present, the
+   *  created row uses this id instead of a freshly generated one, so those
+   *  folders end up lining up with the row rather than needing a rename. */
+  id: z.string().uuid().optional(),
+
   inspectionType: z.string().trim().min(1, 'inspectionType is required').max(120),
   propertyType: z.string().trim().min(1, 'propertyType is required').max(120),
 

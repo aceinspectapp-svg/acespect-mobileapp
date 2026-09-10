@@ -1,8 +1,17 @@
 import { api } from './apiClient';
 import type { SubmitPayload } from '../context/InspectionDraftContext';
 
-/** Upload one local photo (file:// URI) to the backend → returns its public URL. */
-export async function uploadPhoto(uri: string): Promise<string> {
+/**
+ * Upload one local photo (file:// URI) to the backend → returns its public
+ * URL. `inspectionId`/`sectionKey`, when given, group the file under that
+ * inspection's own section folder in Egnyte instead of an ungrouped flat
+ * upload — always pass them for a real inspection photo (see
+ * `InspectionDraftContext.getFolderId()`).
+ */
+export async function uploadPhoto(
+  uri: string,
+  opts?: { inspectionId?: string; sectionKey?: string },
+): Promise<string> {
   const name = uri.split('/').pop() || 'photo.jpg';
   const rawExt = (name.split('.').pop() || 'jpg').toLowerCase();
   const mime = rawExt === 'jpg' ? 'image/jpeg' : `image/${rawExt}`;
@@ -10,6 +19,8 @@ export async function uploadPhoto(uri: string): Promise<string> {
   const form = new FormData();
   // React Native's FormData accepts { uri, name, type } for file parts.
   form.append('photo', { uri, name, type: mime } as unknown as Blob);
+  if (opts?.inspectionId) form.append('inspectionId', opts.inspectionId);
+  if (opts?.sectionKey) form.append('sectionKey', opts.sectionKey);
 
   const { data } = await api.post<{ url: string }>('/inspections/photos', form, {
     headers: { 'Content-Type': 'multipart/form-data' },

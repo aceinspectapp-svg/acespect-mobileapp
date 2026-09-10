@@ -74,7 +74,15 @@ async function submit(inspectorId: string, input: SubmitInspectionInput) {
     return { inspection };
   }
 
-  const inspection = await prisma.inspection.create({ data: { ...data, inspectorId } });
+  const inspection = await prisma.inspection.create({
+    // A client-supplied id (mobile's draft-local id, generated at the start
+    // of the inspection) is what its photos were already uploaded under --
+    // using the same id here is what makes those Egnyte folders line up
+    // with this row instead of needing every photo moved/renamed at submit
+    // time. Falls back to Prisma's own uuid() default when absent (e.g. a
+    // web-created draft).
+    data: { ...data, inspectorId, ...(input.id ? { id: input.id } : {}) },
+  });
   return { inspection };
 }
 
@@ -223,11 +231,24 @@ async function getById(id: string) {
   return inspection;
 }
 
-/** Upload one inspection photo; returns a URL that proxies through this backend. Stored directly in Postgres -- always available, nothing to configure. */
-async function uploadPhoto(buffer: Buffer, contentType: string, originalName: string) {
+/**
+ * Upload one inspection photo; returns a URL that proxies through this
+ * backend. `inspectionId`/`sectionKey`, when given, group the file under
+ * that inspection's own section folder in Egnyte -- mobile passes them
+ * alongside each photo (it has a draft-local inspection id from the moment
+ * the inspection starts, well before submit, precisely so uploads can be
+ * grouped correctly as they happen).
+ */
+async function uploadPhoto(
+  buffer: Buffer,
+  contentType: string,
+  originalName: string,
+  inspectionId?: string,
+  sectionKey?: string,
+) {
   const { uploadPhoto: store } = await import('../../lib/storage');
   const ext = (originalName.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-  return store(buffer, contentType || 'image/jpeg', ext);
+  return store(buffer, contentType || 'image/jpeg', ext, inspectionId, sectionKey);
 }
 
 export const inspectionsService = { submit, update, finalize, getById, uploadPhoto, listAssigned, getBaselineSections };

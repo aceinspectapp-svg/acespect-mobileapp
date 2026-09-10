@@ -327,14 +327,17 @@ model ReviewDecision {
   @@map("review_decisions")
 }
 
-/// Inspection photos, stored directly in Postgres as bytes -- replaces the
-/// Egnyte-backed storage (removed; no external storage dependency needed to
-/// get real submissions working end to end). Served back through the same
-/// /api/v1/media/:id proxy route as before, so nothing downstream (mobile,
-/// dashboard, generated reports) needed to change.
+/// Photo storage is Egnyte-backed (lib/storage.ts) -- this table is just a
+/// lightweight id -> Egnyte path index, so /api/v1/media/:id can stay a
+/// clean opaque id (never leaking the underlying folder structure to
+/// clients) while the actual file lives at a path organized by
+/// inspection/section. `data` is a leftover from the brief interim period
+/// this table held the bytes directly; kept nullable rather than dropped so
+/// no migration is needed either way, and left unpopulated going forward.
 model Photo {
   id          String   @id @default(uuid())
-  data        Bytes
+  storageKey  String?
+  data        Bytes?
   contentType String
   createdAt   DateTime @default(now())
 

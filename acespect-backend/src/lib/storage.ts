@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { env } from '../config/env';
+import { prisma } from './prisma';
 
 // Every photo used in the review UI and the generated report is resized to
 // one consistent size at upload time -- this replaces the old manual
@@ -18,6 +19,18 @@ const REPORT_JPEG_QUALITY = 82;
  * links open a web viewer page rather than serving raw image bytes, so
  * uploadPhoto() hands back a URL on THIS backend (see media.routes.ts) which
  * proxies the file through using the same token.
+ *
+ * Folder layout: {EGNYTE_ROOT_FOLDER}/{inspectionId}/{sectionKey}/{photoId}.jpg
+ * -- one folder per inspection, one subfolder per section (driveway,
+ * description, paving_paths, ...), so photos are browsable in Egnyte itself
+ * grouped exactly the way the inspection is. `inspectionId`/`sectionKey` are
+ * optional on `uploadPhoto()`: when absent (a caller with no section context)
+ * it falls back to the old flat `{root}/inspections/{photoId}.jpg` layout.
+ *
+ * The public `/api/v1/media/:id` URL stays a plain opaque id either way --
+ * it never leaks the folder structure to clients -- because the `photos`
+ * table is a small id -> Egnyte-path index (see prisma/schema.prisma),
+ * looked up on fetch.
  */
 function egnyteBase(): string {
   return `https://${env.EGNYTE_DOMAIN}.egnyte.com`;
@@ -85,7 +98,20 @@ function encodeEgnytePath(path: string): string {
   return path.split('/').map(encodeURIComponent).join('/');
 }
 
-function photoPath(id: string, suffix = ''): string {
+/** Keep only characters safe as a single Egnyte path segment -- ids/section keys come from the client, never trust them verbatim in a path. */
+function safeSegment(raw: string): string {
+  return raw.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 100);
+}
+
+/** A section key can be nested ("driveway:0:photos" for a damage-list instance's photos) -- the folder groups by the top-level section only. */
+function topLevelSection(sectionKey: string): string {
+  return safeSegment(sectionKey.split(':')[0] ?? sectionKey);
+}
+
+function photoPath(id: string, inspectionId: string | undefined, sectionKey: string | undefined, suffix = ''): string {
+  if (inspectionId && sectionKey) {
+    return `${env.EGNYTE_ROOT_FOLDER}/${safeSegment(inspectionId)}/${topLevelSection(sectionKey)}/${id}${suffix}`;
+  }
   return `${env.EGNYTE_ROOT_FOLDER}/inspections/${id}${suffix}`;
 }
 
@@ -103,11 +129,18 @@ async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string)
   }
 }
 
-/** Upload one image; resizes it for the report/UI and returns its storage key + this backend's proxy URL. */
+/**
+ * Upload one image; resizes it for the report/UI and returns its storage key
+ * + this backend's proxy URL. `inspectionId`/`sectionKey`, when given, group
+ * the file under that inspection's own section subfolder in Egnyte (see the
+ * module doc above); omit them for a flat, ungrouped upload.
+ */
 export async function uploadPhoto(
   buffer: Buffer,
   contentType: string,
   ext: string,
+  inspectionId?: string,
+  sectionKey?: string,
 ): Promise<UploadedPhoto> {
   if (!isStorageEnabled()) throw new Error('Photo storage is not configured');
 
@@ -127,18 +160,21 @@ export async function uploadPhoto(
     .jpeg({ quality: REPORT_JPEG_QUALITY })
     .toBuffer();
 
-  const storageKey = photoPath(id, '.jpg');
+  const storageKey = photoPath(id, inspectionId, sectionKey, '.jpg');
   await uploadToEgnyte(storageKey, resized, 'image/jpeg');
 
   // Keep the untouched original alongside it -- not linked anywhere in the
   // app today, but preserved in case a full-resolution copy is ever needed.
   // Non-fatal: the report copy above is what the app actually depends on.
   try {
-    await uploadToEgnyte(photoPath(id, `-original.${ext}`), buffer, contentType);
+    await uploadToEgnyte(photoPath(id, inspectionId, sectionKey, `-original.${ext}`), buffer, contentType);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('⚠️  Failed to store the original photo (resized report copy still saved).', err);
   }
+
+  // Index id -> real path so the public URL can stay a plain opaque id.
+  await prisma.photo.create({ data: { id, storageKey, contentType: 'image/jpeg' } });
 
   return { id, storageKey, url: `${env.PUBLIC_BASE_URL}/api/v1/media/${id}` };
 }
@@ -148,8 +184,14 @@ export async function fetchPhotoStream(
   id: string,
 ): Promise<{ body: ReadableStream; contentType: string } | null> {
   if (!isStorageEnabled()) return null;
+
+  // Look up the real Egnyte path from the index; fall back to the old flat
+  // guess for photos uploaded before this index existed.
+  const indexed = await prisma.photo.findUnique({ where: { id } });
+  const path = indexed?.storageKey ?? photoPath(id, undefined, undefined, '.jpg');
+
   const res = await withRetry(() =>
-    fetch(`${egnyteBase()}/pubapi/v1/fs-content${encodeEgnytePath(photoPath(id, '.jpg'))}`, {
+    fetch(`${egnyteBase()}/pubapi/v1/fs-content${encodeEgnytePath(path)}`, {
       headers: authHeaders(),
     }),
   );
@@ -158,5 +200,5 @@ export async function fetchPhotoStream(
     const body = await res.text().catch(() => '');
     throw new Error(`Egnyte fetch failed (${res.status}): ${body}`);
   }
-  return { body: res.body, contentType: res.headers.get('content-type') ?? 'image/jpeg' };
+  return { body: res.body, contentType: indexed?.contentType ?? res.headers.get('content-type') ?? 'image/jpeg' };
 }
