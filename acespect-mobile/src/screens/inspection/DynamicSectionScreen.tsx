@@ -90,6 +90,11 @@ export function DynamicSectionScreen({
   // section again, which remounts this screen) show a blank form even
   // though the answers were already captured.
   const [answers, setAnswers] = useState<AnswerTree>(() => draft.getAnswers(sectionKey) ?? {});
+  // Off until the inspector actually tries to leave an incomplete section --
+  // a fresh section shouldn't look like it's already full of errors. Once
+  // on, each still-missing field's outline clears itself as it gets filled
+  // in (recomputed fresh every render from the current `answers`).
+  const [showMissing, setShowMissing] = useState(false);
 
   // Post-Dilapidation: this job is being assessed against an earlier
   // inspection. `undefined` = not checked yet, `null` = checked, no entry
@@ -226,6 +231,7 @@ export function DynamicSectionScreen({
       return;
     }
     if (!defectsComplete) {
+      setShowMissing(true);
       Alert.alert(
         'Defect details required',
         'The condition here is Average or Poor, so at least one defect must be recorded before you can leave this section.',
@@ -234,6 +240,7 @@ export function DynamicSectionScreen({
       return;
     }
     if (!requiredFieldsComplete) {
+      setShowMissing(true);
       Alert.alert(
         'Section incomplete',
         'Not everything here has been filled in yet. Save this as a draft and finish it later, or stay and complete it now.',
@@ -322,6 +329,7 @@ export function DynamicSectionScreen({
                 scope={answers}
                 onChange={setAnswer}
                 path={[sectionKey]}
+                showMissing={showMissing}
               />
             ) : (
               <FieldListRenderer
@@ -329,6 +337,7 @@ export function DynamicSectionScreen({
                 scope={answers}
                 onChange={setAnswer}
                 path={[sectionKey]}
+                showMissing={showMissing}
               />
             )}
           </SectionCard>
@@ -340,6 +349,7 @@ export function DynamicSectionScreen({
                 scope={answers}
                 onChange={setAnswer}
                 path={[sectionKey, 'comparison']}
+                showMissing={showMissing}
               />
             </SectionCard>
           )}
