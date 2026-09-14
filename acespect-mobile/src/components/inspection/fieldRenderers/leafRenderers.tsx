@@ -178,8 +178,8 @@ export function PhotosFieldRenderer({ field, value, onChange, path }: FieldRende
     if (busy) return;
     setBusy(true);
     try {
-      const shot = await capture({ sectionKey, sortOrder: uris.length, caption: field.label });
-      if (shot) onChange([...uris, shot.uri]);
+      const shots = await capture({ sectionKey, sortOrder: uris.length, caption: field.label });
+      if (shots?.length) onChange([...uris, ...shots.map((s) => s.uri)]);
     } finally {
       setBusy(false);
     }

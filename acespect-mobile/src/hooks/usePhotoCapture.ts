@@ -11,8 +11,11 @@ import { useInspectionDraft } from '../context/InspectionDraftContext';
 /**
  * Camera + gallery capture via the OS pickers (works in Expo Go).
  *
- * Both entry points return a normalized {@link CapturedPhoto} or `null` when the
- * user cancels. On a hard permission denial we surface an Alert and return null.
+ * Both entry points return a normalized {@link CapturedPhoto}[] or `null` when
+ * the user cancels -- `takePhoto` always resolves to a single-element array
+ * (the camera only ever captures one shot at a time), `pickFromLibrary` can
+ * return several (the library picker allows selecting multiple at once).
+ * On a hard permission denial we surface an Alert and return null.
  * Successful captures are copied into the app document directory so the URI is
  * stable (raw camera/cache URIs are transient) — that saved path is what
  * WatermelonDB will persist in Phase 2.
@@ -49,6 +52,13 @@ function toCapturedPhoto(
   };
 }
 
+function toCapturedPhotos(
+  assets: ImagePicker.ImagePickerAsset[],
+  opts?: { caption?: string; category?: string },
+): CapturedPhoto[] {
+  return assets.map((asset) => toCapturedPhoto(asset, opts));
+}
+
 export interface CaptureOptions {
   caption?: string;
   category?: string;
@@ -62,13 +72,13 @@ export interface CaptureOptions {
  * Best-effort persist to the local DB. No-ops in Expo Go (database === null)
  * and swallows errors so a DB hiccup never blocks the capture UX.
  */
-async function maybePersist(photo: CapturedPhoto, opts?: CaptureOptions): Promise<void> {
+async function maybePersist(photo: CapturedPhoto, sortOrder: number, opts?: CaptureOptions): Promise<void> {
   if (!opts?.sectionKey || !database) return;
   try {
     await persistPhoto(database, {
       sectionKey: opts.sectionKey,
       photo,
-      sortOrder: opts.sortOrder ?? 0,
+      sortOrder,
     });
   } catch (err) {
     console.warn('[usePhotoCapture] failed to persist photo', err);
@@ -78,18 +88,24 @@ async function maybePersist(photo: CapturedPhoto, opts?: CaptureOptions): Promis
 export function usePhotoCapture() {
   const { addPhoto } = useInspectionDraft();
 
-  // Persist locally + register the photo in the inspection draft (by sectionKey)
-  // so it's uploaded and attached to the right section at submit time.
+  // Persist locally + register each photo in the inspection draft (by
+  // sectionKey) so it's uploaded and attached to the right section at
+  // submit time. Sequential sortOrders starting from opts.sortOrder, so a
+  // multi-select from the library still orders correctly relative to
+  // what's already in the section.
   const register = useCallback(
-    async (photo: CapturedPhoto, opts?: CaptureOptions) => {
-      await maybePersist(photo, opts);
-      if (opts?.sectionKey) addPhoto(opts.sectionKey, photo.uri);
+    async (photos: CapturedPhoto[], opts?: CaptureOptions) => {
+      const base = opts?.sortOrder ?? 0;
+      for (let i = 0; i < photos.length; i++) {
+        await maybePersist(photos[i]!, base + i, opts);
+        if (opts?.sectionKey) addPhoto(opts.sectionKey, photos[i]!.uri);
+      }
     },
     [addPhoto],
   );
 
   const takePhoto = useCallback(
-    async (opts?: CaptureOptions): Promise<CapturedPhoto | null> => {
+    async (opts?: CaptureOptions): Promise<CapturedPhoto[] | null> => {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
@@ -104,15 +120,15 @@ export function usePhotoCapture() {
         exif: true,
       });
       if (result.canceled || !result.assets?.length) return null;
-      const photo = toCapturedPhoto(result.assets[0], opts);
-      await register(photo, opts);
-      return photo;
+      const photos = toCapturedPhotos(result.assets, opts);
+      await register(photos, opts);
+      return photos;
     },
     [register],
   );
 
   const pickFromLibrary = useCallback(
-    async (opts?: CaptureOptions): Promise<CapturedPhoto | null> => {
+    async (opts?: CaptureOptions): Promise<CapturedPhoto[] | null> => {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
@@ -124,11 +140,15 @@ export function usePhotoCapture() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         quality: 0.8,
+        // Select several at once instead of one round-trip per photo.
+        // selectionLimit: 0 = no cap (the system's own max).
+        allowsMultipleSelection: true,
+        selectionLimit: 0,
       });
       if (result.canceled || !result.assets?.length) return null;
-      const photo = toCapturedPhoto(result.assets[0], opts);
-      await register(photo, opts);
-      return photo;
+      const photos = toCapturedPhotos(result.assets, opts);
+      await register(photos, opts);
+      return photos;
     },
     [register],
   );
