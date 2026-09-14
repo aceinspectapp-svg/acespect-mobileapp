@@ -48,6 +48,17 @@ export function propertyTitle(id: string): string {
 export function inspectionTitle(id: string): string {
   return INSPECTION_TYPES.find((t) => t.id === id)?.title ?? id;
 }
+/** Reverse of propertyTitle -- inspections are stored with the display title
+ * ("Residential House"), but the templates API is keyed by slug id
+ * ("residential_house"). Falls back to the input so an already-slug value
+ * still passes through untouched. */
+export function propertyIdFromTitle(title: string): string {
+  return PROPERTY_TYPES.find((p) => p.title === title)?.id ?? title;
+}
+/** Reverse of inspectionTitle -- see propertyIdFromTitle. */
+export function inspectionIdFromTitle(title: string): string {
+  return INSPECTION_TYPES.find((t) => t.title === title)?.id ?? title;
+}
 export function isValidCombo(inspectionType: string, propertyType: string): boolean {
   return INSPECTION_TYPES.find((t) => t.id === inspectionType)?.applicableProperties.includes(propertyType) ?? false;
 }
