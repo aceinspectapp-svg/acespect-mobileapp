@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   PanResponder,
   Pressable,
@@ -123,6 +124,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
   const [signed, setSigned] = useState(false);
   const draft = useInspectionDraft();
   const [submitting, setSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState('');
 
   // `route.params.data` has been seen arriving undefined here -- every
   // caller does pass it, but `navigate({..., merge: true})` folds new params
@@ -178,9 +180,14 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
       const inspectionId = draft.getFolderId();
       const pairs = draft.collectPhotoUrisBySection();
       const urlByUri = new Map<string, string>();
+      let uploaded = 0;
+      setSubmitStatus(pairs.length ? `Uploading photos (0/${pairs.length})…` : 'Saving inspection…');
       for (const { sectionKey, uri } of pairs) {
         urlByUri.set(uri, await uploadPhoto(uri, { inspectionId, sectionKey }));
+        uploaded += 1;
+        setSubmitStatus(`Uploading photos (${uploaded}/${pairs.length})…`);
       }
+      setSubmitStatus('Saving inspection…');
 
       // Build the structured payload from the section draft, then fill top-level
       // job fields + ensure a Job Information section from the job setup data.
@@ -234,6 +241,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
       Alert.alert('Submit failed', e?.response?.data?.error?.message ?? e?.message ?? 'Could not submit. Check your connection and try again.');
     } finally {
       setSubmitting(false);
+      setSubmitStatus('');
     }
   };
 
@@ -316,6 +324,12 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
 
         {/* Inspector declaration — Confirm / Decline (no free text) */}
         <View style={styles.card}>
+          {submitting && (
+            <View style={styles.declOverlay}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.declOverlayText}>{submitStatus || 'Submitting…'}</Text>
+            </View>
+          )}
           <SectionTitle label="Inspector Declaration" />
           <Text style={styles.declText}>
             I confirm this report accurately reflects the conditions observed at the property on the date of inspection.
@@ -350,12 +364,18 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
         </View>
 
         {/* Submit */}
-        <Pressable onPress={onGenerate} disabled={!canSubmit} style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}>
-          <Ionicons name="document-text-outline" size={18} color={colors.white} />
-          <Text style={styles.submitText}>{canSubmit ? 'Save to Dashboard' : 'Confirm & Sign to Continue'}</Text>
+        <Pressable onPress={onGenerate} disabled={!canSubmit || submitting} style={[styles.submitBtn, (!canSubmit || submitting) && styles.submitBtnDisabled]}>
+          {submitting ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <Ionicons name="document-text-outline" size={18} color={colors.white} />
+          )}
+          <Text style={styles.submitText}>
+            {submitting ? (submitStatus || 'Submitting…') : canSubmit ? 'Save to Dashboard' : 'Confirm & Sign to Continue'}
+          </Text>
         </Pressable>
 
-        <Pressable onPress={() => navigation.goBack()} style={styles.draftBtn}>
+        <Pressable onPress={() => navigation.goBack()} disabled={submitting} style={styles.draftBtn}>
           <Text style={styles.draftText}>Save as Draft</Text>
         </Pressable>
       </ScrollView>
@@ -420,6 +440,20 @@ const styles = StyleSheet.create({
   pillTextPending: { color: colors.textMuted },
 
   /* Declaration */
+  declOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    zIndex: 10,
+  },
+  declOverlayText: { ...typography.bodySm, fontWeight: '700', color: colors.textSecondary },
   declText: { ...typography.bodySm, color: colors.textSecondary, lineHeight: 19, marginBottom: spacing.md },
   declBtn: {
     flex: 1,
