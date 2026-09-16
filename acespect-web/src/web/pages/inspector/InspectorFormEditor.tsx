@@ -6,6 +6,7 @@ import { useAppData } from "../../data";
 import { StatusBadge } from "../../components/WebLayout";
 import { SectionFieldEditor } from "../../components/SectionFieldEditor";
 import { ActiveTemplate, AnswerTree, AnswerValue, fetchActiveTemplate, flattenSectionToDraft } from "../../templateFields";
+import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 
 export function InspectorFormEditor() {
   const { id } = useParams<{ id: string }>();
@@ -44,7 +45,9 @@ export function InspectorFormEditor() {
     const missing = keys.filter(k => !(k in templates));
     if (missing.length === 0) return;
     let cancelled = false;
-    Promise.all(missing.map(key => fetchActiveTemplate(inspection.type, inspection.propertyType, key).then(t => [key, t] as const)))
+    const inspectionTypeId = inspectionIdFromTitle(inspection.type);
+    const propertyTypeId = propertyIdFromTitle(inspection.propertyType);
+    Promise.all(missing.map(key => fetchActiveTemplate(inspectionTypeId, propertyTypeId, key).then(t => [key, t] as const)))
       .then(pairs => {
         if (cancelled) return;
         setTemplates(prev => {

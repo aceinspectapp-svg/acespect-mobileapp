@@ -54,7 +54,12 @@ export function FieldListEditor({
   disabled: boolean;
   depth?: number;
 }) {
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  // Auto-expand every repeating-group / damage-list field so its itemFields
+  // are visible by default — the user should never have to hunt for a chevron
+  // to reveal the inner fields.
+  const [expanded, setExpanded] = useState<Set<number>>(() =>
+    new Set(fields.map((f, i) => (NESTED_TYPES.includes(f.type) ? i : -1)).filter((i) => i >= 0)),
+  );
 
   function updateField(idx: number, patch: Partial<TemplateField>) {
     onChange(fields.map((f, i) => (i === idx ? { ...f, ...patch } : f)));
@@ -146,6 +151,8 @@ export function FieldListEditor({
                       repeat: isNestedNow ? (field.repeat ?? { presentation: "strip" }) : undefined,
                       itemFields: isNestedNow ? field.itemFields ?? [] : undefined,
                     });
+                    // Auto-expand when switching to a nested type so itemFields are immediately visible.
+                    if (isNestedNow) setExpanded((prev) => new Set([...prev, idx]));
                   }}
                   style={inputStyle}
                 >

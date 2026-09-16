@@ -20,6 +20,7 @@ import { ReportSection } from "../../components/ReportSection";
 import { buildReportHeader } from "../../report";
 import { SectionFieldView } from "../../components/SectionFieldView";
 import { ActiveTemplate, AnswerTree, fetchActiveTemplate } from "../../templateFields";
+import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 
 /* ─── helpers ─────────────────────────────────────────────────────── */
 function formatFieldKey(key: string): string {
@@ -416,8 +417,10 @@ export function ReviewerFormView() {
     const missing = keys.filter((k) => !(k in templates));
     if (missing.length === 0) return;
     let cancelled = false;
+    const inspectionTypeId = inspectionIdFromTitle(inspection.type);
+    const propertyTypeId = propertyIdFromTitle(inspection.propertyType);
     Promise.all(
-      missing.map((key) => fetchActiveTemplate(inspection.type, inspection.propertyType, key).then((t) => [key, t] as const)),
+      missing.map((key) => fetchActiveTemplate(inspectionTypeId, propertyTypeId, key).then((t) => [key, t] as const)),
     ).then((pairs) => {
       if (cancelled) return;
       setTemplates((prev) => {

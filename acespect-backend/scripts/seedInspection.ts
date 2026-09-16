@@ -91,6 +91,36 @@ async function main() {
             reportText:
               'The driveway is constructed of exposed aggregate concrete and is in generally fair condition. One diagonal crack was observed measuring approximately 2mm wide × 450mm long, 2.1m from the garage door.',
             fields: { material: 'Exposed aggregate concrete', condition: 'Fair', drainage: 'Adequate' },
+            // Raw answer tree matching the published "driveway" template (see
+            // seed-templates.ts) -- without this, the template-driven web/
+            // mobile field editor has nothing to walk and falls back to the
+            // flat `fields` summary above, which only ever had 3 of the
+            // template's 8 fields.
+            answers: {
+              items: [
+                {
+                  location: 'front',
+                  material: 'exposed_aggregate',
+                  condition: 'fair',
+                  obstructions: [],
+                  notableDamage: 'yes',
+                  safetyHazard: 'no',
+                  damages: [
+                    {
+                      damageType: 'crack',
+                      location: '2.1m from garage door, centre of driveway',
+                      direction: 'diagonal',
+                      widthMm: '2',
+                      lengthMm: '450',
+                      notes: 'Consistent with thermal movement. No structural concern noted.',
+                      photos: [CRACK],
+                    },
+                  ],
+                  notes: '',
+                  photos: [DRIVE],
+                },
+              ],
+            },
             photos: [DRIVE],
             damages: {
               create: [
