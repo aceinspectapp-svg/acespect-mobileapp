@@ -230,4 +230,26 @@ async function uploadPhoto(buffer: Buffer, contentType: string, originalName: st
   return store(buffer, contentType || 'image/jpeg', ext);
 }
 
-export const inspectionsService = { submit, update, finalize, getById, uploadPhoto, listAssigned, getBaselineSections };
+/**
+ * A section's `photos` array holds any images the inspector attached that
+ * aren't tied to a specific template field (e.g. extra shots from an
+ * external camera) -- everything field-bound lives in `answers` instead.
+ * Used to build the "download all" zip so a reviewer doesn't have to open
+ * each image individually.
+ */
+async function getSectionPhotos(sectionId: string): Promise<{ name: string; photos: string[] }> {
+  const section = await prisma.section.findUnique({ where: { id: sectionId }, select: { name: true, photos: true } });
+  if (!section) throw ApiError.notFound('Section not found');
+  return { name: section.name, photos: (section.photos as unknown as string[] | null) ?? [] };
+}
+
+export const inspectionsService = {
+  submit,
+  update,
+  finalize,
+  getById,
+  uploadPhoto,
+  listAssigned,
+  getBaselineSections,
+  getSectionPhotos,
+};

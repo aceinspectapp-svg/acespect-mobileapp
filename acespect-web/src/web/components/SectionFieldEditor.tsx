@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { createContext, useContext, useRef, useState, type CSSProperties } from "react";
 import {
   AnswerTree,
   AnswerValue,
@@ -10,6 +10,17 @@ import {
   isRepeatRequirementMet,
   resolveInstances,
 } from "../templateFields";
+import { api } from "../api";
+
+/**
+ * Which inspection/section a "photos" field's uploads belong to, so an
+ * externally-taken photo (e.g. shot on a proper camera, not the device the
+ * inspection was started on) still lands in that section's own storage
+ * grouping alongside everything captured in-app. Read by `PhotosField`
+ * however deep it sits (inside a repeating-group/damage-list instance) --
+ * a context avoids threading it through every renderer that doesn't care.
+ */
+export const PhotoUploadContext = createContext<{ inspectionId: string; sectionKey: string } | null>(null);
 
 /**
  * Editable, template-driven field editor -- the web equivalent of the
@@ -326,19 +337,85 @@ function ChipField({ field, value, onChange, readOnly }: RendererProps) {
   );
 }
 
-function PhotosField({ field, value }: RendererProps) {
+function PhotosField({ field, value, onChange, readOnly }: RendererProps) {
   const uris = asStringArray(value);
+  const uploadCtx = useContext(PhotoUploadContext);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0 || !uploadCtx) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const uploaded = await Promise.all(
+        Array.from(files).map((f) => api.uploadInspectionPhoto(f, uploadCtx.inspectionId, uploadCtx.sectionKey)),
+      );
+      onChange([...uris, ...uploaded.map((u) => u.url)]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function removePhoto(i: number) {
+    onChange(uris.filter((_, idx) => idx !== i));
+  }
+
+  const canUpload = !readOnly && !field.readOnly && !!uploadCtx;
+
   return (
     <div>
       <Label field={field} />
-      {uris.length === 0 ? (
+      {uris.length === 0 && !canUpload ? (
         <p style={{ fontSize: "12px", color: "#c1c9d4", margin: 0 }}>No photos</p>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: "6px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: "6px", marginBottom: canUpload ? "10px" : 0 }}>
           {uris.map((u, i) => (
-            <img key={i} src={u} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: "8px", border: "1px solid #e5e7eb" }} />
+            <div key={i} style={{ position: "relative" }}>
+              <img src={u} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: "8px", border: "1px solid #e5e7eb", display: "block" }} />
+              {canUpload && (
+                <button
+                  onClick={() => removePhoto(i)}
+                  title="Remove photo"
+                  style={{
+                    position: "absolute", top: "3px", right: "3px", width: "18px", height: "18px", borderRadius: "50%",
+                    background: "rgba(15,23,42,0.7)", color: "white", border: "none", cursor: "pointer",
+                    fontSize: "11px", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
           ))}
         </div>
+      )}
+      {canUpload && (
+        <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => handleFiles(e.target.files)}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            style={{
+              fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "#eff6ff", border: "1px dashed #93c5fd",
+              borderRadius: "7px", padding: "7px 12px", cursor: uploading ? "wait" : "pointer",
+            }}
+          >
+            {uploading ? "Uploading…" : "+ Add photos from device"}
+          </button>
+          {error && <p style={{ fontSize: "11px", color: "#dc2626", margin: "6px 0 0" }}>{error}</p>}
+        </>
       )}
     </div>
   );
