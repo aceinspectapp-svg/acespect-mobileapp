@@ -6,6 +6,7 @@ import { ChoiceTileGrid, TileOption } from '../ChoiceTile';
 import { ChipMultiSelect, ColorSelect, FieldLabel, PillSelect, PlainTextInput } from '../fieldKit';
 import { colors, radius, spacing } from '../../../theme';
 import { usePhotoCapture } from '../../../hooks/usePhotoCapture';
+import { PhotoAnnotator } from '../PhotoAnnotator';
 import type { FieldRendererProps } from './types';
 
 const asString = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -139,9 +140,22 @@ export function ChipMultiSelectFieldRenderer({ field, value, onChange, missing }
     selected.includes('other') ? ['other'] : [],
   );
 
+  // A chip marked `exclusive` (e.g. "No chimney present" sitting alongside a
+  // list of actual defects) can't logically be true at the same time as any
+  // other option in the same field -- selecting it clears every other pick,
+  // and picking anything else drops whichever exclusive chip was selected.
+  const isExclusive = (v: string) => !!field.options?.find((o) => o.value === v)?.exclusive;
+
   function toggle(v: string) {
     const has = baseSelected.includes(v);
-    const next = has ? baseSelected.filter((s) => s !== v) : [...baseSelected, v];
+    let next: string[];
+    if (has) {
+      next = baseSelected.filter((s) => s !== v);
+    } else if (isExclusive(v)) {
+      next = [v];
+    } else {
+      next = [...baseSelected.filter((s) => !isExclusive(s)), v];
+    }
     onChange(next.filter((s) => s !== 'other').concat(next.includes('other') ? ['other'] : []).concat(
       next.includes('other') && otherValue ? [`${otherKey}:${otherValue}`] : [],
     ));
@@ -178,16 +192,49 @@ export function PhotosFieldRenderer({ field, value, onChange, path, missing }: F
   const { takePhoto, pickFromLibrary } = usePhotoCapture();
   const uris = asStringArray(value);
   const sectionKey = path.join(':');
+  // The photo currently open in the annotator, if any -- null closes it.
+  const [annotating, setAnnotating] = useState<string | null>(null);
 
-  async function add(capture: typeof takePhoto) {
+  // The phone's own camera app owns its capture/confirm screen -- there's no
+  // way for this app to offer annotation before that "tick", so the earliest
+  // possible moment is the instant the photo lands back here. A camera shot
+  // is always exactly one photo, so jump straight into annotating it instead
+  // of making the inspector tap its thumbnail again afterward.
+  async function onTakePhoto() {
     if (busy) return;
     setBusy(true);
     try {
-      const shots = await capture({ sectionKey, sortOrder: uris.length, caption: field.label });
+      const shots = await takePhoto({ sectionKey, sortOrder: uris.length, caption: field.label });
+      if (shots?.length) {
+        const newUri = shots[0]!.uri;
+        onChange([...uris, newUri]);
+        setAnnotating(newUri);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // A library pick can return several photos at once -- auto-opening the
+  // annotator for every one of them would be more annoying than helpful, so
+  // this path stays tap-to-annotate from the grid, same as any other photo.
+  async function onPickFromLibrary() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const shots = await pickFromLibrary({ sectionKey, sortOrder: uris.length, caption: field.label });
       if (shots?.length) onChange([...uris, ...shots.map((s) => s.uri)]);
     } finally {
       setBusy(false);
     }
+  }
+
+  // Saving replaces the tapped photo in place with the flattened, marked-up
+  // version -- same position in the array, so it stays wherever it already
+  // was relative to the others.
+  function onAnnotated(newUri: string) {
+    onChange(uris.map((u) => (u === annotating ? newUri : u)));
+    setAnnotating(null);
   }
 
   return (
@@ -195,15 +242,26 @@ export function PhotosFieldRenderer({ field, value, onChange, path, missing }: F
       <FieldLabel required={field.required}>{field.label}</FieldLabel>
       <View style={styles.photoGrid}>
         {uris.map((uri) => (
-          <Image key={uri} source={{ uri }} style={styles.photoThumb} />
+          <Pressable key={uri} onPress={() => setAnnotating(uri)} accessibilityLabel="Mark up photo">
+            <Image source={{ uri }} style={styles.photoThumb} />
+            <View style={styles.photoThumbBadge}>
+              <Ionicons name="create-outline" size={12} color={colors.white} />
+            </View>
+          </Pressable>
         ))}
-        <Pressable style={styles.photoAddBtn} onPress={() => add(takePhoto)} disabled={busy}>
+        <Pressable style={styles.photoAddBtn} onPress={onTakePhoto} disabled={busy}>
           <Ionicons name="camera" size={18} color={colors.barBlue} />
         </Pressable>
-        <Pressable style={styles.photoAddBtn} onPress={() => add(pickFromLibrary)} disabled={busy}>
+        <Pressable style={styles.photoAddBtn} onPress={onPickFromLibrary} disabled={busy}>
           <Ionicons name="images" size={18} color={colors.barBlue} />
         </Pressable>
       </View>
+      <PhotoAnnotator
+        visible={annotating !== null}
+        uri={annotating}
+        onCancel={() => setAnnotating(null)}
+        onSave={onAnnotated}
+      />
     </View>
   );
 }
@@ -219,6 +277,17 @@ const styles = StyleSheet.create({
   },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   photoThumb: { width: 64, height: 64, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
+  photoThumbBadge: {
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   photoAddBtn: {
     width: 64,
     height: 64,
