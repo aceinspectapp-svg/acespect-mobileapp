@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ArrowLeft, Plus, Camera, Save, Send, CheckCircle, MessageSquare } from "lucide-react";
 import { STATUS_CONFIG } from "../../mockData";
 import { useAppData } from "../../data";
 import { StatusBadge } from "../../components/WebLayout";
-import { SectionFieldEditor } from "../../components/SectionFieldEditor";
+import { SectionFieldEditor, PhotoUploadContext } from "../../components/SectionFieldEditor";
 import { ActiveTemplate, AnswerTree, AnswerValue, fetchActiveTemplate, flattenSectionToDraft } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
+import { api } from "../../api";
 
 export function InspectorFormEditor() {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +26,10 @@ export function InspectorFormEditor() {
   // sectionId -> its answers as edited here, not yet saved. Overrides
   // section.answers only for display/save purposes until Save Draft succeeds.
   const [answerEdits, setAnswerEdits] = useState<Record<string, AnswerTree>>({});
+  // sectionId -> its "additional photos" (not tied to any template field --
+  // e.g. extra shots from an external camera), as edited here. Overrides
+  // section.photos the same way answerEdits overrides section.answers.
+  const [photoEdits, setPhotoEdits] = useState<Record<string, string[]>>({});
 
   const isDraft = inspection?.status === "draft";
   const isCompleted = inspection ? (inspection.status === "approved" || inspection.status === "in-review") : false;
@@ -34,6 +39,7 @@ export function InspectorFormEditor() {
   // they can't bleed from one job into another.
   useEffect(() => {
     setAnswerEdits({});
+    setPhotoEdits({});
   }, [id]);
 
   // Load each distinct section's active template once the inspection is
@@ -83,6 +89,10 @@ export function InspectorFormEditor() {
     });
   }
 
+  function setSectionPhotos(sectionId: string, photos: string[]) {
+    setPhotoEdits(prev => ({ ...prev, [sectionId]: photos }));
+  }
+
   // Sections are sent whole — the API replaces the stored set. Any
   // template-backed section has its report fields/damages/text re-derived
   // from its (possibly just-edited) answers, so the report view and the
@@ -101,7 +111,7 @@ export function InspectorFormEditor() {
         reportText: derived ? derived.reportText : s.reportText ?? "",
         fields: derived ? derived.fields : s.fields ?? {},
         answers: answers as Record<string, unknown> | undefined,
-        photos: s.photos ?? [],
+        photos: photoEdits[s.id] ?? s.photos ?? [],
         damages: (derived ? derived.damages : s.damages ?? []).map((dm, dIdx) => ({
           type: dm.type || "Damage",
           location: dm.location ?? "",
@@ -123,6 +133,7 @@ export function InspectorFormEditor() {
     try {
       await saveInspectionDraft(inspection!.id, { sections: buildSectionsPayload() });
       setAnswerEdits({});
+      setPhotoEdits({});
       return true;
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed to save");
@@ -285,12 +296,14 @@ export function InspectorFormEditor() {
                       </div>
                       {template ? (
                         <div style={{ padding: "16px 18px" }}>
-                          <SectionFieldEditor
-                            fields={template.fields}
-                            scope={answerEdits[selectedSection.id] ?? (selectedSection.answers as AnswerTree | null | undefined) ?? {}}
-                            onChange={(key, value) => setAnswer(selectedSection.id, key, value)}
-                            readOnly={!isDraft}
-                          />
+                          <PhotoUploadContext.Provider value={{ inspectionId: inspection.id, sectionKey: selectedSection.key ?? selectedSection.id }}>
+                            <SectionFieldEditor
+                              fields={template.fields}
+                              scope={answerEdits[selectedSection.id] ?? (selectedSection.answers as AnswerTree | null | undefined) ?? {}}
+                              onChange={(key, value) => setAnswer(selectedSection.id, key, value)}
+                              readOnly={!isDraft}
+                            />
+                          </PhotoUploadContext.Provider>
                         </div>
                       ) : (
                         // No template for this section key (legacy/custom data) —
@@ -326,16 +339,15 @@ export function InspectorFormEditor() {
                         ))}
                       </div>
                     )}
-                    {selectedSection.photos.length > 0 && (
-                      <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", padding: "16px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                        <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 10px" }}>Photos</p>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" }}>
-                          {selectedSection.photos.map((url, i) => (
-                            <img key={i} src={url} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: "8px", border: "1px solid #e5e7eb" }} />
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    <AdditionalPhotosCard
+                      photos={photoEdits[selectedSection.id] ?? selectedSection.photos}
+                      savedPhotos={selectedSection.photos}
+                      sectionId={selectedSection.id}
+                      inspectionId={inspection.id}
+                      sectionKey={selectedSection.key ?? selectedSection.id}
+                      readOnly={!isDraft}
+                      onChange={(photos) => setSectionPhotos(selectedSection.id, photos)}
+                    />
                   </>
                 );
               })()
@@ -407,6 +419,125 @@ export function InspectorFormEditor() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Photos an inspector attaches to a section without tying them to any
+ * specific template field -- e.g. extra shots from an external camera that
+ * don't map cleanly onto a single "Photos" field. Rendered below the
+ * template-driven fields for every section, not just ones that already
+ * have some, so there's always a place to add the first one.
+ *
+ * The "download all" link points at the *saved* copy (the zip endpoint
+ * reads straight from the database), so a hint appears when there are
+ * unsaved local additions it wouldn't yet include.
+ */
+function AdditionalPhotosCard({
+  photos,
+  savedPhotos,
+  sectionId,
+  inspectionId,
+  sectionKey,
+  readOnly,
+  onChange,
+}: {
+  photos: string[];
+  savedPhotos: string[];
+  sectionId: string;
+  inspectionId: string;
+  sectionKey: string;
+  readOnly: boolean;
+  onChange: (photos: string[]) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (readOnly && photos.length === 0) return null;
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const uploaded = await Promise.all(
+        Array.from(files).map((f) => api.uploadInspectionPhoto(f, inspectionId, sectionKey)),
+      );
+      onChange([...photos, ...uploaded.map((u) => u.url)]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const hasUnsaved = photos.length !== savedPhotos.length;
+
+  return (
+    <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", padding: "16px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+        <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
+          Additional Photos {photos.length > 0 ? `(${photos.length})` : ""}
+        </p>
+        {savedPhotos.length > 0 && (
+          <a
+            href={api.sectionPhotosZipUrl(sectionId)}
+            style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", textDecoration: "none" }}
+          >
+            Download all
+          </a>
+        )}
+      </div>
+      {photos.length === 0 ? (
+        <p style={{ fontSize: "12px", color: "#c1c9d4", margin: "0 0 10px" }}>No additional photos</p>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px", marginBottom: "10px" }}>
+          {photos.map((url, i) => (
+            <div key={i} style={{ position: "relative" }}>
+              <img src={url} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: "8px", border: "1px solid #e5e7eb", display: "block" }} />
+              {!readOnly && (
+                <button
+                  onClick={() => onChange(photos.filter((_, idx) => idx !== i))}
+                  title="Remove photo"
+                  style={{
+                    position: "absolute", top: "3px", right: "3px", width: "18px", height: "18px", borderRadius: "50%",
+                    background: "rgba(15,23,42,0.7)", color: "white", border: "none", cursor: "pointer",
+                    fontSize: "11px", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {!readOnly && (
+        <>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
+          />
+          <button
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            style={{
+              fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "#eff6ff", border: "1px dashed #93c5fd",
+              borderRadius: "7px", padding: "7px 12px", cursor: uploading ? "wait" : "pointer",
+            }}
+          >
+            {uploading ? "Uploading…" : "+ Add photos from device"}
+          </button>
+          {hasUnsaved && <p style={{ fontSize: "11px", color: "#b45309", margin: "6px 0 0" }}>Save draft to include new photos in the download link.</p>}
+          {error && <p style={{ fontSize: "11px", color: "#dc2626", margin: "6px 0 0" }}>{error}</p>}
+        </>
+      )}
     </div>
   );
 }

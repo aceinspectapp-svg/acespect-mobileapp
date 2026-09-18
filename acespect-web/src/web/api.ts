@@ -151,6 +151,40 @@ export const api = {
 
   finalizeInspection: (id: string) => req<{ inspection: unknown }>(`/inspections/${id}/finalize`, { method: "POST" }),
 
+  /**
+   * Uploads one photo taken on a different device than the one the
+   * inspection was started on (e.g. a proper camera) so it lands in the
+   * same photo store as everything shot in-app. `sectionKey` groups it
+   * under that section for organizational purposes; omit it for an
+   * ungrouped upload. Bypasses `req()` -- a multipart body must not carry a
+   * JSON Content-Type, and the browser needs to set its own boundary.
+   */
+  async uploadInspectionPhoto(file: File, inspectionId?: string, sectionKey?: string): Promise<{ id: string; url: string }> {
+    const form = new FormData();
+    form.append("photo", file);
+    if (inspectionId) form.append("inspectionId", inspectionId);
+    if (sectionKey) form.append("sectionKey", sectionKey);
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/inspections/photos`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    });
+    if (!res.ok) {
+      let message = `HTTP ${res.status}`;
+      try {
+        message = (await res.json())?.error?.message ?? message;
+      } catch {
+        /* non-JSON */
+      }
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  /** Bundles a section's non-field-bound photos into one zip download -- see inspections.controller.ts. */
+  sectionPhotosZipUrl: (sectionId: string) => `${API_BASE}/inspections/sections/${sectionId}/photos.zip`,
+
   getTemplateSummary: (inspectionType: string, propertyType: string) =>
     req<{ summary: TemplateSummaryRow[] }>(
       `/templates/summary?inspectionType=${encodeURIComponent(inspectionType)}&propertyType=${encodeURIComponent(propertyType)}`,
