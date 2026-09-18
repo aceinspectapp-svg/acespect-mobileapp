@@ -8,6 +8,7 @@ import {
   isGateSatisfied,
   resolveInstances,
 } from "../templateFields";
+import { resolveMediaUrl } from "../api";
 
 /**
  * Read-only, template-driven view of a section's captured answers — the
@@ -72,7 +73,7 @@ function FieldRow({
         <p style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", margin: "0 0 8px" }}>{field.label}</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: "6px" }}>
           {uris.map((u, i) => (
-            <img key={i} src={u} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: "8px", border: "1px solid #e5e7eb" }} />
+            <img key={i} src={resolveMediaUrl(u)} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: "8px", border: "1px solid #e5e7eb" }} />
           ))}
         </div>
       </div>
