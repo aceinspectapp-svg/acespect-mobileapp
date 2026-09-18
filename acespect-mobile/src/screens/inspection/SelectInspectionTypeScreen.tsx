@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,6 +15,16 @@ import { INSPECTION_TYPES, PROPERTY_TYPES } from '../../constants/inspectionData
 import { InspectionTypeId, PropertyTypeId } from '../../types/inspection';
 import { AppScreenProps } from '../../navigation/types';
 import { getAssignedJobs } from '../../services/inspectionApi';
+import { useAuth } from '../../context/AuthContext';
+import { useInspectionDraft } from '../../context/InspectionDraftContext';
+import { loadDraftSnapshot, DraftSnapshot, QueuedSubmission } from '../../services/offlineStorage';
+import {
+  subscribe as subscribeSyncQueue,
+  subscribeProcessing,
+  retryNow,
+  isWaitingForWifi,
+} from '../../services/syncManager';
+import { buildJobSetupDataFromDraft } from '../../utils/jobSetupFromDraft';
 
 const STEPS = [
   { label: 'Inspection Type' },
@@ -37,6 +48,47 @@ export function SelectInspectionTypeScreen({
       .then((jobs) => setAssignedCount(jobs.length))
       .catch(() => {});
   }, []);
+
+  // Pending offline submissions -- inspections finished with no signal,
+  // waiting for the sync queue to upload them. See syncManager.ts.
+  const [pendingQueue, setPendingQueue] = useState<QueuedSubmission[]>([]);
+  useEffect(() => subscribeSyncQueue(setPendingQueue), []);
+
+  // Whether a sync pass is currently running -- a pass can legitimately take
+  // a while (each photo upload gets up to 120s, and an entry can hold
+  // several), and syncManager silently no-ops a retry while one's already in
+  // flight. Without this, tapping the banner mid-pass looks like the tap did
+  // nothing at all, which is exactly the confusing part.
+  const [syncing, setSyncing] = useState(false);
+  useEffect(() => subscribeProcessing(setSyncing), []);
+
+  // Whether it's the Wi-Fi-only preference (not just "no signal at all")
+  // holding the queue back, so the banner doesn't claim "tap to retry" is
+  // pointless when it isn't -- an explicit tap still syncs over cellular.
+  const [waitingForWifi, setWaitingForWifi] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      isWaitingForWifi().then(setWaitingForWifi).catch(() => {});
+    }, []),
+  );
+
+  // A draft left mid-inspection from a killed/crashed app session (not yet
+  // submitted or queued) -- offered here rather than silently discarded, so
+  // starting a fresh inspection is a deliberate choice, not an accident.
+  const draft = useInspectionDraft();
+  const [resumableDraft, setResumableDraft] = useState<DraftSnapshot | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      loadDraftSnapshot().then(setResumableDraft).catch(() => {});
+    }, []),
+  );
+
+  const onResumeDraft = () => {
+    if (!resumableDraft) return;
+    draft.hydrateFromSnapshot(resumableDraft);
+    const data = buildJobSetupDataFromDraft(resumableDraft.top, resumableDraft.answers['job-info']);
+    navigation.navigate('InspectionSections', { data });
+  };
 
   // Auto-scroll to the Property Type section once an inspection type is picked.
   const scrollRef = useRef<ScrollView>(null);
@@ -80,6 +132,14 @@ export function SelectInspectionTypeScreen({
     });
   };
 
+  const { signOut } = useAuth();
+  const onSignOut = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: () => signOut() },
+    ]);
+  };
+
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -99,6 +159,26 @@ export function SelectInspectionTypeScreen({
             >
               <Ionicons name="arrow-back" size={20} color={colors.white} />
             </Pressable>
+            <View style={styles.headerActions}>
+              <Pressable
+                onPress={() => navigation.navigate('Settings')}
+                style={styles.backBtn}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Settings"
+              >
+                <Ionicons name="settings-outline" size={20} color={colors.white} />
+              </Pressable>
+              <Pressable
+                onPress={onSignOut}
+                style={styles.backBtn}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Sign out"
+              >
+                <Ionicons name="log-out-outline" size={20} color={colors.white} />
+              </Pressable>
+            </View>
           </View>
           <Text style={styles.overline}>BEGIN INSPECTION</Text>
           <Text style={styles.title}>Select Inspection Type</Text>
@@ -117,6 +197,46 @@ export function SelectInspectionTypeScreen({
         contentContainerStyle={styles.bodyContent}
         showsVerticalScrollIndicator={false}
       >
+        {resumableDraft && (
+          <Pressable style={styles.assignedBanner} onPress={onResumeDraft}>
+            <Ionicons name="time-outline" size={20} color={colors.accentBlueFg} />
+            <Text style={styles.assignedBannerText}>
+              Unfinished inspection from last session — tap to resume
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.accentBlueFg} />
+          </Pressable>
+        )}
+
+        {pendingQueue.length > 0 && (
+          <Pressable
+            style={styles.pendingBanner}
+            onPress={() => {
+              if (syncing) {
+                Alert.alert('Still syncing', "Already uploading — this can take a minute for photo-heavy inspections. Give it a moment before tapping again.");
+                return;
+              }
+              const started = retryNow();
+              if (!started) {
+                Alert.alert('Still syncing', "Already uploading — this can take a minute for photo-heavy inspections. Give it a moment before tapping again.");
+              }
+              setWaitingForWifi(false);
+            }}
+          >
+            {syncing ? (
+              <ActivityIndicator size="small" color={colors.warning} />
+            ) : (
+              <Ionicons name="cloud-upload-outline" size={20} color={colors.warning} />
+            )}
+            <Text style={styles.pendingBannerText}>
+              {syncing
+                ? `Syncing ${pendingQueue.length} inspection${pendingQueue.length === 1 ? '' : 's'}… this can take a minute`
+                : `${pendingQueue.length} inspection${pendingQueue.length === 1 ? '' : 's'} waiting to sync${
+                    waitingForWifi ? ' — waiting for Wi-Fi (tap to sync now anyway)' : ' — tap to retry now'
+                  }`}
+            </Text>
+          </Pressable>
+        )}
+
         {assignedCount > 0 && (
           <Pressable style={styles.assignedBanner} onPress={() => navigation.navigate('AssignedJobs')}>
             <Ionicons name="briefcase-outline" size={20} color={colors.accentBlueFg} />
@@ -193,7 +313,8 @@ function SectionHeader({ index, title }: { index: number; title: string }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: spacing.xxl, paddingBottom: spacing.xl },
-  headerTopRow: { marginTop: spacing.sm },
+  headerTopRow: { marginTop: spacing.sm, flexDirection: 'row', justifyContent: 'space-between' },
+  headerActions: { flexDirection: 'row', gap: spacing.sm },
   backBtn: {
     width: 38,
     height: 38,
@@ -228,6 +349,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   assignedBannerText: { ...typography.bodySm, fontWeight: '600', color: colors.accentBlueFg, flex: 1 },
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.warning + '1a',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  pendingBannerText: { ...typography.bodySm, fontWeight: '600', color: colors.warning, flex: 1 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
   sectionBadge: {
     width: 22,

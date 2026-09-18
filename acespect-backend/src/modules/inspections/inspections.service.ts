@@ -71,11 +71,37 @@ async function submit(inspectorId: string, input: SubmitInspectionInput) {
     if (!assignment) throw ApiError.notFound('Assigned job not found');
     if (assignment.inspectorId !== inspectorId) throw ApiError.forbidden('This job is not assigned to you');
     const inspection = await prisma.inspection.update({ where: { id: input.assignmentId }, data });
+    if (input.jobNo) await renameEgnyteFolder(input.assignmentId, input.jobNo);
     return { inspection };
   }
 
-  const inspection = await prisma.inspection.create({ data: { ...data, inspectorId } });
+  const inspection = await prisma.inspection.create({
+    // A client-supplied id (mobile's draft-local id, generated at the start
+    // of the inspection) is what its photos were already uploaded under --
+    // using the same id here is what makes those Egnyte folders line up
+    // with this row instead of needing every photo moved/renamed at submit
+    // time. Falls back to Prisma's own uuid() default when absent (e.g. a
+    // web-created draft).
+    data: { ...data, inspectorId, ...(input.id ? { id: input.id } : {}) },
+  });
+  // The folder was created under that draft-local id the moment the first
+  // photo was taken, well before the job number was known -- now that it
+  // is, rename it so it's browsable in Egnyte by job number instead of a
+  // UUID. Skipped when `input.id` is absent (nothing was ever uploaded
+  // under a matching folder, e.g. a web-created draft).
+  if (input.jobNo && input.id) await renameEgnyteFolder(input.id, input.jobNo);
   return { inspection };
+}
+
+/** Non-fatal: a folder-rename failure (or an Egnyte outage) must never block submission. */
+async function renameEgnyteFolder(oldId: string, jobNo: string) {
+  try {
+    const { renameInspectionFolder } = await import('../../lib/storage');
+    await renameInspectionFolder(oldId, jobNo);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('⚠️  Failed to rename Egnyte folder to job number.', err);
+  }
 }
 
 /** Load a draft the given inspector owns, or explain why it can't be edited. */
@@ -223,11 +249,24 @@ async function getById(id: string) {
   return inspection;
 }
 
-/** Upload one inspection photo; returns a URL that proxies through this backend. Stored directly in Postgres -- always available, nothing to configure. */
-async function uploadPhoto(buffer: Buffer, contentType: string, originalName: string) {
+/**
+ * Upload one inspection photo; returns a URL that proxies through this
+ * backend. `inspectionId`/`sectionKey`, when given, group the file under
+ * that inspection's own section folder in Egnyte -- mobile passes them
+ * alongside each photo (it has a draft-local inspection id from the moment
+ * the inspection starts, well before submit, precisely so uploads can be
+ * grouped correctly as they happen).
+ */
+async function uploadPhoto(
+  buffer: Buffer,
+  contentType: string,
+  originalName: string,
+  inspectionId?: string,
+  sectionKey?: string,
+) {
   const { uploadPhoto: store } = await import('../../lib/storage');
   const ext = (originalName.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-  return store(buffer, contentType || 'image/jpeg', ext);
+  return store(buffer, contentType || 'image/jpeg', ext, inspectionId, sectionKey);
 }
 
 /**

@@ -46,12 +46,6 @@
       ],
       "expo-build-properties",
       "expo-status-bar"
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "3367546c-c603-419a-854b-deb28159268f"
-      }
-    },
-    "owner": "anuka02"
+    ]
   }
 }

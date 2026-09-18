@@ -3,9 +3,19 @@ import { useParams, useNavigate } from "react-router";
 import { ArrowLeft, Plus, Camera, Save, Send, CheckCircle, MessageSquare } from "lucide-react";
 import { STATUS_CONFIG } from "../../mockData";
 import { useAppData } from "../../data";
+import { resolveMediaUrl } from "../../api";
 import { StatusBadge } from "../../components/WebLayout";
 import { SectionFieldEditor, PhotoUploadContext } from "../../components/SectionFieldEditor";
-import { ActiveTemplate, AnswerTree, AnswerValue, fetchActiveTemplate, flattenSectionToDraft } from "../../templateFields";
+import {
+  ActiveTemplate,
+  AnswerTree,
+  AnswerValue,
+  fetchActiveTemplate,
+  flattenSectionToDraft,
+  meetsAllRequireWhen,
+  meetsAllRequiredFields,
+} from "../../templateFields";
+import type { FormSection } from "../../mockData";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { api } from "../../api";
 
@@ -26,6 +36,12 @@ export function InspectorFormEditor() {
   // sectionId -> its answers as edited here, not yet saved. Overrides
   // section.answers only for display/save purposes until Save Draft succeeds.
   const [answerEdits, setAnswerEdits] = useState<Record<string, AnswerTree>>({});
+  // Off until the inspector actually tries to Submit an incomplete
+  // inspection -- same "don't show errors on a fresh screen" rule mobile's
+  // DynamicSectionScreen follows, just gated on Submit here instead of on
+  // leaving each section (the web editor shows every section on one page,
+  // not a linear per-section flow).
+  const [showMissing, setShowMissing] = useState(false);
   // sectionId -> its "additional photos" (not tied to any template field --
   // e.g. extra shots from an external camera), as edited here. Overrides
   // section.photos the same way answerEdits overrides section.answers.
@@ -39,8 +55,21 @@ export function InspectorFormEditor() {
   // they can't bleed from one job into another.
   useEffect(() => {
     setAnswerEdits({});
+    setShowMissing(false);
     setPhotoEdits({});
   }, [id]);
+
+  // Same required-field + mandatory-defect rules mobile's DynamicSectionScreen
+  // enforces before letting the inspector leave a section, applied here to
+  // every template-backed section before Submit is allowed to go through. A
+  // section with no matching template (legacy/custom data) has nothing to
+  // validate against, so it's never treated as incomplete.
+  function isSectionComplete(section: FormSection): boolean {
+    const template = templates[section.key ?? section.id];
+    if (!template) return true;
+    const answers = answerEdits[section.id] ?? (section.answers as AnswerTree | null | undefined) ?? {};
+    return meetsAllRequireWhen(template.fields, answers) && meetsAllRequiredFields(template.fields, answers);
+  }
 
   // Load each distinct section's active template once the inspection is
   // known, so the detail panel can show every field the inspector filled in
@@ -153,6 +182,21 @@ export function InspectorFormEditor() {
 
   async function handleSubmit() {
     if (!isDraft) return;
+
+    // Same block mobile applies before letting the inspector leave a section
+    // incomplete -- here, before Submit instead. Missing template (legacy/
+    // custom sections) never blocks; only sections with an actual template
+    // to validate against.
+    const incomplete = inspection!.sections.filter((s) => !isSectionComplete(s));
+    if (incomplete.length > 0) {
+      setShowMissing(true);
+      setSelectedSectionId(incomplete[0].id);
+      setSaveError(
+        `${incomplete.length} section${incomplete.length > 1 ? "s" : ""} still ${incomplete.length > 1 ? "have" : "has"} required fields missing: ${incomplete.map((s) => s.name).join(", ")}. Fill these in before submitting.`,
+      );
+      return;
+    }
+
     if (!window.confirm("Send this inspection for review? You will not be able to edit it afterwards.")) return;
     const ok = await saveDraft();
     if (!ok) return;
@@ -235,13 +279,18 @@ export function InspectorFormEditor() {
               ) : (
                 inspection.sections.map((section, idx) => {
                   const isActive = selectedSectionId === section.id;
+                  // Red outline once the inspector has tried to Submit and
+                  // this section is one of the ones still blocking it --
+                  // the same "highlight what's incomplete" treatment mobile
+                  // gives at its own Continue point.
+                  const flagged = isDraft && showMissing && !isSectionComplete(section);
                   return (
                     <button
                       key={section.id}
                       onClick={() => setSelectedSectionId(isActive ? null : section.id)}
                       style={{
                         width: "100%", background: "white", borderRadius: "12px",
-                        border: `1px solid ${isActive ? "#2563eb" : "#e5e7eb"}`,
+                        border: `1.5px solid ${flagged ? "#dc2626" : isActive ? "#2563eb" : "#e5e7eb"}`,
                         boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
                         padding: "14px 18px", display: "flex", alignItems: "center", gap: "14px",
                         cursor: "pointer", textAlign: "left",
@@ -262,8 +311,12 @@ export function InspectorFormEditor() {
                           {section.photos.length > 0 ? ` · ${section.photos.length} photos` : ""}
                         </p>
                       </div>
-                      <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: section.status === "complete" ? "#dcfce7" : "#f1f5f9", color: section.status === "complete" ? "#15803d" : "#64748b" }}>
-                        {section.status === "complete" ? "Complete" : "Pending"}
+                      {/* Once the inspection itself has been submitted, every
+                          section reads as Complete regardless of its own
+                          stored status -- "Pending" only means anything while
+                          the inspector is still actively drafting. */}
+                      <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: (!isDraft || section.status === "complete") ? "#dcfce7" : "#f1f5f9", color: (!isDraft || section.status === "complete") ? "#15803d" : "#64748b" }}>
+                        {(!isDraft || section.status === "complete") ? "Complete" : "Pending"}
                       </span>
                       <span style={{ fontSize: "16px", color: isActive ? "#2563eb" : "#d1d5db", transform: isActive ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>›</span>
                     </button>
@@ -290,8 +343,8 @@ export function InspectorFormEditor() {
                           <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#1a2a4a", margin: 0 }}>{selectedSection.name}</h4>
                           <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0 0" }}>Inspector's recorded data</p>
                         </div>
-                        <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: selectedSection.status === "complete" ? "#dcfce7" : "#f1f5f9", color: selectedSection.status === "complete" ? "#15803d" : "#64748b" }}>
-                          {selectedSection.status === "complete" ? "Complete" : "Pending"}
+                        <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: (!isDraft || selectedSection.status === "complete") ? "#dcfce7" : "#f1f5f9", color: (!isDraft || selectedSection.status === "complete") ? "#15803d" : "#64748b" }}>
+                          {(!isDraft || selectedSection.status === "complete") ? "Complete" : "Pending"}
                         </span>
                       </div>
                       {template ? (
@@ -302,6 +355,7 @@ export function InspectorFormEditor() {
                               scope={answerEdits[selectedSection.id] ?? (selectedSection.answers as AnswerTree | null | undefined) ?? {}}
                               onChange={(key, value) => setAnswer(selectedSection.id, key, value)}
                               readOnly={!isDraft}
+                              showMissing={isDraft && showMissing}
                             />
                           </PhotoUploadContext.Provider>
                         </div>
@@ -496,7 +550,7 @@ function AdditionalPhotosCard({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px", marginBottom: "10px" }}>
           {photos.map((url, i) => (
             <div key={i} style={{ position: "relative" }}>
-              <img src={url} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: "8px", border: "1px solid #e5e7eb", display: "block" }} />
+              <img src={resolveMediaUrl(url)} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: "8px", border: "1px solid #e5e7eb", display: "block" }} />
               {!readOnly && (
                 <button
                   onClick={() => onChange(photos.filter((_, idx) => idx !== i))}

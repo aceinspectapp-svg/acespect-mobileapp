@@ -42,9 +42,7 @@ export function SignUpScreen({ navigation }: AuthScreenProps<'SignUp'>) {
     !isLoading;
 
   const onSignUp = async () => {
-    console.log('SignUp pressed', { fullName, email, phone, password, confirm, agreed });
     setError(null);
-    Alert.alert('Signing up', 'Attempting to create account...', [{ text: 'OK' }]);
     if (password.length < 8) {
       setError('Password must be at least 8 characters.');
       return;

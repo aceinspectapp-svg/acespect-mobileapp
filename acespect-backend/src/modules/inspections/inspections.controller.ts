@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Readable } from 'node:stream';
 import { ZipArchive } from 'archiver';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
@@ -71,13 +71,10 @@ export const inspectionsController = {
     if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
-    // requireAuth already validated this same header; reusing the raw token
-    // (rather than re-issuing a new one) lets the headless page authenticate
-    // as this exact caller, with the exact same access they already have.
     const authHeader = req.headers.authorization ?? '';
     const token = authHeader.slice('Bearer '.length).trim();
 
-    const inspection = await inspectionsService.getById(id); // 404s early if the id is wrong, before paying for a browser launch
+    const inspection = await inspectionsService.getById(id);
     const pdf = await generateInspectionReportPdf(id, token);
 
     const fileName = `${inspection.jobNo || id}-dilapidation-report.pdf`.replace(/[^a-z0-9.-]+/gi, '-');
@@ -86,12 +83,39 @@ export const inspectionsController = {
     res.send(pdf);
   }),
 
-  // multipart/form-data with a single "photo" file → { id, storageKey, url }.
+  // multipart/form-data with a "photo" file, plus optional "inspectionId"/
+  // "sectionKey" text fields (mobile always sends them; a caller with no
+  // section context, e.g. an ad-hoc upload, can omit them for a flat,
+  // ungrouped upload) → { id, storageKey, url }.
   uploadPhoto: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
     const file = req.file;
     if (!file) throw ApiError.badRequest('No photo file (field name must be "photo")');
-    const result = await inspectionsService.uploadPhoto(file.buffer, file.mimetype, file.originalname);
+    const inspectionId = typeof req.body.inspectionId === 'string' ? req.body.inspectionId : undefined;
+    const sectionKey = typeof req.body.sectionKey === 'string' ? req.body.sectionKey : undefined;
+    const result = await inspectionsService.uploadPhoto(
+      file.buffer,
+      file.mimetype,
+      file.originalname,
+      inspectionId,
+      sectionKey,
+    );
+    res.status(201).json(result);
+  }),
+  
+  uploadPhoto: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const file = req.file;
+    if (!file) throw ApiError.badRequest('No photo file (field name must be "photo")');
+    const inspectionId = typeof req.body.inspectionId === 'string' ? req.body.inspectionId : undefined;
+    const sectionKey = typeof req.body.sectionKey === 'string' ? req.body.sectionKey : undefined;
+    const result = await inspectionsService.uploadPhoto(
+      file.buffer,
+      file.mimetype,
+      file.originalname,
+      inspectionId,
+      sectionKey,
+    );
     res.status(201).json(result);
   }),
 
@@ -118,7 +142,9 @@ export const inspectionsController = {
       const id = photoIdFromUrl(url);
       const stored = id ? await fetchPhotoStream(id) : null;
       if (!stored) continue;
-      archive.append(stored.data, { name: `photo-${i + 1}.jpg` });
+      // fetchPhotoStream hands back the raw WHATWG stream fetch() returns --
+      // archiver wants a Node Readable.
+      archive.append(Readable.fromWeb(stored.body as import('stream/web').ReadableStream), { name: `photo-${i + 1}.jpg` });
     }
 
     await archive.finalize();

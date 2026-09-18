@@ -12,6 +12,22 @@ import type {
 export const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000/api/v1";
 
+/**
+ * Resolve a stored photo value against the CURRENT backend host, not
+ * whichever one was live when it was uploaded. New uploads store a relative
+ * `/api/v1/media/:id` path; older ones may still have an absolute URL baked
+ * in from a since-restarted Cloudflare tunnel, which would otherwise 404
+ * forever. Either way, take everything from `/api/v1/media/` onward and
+ * re-attach it to today's API_BASE origin.
+ */
+export function resolveMediaUrl(value: string): string {
+  const marker = "/api/v1/media/";
+  const idx = value.indexOf(marker);
+  if (idx === -1) return value;
+  const origin = API_BASE.replace(/\/api\/v1\/?$/, "");
+  return origin + value.slice(idx);
+}
+
 const TOKEN_KEY = "acespect_token";
 const USER_KEY = "acespect_user";
 
