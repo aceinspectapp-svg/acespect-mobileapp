@@ -1,5 +1,20 @@
 import { z } from 'zod';
 
+/**
+ * A photo reference from POST /inspections/photos: either the current
+ * relative form (`/api/v1/media/:id` -- deliberately host-less so it
+ * survives the backend's own Cloudflare tunnel hostname changing between
+ * restarts, see storage.ts) or a full absolute URL (older data, or a
+ * non-tunnel deployment). Plain `z.string().url()` rejected every relative
+ * path outright -- every submission with a photo failed validation with a
+ * 400 that looked identical on retry, permanently stuck in the offline sync
+ * queue since the same payload can never pass.
+ */
+const photoUrlSchema = z.string().refine(
+  (v) => v.startsWith('/') || /^https?:\/\//.test(v),
+  { message: 'must be a URL or an absolute path' },
+);
+
 /** A defect/crack within a section. Photos are public URLs (from /photos upload). */
 const damageSchema = z.object({
   type: z.string().trim().min(1).max(120),
@@ -8,7 +23,7 @@ const damageSchema = z.object({
   widthMm: z.number().nonnegative().default(0),
   lengthMm: z.number().nonnegative().default(0),
   notes: z.string().max(2000).default(''),
-  photos: z.array(z.string().url()).max(50).default([]),
+  photos: z.array(photoUrlSchema).max(50).default([]),
   order: z.number().int().default(0),
 });
 
@@ -23,7 +38,7 @@ const sectionSchema = z.object({
   fields: z.record(z.string(), z.unknown()).default({}),
   /** Raw un-flattened answer tree, kept so the section can be reopened for editing. */
   answers: z.record(z.string(), z.unknown()).optional(),
-  photos: z.array(z.string().url()).max(200).default([]),
+  photos: z.array(photoUrlSchema).max(200).default([]),
   damages: z.array(damageSchema).max(200).default([]),
 });
 
