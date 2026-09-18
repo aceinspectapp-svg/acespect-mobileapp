@@ -1,7 +1,8 @@
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef } from 'react';
 import * as Crypto from 'expo-crypto';
 import type { ActiveTemplate } from '../services/templateApi';
 import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
+import { DraftSnapshot, clearDraftSnapshot, saveDraftSnapshot } from '../services/offlineStorage';
 
 /**
  * In-memory draft of the inspection being filled. Each section screen writes its
@@ -123,6 +124,10 @@ interface DraftValue {
    */
   getBaselineSections: () => BaselineSectionRef[] | null;
   setBaselineSections: (sections: BaselineSectionRef[]) => void;
+  /** Replace the entire in-memory draft with a persisted snapshot (see
+   *  `offlineStorage.ts`) — used to resume an inspection left in progress
+   *  from a previous app session, offline or not. */
+  hydrateFromSnapshot: (snapshot: DraftSnapshot) => void;
 }
 
 /** Local mirror of services/inspectionApi.ts's BaselineSection -- kept separate to avoid a circular import (that module imports SubmitPayload from this file). */
@@ -154,15 +159,37 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
   const baselineSectionsRef = useRef<BaselineSectionRef[] | null>(null);
   const answersRef = useRef<Record<string, AnswerTree>>({});
 
+  // Debounced auto-save: every mutation schedules a snapshot write a moment
+  // later (coalescing rapid-fire changes, e.g. typing) rather than hitting
+  // AsyncStorage on every keystroke. This is what makes a force-quit or
+  // crash mid-inspection resumable instead of losing everything, since the
+  // rest of this draft otherwise lives only in these refs.
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const schedulePersist = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const snapshot: DraftSnapshot = {
+        top: topRef.current,
+        sections: sectionsRef.current,
+        photos: photosRef.current,
+        answers: answersRef.current,
+        templates: templatesRef.current,
+      };
+      void saveDraftSnapshot(snapshot);
+    }, 800);
+  }, []);
+
   const setTop = useCallback((patch: Partial<DraftTop>) => {
     topRef.current = { ...topRef.current, ...patch };
-  }, []);
+    schedulePersist();
+  }, [schedulePersist]);
 
   const getTop = useCallback(() => topRef.current, []);
 
   const setSection = useCallback((section: DraftSection) => {
     sectionsRef.current = { ...sectionsRef.current, [section.key]: section };
-  }, []);
+    schedulePersist();
+  }, [schedulePersist]);
 
   const getSection = useCallback((key: string) => sectionsRef.current[key], []);
 
@@ -171,9 +198,11 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
   const addPhoto = useCallback((sectionKey: string, uri: string) => {
     const cur = photosRef.current[sectionKey] ?? [];
     photosRef.current = { ...photosRef.current, [sectionKey]: [...cur, uri] };
-  }, []);
+    schedulePersist();
+  }, [schedulePersist]);
 
   const reset = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
     topRef.current = {
       inspectionType: 'Dilapidation',
       propertyType: 'Residential House',
@@ -184,6 +213,15 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     templatesRef.current = {};
     answersRef.current = {};
     baselineSectionsRef.current = null;
+    void clearDraftSnapshot();
+  }, []);
+
+  const hydrateFromSnapshot = useCallback((snapshot: DraftSnapshot) => {
+    topRef.current = snapshot.top;
+    sectionsRef.current = snapshot.sections;
+    photosRef.current = snapshot.photos;
+    answersRef.current = snapshot.answers;
+    templatesRef.current = snapshot.templates;
   }, []);
 
   const getActiveTemplate = useCallback(
@@ -193,7 +231,8 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
 
   const setActiveTemplate = useCallback((sectionKey: string, template: ActiveTemplate) => {
     templatesRef.current = { ...templatesRef.current, [sectionKey]: template };
-  }, []);
+    schedulePersist();
+  }, [schedulePersist]);
 
   const getBaselineSections = useCallback(() => baselineSectionsRef.current, []);
   const setBaselineSections = useCallback((sections: BaselineSectionRef[]) => {
@@ -207,7 +246,8 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
 
   const setAnswers = useCallback((sectionKey: string, answers: AnswerTree) => {
     answersRef.current = { ...answersRef.current, [sectionKey]: answers };
-  }, []);
+    schedulePersist();
+  }, [schedulePersist]);
 
   // Photos registered under a section key or any "key:n" sub-key.
   const photosForSection = useCallback((key: string): string[] => {
@@ -288,6 +328,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       setAnswers,
       getBaselineSections,
       setBaselineSections,
+      hydrateFromSnapshot,
     }),
     [
       setTop,
@@ -307,6 +348,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       setAnswers,
       getBaselineSections,
       setBaselineSections,
+      hydrateFromSnapshot,
     ],
   );
 

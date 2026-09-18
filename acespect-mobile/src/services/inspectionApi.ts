@@ -24,6 +24,15 @@ export async function uploadPhoto(
 
   const { data } = await api.post<{ url: string }>('/inspections/photos', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    // The shared client's default (15s, apiClient.ts) is fine for small JSON
+    // calls but nowhere near enough for a full-resolution phone photo: the
+    // backend uploads it to Egnyte twice (compressed + full-quality
+    // original, storage.ts) before responding, and over a slow/tunnelled
+    // dev connection a single ~9MB photo has been measured taking 45s+.
+    // Without this override every upload of a real (not test-sized) photo
+    // would spuriously fail as a "Network Error" well before it was actually
+    // done -- not a flaky connection, just too short a clock for the payload.
+    timeout: 120000,
   });
   return data.url;
 }

@@ -16,6 +16,11 @@ export interface TemplateFieldOption {
   label: string;
   icon?: string;
   color?: string;
+  /** For a chip-multiselect option only: selecting this one clears every
+   *  other selection in the same field (e.g. "No chimney present" alongside
+   *  a list of chimney defects that can't apply if there's no chimney), and
+   *  selecting any other option clears this one. */
+  exclusive?: boolean;
 }
 
 /** Generalizes "hasDamage === 'yes' reveals the damages list" to any field. */
@@ -101,4 +106,34 @@ export async function getActiveTemplate(
     `/templates/active/${inspectionType}/${propertyType}/${sectionKey}`,
   );
   return data.template;
+}
+
+/**
+ * Same as `getActiveTemplate`, but falls back to whatever was last fetched
+ * for this exact profile + section (cached on-device the previous time it
+ * succeeded) when the live request fails -- e.g. no signal in a basement.
+ * A profile never opened before while online still has nothing to fall back
+ * to; this only rescues a profile the inspector (or anyone on this device)
+ * has already used at least once.
+ */
+export async function getActiveTemplateCached(
+  inspectionType: string,
+  propertyType: string,
+  sectionKey: string,
+): Promise<ActiveTemplate> {
+  // Lazy import avoids a require cycle: offlineStorage imports this module's
+  // `ActiveTemplate` type, so importing it back at module scope here would
+  // create one (type-only imports are fine either way, but this keeps the
+  // runtime dependency one-directional).
+  const { getCachedTemplate, setCachedTemplate } = await import('./offlineStorage');
+  const pinKey = `${inspectionType}:${propertyType}:${sectionKey}`;
+  try {
+    const template = await getActiveTemplate(inspectionType, propertyType, sectionKey);
+    void setCachedTemplate(pinKey, template);
+    return template;
+  } catch (err) {
+    const cached = await getCachedTemplate(pinKey);
+    if (cached) return cached;
+    throw err;
+  }
 }

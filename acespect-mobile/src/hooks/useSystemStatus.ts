@@ -111,7 +111,10 @@ export function useSystemStatus(): LiveSystemStatus {
     };
   }, []);
 
-  const offlineActive = Platform.OS !== 'web';
+  // AsyncStorage-backed draft persistence (see offlineStorage.ts) works on
+  // every platform this app runs on -- unlike the old WatermelonDB-based
+  // check this replaced, there's no native module that could be missing.
+  const offlineActive = true;
 
   const cloudSync: SystemStatusRow = {
     value: !netKnown ? 'Checking…' : online ? 'Connected' : 'Offline',
