@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { colors, radius, spacing, typography } from '../../theme';
@@ -9,7 +9,7 @@ import { SectionCard } from '../../components/inspection/SectionCard';
 import { FieldListRenderer, SectionNavRenderer } from '../../components/inspection/fieldRenderers';
 import type { AnswerTree, AnswerValue } from '../../components/inspection/fieldRenderers/types';
 import { useInspectionDraft, BaselineSectionRef } from '../../context/InspectionDraftContext';
-import { ActiveTemplate, getActiveTemplate, TemplateField } from '../../services/templateApi';
+import { ActiveTemplate, getActiveTemplateCached, TemplateField } from '../../services/templateApi';
 import { flattenSectionToDraft, meetsAllRequireWhen, meetsAllRequiredFields } from '../../utils/flattenSectionToDraft';
 import { InspectionDraftSelection } from '../../types/inspection';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
@@ -147,7 +147,7 @@ export function DynamicSectionScreen({
       return;
     }
     setLoadError(false);
-    getActiveTemplate(inspectionTypeId, propertyTypeId, templateKey)
+    getActiveTemplateCached(inspectionTypeId, propertyTypeId, templateKey)
       .then((t) => {
         draft.setActiveTemplate(pinKey, t);
         setTemplate(t);
@@ -167,7 +167,7 @@ export function DynamicSectionScreen({
   function retry() {
     if (!inspectionTypeId || !propertyTypeId) return;
     setLoadError(false);
-    getActiveTemplate(inspectionTypeId, propertyTypeId, templateKey)
+    getActiveTemplateCached(inspectionTypeId, propertyTypeId, templateKey)
       .then((t) => {
         draft.setActiveTemplate(pinKey, t);
         setTemplate(t);
@@ -285,100 +285,109 @@ export function DynamicSectionScreen({
         <ProgressBar progress={0.6} />
       </View>
 
-      {!template ? (
-        <View style={styles.loadingWrap}>
-          {loadError ? (
-            <>
-              <Text style={styles.helper}>Couldn't load this section's form.</Text>
-              <Button label="Retry" variant="outline" onPress={retry} />
-            </>
-          ) : (
-            <ActivityIndicator color={colors.accentBlueFg} />
-          )}
-        </View>
-      ) : (
-        <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
-          {isPostDilapidation && baselineSection && (
-            <View style={styles.baselineCard}>
-              <Text style={styles.baselineLabel}>PREVIOUSLY RECORDED</Text>
-              <Text style={styles.baselineText}>
-                {baselineSection.reportText || 'No summary was recorded for this section.'}
-              </Text>
-              {baselineSection.photos.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.baselinePhotos}>
-                  {baselineSection.photos.map((uri) => (
-                    <Image key={uri} source={{ uri }} style={styles.baselinePhoto} />
-                  ))}
-                </ScrollView>
-              )}
-            </View>
-          )}
-          {isPostDilapidation && baselineSection === null && (
-            <View style={styles.baselineCard}>
-              <Text style={styles.baselineText}>
-                The previous inspection didn't record this section — give your own assessment below.
-              </Text>
-            </View>
-          )}
-
-          <SectionCard title={displayName.toUpperCase()} accent="blue">
-            {template.layout?.mode === 'section-nav' ? (
-              <SectionNavRenderer
-                fields={template.fields}
-                layout={template.layout}
-                scope={answers}
-                onChange={setAnswer}
-                path={[sectionKey]}
-                showMissing={showMissing}
-              />
+      {/* Keeps the footer's Back/Complete buttons above the keyboard instead
+          of hidden behind it -- wraps the scroll area and footer together so
+          both shift up as one when a text field is focused. */}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoider}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        {!template ? (
+          <View style={styles.loadingWrap}>
+            {loadError ? (
+              <>
+                <Text style={styles.helper}>Couldn't load this section's form.</Text>
+                <Button label="Retry" variant="outline" onPress={retry} />
+              </>
             ) : (
-              <FieldListRenderer
-                fields={template.fields}
-                scope={answers}
-                onChange={setAnswer}
-                path={[sectionKey]}
-                showMissing={showMissing}
-              />
+              <ActivityIndicator color={colors.accentBlueFg} />
             )}
-          </SectionCard>
+          </View>
+        ) : (
+          <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+            {isPostDilapidation && baselineSection && (
+              <View style={styles.baselineCard}>
+                <Text style={styles.baselineLabel}>PREVIOUSLY RECORDED</Text>
+                <Text style={styles.baselineText}>
+                  {baselineSection.reportText || 'No summary was recorded for this section.'}
+                </Text>
+                {baselineSection.photos.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.baselinePhotos}>
+                    {baselineSection.photos.map((uri) => (
+                      <Image key={uri} source={{ uri }} style={styles.baselinePhoto} />
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            )}
+            {isPostDilapidation && baselineSection === null && (
+              <View style={styles.baselineCard}>
+                <Text style={styles.baselineText}>
+                  The previous inspection didn't record this section — give your own assessment below.
+                </Text>
+              </View>
+            )}
 
-          {isPostDilapidation && (
-            <SectionCard title="COMPARED TO PREVIOUS INSPECTION" accent="blue">
-              <FieldListRenderer
-                fields={COMPARISON_FIELDS}
-                scope={answers}
-                onChange={setAnswer}
-                path={[sectionKey, 'comparison']}
-                showMissing={showMissing}
-              />
+            <SectionCard title={displayName.toUpperCase()} accent="blue">
+              {template.layout?.mode === 'section-nav' ? (
+                <SectionNavRenderer
+                  fields={template.fields}
+                  layout={template.layout}
+                  scope={answers}
+                  onChange={setAnswer}
+                  path={[sectionKey]}
+                  showMissing={showMissing}
+                />
+              ) : (
+                <FieldListRenderer
+                  fields={template.fields}
+                  scope={answers}
+                  onChange={setAnswer}
+                  path={[sectionKey]}
+                  showMissing={showMissing}
+                />
+              )}
             </SectionCard>
-          )}
-        </ScrollView>
-      )}
 
-      <SafeAreaView edges={['bottom']} style={styles.footer}>
-        <View style={styles.footerRow}>
-          <Button label="Back" variant="outline" leftIcon="chevron-back" fitContent onPress={handleBack} />
-          <Button
-            label="Complete Section"
-            variant="primaryGradient"
-            rightIcon="checkmark"
-            disabled={!template}
-            onPress={handleComplete}
-            style={styles.completeBtn}
-          />
-        </View>
-        {template && !defectsComplete && (
-          <Text style={styles.footerHintBlocking}>
-            Defect details are required before you can leave this section
-          </Text>
+            {isPostDilapidation && (
+              <SectionCard title="COMPARED TO PREVIOUS INSPECTION" accent="blue">
+                <FieldListRenderer
+                  fields={COMPARISON_FIELDS}
+                  scope={answers}
+                  onChange={setAnswer}
+                  path={[sectionKey, 'comparison']}
+                  showMissing={showMissing}
+                />
+              </SectionCard>
+            )}
+          </ScrollView>
         )}
-        {template && defectsComplete && !requiredFieldsComplete && (
-          <Text style={styles.footerHint}>
-            You can complete with required fields blank, but they're recommended
-          </Text>
-        )}
-      </SafeAreaView>
+
+        <SafeAreaView edges={['bottom']} style={styles.footer}>
+          <View style={styles.footerRow}>
+            <Button label="Back" variant="outline" leftIcon="chevron-back" fitContent onPress={handleBack} />
+            <Button
+              label="Complete Section"
+              variant="primaryGradient"
+              rightIcon="checkmark"
+              disabled={!template}
+              onPress={handleComplete}
+              style={styles.completeBtn}
+            />
+          </View>
+          {template && !defectsComplete && (
+            <Text style={styles.footerHintBlocking}>
+              Defect details are required before you can leave this section
+            </Text>
+          )}
+          {template && defectsComplete && !requiredFieldsComplete && (
+            <Text style={styles.footerHint}>
+              You can complete with required fields blank, but they're recommended
+            </Text>
+          )}
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -386,6 +395,7 @@ export function DynamicSectionScreen({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   progressWrap: { backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  keyboardAvoider: { flex: 1 },
   baselineCard: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: radius.lg,
