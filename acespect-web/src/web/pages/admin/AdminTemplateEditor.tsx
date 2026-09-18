@@ -30,8 +30,83 @@ export const inputStyle: React.CSSProperties = {
   outline: "none", boxSizing: "border-box",
 };
 
-function emptyField(order: number): TemplateField {
-  return { key: "", label: "", type: "text", order, required: false };
+function emptyField(order: number, sectionLetter?: string): TemplateField {
+  return { key: "", label: "", type: "text", order, required: false, sectionLetter };
+}
+
+/** A, B, C, ... Z, AA, AB, ... -- the same "next column" sequence a spreadsheet uses. */
+function nextLetter(letter: string): string {
+  const chars = letter.split("");
+  for (let i = chars.length - 1; i >= 0; i--) {
+    if (chars[i] === "Z") {
+      chars[i] = "A";
+    } else {
+      chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1);
+      return chars.join("");
+    }
+  }
+  return "A" + chars.join("");
+}
+
+/**
+ * A fresh Group letter for a brand-new cluster -- one past whatever plain
+ * A/B/C-style letter is already the highest among these siblings, or "A" if
+ * none of them have one yet. Used when a *repeating group* is added (it
+ * starts its own container, distinct from whatever else is in the list) --
+ * never for an ordinary leaf field, which should join an existing group
+ * instead of starting a new one.
+ */
+function freshGroupLetter(siblings: TemplateField[]): string {
+  const letterLike = siblings.map((f) => f.sectionLetter).filter((l): l is string => !!l && /^[A-Z]+$/.test(l));
+  if (letterLike.length === 0) return "A";
+  const max = letterLike.reduce((a, b) => (b.length > a.length || (b.length === a.length && b > a) ? b : a));
+  return nextLetter(max);
+}
+
+/**
+ * The Group letter a newly added *leaf* field should share -- every leaf
+ * field in the same list is one group, never each its own. Reuses whatever
+ * letter the list's other leaf siblings already carry (backfilling any that
+ * don't have one yet, so they all read the same), or claims a fresh one if
+ * this list has no leaf-field group yet (e.g. it's currently only repeating
+ * groups, or completely empty). Repeating-group siblings are left alone --
+ * each keeps its own letter from when it was created.
+ */
+function sharedLeafGroupLetter(siblings: TemplateField[]): { fields: TemplateField[]; letter: string } {
+  const leafSiblings = siblings.filter((f) => !NESTED_TYPES.includes(f.type));
+  if (leafSiblings.length === 0) return { fields: siblings, letter: freshGroupLetter(siblings) };
+  const letter = leafSiblings.find((f) => f.sectionLetter)?.sectionLetter ?? "A";
+  const backfilled = siblings.map((f) => (!NESTED_TYPES.includes(f.type) && !f.sectionLetter ? { ...f, sectionLetter: letter } : f));
+  return { fields: backfilled, letter };
+}
+
+/**
+ * Fixes up an entire field tree's Group letters once, top-down: each
+ * repeating group keeps its own letter (assigning a fresh one if it's
+ * missing one), every plain leaf alongside it shares that same letter (or,
+ * at a section's own top level where there's no enclosing group, whatever
+ * shared leaf letter the section's other top-level leaves use), and the
+ * same two rules apply again inside each repeating group's own itemFields --
+ * so a damage-list nested inside a Part gets a letter distinct from that
+ * Part's own leaf fields, exactly as a top-level repeating group would.
+ * Run once when a template loads (see AdminTemplateEditor below), so data
+ * saved before this feature existed reads correctly immediately instead of
+ * needing an edit to trigger a fix.
+ */
+function normalizeGroupLetters(fields: TemplateField[], containerLetter?: string): TemplateField[] {
+  let next = fields;
+  fields.forEach((f, i) => {
+    if (NESTED_TYPES.includes(f.type) && !next[i].sectionLetter) {
+      const letter = freshGroupLetter(next);
+      next = next.map((g, j) => (j === i ? { ...g, sectionLetter: letter } : g));
+    }
+  });
+  next = containerLetter
+    ? next.map((f) => (NESTED_TYPES.includes(f.type) ? f : { ...f, sectionLetter: containerLetter }))
+    : sharedLeafGroupLetter(next).fields;
+  return next.map((f) =>
+    NESTED_TYPES.includes(f.type) ? { ...f, itemFields: normalizeGroupLetters(f.itemFields ?? [], f.sectionLetter) } : f,
+  );
 }
 
 /**
@@ -48,13 +123,31 @@ export function FieldListEditor({
   onChange,
   disabled,
   depth = 0,
+  sharedGroupLetter,
 }: {
   fields: TemplateField[];
   onChange: (fields: TemplateField[]) => void;
   disabled: boolean;
   depth?: number;
+  /**
+   * Set when `fields` IS one repeating group's itemFields (never for a
+   * section's own top-level list) -- every field added to the list from
+   * here on must carry this exact Group letter, the container's own, not
+   * one of its own choosing. Mismatches already sitting in loaded data
+   * (from before this rule existed) are fixed once, up front, by
+   * `normalizeGroupLetters` -- see AdminTemplateEditor's template fetch --
+   * rather than reactively here, so a nested repeating group's *own* letter
+   * (a damage-list inside a Part, say) can't get raced into matching its
+   * container's instead of keeping its own.
+   */
+  sharedGroupLetter?: string;
 }) {
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  // Auto-expand every repeating-group / damage-list field so its itemFields
+  // are visible by default — the user should never have to hunt for a chevron
+  // to reveal the inner fields.
+  const [expanded, setExpanded] = useState<Set<number>>(() =>
+    new Set(fields.map((f, i) => (NESTED_TYPES.includes(f.type) ? i : -1)).filter((i) => i >= 0)),
+  );
 
   function updateField(idx: number, patch: Partial<TemplateField>) {
     onChange(fields.map((f, i) => (i === idx ? { ...f, ...patch } : f)));
@@ -67,7 +160,18 @@ export function FieldListEditor({
     onChange(next.map((f, i) => ({ ...f, order: i })));
   }
   function addField() {
-    onChange([...fields, emptyField(fields.length)]);
+    // Inside a repeating group's itemFields, every field -- new or old --
+    // must carry the container's own letter.
+    if (sharedGroupLetter) {
+      onChange([...fields, emptyField(fields.length, sharedGroupLetter)]);
+      return;
+    }
+    // A brand-new field always starts out as a plain "text" leaf -- it only
+    // becomes its own group if the admin turns it into a repeating group
+    // afterward (see the Type <select> below), so it joins the shared leaf
+    // group here regardless of what else is in the list.
+    const { fields: backfilled, letter } = sharedLeafGroupLetter(fields);
+    onChange([...backfilled, emptyField(backfilled.length, letter)]);
   }
   function removeField(idx: number) {
     onChange(fields.filter((_, i) => i !== idx).map((f, i) => ({ ...f, order: i })));
@@ -145,7 +249,15 @@ export function FieldListEditor({
                       type,
                       repeat: isNestedNow ? (field.repeat ?? { presentation: "strip" }) : undefined,
                       itemFields: isNestedNow ? field.itemFields ?? [] : undefined,
+                      // A repeating group is its own container -- becoming one
+                      // always claims a fresh Group letter, distinct from
+                      // whatever this field shared before (e.g. as a plain
+                      // leaf) and from every other repeating group already
+                      // in this list.
+                      ...(isNestedNow ? { sectionLetter: freshGroupLetter(fields) } : {}),
                     });
+                    // Auto-expand when switching to a nested type so itemFields are immediately visible.
+                    if (isNestedNow) setExpanded((prev) => new Set([...prev, idx]));
                   }}
                   style={inputStyle}
                 >
@@ -315,10 +427,23 @@ export function FieldListEditor({
                   onChange={(itemFields) => updateField(idx, { itemFields })}
                   disabled={disabled}
                   depth={depth + 1}
+                  sharedGroupLetter={field.sectionLetter}
                 />
                 {!disabled && (
                   <button
-                    onClick={() => updateField(idx, { itemFields: [...(field.itemFields ?? []), emptyField((field.itemFields ?? []).length)] })}
+                    onClick={() => {
+                      // Every field inside this repeating group shares its
+                      // container's own Group letter -- assign the group
+                      // itself one now if it doesn't have one yet (e.g. it
+                      // predates this feature), and bring any of its existing
+                      // fields that fell out of sync back to match.
+                      const groupLetter = field.sectionLetter ?? freshGroupLetter(fields);
+                      const itemFields = (field.itemFields ?? []).map((f) => ({ ...f, sectionLetter: groupLetter }));
+                      updateField(idx, {
+                        sectionLetter: groupLetter,
+                        itemFields: [...itemFields, emptyField(itemFields.length, groupLetter)],
+                      });
+                    }}
                     style={{ marginTop: "10px", fontSize: "11px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: "4px 0", fontWeight: 600 }}
                   >
                     + Add field to {field.type === "damage-list" ? "damage record" : "instance"}
@@ -362,7 +487,7 @@ export function AdminTemplateEditor() {
     api.getTemplate(id).then((t) => {
       setTemplate(t);
       setName(t.name);
-      setFields([...t.fields].sort((a, b) => a.order - b.order));
+      setFields(normalizeGroupLetters([...t.fields].sort((a, b) => a.order - b.order)));
     });
   }, [id]);
 

@@ -20,7 +20,8 @@ import { ReportSection } from "../../components/ReportSection";
 import { buildReportHeader } from "../../report";
 import { SectionFieldView } from "../../components/SectionFieldView";
 import { ActiveTemplate, AnswerTree, fetchActiveTemplate } from "../../templateFields";
-import { resolveMediaUrl } from "../../api";
+import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
+import { api, resolveMediaUrl } from "../../api";
 
 /* ─── helpers ─────────────────────────────────────────────────────── */
 function formatFieldKey(key: string): string {
@@ -417,8 +418,10 @@ export function ReviewerFormView() {
     const missing = keys.filter((k) => !(k in templates));
     if (missing.length === 0) return;
     let cancelled = false;
+    const inspectionTypeId = inspectionIdFromTitle(inspection.type);
+    const propertyTypeId = propertyIdFromTitle(inspection.propertyType);
     Promise.all(
-      missing.map((key) => fetchActiveTemplate(inspection.type, inspection.propertyType, key).then((t) => [key, t] as const)),
+      missing.map((key) => fetchActiveTemplate(inspectionTypeId, propertyTypeId, key).then((t) => [key, t] as const)),
     ).then((pairs) => {
       if (cancelled) return;
       setTemplates((prev) => {
@@ -764,9 +767,20 @@ export function ReviewerFormView() {
                     </div>
                   )}
 
-                  {/* Photos */}
+                  {/* Additional photos -- attached by the inspector outside any
+                      specific template field (e.g. shots from an external
+                      camera). Bulk-downloadable so a reviewer isn't stuck
+                      opening them one at a time. */}
                   {selectedSection.photos.length > 0 && (
                     <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "16px 20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+                        <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
+                          Additional Photos ({selectedSection.photos.length})
+                        </p>
+                        <a href={api.sectionPhotosZipUrl(selectedSection.id)} style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", textDecoration: "none" }}>
+                          Download all
+                        </a>
+                      </div>
                       <PhotosGrid photos={selectedSection.photos} />
                     </div>
                   )}
