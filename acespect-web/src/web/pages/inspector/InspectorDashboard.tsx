@@ -101,7 +101,9 @@ export function InspectorDashboard() {
         >
           {filtered.map((ins, idx) => {
             const cfg = STATUS_CONFIG[ins.status];
-            const canEdit = ins.status === "draft" || ins.status === "submitted";
+            // Once submitted, the inspector's editing window is over -- only
+            // a still-open draft can be edited from here.
+            const canEdit = ins.status === "draft";
             return (
               <tr
                 key={ins.id}

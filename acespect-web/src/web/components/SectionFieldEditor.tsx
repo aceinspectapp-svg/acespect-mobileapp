@@ -6,10 +6,12 @@ import {
   asAnswerTree,
   asString,
   asStringArray,
+  isFieldMissing,
   isGateSatisfied,
   isRepeatRequirementMet,
   resolveInstances,
 } from "../templateFields";
+import { resolveMediaUrl } from "../api";
 
 /**
  * Editable, template-driven field editor -- the web equivalent of the
@@ -17,17 +19,24 @@ import {
  * the inspector edit) every field of a section's template against its
  * answer tree: the same fields, in the same order and nesting, so a
  * section started on mobile can be finished here and vice versa.
+ *
+ * `showMissing`, when on, red-outlines every currently-unfilled required
+ * field -- the same "tried to leave an incomplete section" treatment mobile
+ * gives via its own FieldListRenderer, triggered here by an attempted Submit
+ * instead of leaving a section screen.
  */
 export function SectionFieldEditor({
   fields,
   scope,
   onChange,
   readOnly,
+  showMissing,
 }: {
   fields: TemplateField[];
   scope: AnswerTree;
   onChange: (key: string, value: AnswerValue) => void;
   readOnly: boolean;
+  showMissing?: boolean;
 }) {
   const visible = [...fields].filter((f) => isGateSatisfied(f, scope)).sort((a, b) => a.order - b.order);
   let lastLetter: string | undefined;
@@ -36,6 +45,7 @@ export function SectionFieldEditor({
       {visible.map((field) => {
         const showLetter = field.sectionLetter && field.sectionLetter !== lastLetter;
         lastLetter = field.sectionLetter;
+        const missing = !!showMissing && isFieldMissing(field, visible, scope);
         return (
           <div key={field.key}>
             {showLetter && (
@@ -56,7 +66,16 @@ export function SectionFieldEditor({
                 {field.sectionLetter}
               </div>
             )}
-            <FieldRenderer field={field} value={scope[field.key]} scope={scope} onChange={(v) => onChange(field.key, v)} readOnly={readOnly} />
+            <div style={missing ? { border: "1.5px solid #dc2626", borderRadius: "8px", padding: "10px" } : undefined}>
+              <FieldRenderer
+                field={field}
+                value={scope[field.key]}
+                scope={scope}
+                onChange={(v) => onChange(field.key, v)}
+                readOnly={readOnly}
+                showMissing={showMissing}
+              />
+            </div>
           </div>
         );
       })}
@@ -70,6 +89,7 @@ interface RendererProps {
   scope: AnswerTree;
   onChange: (v: AnswerValue) => void;
   readOnly: boolean;
+  showMissing?: boolean;
 }
 
 const labelStyle: CSSProperties = {
@@ -251,9 +271,22 @@ function ChipField({ field, value, onChange, readOnly }: RendererProps) {
   const otherValue = otherEntry ? otherEntry.slice(otherKey.length + 1) : "";
   const baseSelected = selected.filter((s) => s !== "other" && !s.startsWith(`${otherKey}:`)).concat(selected.includes("other") ? ["other"] : []);
 
+  // A chip marked `exclusive` (e.g. "No chimney present" alongside a list of
+  // actual defects) can't logically be true at the same time as any other
+  // option -- selecting it clears every other pick, and picking anything
+  // else drops whichever exclusive chip was selected.
+  const isExclusive = (v: string) => !!field.options?.find((o) => o.value === v)?.exclusive;
+
   function toggle(v: string) {
     const has = baseSelected.includes(v);
-    const next = has ? baseSelected.filter((s) => s !== v) : [...baseSelected, v];
+    let next: string[];
+    if (has) {
+      next = baseSelected.filter((s) => s !== v);
+    } else if (isExclusive(v)) {
+      next = [v];
+    } else {
+      next = [...baseSelected.filter((s) => !isExclusive(s)), v];
+    }
     onChange(
       next
         .filter((s) => s !== "other")
@@ -336,7 +369,7 @@ function PhotosField({ field, value }: RendererProps) {
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: "6px" }}>
           {uris.map((u, i) => (
-            <img key={i} src={u} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: "8px", border: "1px solid #e5e7eb" }} />
+            <img key={i} src={resolveMediaUrl(u)} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: "8px", border: "1px solid #e5e7eb" }} />
           ))}
         </div>
       )}
@@ -351,7 +384,7 @@ function humanizeList(values: string[]): string {
 }
 
 /** repeating-group / damage-list: a list of instance cards, each recursing back into SectionFieldEditor. */
-function RepeatingField({ field, value, onChange, scope, readOnly }: RendererProps) {
+function RepeatingField({ field, value, onChange, scope, readOnly, showMissing }: RendererProps) {
   const presentation = field.repeat?.presentation ?? "strip";
   const itemFields = field.itemFields ?? [];
 
@@ -370,6 +403,7 @@ function RepeatingField({ field, value, onChange, scope, readOnly }: RendererPro
                   scope={instScope}
                   onChange={(k, v) => onChange({ ...record, [inst.key]: { ...instScope, [k]: v } })}
                   readOnly={readOnly}
+                  showMissing={showMissing}
                 />
               </div>
             );
@@ -463,6 +497,7 @@ function RepeatingField({ field, value, onChange, scope, readOnly }: RendererPro
                   scope={inst.scope}
                   onChange={(k, v) => (isArrayBacked ? updateArrayInstance(idx, k, v) : key !== undefined ? updateRecordInstance(key, k, v) : undefined)}
                   readOnly={readOnly}
+                  showMissing={showMissing}
                 />
               </div>
             </div>

@@ -24,6 +24,7 @@ export interface TemplateFieldOption {
   label: string;
   icon?: string;
   color?: string;
+  exclusive?: boolean;
 }
 
 export interface FieldGate {
@@ -148,6 +149,84 @@ export function isRepeatRequirementMet(field: TemplateField, value: AnswerValue,
     : typeof triggerVal === "string" && req.equals.includes(triggerVal);
   if (!triggered) return true;
   return Array.isArray(value) && value.length > 0;
+}
+
+function isAnswered(v: AnswerValue): boolean {
+  return Array.isArray(v) ? v.length > 0 : v !== undefined && v !== "";
+}
+
+/**
+ * Whether `field` is a currently-unmet required field within `siblings` (the
+ * full sibling list at this level, needed to resolve either/or
+ * `requiredGroup`s the same way `meetsAllRequiredFields` does) against
+ * `scope` -- ported from acespect-mobile's fieldRenderers/index.tsx so the
+ * web editor can red-outline missing fields the same way mobile does. A
+ * gated-off field is never "missing" -- it isn't asking anything right now.
+ */
+export function isFieldMissing(field: TemplateField, siblings: TemplateField[], scope: AnswerTree): boolean {
+  if (!field.required) return false;
+  if (!isGateSatisfied(field, scope)) return false;
+  if (field.requiredGroup) {
+    const group = siblings.filter((f) => f.requiredGroup === field.requiredGroup);
+    return !group.some((f) => isAnswered(scope[f.key]));
+  }
+  return !isAnswered(scope[field.key]);
+}
+
+/**
+ * True when every `repeat.requireWhen` constraint in this template is
+ * satisfied, at every nesting depth -- ported from
+ * acespect-mobile's utils/flattenSectionToDraft.ts so the web editor blocks
+ * Submit on the same mandatory-defect rule mobile does (Condition = Average/
+ * Poor without a recorded defect).
+ */
+export function meetsAllRequireWhen(templateFields: TemplateField[], scope: AnswerTree): boolean {
+  for (const field of templateFields) {
+    if (!isGateSatisfied(field, scope)) continue;
+    const value = scope[field.key];
+    if (field.repeat?.requireWhen && !isRepeatRequirementMet(field, value, scope)) return false;
+    if (field.type === "repeating-group") {
+      for (const { scope: inst } of resolveInstances(field, value)) {
+        if (!meetsAllRequireWhen(field.itemFields ?? [], inst)) return false;
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * True when every `required` field is satisfied, at this level AND inside
+ * every instance of every repeating-group -- ported from
+ * acespect-mobile's utils/flattenSectionToDraft.ts. A required field hidden
+ * by its own `gate` doesn't block completion while invisible, and fields
+ * sharing a `requiredGroup` are "either/or".
+ */
+export function meetsAllRequiredFields(templateFields: TemplateField[], scope: AnswerTree): boolean {
+  const required = templateFields.filter((f) => f.required && isGateSatisfied(f, scope));
+  const grouped = new Map<string, TemplateField[]>();
+  const ungrouped: TemplateField[] = [];
+  for (const f of required) {
+    if (f.requiredGroup) {
+      const arr = grouped.get(f.requiredGroup) ?? [];
+      arr.push(f);
+      grouped.set(f.requiredGroup, arr);
+    } else {
+      ungrouped.push(f);
+    }
+  }
+  if (!ungrouped.every((f) => isAnswered(scope[f.key]))) return false;
+  for (const fields of grouped.values()) {
+    if (!fields.some((f) => isAnswered(scope[f.key]))) return false;
+  }
+
+  for (const field of templateFields) {
+    if (field.type !== "repeating-group") continue;
+    if (!isGateSatisfied(field, scope)) continue;
+    for (const { scope: inst } of resolveInstances(field, scope[field.key])) {
+      if (!meetsAllRequiredFields(field.itemFields ?? [], inst)) return false;
+    }
+  }
+  return true;
 }
 
 export function asAnswerTree(v: AnswerValue): AnswerTree {
