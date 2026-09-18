@@ -5,6 +5,17 @@ export const sectionUpdateSchema = z.object({
   reviewComment: z.string().max(2000).optional(),
   reportText: z.string().max(20000).optional(),
   fields: z.record(z.string(), z.unknown()).optional(),
+  // Photo URLs (from this section's own `photos`) a reviewer has chosen to
+  // leave out of the generated report. Replaces the stored list wholesale --
+  // the reviewer's UI always sends the full current exclusion set.
+  excludedPhotoUrls: z.array(z.string()).optional(),
+});
+
+// A damage record's own photo-exclusion list -- same idea as the section's,
+// scoped to one crack/defect's photos. No update endpoint existed for
+// damages before this; this is the smallest schema that adds one.
+export const damageUpdateSchema = z.object({
+  excludedPhotoUrls: z.array(z.string()).optional(),
 });
 
 export const inspectionUpdateSchema = z.object({
@@ -14,4 +25,5 @@ export const inspectionUpdateSchema = z.object({
 });
 
 export type SectionUpdateInput = z.infer<typeof sectionUpdateSchema>;
+export type DamageUpdateInput = z.infer<typeof damageUpdateSchema>;
 export type InspectionUpdateInput = z.infer<typeof inspectionUpdateSchema>;

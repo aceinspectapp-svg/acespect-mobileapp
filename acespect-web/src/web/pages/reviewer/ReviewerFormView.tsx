@@ -17,7 +17,7 @@ import { ReportDescription } from "../../components/ReportDescription";
 import { ReportScope } from "../../components/ReportScope";
 import { ReportConditions } from "../../components/ReportConditions";
 import { ReportSection } from "../../components/ReportSection";
-import { buildReportHeader } from "../../report";
+import { buildReportHeader, withExcludedPhotosRemoved } from "../../report";
 import { SectionFieldView } from "../../components/SectionFieldView";
 import { ActiveTemplate, AnswerTree, fetchActiveTemplate } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
@@ -359,6 +359,79 @@ function PhotosGrid({ photos }: { photos: string[] }) {
   );
 }
 
+/**
+ * The same photos PhotosGrid shows, but every thumbnail is a checkbox: on
+ * (default) means it's in the generated report, off means the reviewer has
+ * left it out. `excludedPhotoUrls` is whichever list -- the section's own or
+ * one damage record's -- this particular grid is toggling.
+ */
+function SelectablePhotoGrid({
+  photos,
+  excludedPhotoUrls,
+  onToggle,
+}: {
+  photos: string[];
+  excludedPhotoUrls: string[];
+  onToggle: (url: string) => void;
+}) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: "8px" }}>
+      {photos.map((url, i) => {
+        const included = !excludedPhotoUrls.includes(url);
+        return (
+          <button
+            key={i}
+            onClick={() => onToggle(url)}
+            title={included ? "Included in report — click to exclude" : "Excluded from report — click to include"}
+            style={{
+              position: "relative",
+              padding: 0,
+              border: "none",
+              background: "none",
+              cursor: "pointer",
+              borderRadius: "10px",
+              overflow: "hidden",
+            }}
+          >
+            <img
+              src={url}
+              alt={`Photo ${i + 1}`}
+              style={{
+                width: "100%",
+                aspectRatio: "4/3",
+                objectFit: "cover",
+                display: "block",
+                border: `1.5px solid ${included ? "#e5e7eb" : "#fca5a5"}`,
+                opacity: included ? 1 : 0.4,
+              }}
+            />
+            <span
+              style={{
+                position: "absolute",
+                top: "4px",
+                right: "4px",
+                width: "20px",
+                height: "20px",
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "12px",
+                fontWeight: 700,
+                background: included ? "#16a34a" : "rgba(15,23,42,0.55)",
+                color: "white",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+              }}
+            >
+              {included ? "✓" : "✕"}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function EmptyState({ message }: { message: string }) {
   return (
     <div style={{ padding: "32px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
@@ -388,7 +461,7 @@ function ReviewStatusPill({ status }: { status: SectionReviewStatus }) {
 export function ReviewerFormView() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { currentUser, loading, getInspectionById, getUser, patchSection } = useAppData();
+  const { currentUser, loading, getInspectionById, getUser, patchSection, patchDamage } = useAppData();
   const inspection = getInspectionById(id ?? "");
 
   const [selectedSectionId, setSelectedSectionId] = useState<string>("");
@@ -476,6 +549,30 @@ export function ReviewerFormView() {
         reviewStatus: status,
         reviewComment: reviewComments[sectionId] ?? "",
       });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Flips one of this section's own photos between included/excluded in the generated report. */
+  async function toggleSectionPhoto(section: FormSection, url: string) {
+    const current = section.excludedPhotoUrls ?? [];
+    const next = current.includes(url) ? current.filter((u) => u !== url) : [...current, url];
+    setBusy(true);
+    try {
+      await patchSection(inspection!.id, section.id, { excludedPhotoUrls: next });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Same as toggleSectionPhoto, one level down -- one damage record's own photos. */
+  async function toggleDamagePhoto(damage: FormSection["damages"][number], url: string) {
+    const current = damage.excludedPhotoUrls ?? [];
+    const next = current.includes(url) ? current.filter((u) => u !== url) : [...current, url];
+    setBusy(true);
+    try {
+      await patchDamage(inspection!.id, damage.id, { excludedPhotoUrls: next });
     } finally {
       setBusy(false);
     }
@@ -943,7 +1040,7 @@ export function ReviewerFormView() {
                       padding: "16px 18px",
                       borderLeft: "3px solid #2563eb",
                     }}>
-                      <ReportSection section={selectedSection} compact />
+                      <ReportSection section={withExcludedPhotosRemoved(selectedSection)} compact />
                       <button
                         onClick={() => {
                           const newText = prompt("Edit report text:", selectedSection.reportText);
@@ -954,6 +1051,36 @@ export function ReviewerFormView() {
                         ✏ Edit report text
                       </button>
                     </div>
+                    {/* Every photo captured for this category, with a checkbox to
+                        leave specific ones out of the report above -- unchecking
+                        one here is exactly what the preview and the printed
+                        report both reflect. */}
+                    {(selectedSection.photos.length > 0 || selectedSection.damages.some((d) => d.photos.length > 0)) && (
+                      <div style={{ marginTop: "14px" }}>
+                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "8px" }}>
+                          Select Photos For Report
+                        </label>
+                        <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "14px 16px" }}>
+                          {selectedSection.photos.length > 0 && (
+                            <SelectablePhotoGrid
+                              photos={selectedSection.photos}
+                              excludedPhotoUrls={selectedSection.excludedPhotoUrls ?? []}
+                              onToggle={(url) => toggleSectionPhoto(selectedSection, url)}
+                            />
+                          )}
+                          {selectedSection.damages.filter((d) => d.photos.length > 0).map((d) => (
+                            <div key={d.id} style={{ marginTop: "10px" }}>
+                              <p style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", margin: "0 0 6px" }}>{d.type} — {d.location}</p>
+                              <SelectablePhotoGrid
+                                photos={d.photos}
+                                excludedPhotoUrls={d.excludedPhotoUrls ?? []}
+                                onToggle={(url) => toggleDamagePhoto(d, url)}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

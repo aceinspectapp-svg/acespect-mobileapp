@@ -186,6 +186,10 @@ model Section {
   /// "edit a submitted inspection" possible without losing per-instance detail.
   answers       Json?
   photos        Json                @default("[]")
+  /// URLs from `photos` a reviewer has chosen to leave out of the generated
+  /// report -- everything defaults to included, so existing inspections are
+  /// unaffected until a reviewer actually excludes something.
+  excludedPhotoUrls Json            @default("[]")
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
@@ -207,6 +211,8 @@ model Damage {
   lengthMm  Float   @default(0)
   notes     String  @default("")
   photos    Json    @default("[]")
+  /// Same as Section.excludedPhotoUrls, scoped to this damage record's own photos.
+  excludedPhotoUrls Json @default("[]")
   order     Int     @default(0)
 
   @@index([sectionId])
