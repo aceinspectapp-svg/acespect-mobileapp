@@ -20,12 +20,13 @@ const REPORT_JPEG_QUALITY = 82;
  * uploadPhoto() hands back a URL on THIS backend (see media.routes.ts) which
  * proxies the file through using the same token.
  *
- * Folder layout: {EGNYTE_ROOT_FOLDER}/{inspectionId}/{sectionKey}/{photoId}.jpg
- * -- one folder per inspection, one subfolder per section (driveway,
- * description, paving_paths, ...), so photos are browsable in Egnyte itself
- * grouped exactly the way the inspection is. `inspectionId`/`sectionKey` are
- * optional on `uploadPhoto()`: when absent (a caller with no section context)
- * it falls back to the old flat `{root}/inspections/{photoId}.jpg` layout.
+ * Folder layout: {EGNYTE_ROOT_FOLDER}/{inspectionId}/{sectionKey parts.../}{photoId}.jpg
+ * -- one folder per inspection, then one subfolder per colon-separated part
+ * of `sectionKey` (e.g. "internal_areas:ceilings" -> internal_areas/ceilings/),
+ * so photos are browsable in Egnyte grouped by sub-area, not dumped into one
+ * folder per section. `inspectionId`/`sectionKey` are optional on
+ * `uploadPhoto()`: when absent (a caller with no section context) it falls
+ * back to the old flat `{root}/inspections/{photoId}.jpg` layout.
  *
  * The public `/api/v1/media/:id` URL stays a plain opaque id either way --
  * it never leaks the folder structure to clients -- because the `photos`
@@ -103,16 +104,71 @@ function safeSegment(raw: string): string {
   return raw.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 100);
 }
 
-/** A section key can be nested ("driveway:0:photos" for a damage-list instance's photos) -- the folder groups by the top-level section only. */
-function topLevelSection(sectionKey: string): string {
-  return safeSegment(sectionKey.split(':')[0] ?? sectionKey);
+/**
+ * A section key can be nested (e.g. "internal_areas:ceilings" for a photo
+ * captured on the Ceilings sub-area of Internal Areas, or
+ * "elevations:other_doors_ext" for the Other External Doors group) -- each
+ * colon-separated segment becomes its own Egnyte subfolder, so photos land
+ * grouped by sub-area rather than dumped into one flat per-section folder.
+ */
+function sectionFolderPath(sectionKey: string): string {
+  return sectionKey
+    .split(':')
+    .map(safeSegment)
+    .filter(Boolean)
+    .join('/');
 }
 
 function photoPath(id: string, inspectionId: string | undefined, sectionKey: string | undefined, suffix = ''): string {
   if (inspectionId && sectionKey) {
-    return `${env.EGNYTE_ROOT_FOLDER}/${safeSegment(inspectionId)}/${topLevelSection(sectionKey)}/${id}${suffix}`;
+    return `${env.EGNYTE_ROOT_FOLDER}/${safeSegment(inspectionId)}/${sectionFolderPath(sectionKey)}/${id}${suffix}`;
   }
   return `${env.EGNYTE_ROOT_FOLDER}/inspections/${id}${suffix}`;
+}
+
+/**
+ * Move an inspection's Egnyte folder from the draft-local id it was created
+ * under (see `photoPath`'s `inspectionId`) to a name based on the job
+ * number, once that's known at submit time -- so folders are browsable by
+ * job number in Egnyte instead of an opaque UUID. Non-fatal: a collision
+ * (two inspections landing on the same job number) or any other failure
+ * leaves photos under their existing, still perfectly valid folder rather
+ * than blocking submission.
+ */
+export async function renameInspectionFolder(oldId: string, jobNo: string): Promise<string | null> {
+  if (!isStorageEnabled()) return null;
+  const oldSegment = safeSegment(oldId);
+  const newSegment = safeSegment(jobNo);
+  if (!newSegment || newSegment === oldSegment) return null;
+
+  const oldFolder = `${env.EGNYTE_ROOT_FOLDER}/${oldSegment}`;
+  const newFolder = `${env.EGNYTE_ROOT_FOLDER}/${newSegment}`;
+
+  const res = await withRetry(() =>
+    fetch(`${egnyteBase()}/pubapi/v1/fs${encodeEgnytePath(oldFolder)}`, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'move', destination: newFolder }),
+    }),
+  );
+  if (res.status === 404) return null; // no photos were ever taken -- nothing to move
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    // eslint-disable-next-line no-console
+    console.error(`⚠️  Failed to rename Egnyte folder ${oldFolder} -> ${newFolder} (${res.status}): ${body}`);
+    return null;
+  }
+
+  // The photos table indexes each photo by its full Egnyte path -- repoint
+  // every one that lived under the old folder so future fetches still
+  // resolve to where the file actually moved to.
+  await prisma.$executeRaw`
+    UPDATE photos
+    SET "storageKey" = ${newFolder} || substring("storageKey" from ${oldFolder.length + 1}::int)
+    WHERE "storageKey" LIKE ${oldFolder + '/%'}
+  `;
+
+  return newSegment;
 }
 
 async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string): Promise<void> {
@@ -130,10 +186,16 @@ async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string)
 }
 
 /**
- * Upload one image; resizes it for the report/UI and returns its storage key
- * + this backend's proxy URL. `inspectionId`/`sectionKey`, when given, group
- * the file under that inspection's own section subfolder in Egnyte (see the
- * module doc above); omit them for a flat, ungrouped upload.
+ * Upload one image, keeping two copies in Egnyte on purpose (not the earlier
+ * accidental duplication, which this replaces with a deliberate, documented
+ * one): the untouched full-quality original for archival/future reference,
+ * and a resized/compressed copy for fast report and dashboard display. The
+ * public `/api/v1/media/:id` URL and the returned `storageKey` always point
+ * at the compressed copy -- that's what every in-app view renders, so
+ * nothing downstream needs to know the original exists. `inspectionId`/
+ * `sectionKey`, when given, group both files under that inspection's own
+ * section subfolder in Egnyte (see the module doc above); omit them for a
+ * flat, ungrouped upload.
  */
 export async function uploadPhoto(
   buffer: Buffer,
@@ -163,20 +225,25 @@ export async function uploadPhoto(
   const storageKey = photoPath(id, inspectionId, sectionKey, '.jpg');
   await uploadToEgnyte(storageKey, resized, 'image/jpeg');
 
-  // Keep the untouched original alongside it -- not linked anywhere in the
-  // app today, but preserved in case a full-resolution copy is ever needed.
-  // Non-fatal: the report copy above is what the app actually depends on.
+  // Full-quality original, alongside the compressed copy above. Non-fatal:
+  // every in-app view depends on the compressed copy having uploaded (which
+  // already happened by this point), not this one.
   try {
     await uploadToEgnyte(photoPath(id, inspectionId, sectionKey, `-original.${ext}`), buffer, contentType);
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('⚠️  Failed to store the original photo (resized report copy still saved).', err);
+    console.error('⚠️  Failed to store the full-quality original (compressed report copy still saved).', err);
   }
 
   // Index id -> real path so the public URL can stay a plain opaque id.
   await prisma.photo.create({ data: { id, storageKey, contentType: 'image/jpeg' } });
 
-  return { id, storageKey, url: `${env.PUBLIC_BASE_URL}/api/v1/media/${id}` };
+  // Relative, not `${PUBLIC_BASE_URL}/api/v1/media/${id}`: PUBLIC_BASE_URL is a
+  // Cloudflare quick tunnel that gets a new hostname every restart, so a
+  // baked-in absolute URL would go dead (and break every already-submitted
+  // photo) the next time the tunnel restarts. Clients resolve this path
+  // against whatever API host they're currently configured for.
+  return { id, storageKey, url: `/api/v1/media/${id}` };
 }
 
 /** Streams the resized report copy for a given photo id straight from Egnyte. Used by the media proxy route. */

@@ -71,6 +71,7 @@ async function submit(inspectorId: string, input: SubmitInspectionInput) {
     if (!assignment) throw ApiError.notFound('Assigned job not found');
     if (assignment.inspectorId !== inspectorId) throw ApiError.forbidden('This job is not assigned to you');
     const inspection = await prisma.inspection.update({ where: { id: input.assignmentId }, data });
+    if (input.jobNo) await renameEgnyteFolder(input.assignmentId, input.jobNo);
     return { inspection };
   }
 
@@ -83,7 +84,24 @@ async function submit(inspectorId: string, input: SubmitInspectionInput) {
     // web-created draft).
     data: { ...data, inspectorId, ...(input.id ? { id: input.id } : {}) },
   });
+  // The folder was created under that draft-local id the moment the first
+  // photo was taken, well before the job number was known -- now that it
+  // is, rename it so it's browsable in Egnyte by job number instead of a
+  // UUID. Skipped when `input.id` is absent (nothing was ever uploaded
+  // under a matching folder, e.g. a web-created draft).
+  if (input.jobNo && input.id) await renameEgnyteFolder(input.id, input.jobNo);
   return { inspection };
+}
+
+/** Non-fatal: a folder-rename failure (or an Egnyte outage) must never block submission. */
+async function renameEgnyteFolder(oldId: string, jobNo: string) {
+  try {
+    const { renameInspectionFolder } = await import('../../lib/storage');
+    await renameInspectionFolder(oldId, jobNo);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('⚠️  Failed to rename Egnyte folder to job number.', err);
+  }
 }
 
 /** Load a draft the given inspector owns, or explain why it can't be edited. */
