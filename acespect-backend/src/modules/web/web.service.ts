@@ -8,7 +8,7 @@ import {
   WEB_TO_INS_STATUS,
   WEB_TO_REV_STATUS,
 } from './web.serializers';
-import { InspectionUpdateInput, SectionUpdateInput } from './web.schemas';
+import { DamageUpdateInput, InspectionUpdateInput, SectionUpdateInput } from './web.schemas';
 
 const SECTIONS_INCLUDE = {
   sections: {
@@ -66,10 +66,30 @@ async function updateSection(id: string, input: SectionUpdateInput) {
             },
           }
         : {}),
+      // Replaced wholesale, not merged -- the reviewer's UI always sends the
+      // full current exclusion set, same as reportText above.
+      ...(input.excludedPhotoUrls !== undefined
+        ? { excludedPhotoUrls: input.excludedPhotoUrls as Prisma.InputJsonValue }
+        : {}),
     },
     include: { damages: { orderBy: { order: 'asc' } } },
   });
   return serializeSection(row);
+}
+
+/** Reviewer picks which of one damage record's own photos make the report. */
+async function updateDamage(id: string, input: DamageUpdateInput) {
+  const exists = await prisma.damage.findUnique({ where: { id }, select: { id: true } });
+  if (!exists) throw ApiError.notFound('Damage not found');
+
+  return prisma.damage.update({
+    where: { id },
+    data: {
+      ...(input.excludedPhotoUrls !== undefined
+        ? { excludedPhotoUrls: input.excludedPhotoUrls as Prisma.InputJsonValue }
+        : {}),
+    },
+  });
 }
 
 /** Status / notes / reviewer-assignment changes on an inspection. */
@@ -94,5 +114,6 @@ export const webService = {
   getInspection,
   listUsers,
   updateSection,
+  updateDamage,
   updateInspection,
 };

@@ -35,4 +35,11 @@ export const webController = {
     const inspection = await webService.updateInspection(id, req.body);
     res.status(200).json({ inspection });
   }),
+
+  updateDamage: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Damage id is required');
+    const damage = await webService.updateDamage(id, req.body);
+    res.status(200).json({ damage });
+  }),
 };

@@ -4,6 +4,7 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
 import { inspectionsService } from './inspections.service';
 import { fetchPhotoStream } from '../../lib/storage';
+import { generateInspectionReportPdf } from '../../lib/reportPdf';
 
 /** A photo URL is this backend's own `/api/v1/media/:id` proxy link -- pull the id back off the end of it. */
 function photoIdFromUrl(url: string): string | null {
@@ -61,6 +62,28 @@ export const inspectionsController = {
     if (!id) throw ApiError.badRequest('Inspection id is required');
     const inspection = await inspectionsService.getById(id);
     res.status(200).json({ inspection });
+  }),
+
+  // Renders the same `/report/:id` page a reviewer already sees into a real
+  // PDF file -- see lib/reportPdf.ts for why this reuses that page rather
+  // than a second, PDF-specific layout.
+  downloadReportPdf: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    // requireAuth already validated this same header; reusing the raw token
+    // (rather than re-issuing a new one) lets the headless page authenticate
+    // as this exact caller, with the exact same access they already have.
+    const authHeader = req.headers.authorization ?? '';
+    const token = authHeader.slice('Bearer '.length).trim();
+
+    const inspection = await inspectionsService.getById(id); // 404s early if the id is wrong, before paying for a browser launch
+    const pdf = await generateInspectionReportPdf(id, token);
+
+    const fileName = `${inspection.jobNo || id}-dilapidation-report.pdf`.replace(/[^a-z0-9.-]+/gi, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(pdf);
   }),
 
   // multipart/form-data with a single "photo" file → { id, storageKey, url }.

@@ -1,5 +1,6 @@
 import type { ReportHeader } from "../report";
 import { MetaRow, Para, reportTokens } from "./reportKit";
+import { AcespectLogo } from "../../components/AcespectLogo";
 
 /**
  * The Dilapidation Report front matter (cover), generated from Job Information.
@@ -13,6 +14,20 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
 
   return (
     <div style={{ fontFamily: reportTokens.font, color: reportTokens.ink, fontSize: `${fontSize}px`, lineHeight: 1.5 }}>
+      {!compact && (
+        // Hidden when printed/exported to PDF: the PDF pipeline's own
+        // per-page header (see acespect-backend/src/lib/reportPdf.ts)
+        // already puts this same logo on every page, cover included --
+        // showing both here would double it up on page 1. Still shown in
+        // the live browser view, which has no per-page header of its own.
+        <div className="screen-only" style={{ display: "flex", justifyContent: "flex-end", marginBottom: "24px" }}>
+          {/* `sm` is the variant meant for light/white backgrounds (navy wordmark) --
+              `md`/`lg` assume a dark hero background and render white text, which
+              disappears against the report's white page. */}
+          <AcespectLogo size="sm" />
+        </div>
+      )}
+
       {/* Client + references */}
       <div>
         <MetaRow label="Client" labelWidth={labelW} compact={compact}>
@@ -69,6 +84,27 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
           <Para style={{ margin: 0 }}>{r.purpose}</Para>
         </MetaRow>
       </div>
+
+      {/* Signature */}
+      {(r.signatureUrl || r.signatureName) && (
+        <div style={{ marginTop: compact ? "24px" : "48px" }}>
+          {r.signatureUrl && (
+            <img
+              src={r.signatureUrl}
+              alt="Signature"
+              style={{ height: compact ? "36px" : "56px", display: "block", marginBottom: "4px" }}
+            />
+          )}
+          {r.signatureName && (
+            <div style={{ fontWeight: 700, color: reportTokens.accent, fontSize: compact ? "0.95em" : "1.05em" }}>
+              {r.signatureName}
+            </div>
+          )}
+          {r.signatureTitle && (
+            <div style={{ color: reportTokens.inkMuted, fontSize: "0.85em" }}>{r.signatureTitle}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

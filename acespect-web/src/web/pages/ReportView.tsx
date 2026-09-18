@@ -1,13 +1,16 @@
 import { useNavigate, useParams } from "react-router";
 import { ArrowLeft, Printer } from "lucide-react";
 import type { FormSection } from "../mockData";
-import { buildReportHeader } from "../report";
+import { buildReportHeader, withExcludedPhotosRemoved } from "../report";
 import { useAppData } from "../data";
 import { ReportCover } from "../components/ReportCover";
 import { ReportDescription } from "../components/ReportDescription";
 import { ReportScope } from "../components/ReportScope";
 import { ReportConditions } from "../components/ReportConditions";
 import { ReportSection } from "../components/ReportSection";
+import { ReportFrontMatter } from "../components/ReportFrontMatter";
+import { ReportCrackTable } from "../components/ReportCrackTable";
+import { ReportPoolSpaDisclaimer } from "../components/ReportPoolSpaDisclaimer";
 import { Para, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
@@ -126,9 +129,19 @@ export function ReportView() {
         {/* Cover / front matter, generated from Job Information */}
         <ReportCover header={r} />
 
+        {/* Scope / Condition Definitions / Dilapidation Report Information */}
+        <div className="report-page-break" style={{ marginTop: "40px" }}>
+          <ReportFrontMatter />
+        </div>
+
+        {/* Crack Categorisation Table (AS4349.1-2007 Table E1) */}
+        <div className="report-page-break" style={{ marginTop: "40px" }}>
+          <ReportCrackTable />
+        </div>
+
         {/* Report body — approved section report text, written on approval */}
         {renderList.length > 0 ? (
-          <div style={{ marginTop: "40px" }}>
+          <div className="report-page-break" style={{ marginTop: "40px" }}>
             {renderList.map((item, i) =>
               item.type === "banner" ? (
                 <SectionBand key={item.label} compact={false}>
@@ -177,8 +190,12 @@ export function ReportView() {
             </div>
           </>
         ) : (
-          /* Every inspection category: description → photographs → cracks (described + imaged) */
-          <ReportSection section={s} />
+          /* Every inspection category: description → photographs → cracks (described + imaged).
+             Filtered first so any photo the reviewer excluded never reaches the printed report. */
+          <>
+            <ReportSection section={withExcludedPhotosRemoved(s)} />
+            {slug(s).startsWith("pool") && <ReportPoolSpaDisclaimer />}
+          </>
         )}
       </div>
     );

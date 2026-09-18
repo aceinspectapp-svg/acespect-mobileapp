@@ -1,5 +1,5 @@
-import type { Inspection } from "./mockData";
-import { getUser } from "./mockData";
+import type { FormSection, Inspection } from "./mockData";
+import { getReportSigner, getUser } from "./mockData";
 
 /** The front-matter of a Dilapidation Report, derived from Job Information. */
 export interface ReportHeader {
@@ -17,6 +17,9 @@ export interface ReportHeader {
   inspector: string;
   inspectorRegistration?: string;
   purpose: string;
+  signatureUrl?: string;
+  signatureName?: string;
+  signatureTitle?: string;
 }
 
 /** Standard boilerplate used when the Job Information section has no custom purpose. */
@@ -53,6 +56,85 @@ export const SITE_IMAGE_NOTE =
   "Please do not anchor images. Just insert them the same way as a photograph so they can be easily " +
   "sized and moved. (Admin: adjust photo size to 5.9cm for landscape & 5.2cm for portrait.)";
 
+/* ── Scope page: Condition Definitions + Dilapidation Report Information ── */
+
+export interface ConditionDefinition {
+  term: string;
+  description: string;
+}
+
+/** The 5-tier condition scale used across every color-select field in every template. */
+export const CONDITION_DEFINITIONS: ConditionDefinition[] = [
+  { term: "New", description: "Self explanatory." },
+  { term: "Satisfactory", description: "Generally good condition." },
+  { term: "Fair", description: "Starting to look like it needs maintenance." },
+  { term: "Average", description: "Functioning but needs maintenance and/or repairs within 6 months." },
+  { term: "Poor", description: "Needs repair or replacement now." },
+];
+
+export const DILAPIDATION_REPORT_INFORMATION: string[] = [
+  "This dilapidation report is the result of a visual inspection on the date noted on the report and is compiled by the Inspector noted on the report. The Inspector is a qualified Licensed Builder with extensive experience in the building industry.",
+  "The dilapidation report methodology involves a systematic visual review of each accessible room and area of the building, including internal walls, ceilings and floor surfaces.",
+  "The report highlights inspection findings such as damaged areas, cracks, popped nails, binding doors and windows, and any other matters which the Inspector feels are noteworthy or material. Where appropriate the crack categorisation table is used to categorise notable or significant cracks identified in this report.",
+  "The report findings are by exception — that is, only items which are noteworthy or significant are reported on and, where appropriate, photographed and compiled. The majority of findings reported are generally minor and cosmetic in nature, and are generally consistent with normal minor settling or movement in any building. Unless specifically noted otherwise, the findings reported on are not material or structural in nature.",
+  "In conducting the inspection, the Inspector may also take additional archive photos of the building, but only those photos of notable findings are contained in this report.",
+];
+
+/* ── Crack Categorisation Table (AS4349.1-2007 Table E1) ── */
+
+export interface CrackCategoryRow {
+  description: string;
+  widthLimit: string;
+  category: string;
+}
+
+export const CRACK_CATEGORISATION_TABLE_TITLE =
+  'Crack Categorisation Table (based on AS4349.1-2007 Table E1 — "Categorisation of Cracking in Masonry Structures")';
+
+export const CRACK_CATEGORISATION_TABLE: CrackCategoryRow[] = [
+  { description: "Hairline cracks", widthLimit: "<= 0.1 mm", category: "0" },
+  { description: "Fine cracks", widthLimit: "<= 1.0 mm", category: "1" },
+  { description: "Moderate cracks that are clearly noticeable", widthLimit: "<= 5.0 mm", category: "2" },
+  {
+    description: "Significant cracks that are of a notable concern",
+    widthLimit: "> 5.0 mm, <= 15.0 mm (or a number of cracks 3.0 mm or more in one group)",
+    category: "3",
+  },
+  {
+    description: "Significant cracks requiring extensive repair work",
+    widthLimit: "<=> 15.0 mm, <= 25 mm but also depends on number of cracks",
+    category: "4",
+  },
+];
+
+export const CRACK_CATEGORISATION_TABLE_FOOTNOTE =
+  '*Based on AS4349.1-2007 Table E1 — "Categorisation of Cracking in Masonry Structures"';
+
+/* ── Pool & Spa boilerplate, appended after the Pool / Spa section ── */
+
+export const POOL_SPA_DISCLAIMER_TITLE = "Pool and Spa Inspection Disclaimer";
+
+export const POOL_SPA_DISCLAIMER: string[] = [
+  "This inspection does not provide Pool or Spa certification or safety inspection services. The Building Inspector's comments on pools or spas are general observations only.",
+  "All pools and spas must be registered with the local council and certified for pool safety by an appropriately licensed building surveyor or registered pool inspector.",
+  "This inspection does not cover pool pumps, filters, solar panels, pool cleaning equipment, play equipment, etc.",
+  "It is recommended that all electrical circuits and equipment to the pool area be checked by a licensed electrician or pool specialist for function and performance.",
+];
+
+export const POOL_SAFETY_NOTE =
+  "Pool safety is important and requirements vary. Please seek advice from your local council.";
+
+/** "Residential House" → "House", a short cover-title form matching the industry-standard report layout this app follows. */
+function shortPropertyTypeLabel(propertyType: string): string {
+  const words = propertyType.trim().split(/\s+/);
+  return words[words.length - 1] || propertyType;
+}
+
+/** Draft until a report's sections have all been reviewed and approved. */
+function reportStatusSuffix(status: Inspection["status"]): string {
+  return status === "approved" ? "(FINAL)" : "(DRAFT)";
+}
+
 /** "2024-06-15" → "Thursday, 18 June, 2026" (en-AU style with comma before year). */
 export function formatLongDate(value: string): string {
   const d = new Date(value);
@@ -76,10 +158,13 @@ export function buildReportHeader(inspection: Inspection): ReportHeader {
   const jobInfo = inspection.sections.find((s) => (s.key ?? s.id).startsWith("job-info"));
   const f = jobInfo?.fields ?? {};
   const inspector = getUser(inspection.inspectorId);
+  const signer = getReportSigner();
+
+  const baseTitle = inspection.type === "Dilapidation" ? "Dilapidation Report" : `${inspection.type} Report`;
+  const reportTitle = `${baseTitle} - ${shortPropertyTypeLabel(inspection.propertyType)} ${reportStatusSuffix(inspection.status)}`;
 
   return {
-    reportTitle:
-      inspection.type === "Dilapidation" ? "Dilapidation Report" : `${inspection.type} Report`,
+    reportTitle,
     clientName: str(f.clientName, inspection.client),
     clientAttn: str(f.clientAttn) || undefined,
     clientEmail: str(f.clientEmail) || undefined,
@@ -93,5 +178,27 @@ export function buildReportHeader(inspection: Inspection): ReportHeader {
     inspector: str(f.inspector, inspector?.name ?? "—"),
     inspectorRegistration: str(f.inspectorRegistration) || undefined,
     purpose: str(f.purpose) || DEFAULT_PURPOSE,
+    signatureUrl: signer?.signatureUrl,
+    signatureName: signer?.name,
+    signatureTitle: signer?.signatureTitle,
+  };
+}
+
+/**
+ * A section with any reviewer-excluded photos already filtered out of
+ * `photos` and every damage's own `photos`. Used right before handing a
+ * section to `ReportSection` -- both the reviewer's live preview and the
+ * final printed report call this first, so the two always agree on exactly
+ * which photos are in the report.
+ */
+export function withExcludedPhotosRemoved(section: FormSection): FormSection {
+  const sectionExcluded = section.excludedPhotoUrls ?? [];
+  return {
+    ...section,
+    photos: section.photos.filter((url) => !sectionExcluded.includes(url)),
+    damages: section.damages.map((d) => {
+      const damageExcluded = d.excludedPhotoUrls ?? [];
+      return damageExcluded.length === 0 ? d : { ...d, photos: d.photos.filter((url) => !damageExcluded.includes(url)) };
+    }),
   };
 }

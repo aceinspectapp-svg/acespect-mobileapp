@@ -104,8 +104,13 @@ export const api = {
       reviewComment?: string;
       reportText?: string;
       fields?: Record<string, unknown>;
+      excludedPhotoUrls?: string[];
     },
   ) => req<{ section: unknown }>(`/web/sections/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+
+  /** A damage record's own photo-exclusion list -- see updateSection above for the same idea, one level down. */
+  updateDamage: (id: string, patch: { excludedPhotoUrls?: string[] }) =>
+    req<{ damage: unknown }>(`/web/damages/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
   updateInspection: (id: string, patch: { status?: InspectionStatus; notes?: string; reviewerId?: string | null }) =>
     req<{ inspection: Inspection }>(`/web/inspections/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),

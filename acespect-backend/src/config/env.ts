@@ -33,6 +33,11 @@ const schema = z.object({
   // (PUBLIC_BASE_URL + /api/v1/media/:id) that proxy to Postgres-stored
   // photo bytes -- see lib/storage.ts.
   PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),
+
+  // The web app's own origin -- the PDF pipeline points a headless browser
+  // at `${WEB_APP_URL}/report/:id` (the same page a reviewer already sees)
+  // rather than re-rendering the report a second time; see lib/reportPdf.ts.
+  WEB_APP_URL: z.string().default('http://localhost:5173'),
 });
 
 const parsed = schema.safeParse(process.env);
