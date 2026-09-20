@@ -13,10 +13,36 @@ function requireLineage(req: Request): { inspectionType: string; propertyType: s
   return { inspectionType, propertyType, sectionKey };
 }
 
+function requireProfile(req: Request): { inspectionType: string; propertyType: string } {
+  const { inspectionType, propertyType } = req.params;
+  if (!inspectionType || !propertyType) {
+    throw ApiError.badRequest('inspectionType and propertyType are required');
+  }
+  return { inspectionType, propertyType };
+}
+
 export const templatesController = {
   getActive: asyncHandler(async (req: Request, res: Response) => {
-    const template = await templatesService.getActive(requireLineage(req));
+    if (!req.user) throw ApiError.unauthorized();
+    const template = await templatesService.getActiveForInspector(req.user.id, requireLineage(req));
     res.status(200).json({ template: serializeTemplate(template) });
+  }),
+
+  listUpdates: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const updates = await templatesService.listPendingUpdates(req.user.id);
+    res.status(200).json({ updates });
+  }),
+
+  acceptUpdates: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const acceptances = await templatesService.acceptProfileUpdates(req.user.id, requireProfile(req));
+    res.status(200).json({ acceptances: acceptances.map((a) => ({ sectionKey: a.sectionKey, version: a.acceptedTemplate.version, acceptedAt: a.acceptedAt })) });
+  }),
+
+  adoption: asyncHandler(async (req: Request, res: Response) => {
+    const adoption = await templatesService.getAdoption(requireProfile(req));
+    res.status(200).json({ adoption });
   }),
 
   list: asyncHandler(async (req: Request, res: Response) => {

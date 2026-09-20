@@ -36,11 +36,12 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  refreshTokens    RefreshToken[]
-  inspections      Inspection[]         @relation("InspectorInspections")
-  assignedReviews  Inspection[]         @relation("ReviewerInspections")
-  reviewDecisions  ReviewDecision[]     @relation("ReviewerDecisions")
-  createdTemplates InspectionTemplate[]
+  refreshTokens       RefreshToken[]
+  inspections         Inspection[]         @relation("InspectorInspections")
+  assignedReviews     Inspection[]         @relation("ReviewerInspections")
+  reviewDecisions     ReviewDecision[]     @relation("ReviewerDecisions")
+  createdTemplates    InspectionTemplate[]
+  templateAcceptances TemplateAcceptance[]
 
   @@map("users")
 }
@@ -252,8 +253,38 @@ model InspectionTemplate {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
+  acceptances TemplateAcceptance[]
+
   @@index([inspectionType, propertyType, sectionKey, status])
   @@map("inspection_templates")
+}
+
+/// Per-inspector, per-section-lineage record of which template VERSION the
+/// inspector is currently on for NEW inspections. Publishing a new version
+/// never touches this table -- an inspector keeps rendering/using whatever
+/// they're pointed at here until they explicitly accept an update (see
+/// templates.service.ts `acceptProfileUpdates`). The first time an inspector
+/// ever fetches a lineage with no row here, one is auto-created pointing at
+/// whatever's currently published (nothing to migrate away from).
+model TemplateAcceptance {
+  id                 String              @id @default(uuid())
+  inspector          User                @relation(fields: [inspectorId], references: [id], onDelete: Cascade)
+  inspectorId        String
+  inspectionType     String
+  propertyType       String
+  sectionKey         String
+  acceptedTemplate   InspectionTemplate  @relation(fields: [acceptedTemplateId], references: [id])
+  acceptedTemplateId String
+  /// First time `GET /templates/updates` surfaced this as pending -- an
+  /// in-app "have they even seen it" signal for the admin adoption view,
+  /// distinct from `acceptedAt`.
+  notifiedAt         DateTime?
+  acceptedAt         DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@unique([inspectorId, inspectionType, propertyType, sectionKey])
+  @@index([inspectorId])
+  @@map("template_acceptances")
 }
 
 /// One review run for a given inspection version. The (inspectionId, version)
