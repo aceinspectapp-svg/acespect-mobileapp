@@ -218,4 +218,26 @@ export const api = {
     ),
   publishTemplate: (id: string) =>
     req<{ template: Template }>(`/templates/${id}/publish`, { method: "POST" }).then((d) => d.template),
+  getTemplateAdoption: (inspectionType: string, propertyType: string) =>
+    req<{ adoption: TemplateAdoptionRow[] }>(
+      `/templates/adoption/${encodeURIComponent(inspectionType)}/${encodeURIComponent(propertyType)}`,
+    ).then((d) => d.adoption),
 };
+
+/** One inspector's adoption status for a profile's set of section templates — see templates.service.ts `getAdoption`. */
+export interface TemplateAdoptionRow {
+  inspectorId: string;
+  name: string | null;
+  email: string;
+  status: "NOT_STARTED" | "UP_TO_DATE" | "UPDATE_AVAILABLE";
+  notifiedAt: string | null;
+  acceptedAt: string | null;
+  sections: {
+    sectionKey: string;
+    currentVersion: number | null;
+    latestVersion: number | null;
+    upToDate: boolean;
+    notifiedAt: string | null;
+    acceptedAt: string | null;
+  }[];
+}

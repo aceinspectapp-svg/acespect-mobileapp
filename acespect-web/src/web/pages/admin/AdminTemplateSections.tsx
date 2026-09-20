@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, Pencil, Plus, FileText } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, FileText, Users } from "lucide-react";
 import { PageShell, TableCard, StatusBadge } from "../../components/WebLayout";
 import { TEMPLATE_STATUS_CONFIG, type TemplateSummaryRow } from "../../mockData";
 import { TEMPLATABLE_SECTIONS, inspectionTitle, propertyTitle } from "../../constants/inspectionData";
@@ -70,16 +70,28 @@ export function AdminTemplateSections() {
       title={`${inspectionTitle(inspectionType)} — ${propertyTitle(propertyType)}`}
       subtitle="Every section's template for this profile"
       actions={
-        <button
-          onClick={() => navigate("/admin/templates")}
-          style={{
-            height: "32px", padding: "0 12px", borderRadius: "8px", background: "white",
-            border: "1px solid #e5e7eb", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
-            color: "#374151", fontSize: "12px", fontWeight: 600,
-          }}
-        >
-          <ArrowLeft size={14} /> Change Profile
-        </button>
+        <>
+          <button
+            onClick={() => navigate(`/admin/templates/${inspectionType}/${propertyType}/adoption`)}
+            style={{
+              height: "32px", padding: "0 12px", borderRadius: "8px", background: "white",
+              border: "1px solid #e5e7eb", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
+              color: "#374151", fontSize: "12px", fontWeight: 600,
+            }}
+          >
+            <Users size={14} /> View Adoption
+          </button>
+          <button
+            onClick={() => navigate("/admin/templates")}
+            style={{
+              height: "32px", padding: "0 12px", borderRadius: "8px", background: "white",
+              border: "1px solid #e5e7eb", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
+              color: "#374151", fontSize: "12px", fontWeight: 600,
+            }}
+          >
+            <ArrowLeft size={14} /> Change Profile
+          </button>
+        </>
       }
     >
       <TableCard headers={["Section", "Status", "Version", "Published", "Actions"]}>
