@@ -1,10 +1,10 @@
-import { Request, Response } from 'express';
 import { Readable } from 'node:stream';
 import { ZipArchive } from 'archiver';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
 import { inspectionsService } from './inspections.service';
 import { fetchPhotoStream } from '../../lib/storage';
+import { generateInspectionReportPdf } from '../../lib/reportPdf';
 
 /** A photo URL is this backend's own `/api/v1/media/:id` proxy link -- pull the id back off the end of it. */
 function photoIdFromUrl(url: string): string | null {
@@ -64,10 +64,45 @@ export const inspectionsController = {
     res.status(200).json({ inspection });
   }),
 
+  // Renders the same `/report/:id` page a reviewer already sees into a real
+  // PDF file -- see lib/reportPdf.ts for why this reuses that page rather
+  // than a second, PDF-specific layout.
+  downloadReportPdf: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    const authHeader = req.headers.authorization ?? '';
+    const token = authHeader.slice('Bearer '.length).trim();
+
+    const inspection = await inspectionsService.getById(id);
+    const pdf = await generateInspectionReportPdf(id, token);
+
+    const fileName = `${inspection.jobNo || id}-dilapidation-report.pdf`.replace(/[^a-z0-9.-]+/gi, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(pdf);
+  }),
+
   // multipart/form-data with a "photo" file, plus optional "inspectionId"/
   // "sectionKey" text fields (mobile always sends them; a caller with no
   // section context, e.g. an ad-hoc upload, can omit them for a flat,
   // ungrouped upload) → { id, storageKey, url }.
+  uploadPhoto: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const file = req.file;
+    if (!file) throw ApiError.badRequest('No photo file (field name must be "photo")');
+    const inspectionId = typeof req.body.inspectionId === 'string' ? req.body.inspectionId : undefined;
+    const sectionKey = typeof req.body.sectionKey === 'string' ? req.body.sectionKey : undefined;
+    const result = await inspectionsService.uploadPhoto(
+      file.buffer,
+      file.mimetype,
+      file.originalname,
+      inspectionId,
+      sectionKey,
+    );
+    res.status(201).json(result);
+  }),
+  
   uploadPhoto: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
     const file = req.file;

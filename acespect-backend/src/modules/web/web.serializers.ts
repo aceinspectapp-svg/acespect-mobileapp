@@ -64,6 +64,7 @@ function serializeDamage(d: Damage) {
     lengthMm: d.lengthMm,
     notes: d.notes,
     photos: d.photos ?? [],
+    excludedPhotoUrls: d.excludedPhotoUrls ?? [],
   };
 }
 
@@ -82,6 +83,7 @@ export function serializeSection(s: Section & { damages: Damage[] }) {
     answers: s.answers ?? null,
     damages: s.damages.map(serializeDamage),
     photos: s.photos ?? [],
+    excludedPhotoUrls: s.excludedPhotoUrls ?? [],
   };
 }
 

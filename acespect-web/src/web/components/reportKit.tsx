@@ -255,6 +255,66 @@ export function PhotoGrid({ photos, compact }: { photos: string[]; compact: bool
   );
 }
 
+/** A simple bordered data table (e.g. the Crack Categorisation Table) — nothing else in this report needs a real `<table>` yet. */
+export function Table({
+  columns,
+  rows,
+  compact = false,
+}: {
+  columns: string[];
+  rows: (string | ReactNode)[][];
+  compact?: boolean;
+}) {
+  return (
+    <table
+      style={{
+        width: "100%",
+        borderCollapse: "collapse",
+        margin: "8px 0 14px",
+        fontSize: compact ? "0.85em" : "0.95em",
+      }}
+    >
+      <thead>
+        <tr>
+          {columns.map((c, i) => (
+            <th
+              key={i}
+              style={{
+                textAlign: "left",
+                padding: "8px 10px",
+                borderBottom: `2px solid ${reportTokens.accent}`,
+                color: reportTokens.accent,
+                fontWeight: 700,
+              }}
+            >
+              {c}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i}>
+            {row.map((cell, j) => (
+              <td
+                key={j}
+                style={{
+                  padding: "8px 10px",
+                  borderBottom: `1px solid ${reportTokens.border}`,
+                  color: reportTokens.ink,
+                  verticalAlign: "top",
+                }}
+              >
+                {cell}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 /** Shared base text styles applied at the root of every report component. */
 export function reportTextStyle(compact: boolean, size?: { normal: string; compact: string }): React.CSSProperties {
   const s = size ?? { normal: "15px", compact: "12.5px" };

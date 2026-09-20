@@ -22,8 +22,11 @@ interface AppData {
       reviewComment?: string;
       reportText?: string;
       fields?: Record<string, unknown>;
+      excludedPhotoUrls?: string[];
     },
   ) => Promise<void>;
+  /** Same idea as patchSection, one level down -- a damage record's own photo-exclusion list. */
+  patchDamage: (inspectionId: string, damageId: string, patch: { excludedPhotoUrls?: string[] }) => Promise<void>;
   patchInspection: (id: string, patch: { status?: Inspection["status"]; notes?: string }) => Promise<void>;
   /** Inspector's own draft save -- replaces the section set. Refreshes the inspection on success. */
   saveInspectionDraft: (id: string, patch: Parameters<typeof api.updateInspectionDraft>[1]) => Promise<void>;
@@ -132,6 +135,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [replaceInspection],
   );
 
+  const patchDamage = useCallback<AppData["patchDamage"]>(
+    async (inspectionId, damageId, patch) => {
+      await api.updateDamage(damageId, patch);
+      await replaceInspection(inspectionId);
+    },
+    [replaceInspection],
+  );
+
   const patchInspection = useCallback<AppData["patchInspection"]>(
     async (id, patch) => {
       await api.updateInspection(id, patch);
@@ -170,6 +181,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     logout,
     refresh,
     patchSection,
+    patchDamage,
     patchInspection,
     saveInspectionDraft,
     finalizeInspection,

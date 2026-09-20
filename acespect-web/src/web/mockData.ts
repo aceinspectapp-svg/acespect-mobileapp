@@ -10,6 +10,9 @@ export interface User {
   avatar: string;
   phone?: string;
   region?: string;
+  /** The report cover's signature block, when this user is the one whose signature appears there (typically the admin/director). */
+  signatureUrl?: string;
+  signatureTitle?: string;
 }
 
 export interface DamageRecord {
@@ -21,6 +24,8 @@ export interface DamageRecord {
   lengthMm: number;
   notes: string;
   photos: string[];
+  /** Photo URLs from `photos` the reviewer has excluded from the generated report. */
+  excludedPhotoUrls?: string[];
 }
 
 export interface FormSection {
@@ -37,6 +42,8 @@ export interface FormSection {
   answers?: Record<string, unknown> | null;
   damages: DamageRecord[];
   photos: string[];
+  /** Photo URLs from `photos` the reviewer has excluded from the generated report. */
+  excludedPhotoUrls?: string[];
 }
 
 export interface Inspection {
@@ -143,7 +150,7 @@ export const TEMPLATE_STATUS_CONFIG: Record<TemplateStatus, { label: string; col
 
 /* ─── Users ─────────────────────────────────────────────────────── */
 export const USERS: User[] = [
-  { id: "u1", name: "Admin User",       email: "admin@acespect.com.au",    role: "admin",     avatar: "AU", region: "VIC" },
+  { id: "u1", name: "Admin User",       email: "admin@acespect.com.au",    role: "admin",     avatar: "AU", region: "VIC", signatureTitle: "Director" },
   { id: "u2", name: "James Thompson",   email: "james@acespect.com.au",    role: "inspector", avatar: "JT", phone: "0412 345 678", region: "VIC" },
   { id: "u3", name: "Priya Nair",       email: "priya@acespect.com.au",    role: "inspector", avatar: "PN", phone: "0423 456 789", region: "VIC" },
   { id: "u4", name: "Sarah Chen",       email: "sarah@acespect.com.au",    role: "reviewer",  avatar: "SC", region: "VIC" },
@@ -581,6 +588,11 @@ export const INSPECTIONS: Inspection[] = [
 /* ─── Helpers ────────────────────────────────────────────────────── */
 export function getUser(id: string): User | undefined {
   return USERS.find(u => u.id === id);
+}
+
+/** The signatory on every report cover -- the same person regardless of which inspector did the fieldwork, matching the reference report template. */
+export function getReportSigner(): User | undefined {
+  return USERS.find((u) => u.role === "admin");
 }
 
 export function getInspectionsByInspector(inspectorId: string): Inspection[] {
