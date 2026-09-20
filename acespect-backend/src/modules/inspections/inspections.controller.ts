@@ -1,3 +1,4 @@
+import { Request, Response } from 'express';
 import { Readable } from 'node:stream';
 import { ZipArchive } from 'archiver';
 import { asyncHandler } from '../../utils/asyncHandler';
@@ -87,22 +88,6 @@ export const inspectionsController = {
   // "sectionKey" text fields (mobile always sends them; a caller with no
   // section context, e.g. an ad-hoc upload, can omit them for a flat,
   // ungrouped upload) → { id, storageKey, url }.
-  uploadPhoto: asyncHandler(async (req: Request, res: Response) => {
-    if (!req.user) throw ApiError.unauthorized();
-    const file = req.file;
-    if (!file) throw ApiError.badRequest('No photo file (field name must be "photo")');
-    const inspectionId = typeof req.body.inspectionId === 'string' ? req.body.inspectionId : undefined;
-    const sectionKey = typeof req.body.sectionKey === 'string' ? req.body.sectionKey : undefined;
-    const result = await inspectionsService.uploadPhoto(
-      file.buffer,
-      file.mimetype,
-      file.originalname,
-      inspectionId,
-      sectionKey,
-    );
-    res.status(201).json(result);
-  }),
-  
   uploadPhoto: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
     const file = req.file;
