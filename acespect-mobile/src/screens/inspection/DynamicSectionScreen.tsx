@@ -15,6 +15,7 @@ import { InspectionDraftSelection } from '../../types/inspection';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
 import { getSectionTitle } from '../../constants/inspectionSections';
 import { getBaselineSections as fetchBaselineSections } from '../../services/inspectionApi';
+import { pinAllSectionTemplates } from '../../utils/pinAllSectionTemplates';
 
 /**
  * Every Post-Dilapidation job asks the same opinion of every section, on top
@@ -132,6 +133,8 @@ export function DynamicSectionScreen({
       inspectionType: typeDef?.title ?? selection.inspectionTypeId,
       propertyType: PROPERTY_LABELS[selection.propertyTypeId] ?? selection.propertyTypeId,
     });
+    // Snapshot every section's template up front -- see pinAllSectionTemplates.
+    pinAllSectionTemplates(draft, selection.inspectionTypeId, selection.propertyTypeId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

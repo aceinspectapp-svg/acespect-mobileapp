@@ -25,6 +25,13 @@ import {
   isWaitingForWifi,
 } from '../../services/syncManager';
 import { buildJobSetupDataFromDraft } from '../../utils/jobSetupFromDraft';
+import {
+  acceptProfileTemplateUpdates,
+  describeTemplateProfile,
+  getTemplateUpdates,
+  TemplateProfileUpdate,
+  templateUpdateSignature,
+} from '../../services/templateApi';
 
 const STEPS = [
   { label: 'Inspection Type' },
@@ -53,6 +60,68 @@ export function SelectInspectionTypeScreen({
   // waiting for the sync queue to upload them. See syncManager.ts.
   const [pendingQueue, setPendingQueue] = useState<QueuedSubmission[]>([]);
   useEffect(() => subscribeSyncQueue(setPendingQueue), []);
+
+  // Admin-published template versions not yet accepted. The banner below is
+  // the passive "anytime" access point (spec: inspector can accept later from
+  // Settings); the alert popup right after it is the ACTIVE notification --
+  // "New Inspection Template Available -- use it now or later?" -- fired once
+  // per distinct pending update, not on every re-focus of this screen.
+  const [templateUpdates, setTemplateUpdates] = useState<TemplateProfileUpdate[]>([]);
+  const alertedSignatures = useRef<Record<string, string>>({});
+  useFocusEffect(
+    useCallback(() => {
+      getTemplateUpdates()
+        .then((updates) => {
+          setTemplateUpdates(updates);
+          promptForNewUpdates(updates);
+        })
+        .catch(() => {});
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+
+  // Shows one Alert per not-yet-prompted profile update, one at a time (a
+  // second only appears after the first is dismissed) so multiple pending
+  // profiles don't stack. "Use Later" leaves it pending -- still visible in
+  // the banner and Settings > Template Updates, never forced. "Use Now"
+  // accepts it immediately; either way it's remembered as prompted so
+  // re-opening this screen doesn't ask again for the same update.
+  function promptForNewUpdates(updates: TemplateProfileUpdate[]) {
+    const unprompted = updates.filter(
+      (u) => alertedSignatures.current[`${u.inspectionType}:${u.propertyType}`] !== templateUpdateSignature(u),
+    );
+    const [next, ...rest] = unprompted;
+    if (!next) return;
+
+    const key = `${next.inspectionType}:${next.propertyType}`;
+    const label = describeTemplateProfile(next.inspectionType, next.propertyType);
+    Alert.alert(
+      'New Inspection Template Available',
+      `A new version of the ${label} template is available. Would you like to use it for your inspections now, or continue with your current version for now?`,
+      [
+        {
+          text: 'Use Later',
+          style: 'cancel',
+          onPress: () => {
+            alertedSignatures.current[key] = templateUpdateSignature(next);
+            if (rest.length > 0) promptForNewUpdates(rest);
+          },
+        },
+        {
+          text: 'Use Now',
+          onPress: () => {
+            alertedSignatures.current[key] = templateUpdateSignature(next);
+            acceptProfileTemplateUpdates(next.inspectionType, next.propertyType)
+              .then(() => getTemplateUpdates().then(setTemplateUpdates))
+              .catch(() => {})
+              .finally(() => {
+                if (rest.length > 0) promptForNewUpdates(rest);
+              });
+          },
+        },
+      ],
+    );
+  }
 
   // Whether a sync pass is currently running -- a pass can legitimately take
   // a while (each photo upload gets up to 120s, and an entry can hold
@@ -242,6 +311,16 @@ export function SelectInspectionTypeScreen({
             <Ionicons name="briefcase-outline" size={20} color={colors.accentBlueFg} />
             <Text style={styles.assignedBannerText}>
               {assignedCount} assigned job{assignedCount === 1 ? '' : 's'} waiting — tap to continue
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.accentBlueFg} />
+          </Pressable>
+        )}
+
+        {templateUpdates.length > 0 && (
+          <Pressable style={styles.assignedBanner} onPress={() => navigation.navigate('TemplateUpdates')}>
+            <Ionicons name="document-text-outline" size={20} color={colors.accentBlueFg} />
+            <Text style={styles.assignedBannerText}>
+              New inspection template{templateUpdates.length === 1 ? '' : 's'} available — tap to review
             </Text>
             <Ionicons name="chevron-forward" size={18} color={colors.accentBlueFg} />
           </Pressable>

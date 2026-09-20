@@ -1,4 +1,5 @@
 import { api } from './apiClient';
+import { INSPECTION_TYPES, PROPERTY_LABELS } from '../constants/inspectionData';
 
 export type TemplateFieldType =
   | 'text' | 'textarea' | 'numeric' | 'date'
@@ -136,4 +137,40 @@ export async function getActiveTemplateCached(
     if (cached) return cached;
     throw err;
   }
+}
+
+/** One profile (inspection type + property type) with at least one section the inspector hasn't accepted the latest published version of. */
+export interface TemplateProfileUpdate {
+  inspectionType: string;
+  propertyType: string;
+  pendingSections: { sectionKey: string; currentVersion: number; newVersion: number }[];
+}
+
+/** Profiles with a published version newer than what this inspector is currently accepted onto -- drives the home-screen banner and the Template Updates screen. */
+export async function getTemplateUpdates(): Promise<TemplateProfileUpdate[]> {
+  const { data } = await api.get<{ updates: TemplateProfileUpdate[] }>('/templates/updates');
+  return data.updates;
+}
+
+/** Accept every pending section update for one profile at once -- takes effect for inspections started AFTER this call, never an already-in-progress one. */
+export async function acceptProfileTemplateUpdates(
+  inspectionType: string,
+  propertyType: string,
+): Promise<void> {
+  await api.post(`/templates/updates/${inspectionType}/${propertyType}/accept`);
+}
+
+/** Human-readable name for a profile update, e.g. "Pre-Purchase — Residential House". */
+export function describeTemplateProfile(inspectionType: string, propertyType: string): string {
+  const typeDef = INSPECTION_TYPES.find((t) => t.id === inspectionType);
+  const propertyLabel = PROPERTY_LABELS[propertyType] ?? propertyType;
+  return `${typeDef?.title ?? inspectionType} — ${propertyLabel}`;
+}
+
+/** Stable key identifying one profile's pending update -- changes if which sections/versions are pending changes, so re-showing the "new template available" alert only happens for a genuinely new update, not a repeat of one already surfaced this session. */
+export function templateUpdateSignature(update: TemplateProfileUpdate): string {
+  return update.pendingSections
+    .map((s) => `${s.sectionKey}:${s.currentVersion}->${s.newVersion}`)
+    .sort()
+    .join(',');
 }
