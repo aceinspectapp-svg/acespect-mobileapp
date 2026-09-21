@@ -240,7 +240,10 @@ export function asString(v: AnswerValue): string {
   return typeof v === "string" ? v : "";
 }
 
-export function resolveInstances(field: TemplateField, value: AnswerValue): { label: string; scope: AnswerTree }[] {
+export function resolveInstances(
+  field: TemplateField,
+  value: AnswerValue,
+): { key?: string; label: string; scope: AnswerTree }[] {
   const repeat = field.repeat ?? { presentation: "strip" as const };
   const titleKey = repeat.titleFieldKey;
   const named = (scope: AnswerTree, fallback: string): string => {
@@ -255,12 +258,18 @@ export function resolveInstances(field: TemplateField, value: AnswerValue): { la
   const record = asAnswerTree(value) as unknown as Record<string, AnswerTree>;
   const fixed = repeat.fixedInstances ?? [];
   const seen = new Set(fixed.map((f) => f.key));
-  const out = fixed.map((f) => ({ label: named(record[f.key] ?? {}, f.label), scope: record[f.key] ?? {} }));
+  // `key` here is the fixed instance's own stable identity -- callers that
+  // write back an edit must key off *this*, not try to rediscover it by
+  // scanning `record` for a value `===` this scope object: a fixed instance
+  // with no data yet gets a freshly-allocated `{}` below, which is never
+  // reference-equal to anything already in `record`, so that reverse lookup
+  // silently fails (and the edit is dropped) for any instance not yet started.
+  const out = fixed.map((f) => ({ key: f.key, label: named(record[f.key] ?? {}, f.label), scope: record[f.key] ?? {} }));
   let extra = 0;
   for (const [key, scope] of Object.entries(record)) {
     if (seen.has(key)) continue;
     extra += 1;
-    out.push({ label: named(scope, `${field.label} ${fixed.length + extra}`), scope });
+    out.push({ key, label: named(scope, `${field.label} ${fixed.length + extra}`), scope });
   }
   return out;
 }

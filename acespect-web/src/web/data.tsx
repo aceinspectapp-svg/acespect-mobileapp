@@ -11,6 +11,11 @@ interface AppData {
   getInspectionsByInspector: (inspectorId: string) => Inspection[];
   getInspectionsForReviewer: (reviewerId: string) => Inspection[];
   getUser: (id: string) => User | undefined;
+  /** Admin-only: edit another user's profile (name/phone/region/license). Refreshes `users` on success. */
+  patchUser: (
+    id: string,
+    patch: { name?: string; phone?: string | null; region?: string | null; licenseNumber?: string | null },
+  ) => Promise<void>;
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
   refresh: () => Promise<void>;
@@ -32,6 +37,8 @@ interface AppData {
   saveInspectionDraft: (id: string, patch: Parameters<typeof api.updateInspectionDraft>[1]) => Promise<void>;
   /** Sends a draft for review -- one-way. Refreshes the inspection on success. */
   finalizeInspection: (id: string) => Promise<void>;
+  /** Inspector starts a brand-new draft from the web. Refreshes `inspections` and returns the new id. */
+  createInspection: (input: Parameters<typeof api.createInspection>[0]) => Promise<string>;
 }
 
 const Ctx = createContext<AppData | null>(null);
@@ -167,6 +174,22 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [replaceInspection],
   );
 
+  const patchUser = useCallback<AppData["patchUser"]>(async (id, patch) => {
+    const updated = await api.updateUser(id, patch);
+    setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
+  }, []);
+
+  const createInspection = useCallback<AppData["createInspection"]>(
+    async (input) => {
+      const { inspectionId } = await api.createInspection(input);
+      // Brand new, so `replaceInspection`'s map-in-place wouldn't add it --
+      // refetch the whole list instead.
+      await loadData();
+      return inspectionId;
+    },
+    [loadData],
+  );
+
   const value: AppData = {
     currentUser,
     loading,
@@ -177,12 +200,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     getInspectionsForReviewer: (reviewerId) =>
       inspections.filter((i) => i.reviewerId === reviewerId && i.status !== "draft"),
     getUser: (id) => users.find((u) => u.id === id),
+    patchUser,
     login,
     logout,
     refresh,
     patchSection,
     patchDamage,
     patchInspection,
+    createInspection,
     saveInspectionDraft,
     finalizeInspection,
   };

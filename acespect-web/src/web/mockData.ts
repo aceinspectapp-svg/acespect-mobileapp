@@ -10,6 +10,8 @@ export interface User {
   avatar: string;
   phone?: string;
   region?: string;
+  /** Inspector's license/registration number (e.g. DBU license) -- shown alongside their name in the reviewer pane and the report cover. */
+  licenseNumber?: string;
   /** The report cover's signature block, when this user is the one whose signature appears there (typically the admin/director). */
   signatureUrl?: string;
   signatureTitle?: string;

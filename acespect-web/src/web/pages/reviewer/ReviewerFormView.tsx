@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
-  ArrowLeft, CheckCircle, RotateCcw, Send, ChevronRight,
+  ArrowLeft, CheckCircle, RotateCcw, Send, ChevronRight, ChevronDown,
   Image as ImageIcon, FileText, AlertTriangle, Layers, Save,
 } from "lucide-react";
 import {
   STATUS_CONFIG,
   REVIEW_STATUS_CONFIG,
   type FormSection,
+  type Inspection,
   type SectionReviewStatus,
+  type User,
 } from "../../mockData";
 import { useAppData } from "../../data";
 import { StatusBadge } from "../../components/WebLayout";
@@ -17,9 +19,9 @@ import { ReportDescription } from "../../components/ReportDescription";
 import { ReportScope } from "../../components/ReportScope";
 import { ReportConditions } from "../../components/ReportConditions";
 import { ReportSection } from "../../components/ReportSection";
-import { buildReportHeader, withExcludedPhotosRemoved } from "../../report";
+import { buildReportHeader, DEFAULT_PURPOSE, withExcludedPhotosRemoved } from "../../report";
 import { SectionFieldView } from "../../components/SectionFieldView";
-import { ActiveTemplate, AnswerTree, fetchActiveTemplate } from "../../templateFields";
+import { ActiveTemplate, AnswerTree, TemplateFieldOption, fetchActiveTemplate } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { api, resolveMediaUrl } from "../../api";
 
@@ -139,6 +141,10 @@ function FieldsView({ section }: { section: FormSection }) {
 }
 
 /* ─── Job Information: editable field data (feeds the report header) ── */
+// Keys deliberately match buildReportHeader's own field names (report.ts) --
+// this form edits the report cover's override fields, not the inspector
+// template's own answer keys, so a value entered here always lands exactly
+// where the generated report reads it from.
 const JOB_INFO_FIELDS: { key: string; label: string; type: "text" | "email" | "date" | "textarea" }[] = [
   { key: "date", label: "Date", type: "date" },
   { key: "clientName", label: "Client Name", type: "text" },
@@ -168,33 +174,103 @@ const inputStyle: React.CSSProperties = {
   transition: "border-color 0.12s",
 };
 
+function asDraftString(v: unknown, fallback = ""): string {
+  if (v === undefined || v === null || v === "") return fallback;
+  if (Array.isArray(v)) return v.join(", ");
+  return String(v);
+}
+function asDraftArray(v: unknown, fallback: string[] = []): string[] {
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+  if (typeof v === "string" && v.trim()) return [v];
+  return fallback;
+}
+
+/**
+ * A field this form edits as free text by default, but whose template
+ * definition (job-info's own template, same one the inspector's app reads)
+ * says it's actually a select/multiselect -- "Weather" is the only current
+ * example. Detected generically, by key, rather than hardcoded, so any
+ * future job-info select field picks up the same treatment automatically.
+ */
+const SELECT_TYPES = new Set(["chip-multiselect", "tile-multiselect", "pill-select", "select-tiles", "color-select"]);
+
 function JobInfoFieldsForm({
   section,
+  inspection,
+  inspector,
+  template,
   onSave,
 }: {
   section: FormSection;
+  inspection: Inspection;
+  inspector: User | undefined;
+  template: ActiveTemplate | null | undefined;
   onSave: (fields: Record<string, unknown>) => Promise<void>;
 }) {
-  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [draft, setDraft] = useState<Record<string, string | string[]>>({});
+  // Snapshot of what `draft` was seeded to, so "dirty" reflects the
+  // reviewer's own edits rather than flipping true just because a fallback
+  // (e.g. inspection.jobNo standing in for an unset report override) differs
+  // from the literal, possibly-empty stored value.
+  const [baseline, setBaseline] = useState<Record<string, string | string[]>>({});
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
+  // Same fallback chain buildReportHeader (report.ts) applies when rendering
+  // the actual report, so what the reviewer sees here always matches what
+  // would be printed right now if they hit Submit without changing anything.
+  function seed(key: string): string | string[] {
+    const raw = (section.fields as Record<string, unknown>)[key];
+    switch (key) {
+      case "date":
+        return asDraftString(raw, inspection.date);
+      case "clientName":
+        return asDraftString(raw, inspection.client);
+      case "yourReference":
+      case "jobNo":
+        return asDraftString(raw, inspection.jobNo);
+      case "address":
+        return asDraftString(raw, [inspection.address, inspection.suburb].filter(Boolean).join(", "));
+      case "weather": {
+        // `section.fields.weather` is a flattened *display* string ("sunny,
+        // dry" -- built for the old plain-text report line), not the raw
+        // option codes a multi-select needs -- treating it as one option
+        // called "sunny, dry" left every checkbox unchecked. The raw codes
+        // live in `section.answers.weather`. Once a reviewer saves through
+        // this dropdown, `fields.weather` becomes a real array and takes
+        // over, same override precedence every other field here follows.
+        const fromAnswers = asDraftArray((section.answers as AnswerTree | null)?.weather);
+        return Array.isArray(raw) ? asDraftArray(raw, fromAnswers) : fromAnswers;
+      }
+      case "inspector":
+        return asDraftString(raw, inspector?.name ?? "");
+      case "inspectorRegistration":
+        return asDraftString(raw, inspector?.licenseNumber ?? "");
+      case "purpose":
+        return asDraftString(raw, DEFAULT_PURPOSE);
+      default:
+        return asDraftString(raw);
+    }
+  }
+
   // Reseed the draft whenever the reviewer switches to a different section.
   useEffect(() => {
-    setDraft(
-      Object.fromEntries(JOB_INFO_FIELDS.map(({ key }) => [key, formatFieldValue(section.fields[key] ?? "")])),
-    );
+    const seeded = Object.fromEntries(JOB_INFO_FIELDS.map(({ key }) => [key, seed(key)]));
+    setDraft(seeded);
+    setBaseline(seeded);
     setSavedAt(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section.id]);
 
   const dirty = JOB_INFO_FIELDS.some(
-    ({ key }) => (draft[key] ?? "") !== formatFieldValue(section.fields[key] ?? ""),
+    ({ key }) => JSON.stringify(draft[key] ?? "") !== JSON.stringify(baseline[key] ?? ""),
   );
 
   async function handleSave() {
     setSaving(true);
     try {
       await onSave(draft);
+      setBaseline(draft);
       setSavedAt(Date.now());
     } finally {
       setSaving(false);
@@ -203,32 +279,42 @@ function JobInfoFieldsForm({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "14px 16px" }}>
-      {JOB_INFO_FIELDS.map(({ key, label, type }) => (
-        <div key={key}>
-          <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>
-            {label}
-          </label>
-          {type === "textarea" ? (
-            <textarea
-              rows={3}
-              value={draft[key] ?? ""}
-              onChange={(e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }))}
-              style={{ ...inputStyle, resize: "vertical" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "#2563eb")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e7eb")}
-            />
-          ) : (
-            <input
-              type={type}
-              value={draft[key] ?? ""}
-              onChange={(e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }))}
-              style={inputStyle}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "#2563eb")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e7eb")}
-            />
-          )}
-        </div>
-      ))}
+      {JOB_INFO_FIELDS.map(({ key, label, type }) => {
+        const templateField = template?.fields.find((f) => f.key === key);
+        const isSelect = !!templateField && SELECT_TYPES.has(templateField.type);
+        return (
+          <div key={key}>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>
+              {label}
+            </label>
+            {isSelect ? (
+              <MultiSelectDropdown
+                options={templateField!.options ?? []}
+                value={asDraftArray(draft[key])}
+                onChange={(next) => setDraft((prev) => ({ ...prev, [key]: next }))}
+              />
+            ) : type === "textarea" ? (
+              <textarea
+                rows={3}
+                value={asDraftString(draft[key])}
+                onChange={(e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }))}
+                style={{ ...inputStyle, resize: "vertical" }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "#2563eb")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e7eb")}
+              />
+            ) : (
+              <input
+                type={type}
+                value={asDraftString(draft[key])}
+                onChange={(e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }))}
+                style={inputStyle}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "#2563eb")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e7eb")}
+              />
+            )}
+          </div>
+        );
+      })}
       <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px" }}>
         <button
           onClick={handleSave}
@@ -254,6 +340,90 @@ function JobInfoFieldsForm({
           <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: 600 }}>Saved</span>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A checkbox-list dropdown for a multi-select template field -- lets the
+ * reviewer change which of the template's own defined options are selected,
+ * instead of free-editing a comma-joined text string. Options and labels
+ * come straight from the field's template (the same one the inspector app
+ * renders), so the values offered here always match what the report can
+ * actually display.
+ */
+function MultiSelectDropdown({
+  options,
+  value,
+  onChange,
+}: {
+  options: TemplateFieldOption[];
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  function toggle(optionValue: string) {
+    onChange(value.includes(optionValue) ? value.filter((v) => v !== optionValue) : [...value, optionValue]);
+  }
+
+  const summary = value.length === 0
+    ? "Select…"
+    : value.map((v) => options.find((o) => o.value === v)?.label ?? v).join(", ");
+
+  return (
+    <div ref={rootRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          ...inputStyle,
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px",
+          cursor: "pointer", textAlign: "left",
+          color: value.length === 0 ? "#94a3b8" : "#1a2a4a",
+        }}
+      >
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</span>
+        <ChevronDown size={14} color="#94a3b8" style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.12s" }} />
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20,
+          background: "white", border: "1.5px solid #e5e7eb", borderRadius: "8px",
+          boxShadow: "0 8px 24px rgba(15,23,42,0.12)", padding: "6px", maxHeight: "240px", overflowY: "auto",
+        }}>
+          {options.map((opt) => {
+            const checked = value.includes(opt.value);
+            return (
+              <label
+                key={opt.value}
+                style={{
+                  display: "flex", alignItems: "center", gap: "8px", padding: "7px 8px", borderRadius: "6px",
+                  fontSize: "13px", color: "#1a2a4a", cursor: "pointer",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                <input type="checkbox" checked={checked} onChange={() => toggle(opt.value)} style={{ cursor: "pointer" }} />
+                {opt.label}
+              </label>
+            );
+          })}
+          {options.length === 0 && (
+            <p style={{ fontSize: "12px", color: "#94a3b8", padding: "6px 8px", margin: 0 }}>No options defined</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -829,6 +999,9 @@ export function ReviewerFormView() {
                       </div>
                       <JobInfoFieldsForm
                         section={selectedSection}
+                        inspection={inspection}
+                        inspector={getUser(inspection.inspectorId)}
+                        template={template}
                         onSave={(fields) => updateSectionFields(selectedSection.id, fields)}
                       />
                     </div>
@@ -959,7 +1132,7 @@ export function ReviewerFormView() {
                       padding: "16px 18px",
                       borderLeft: "3px solid #2563eb",
                     }}>
-                      <ReportCover header={buildReportHeader(inspection)} compact />
+                      <ReportCover header={buildReportHeader(inspection, getUser(inspection.inspectorId))} compact />
                     </div>
                   </div>
                 ) : (selectedSection.key ?? selectedSection.id).startsWith("description") ? (

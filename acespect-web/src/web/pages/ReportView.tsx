@@ -19,7 +19,7 @@ const slug = (s: Pick<FormSection, "id" | "key">): string => s.key ?? s.id;
 export function ReportView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getInspectionById, loading } = useAppData();
+  const { getInspectionById, getUser, loading } = useAppData();
   const inspection = id ? getInspectionById(id) : undefined;
 
   if (!inspection) {
@@ -30,7 +30,7 @@ export function ReportView() {
     );
   }
 
-  const r = buildReportHeader(inspection);
+  const r = buildReportHeader(inspection, getUser(inspection.inspectorId));
 
   // Body = non-cover sections the reviewer has APPROVED (real data from the backend).
   const bodySections = inspection.sections

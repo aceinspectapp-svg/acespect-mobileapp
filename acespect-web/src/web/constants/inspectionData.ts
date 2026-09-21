@@ -63,18 +63,26 @@ export function isValidCombo(inspectionType: string, propertyType: string): bool
   return INSPECTION_TYPES.find((t) => t.id === inspectionType)?.applicableProperties.includes(propertyType) ?? false;
 }
 
-/** The 12 real data-entry section keys that get templates (matches backend's TEMPLATABLE_SECTIONS). */
-export const TEMPLATABLE_SECTIONS: { key: string; name: string }[] = [
-  { key: "job-info", name: "Job Information" },
-  { key: "description", name: "Description & Overview" },
-  { key: "driveway", name: "Driveway" },
-  { key: "paving_paths", name: "Paving & Paths" },
-  { key: "fences", name: "Fences" },
-  { key: "retaining_walls", name: "Retaining Walls" },
-  { key: "garage_carport_sheds", name: "Garage / Carport / Sheds" },
-  { key: "pool_spa", name: "Pool / Spa" },
-  { key: "elevations", name: "Elevations" },
-  { key: "roof_chimneys", name: "Roof Covering & Chimneys" },
-  { key: "internal_areas", name: "Internal Areas" },
-  { key: "notes", name: "Notes / Post Project / Defects" },
+/**
+ * The 12 real data-entry section keys that get templates (matches backend's
+ * TEMPLATABLE_SECTIONS). `icon` is a display convenience -- not stored
+ * anywhere centrally today, sections just carry whatever emoji string was
+ * set when they were created (see acespect-backend/scripts/seedInspection.ts
+ * for the values already established for job-info/description/driveway/
+ * fences/internal_areas/notes; the rest are new, picked to stay distinct).
+ * Used to seed a freshly-created web draft's placeholder sections.
+ */
+export const TEMPLATABLE_SECTIONS: { key: string; name: string; icon: string }[] = [
+  { key: "job-info", name: "Job Information", icon: "📋" },
+  { key: "description", name: "Description & Overview", icon: "🏠" },
+  { key: "driveway", name: "Driveway", icon: "🚗" },
+  { key: "paving_paths", name: "Paving & Paths", icon: "🚶" },
+  { key: "fences", name: "Fences", icon: "🪵" },
+  { key: "retaining_walls", name: "Retaining Walls", icon: "🧱" },
+  { key: "garage_carport_sheds", name: "Garage / Carport / Sheds", icon: "🚪" },
+  { key: "pool_spa", name: "Pool / Spa", icon: "🏊" },
+  { key: "elevations", name: "Elevations", icon: "🏛️" },
+  { key: "roof_chimneys", name: "Roof Covering & Chimneys", icon: "🏚️" },
+  { key: "internal_areas", name: "Internal Areas", icon: "🛋️" },
+  { key: "notes", name: "Notes / Post Project / Defects", icon: "📝" },
 ];
