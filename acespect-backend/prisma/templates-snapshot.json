@@ -3026,7 +3026,7 @@
     "propertyType": "apartment",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 6,
+    "version": 9,
     "fields": [
       {
         "key": "jobNumber",
@@ -3067,47 +3067,37 @@
       },
       {
         "key": "weather",
-        "type": "chip-multiselect",
+        "type": "tile-multiselect",
         "label": "Weather",
         "order": 5,
         "options": [
           {
+            "icon": "sunny-outline",
             "label": "Sunny",
             "value": "sunny"
           },
           {
+            "icon": "cloudy-outline",
             "label": "Overcast",
             "value": "overcast"
           },
           {
+            "icon": "thermometer-outline",
             "label": "Dry",
             "value": "dry"
           },
           {
+            "icon": "partly-sunny-outline",
             "label": "Intermittent Showers",
             "value": "intermittent_showers"
           },
           {
+            "icon": "rainy-outline",
             "label": "Rain",
             "value": "rain"
           },
           {
-            "label": "Cloudy",
-            "value": "cloudy"
-          },
-          {
-            "label": "Windy",
-            "value": "windy"
-          },
-          {
-            "label": "Humid",
-            "value": "humid"
-          },
-          {
-            "label": "Wet Conditions",
-            "value": "wet_conditions"
-          },
-          {
+            "icon": "ellipsis-horizontal-circle-outline",
             "label": "Other",
             "value": "other"
           }
@@ -8588,7 +8578,7 @@
     "propertyType": "residential_house",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 6,
+    "version": 9,
     "fields": [
       {
         "key": "jobNumber",
@@ -8629,47 +8619,37 @@
       },
       {
         "key": "weather",
-        "type": "chip-multiselect",
+        "type": "tile-multiselect",
         "label": "Weather",
         "order": 5,
         "options": [
           {
+            "icon": "sunny-outline",
             "label": "Sunny",
             "value": "sunny"
           },
           {
+            "icon": "cloudy-outline",
             "label": "Overcast",
             "value": "overcast"
           },
           {
+            "icon": "thermometer-outline",
             "label": "Dry",
             "value": "dry"
           },
           {
+            "icon": "partly-sunny-outline",
             "label": "Intermittent Showers",
             "value": "intermittent_showers"
           },
           {
+            "icon": "rainy-outline",
             "label": "Rain",
             "value": "rain"
           },
           {
-            "label": "Cloudy",
-            "value": "cloudy"
-          },
-          {
-            "label": "Windy",
-            "value": "windy"
-          },
-          {
-            "label": "Humid",
-            "value": "humid"
-          },
-          {
-            "label": "Wet Conditions",
-            "value": "wet_conditions"
-          },
-          {
+            "icon": "ellipsis-horizontal-circle-outline",
             "label": "Other",
             "value": "other"
           }
@@ -20614,7 +20594,7 @@
     "propertyType": "apartment",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 6,
+    "version": 9,
     "fields": [
       {
         "key": "jobNumber",
@@ -20668,7 +20648,7 @@
       },
       {
         "key": "weather",
-        "type": "chip-multiselect",
+        "type": "tile-multiselect",
         "label": "Weather",
         "order": 7,
         "options": [
@@ -20681,6 +20661,7 @@
             "value": "partly_cloudy"
           },
           {
+            "icon": "cloudy-outline",
             "label": "Overcast",
             "value": "overcast"
           },
@@ -20689,26 +20670,12 @@
             "value": "light_rain"
           },
           {
+            "icon": "rainy-outline",
             "label": "Rain",
             "value": "rain"
           },
           {
-            "label": "Windy",
-            "value": "windy"
-          },
-          {
-            "label": "Cloudy",
-            "value": "cloudy"
-          },
-          {
-            "label": "Humid",
-            "value": "humid"
-          },
-          {
-            "label": "Wet Conditions",
-            "value": "wet_conditions"
-          },
-          {
+            "icon": "ellipsis-horizontal-circle-outline",
             "label": "Other",
             "value": "other"
           }
@@ -32573,7 +32540,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 8,
+    "version": 11,
     "fields": [
       {
         "key": "jobNumber",
@@ -32620,47 +32587,37 @@
       },
       {
         "key": "weather",
-        "type": "chip-multiselect",
+        "type": "tile-multiselect",
         "label": "Weather",
         "order": 6,
         "options": [
           {
+            "icon": "cloudy-outline",
             "label": "Overcast",
             "value": "overcast"
           },
           {
+            "icon": "thermometer-outline",
             "label": "Dry",
             "value": "dry"
           },
           {
+            "icon": "sunny-outline",
             "label": "Sunny",
             "value": "sunny"
           },
           {
+            "icon": "partly-sunny-outline",
             "label": "Intermittent showers",
             "value": "intermittent_showers"
           },
           {
+            "icon": "rainy-outline",
             "label": "Rain",
             "value": "rain"
           },
           {
-            "label": "Cloudy",
-            "value": "cloudy"
-          },
-          {
-            "label": "Windy",
-            "value": "windy"
-          },
-          {
-            "label": "Humid",
-            "value": "humid"
-          },
-          {
-            "label": "Wet Conditions",
-            "value": "wet_conditions"
-          },
-          {
+            "icon": "ellipsis-horizontal-circle-outline",
             "label": "Other",
             "value": "other"
           }
@@ -45278,7 +45235,7 @@
     "propertyType": "public_assets",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 10,
+    "version": 13,
     "fields": [
       {
         "key": "jobNumber",
@@ -45319,47 +45276,37 @@
       },
       {
         "key": "weather",
-        "type": "chip-multiselect",
+        "type": "tile-multiselect",
         "label": "Weather",
         "order": 5,
         "options": [
           {
+            "icon": "sunny-outline",
             "label": "Sunny",
             "value": "sunny"
           },
           {
+            "icon": "cloudy-outline",
             "label": "Overcast",
             "value": "overcast"
           },
           {
+            "icon": "thermometer-outline",
             "label": "Dry",
             "value": "dry"
           },
           {
+            "icon": "partly-sunny-outline",
             "label": "Intermittent Showers",
             "value": "intermittent_showers"
           },
           {
+            "icon": "rainy-outline",
             "label": "Rain",
             "value": "rain"
           },
           {
-            "label": "Cloudy",
-            "value": "cloudy"
-          },
-          {
-            "label": "Windy",
-            "value": "windy"
-          },
-          {
-            "label": "Humid",
-            "value": "humid"
-          },
-          {
-            "label": "Wet Conditions",
-            "value": "wet_conditions"
-          },
-          {
+            "icon": "ellipsis-horizontal-circle-outline",
             "label": "Other",
             "value": "other"
           }
@@ -52093,7 +52040,7 @@
     "propertyType": "residential_house",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 7,
+    "version": 10,
     "fields": [
       {
         "key": "jobNumber",
@@ -52133,47 +52080,37 @@
       },
       {
         "key": "weather",
-        "type": "chip-multiselect",
+        "type": "tile-multiselect",
         "label": "Weather",
         "order": 5,
         "options": [
           {
+            "icon": "cloudy-outline",
             "label": "Overcast",
             "value": "overcast"
           },
           {
+            "icon": "thermometer-outline",
             "label": "Dry",
             "value": "dry"
           },
           {
+            "icon": "sunny-outline",
             "label": "Sunny",
             "value": "sunny"
           },
           {
+            "icon": "partly-sunny-outline",
             "label": "Intermittent showers",
             "value": "intermittent_showers"
           },
           {
+            "icon": "rainy-outline",
             "label": "Rain",
             "value": "rain"
           },
           {
-            "label": "Cloudy",
-            "value": "cloudy"
-          },
-          {
-            "label": "Windy",
-            "value": "windy"
-          },
-          {
-            "label": "Humid",
-            "value": "humid"
-          },
-          {
-            "label": "Wet Conditions",
-            "value": "wet_conditions"
-          },
-          {
+            "icon": "ellipsis-horizontal-circle-outline",
             "label": "Other",
             "value": "other"
           }
@@ -58000,7 +57937,7 @@
     "propertyType": "apartment",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 6,
+    "version": 9,
     "fields": [
       {
         "key": "jobNumber",
@@ -58041,47 +57978,37 @@
       },
       {
         "key": "weather",
-        "type": "chip-multiselect",
+        "type": "tile-multiselect",
         "label": "Weather",
         "order": 5,
         "options": [
           {
+            "icon": "sunny-outline",
             "label": "Sunny",
             "value": "sunny"
           },
           {
+            "icon": "cloudy-outline",
             "label": "Overcast",
             "value": "overcast"
           },
           {
+            "icon": "thermometer-outline",
             "label": "Dry",
             "value": "dry"
           },
           {
+            "icon": "partly-sunny-outline",
             "label": "Intermittent Showers",
             "value": "intermittent_showers"
           },
           {
+            "icon": "rainy-outline",
             "label": "Rain",
             "value": "rain"
           },
           {
-            "label": "Cloudy",
-            "value": "cloudy"
-          },
-          {
-            "label": "Windy",
-            "value": "windy"
-          },
-          {
-            "label": "Humid",
-            "value": "humid"
-          },
-          {
-            "label": "Wet Conditions",
-            "value": "wet_conditions"
-          },
-          {
+            "icon": "ellipsis-horizontal-circle-outline",
             "label": "Other",
             "value": "other"
           }
@@ -63562,7 +63489,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 6,
+    "version": 9,
     "fields": [
       {
         "key": "jobNumber",
@@ -63603,47 +63530,37 @@
       },
       {
         "key": "weather",
-        "type": "chip-multiselect",
+        "type": "tile-multiselect",
         "label": "Weather",
         "order": 5,
         "options": [
           {
+            "icon": "sunny-outline",
             "label": "Sunny",
             "value": "sunny"
           },
           {
+            "icon": "cloudy-outline",
             "label": "Overcast",
             "value": "overcast"
           },
           {
+            "icon": "thermometer-outline",
             "label": "Dry",
             "value": "dry"
           },
           {
+            "icon": "partly-sunny-outline",
             "label": "Intermittent Showers",
             "value": "intermittent_showers"
           },
           {
+            "icon": "rainy-outline",
             "label": "Rain",
             "value": "rain"
           },
           {
-            "label": "Cloudy",
-            "value": "cloudy"
-          },
-          {
-            "label": "Windy",
-            "value": "windy"
-          },
-          {
-            "label": "Humid",
-            "value": "humid"
-          },
-          {
-            "label": "Wet Conditions",
-            "value": "wet_conditions"
-          },
-          {
+            "icon": "ellipsis-horizontal-circle-outline",
             "label": "Other",
             "value": "other"
           }
@@ -69124,7 +69041,7 @@
     "propertyType": "residential_house",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 6,
+    "version": 9,
     "fields": [
       {
         "key": "jobNumber",
@@ -69165,47 +69082,37 @@
       },
       {
         "key": "weather",
-        "type": "chip-multiselect",
+        "type": "tile-multiselect",
         "label": "Weather",
         "order": 5,
         "options": [
           {
+            "icon": "sunny-outline",
             "label": "Sunny",
             "value": "sunny"
           },
           {
+            "icon": "cloudy-outline",
             "label": "Overcast",
             "value": "overcast"
           },
           {
+            "icon": "thermometer-outline",
             "label": "Dry",
             "value": "dry"
           },
           {
+            "icon": "partly-sunny-outline",
             "label": "Intermittent Showers",
             "value": "intermittent_showers"
           },
           {
+            "icon": "rainy-outline",
             "label": "Rain",
             "value": "rain"
           },
           {
-            "label": "Cloudy",
-            "value": "cloudy"
-          },
-          {
-            "label": "Windy",
-            "value": "windy"
-          },
-          {
-            "label": "Humid",
-            "value": "humid"
-          },
-          {
-            "label": "Wet Conditions",
-            "value": "wet_conditions"
-          },
-          {
+            "icon": "ellipsis-horizontal-circle-outline",
             "label": "Other",
             "value": "other"
           }
@@ -82923,7 +82830,7 @@
     "propertyType": "apartment",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 7,
+    "version": 10,
     "fields": [
       {
         "key": "jobNumber",
@@ -82964,49 +82871,39 @@
       },
       {
         "key": "weather",
-        "type": "chip-multiselect",
+        "type": "tile-multiselect",
         "label": "Weather",
         "order": 5,
         "options": [
           {
+            "icon": "sunny-outline",
             "label": "Sunny",
             "value": "sunny"
           },
           {
+            "icon": "cloudy-outline",
             "label": "Overcast",
             "value": "overcast"
           },
           {
+            "icon": "thermometer-outline",
             "label": "Dry",
             "value": "dry"
           },
           {
+            "icon": "partly-sunny-outline",
             "label": "Intermittent Showers",
             "value": "intermittent_showers"
           },
           {
+            "icon": "rainy-outline",
             "label": "Rain",
             "value": "rain"
           },
           {
+            "icon": "ellipsis-horizontal-circle-outline",
             "label": "Other",
             "value": "other"
-          },
-          {
-            "label": "Cloudy",
-            "value": "cloudy"
-          },
-          {
-            "label": "Windy",
-            "value": "windy"
-          },
-          {
-            "label": "Humid",
-            "value": "humid"
-          },
-          {
-            "label": "Wet Conditions",
-            "value": "wet_conditions"
           }
         ],
         "required": true
@@ -103041,7 +102938,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 7,
+    "version": 10,
     "fields": [
       {
         "key": "jobNumber",
@@ -103082,49 +102979,39 @@
       },
       {
         "key": "weather",
-        "type": "chip-multiselect",
+        "type": "tile-multiselect",
         "label": "Weather",
         "order": 5,
         "options": [
           {
+            "icon": "sunny-outline",
             "label": "Sunny",
             "value": "sunny"
           },
           {
+            "icon": "cloudy-outline",
             "label": "Overcast",
             "value": "overcast"
           },
           {
+            "icon": "thermometer-outline",
             "label": "Dry",
             "value": "dry"
           },
           {
+            "icon": "partly-sunny-outline",
             "label": "Intermittent Showers",
             "value": "intermittent_showers"
           },
           {
+            "icon": "rainy-outline",
             "label": "Rain",
             "value": "rain"
           },
           {
+            "icon": "ellipsis-horizontal-circle-outline",
             "label": "Other",
             "value": "other"
-          },
-          {
-            "label": "Cloudy",
-            "value": "cloudy"
-          },
-          {
-            "label": "Windy",
-            "value": "windy"
-          },
-          {
-            "label": "Humid",
-            "value": "humid"
-          },
-          {
-            "label": "Wet Conditions",
-            "value": "wet_conditions"
           }
         ],
         "required": true
@@ -126712,7 +126599,7 @@
     "propertyType": "residential_house",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 7,
+    "version": 10,
     "fields": [
       {
         "key": "jobNumber",
@@ -126759,47 +126646,37 @@
       },
       {
         "key": "weather",
-        "type": "chip-multiselect",
+        "type": "tile-multiselect",
         "label": "Weather",
         "order": 6,
         "options": [
           {
+            "icon": "thermometer-outline",
             "label": "Dry",
             "value": "dry"
           },
           {
+            "icon": "sunny-outline",
             "label": "Sunny",
             "value": "sunny"
           },
           {
+            "icon": "cloudy-outline",
             "label": "Overcast",
             "value": "overcast"
           },
           {
+            "icon": "partly-sunny-outline",
             "label": "Intermittent showers",
             "value": "intermittent_showers"
           },
           {
+            "icon": "rainy-outline",
             "label": "Rain",
             "value": "rain"
           },
           {
-            "label": "Cloudy",
-            "value": "cloudy"
-          },
-          {
-            "label": "Windy",
-            "value": "windy"
-          },
-          {
-            "label": "Humid",
-            "value": "humid"
-          },
-          {
-            "label": "Wet Conditions",
-            "value": "wet_conditions"
-          },
-          {
+            "icon": "ellipsis-horizontal-circle-outline",
             "label": "Other",
             "value": "other"
           }

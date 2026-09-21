@@ -15,6 +15,7 @@ export type TemplateFieldType =
   | "select-tiles"
   | "color-select"
   | "chip-multiselect"
+  | "tile-multiselect"
   | "photos"
   | "repeating-group"
   | "damage-list";

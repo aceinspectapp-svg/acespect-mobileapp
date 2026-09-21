@@ -52,6 +52,49 @@ export function ChoiceTileGrid({ options, value, onChange, columns = 3 }: Choice
   );
 }
 
+interface ChoiceTileMultiGridProps {
+  options: TileOption[];
+  selected: string[];
+  onToggle: (value: string) => void;
+  /** Tiles per row. */
+  columns?: number;
+}
+
+/** Same tile-card look as ChoiceTileGrid, but multiple tiles can be active at once (e.g. weather). */
+export function ChoiceTileMultiGrid({ options, selected, onToggle, columns = 3 }: ChoiceTileMultiGridProps) {
+  return (
+    <View style={styles.grid}>
+      {options.map((opt) => {
+        const active = selected.includes(opt.value);
+        return (
+          <Pressable
+            key={opt.value}
+            onPress={() => onToggle(opt.value)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: active }}
+            style={({ pressed }) => [
+              styles.tile,
+              { width: `${100 / columns}%` },
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={[styles.inner, active && styles.innerSelected]}>
+              <Ionicons
+                name={opt.icon}
+                size={22}
+                color={active ? colors.tileSelectedBorder : colors.textSecondary}
+              />
+              <Text style={[styles.label, active && styles.labelSelected]} numberOfLines={1}>
+                {opt.label}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', margin: -spacing.xs },
   tile: { padding: spacing.xs },

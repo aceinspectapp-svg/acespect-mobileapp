@@ -153,6 +153,7 @@ function FieldRenderer(props: RendererProps) {
     case "color-select":
       return <ToggleField {...props} />;
     case "chip-multiselect":
+    case "tile-multiselect":
       return <ChipField {...props} />;
     case "photos":
       return <PhotosField {...props} />;

@@ -363,7 +363,7 @@ export function JobInformationScreen({
               counting it as "there's content" left an empty card showing
               with nothing inside it. */}
           {remainingFields.some((f) => isGateSatisfied(f, answers)) && (
-            <SectionCard title="ADDITIONAL DETAILS" accent="blue">
+            <SectionCard accent="blue">
               <FieldListRenderer
                 fields={remainingFields}
                 scope={answers}
