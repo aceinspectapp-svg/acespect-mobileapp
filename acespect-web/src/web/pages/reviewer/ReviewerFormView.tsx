@@ -21,7 +21,7 @@ import { buildReportHeader, withExcludedPhotosRemoved } from "../../report";
 import { SectionFieldView } from "../../components/SectionFieldView";
 import { ActiveTemplate, AnswerTree, fetchActiveTemplate } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
-import { api } from "../../api";
+import { api, resolveMediaUrl } from "../../api";
 
 /* ─── helpers ─────────────────────────────────────────────────────── */
 function formatFieldKey(key: string): string {
@@ -318,7 +318,7 @@ function DamageCard({ damage }: { damage: FormSection["damages"][0] }) {
             {damage.photos.map((url, i) => (
               <img
                 key={i}
-                src={url}
+                src={resolveMediaUrl(url)}
                 alt={`Damage photo ${i + 1}`}
                 style={{ width: "80px", height: "60px", objectFit: "cover", borderRadius: "10px", border: "1px solid #e5e7eb" }}
               />
@@ -342,7 +342,7 @@ function PhotosGrid({ photos }: { photos: string[] }) {
         {photos.map((url, i) => (
           <img
             key={i}
-            src={url}
+            src={resolveMediaUrl(url)}
             alt={`Photo ${i + 1}`}
             style={{
               width: "100%",

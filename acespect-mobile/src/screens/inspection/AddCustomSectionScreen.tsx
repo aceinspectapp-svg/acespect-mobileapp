@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { colors, spacing, typography } from '../../theme';
@@ -44,33 +44,40 @@ export function AddCustomSectionScreen({ navigation }: AppScreenProps<'AddCustom
     <View style={styles.root}>
       <StatusBar style="light" />
       <InspectionHeader title="Add Extra Structure" onBack={() => navigation.goBack()} />
-      <View style={styles.body}>
-        <Text style={styles.helper}>
-          Use this for anything on site that doesn't fit the standard sections — an extra
-          shed, a pergola, a granny flat, a room found during the walk-through.
-        </Text>
-        <AppTextInput
-          label="What is it?"
-          required
-          placeholder="e.g. Rear pergola, Bungalow, Store room"
-          value={name}
-          onChangeText={setName}
-          autoFocus
-        />
-        <Text style={styles.hint}>
-          You'll fill in material, condition, defects, photos and notes on the next screen —
-          the same as any other section.
-        </Text>
-      </View>
-      <SafeAreaView edges={['bottom']} style={styles.footer}>
-        <Button label="Continue" variant="primaryGradient" disabled={!trimmed} onPress={onCreate} />
-      </SafeAreaView>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoider}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <View style={styles.body}>
+          <Text style={styles.helper}>
+            Use this for anything on site that doesn't fit the standard sections — an extra
+            shed, a pergola, a granny flat, a room found during the walk-through.
+          </Text>
+          <AppTextInput
+            label="What is it?"
+            required
+            placeholder="e.g. Rear pergola, Bungalow, Store room"
+            value={name}
+            onChangeText={setName}
+            autoFocus
+          />
+          <Text style={styles.hint}>
+            You'll fill in material, condition, defects, photos and notes on the next screen —
+            the same as any other section.
+          </Text>
+        </View>
+        <SafeAreaView edges={['bottom']} style={styles.footer}>
+          <Button label="Continue" variant="primaryGradient" disabled={!trimmed} onPress={onCreate} />
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  keyboardAvoider: { flex: 1 },
   body: { flex: 1, padding: spacing.lg, gap: spacing.md },
   helper: { ...typography.bodySm, color: colors.textMuted },
   hint: { ...typography.caption, color: colors.textMuted },

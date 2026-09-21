@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import { InspectionDraftProvider } from './src/context/InspectionDraftContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { database } from './src/db';
+import { initSyncManager } from './src/services/syncManager';
 
 /**
  * App entry. Provider order: (database) -> safe area -> auth -> navigation.
@@ -15,6 +16,13 @@ import { database } from './src/db';
  * compatibility). A static top-level import here crashed the app on launch.
  */
 export default function App() {
+  // Kicks off the offline sync queue: flushes anything saved from a previous
+  // offline session, then watches for connectivity regained. See
+  // src/services/syncManager.ts.
+  useEffect(() => {
+    void initSyncManager();
+  }, []);
+
   const tree = (
     <SafeAreaProvider>
       <AuthProvider>

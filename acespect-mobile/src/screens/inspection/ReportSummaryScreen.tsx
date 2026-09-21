@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   PanResponder,
   Pressable,
@@ -13,12 +14,13 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
+import { useNetworkState } from 'expo-network';
 import { colors, radius, shadows, spacing, typography } from '../../theme';
 import { getSectionGroupsForProperty } from '../../constants/inspectionSections';
 import { INSPECTION_TYPES } from '../../constants/inspectionData';
 import { AppScreenProps } from '../../navigation/types';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
-import { uploadPhoto, submitInspection } from '../../services/inspectionApi';
+import { runSubmission, enqueueSubmission } from '../../services/syncManager';
 import { JobSetupData } from '../../types/jobSetup';
 
 const PROPERTY_LABELS: Record<string, string> = {
@@ -123,6 +125,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
   const [signed, setSigned] = useState(false);
   const draft = useInspectionDraft();
   const [submitting, setSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState('');
 
   // `route.params.data` has been seen arriving undefined here -- every
   // caller does pass it, but `navigate({..., merge: true})` folds new params
@@ -168,64 +171,97 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
 
   const canSubmit = confirmed === 'yes' && signed;
 
+  const net = useNetworkState();
+  const isOnline = net.isInternetReachable ?? net.isConnected ?? false;
+
   const onGenerate = async () => {
     if (!canSubmit || submitting) return;
     setSubmitting(true);
+
+    // Build the structured payload from the section draft once, with photos
+    // left as local `file://` URIs -- uploading happens inside
+    // `runSubmission`, shared with the offline sync queue, so both the "try
+    // now" and "queue for later" paths below can hand it the exact same
+    // payload. Built outside the try/catch so a failed live attempt can
+    // still enqueue this (fully-populated) payload rather than a half-built
+    // one reconstructed from scratch.
+    const inspectionId = draft.getFolderId();
+    const payload = draft.buildPayload((u) => u);
+    // Reuse the same id photos get uploaded under, so the created row's
+    // Egnyte folder matches without needing anything moved.
+    payload.id = inspectionId;
+    payload.inspectionType = inspectionTypeLabel;
+    payload.propertyType =
+      PROPERTY_LABELS[data.selection.propertyTypeId] ?? data.selection.propertyTypeId;
+    payload.jobNo = data.details.jobNumber;
+    payload.address = data.details.inspectionAddress;
+    payload.client = data.details.clientName;
+    payload.date = data.details.inspectionDate;
+    payload.overallProgress = pct;
+
+    if (!payload.sections.some((s) => s.key === 'job-info')) {
+      payload.sections.unshift({
+        key: 'job-info',
+        name: 'Job Information',
+        icon: '📋',
+        order: 0,
+        status: 'complete',
+        reportText: `Inspection conducted at ${data.details.inspectionAddress}.`,
+        fields: {
+          clientName: data.details.clientName,
+          jobNo: data.details.jobNumber,
+          date: data.details.inspectionDate,
+          weather: data.weather,
+          inspector: data.details.assignedInspector,
+        },
+      });
+    }
+
+    // After any outcome here, the inspector is done with this inspection --
+    // unwind the whole stack back to the very first screen so the next
+    // action is naturally "start a new inspection", not lingering on the
+    // just-submitted one's hub.
+    const goHome = () => navigation.popToTop();
+
+    // No signal at all -- don't bother attempting uploads that would just
+    // hang/time out. Save the finished inspection for the sync queue to pick
+    // up the moment connectivity returns (foreground-triggered; see
+    // syncManager.ts) and let the inspector move on to their next job.
+    if (!isOnline) {
+      await enqueueSubmission(payload);
+      draft.reset();
+      setSubmitting(false);
+      Alert.alert(
+        'Saved on this device',
+        "No connection right now — this inspection will upload automatically once you're back online.",
+        [{ text: 'OK', onPress: goHome }],
+      );
+      return;
+    }
+
     try {
-      // Upload every locally-captured photo → map local URI to its public URL.
-      const uris = draft.collectPhotoUris();
-      const urlByUri = new Map<string, string>();
-      for (const uri of uris) urlByUri.set(uri, await uploadPhoto(uri));
-
-      // Build the structured payload from the section draft, then fill top-level
-      // job fields + ensure a Job Information section from the job setup data.
-      const payload = draft.buildPayload((u) => urlByUri.get(u) ?? u);
-      payload.inspectionType = inspectionTypeLabel;
-      payload.propertyType =
-        PROPERTY_LABELS[data.selection.propertyTypeId] ?? data.selection.propertyTypeId;
-      payload.jobNo = data.details.jobNumber;
-      payload.address = data.details.inspectionAddress;
-      payload.client = data.details.clientName;
-      payload.date = data.details.inspectionDate;
-      payload.overallProgress = pct;
-
-      if (!payload.sections.some((s) => s.key === 'job-info')) {
-        payload.sections.unshift({
-          key: 'job-info',
-          name: 'Job Information',
-          icon: '📋',
-          order: 0,
-          status: 'complete',
-          reportText: `Inspection conducted at ${data.details.inspectionAddress}.`,
-          fields: {
-            clientName: data.details.clientName,
-            jobNo: data.details.jobNumber,
-            date: data.details.inspectionDate,
-            weather: data.weather,
-            inspector: data.details.assignedInspector,
-          },
-        });
-      }
-
-      const res = await submitInspection(payload);
+      setSubmitStatus(payload.sections.some((s) => (s.photos?.length ?? 0) > 0) ? 'Uploading photos…' : 'Saving inspection…');
+      const res = await runSubmission(payload);
       Alert.alert(
         'Saved to your dashboard',
         `Inspection saved as a draft (ref ${res.inspectionId.slice(0, 8)}…). Review and edit it on your dashboard, then finalize it to send for review.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              draft.reset();
-              navigation.navigate({ name: 'InspectionSections', params: { completedId: 'report_signoff', data }, merge: true });
-            },
-          },
-        ],
+        [{ text: 'OK', onPress: () => { draft.reset(); goHome(); } }],
       );
     } catch (err) {
+      // A live attempt failed partway (e.g. connection dropped mid-upload) --
+      // rather than a dead-end "Submit failed" with no recovery, save it the
+      // same way an offline submit would be and let the sync queue retry.
+      await enqueueSubmission(payload);
+      draft.reset();
       const e = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
-      Alert.alert('Submit failed', e?.response?.data?.error?.message ?? e?.message ?? 'Could not submit. Check your connection and try again.');
+      Alert.alert(
+        'Saved on this device',
+        `Couldn't reach the server (${e?.response?.data?.error?.message ?? e?.message ?? 'connection issue'}) — this inspection will upload automatically once you're back online.`,
+        [{ text: 'OK', onPress: goHome }],
+      );
     } finally {
       setSubmitting(false);
+      setSubmitStatus('');
     }
   };
 
@@ -308,6 +344,12 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
 
         {/* Inspector declaration — Confirm / Decline (no free text) */}
         <View style={styles.card}>
+          {submitting && (
+            <View style={styles.declOverlay}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.declOverlayText}>{submitStatus || 'Submitting…'}</Text>
+            </View>
+          )}
           <SectionTitle label="Inspector Declaration" />
           <Text style={styles.declText}>
             I confirm this report accurately reflects the conditions observed at the property on the date of inspection.
@@ -342,12 +384,18 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
         </View>
 
         {/* Submit */}
-        <Pressable onPress={onGenerate} disabled={!canSubmit} style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}>
-          <Ionicons name="document-text-outline" size={18} color={colors.white} />
-          <Text style={styles.submitText}>{canSubmit ? 'Save to Dashboard' : 'Confirm & Sign to Continue'}</Text>
+        <Pressable onPress={onGenerate} disabled={!canSubmit || submitting} style={[styles.submitBtn, (!canSubmit || submitting) && styles.submitBtnDisabled]}>
+          {submitting ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <Ionicons name="document-text-outline" size={18} color={colors.white} />
+          )}
+          <Text style={styles.submitText}>
+            {submitting ? (submitStatus || 'Submitting…') : canSubmit ? 'Save to Dashboard' : 'Confirm & Sign to Continue'}
+          </Text>
         </Pressable>
 
-        <Pressable onPress={() => navigation.goBack()} style={styles.draftBtn}>
+        <Pressable onPress={() => navigation.goBack()} disabled={submitting} style={styles.draftBtn}>
           <Text style={styles.draftText}>Save as Draft</Text>
         </Pressable>
       </ScrollView>
@@ -412,6 +460,20 @@ const styles = StyleSheet.create({
   pillTextPending: { color: colors.textMuted },
 
   /* Declaration */
+  declOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    zIndex: 10,
+  },
+  declOverlayText: { ...typography.bodySm, fontWeight: '700', color: colors.textSecondary },
   declText: { ...typography.bodySm, color: colors.textSecondary, lineHeight: 19, marginBottom: spacing.md },
   declBtn: {
     flex: 1,

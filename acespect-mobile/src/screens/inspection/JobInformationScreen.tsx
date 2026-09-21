@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,8 +12,9 @@ import { StatusRow } from '../../components/inspection/StatusRow';
 import { JobSetupData, PropertyUse } from '../../types/jobSetup';
 import { AppScreenProps } from '../../navigation/types';
 import { useSystemStatus } from '../../hooks/useSystemStatus';
+import { useAuth } from '../../context/AuthContext';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
-import { ActiveTemplate, getActiveTemplate, TemplateField } from '../../services/templateApi';
+import { ActiveTemplate, getActiveTemplateCached, TemplateField } from '../../services/templateApi';
 import { meetsAllRequiredFields } from '../../utils/flattenSectionToDraft';
 import { FieldListRenderer } from '../../components/inspection/fieldRenderers';
 import { isGateSatisfied, type AnswerTree, type AnswerValue } from '../../components/inspection/fieldRenderers/types';
@@ -36,6 +37,7 @@ export function JobInformationScreen({
   const { selection, fromHub } = route.params;
   const draft = useInspectionDraft();
   const systemStatus = useSystemStatus();
+  const { user } = useAuth();
 
   const [template, setTemplate] = useState<ActiveTemplate | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -75,7 +77,7 @@ export function JobInformationScreen({
       return;
     }
     setLoadError(false);
-    getActiveTemplate(selection.inspectionTypeId, selection.propertyTypeId, SECTION_KEY)
+    getActiveTemplateCached(selection.inspectionTypeId, selection.propertyTypeId, SECTION_KEY)
       .then((t) => {
         draft.setActiveTemplate(pinKey, t);
         setTemplate(t);
@@ -86,21 +88,34 @@ export function JobInformationScreen({
 
   // Every field starts blank for the inspector to fill in -- except dates,
   // which default to today, since an inspection is all but always dated the
-  // day it's carried out. The calendar stays available to change it.
+  // day it's carried out (calendar stays available to change it), and the
+  // inspector-name field, which several profiles mark `readOnly` -- with
+  // nothing else in the app ever writing a value into it, that combination
+  // left it permanently blank and permanently un-fillable, blocking Job
+  // Information forever since it's also `required` everywhere it appears.
+  // Seeded from the signed-in account instead; still editable wherever the
+  // template doesn't mark it readOnly, in case someone else is completing
+  // the form on the inspector's behalf.
   // (This used to seed from a MOCK_JOB_DETAILS sample job, which put a fake
   // inspector, client and address into every real inspection.)
   useEffect(() => {
     if (!template) return;
     const d = new Date();
     const todayIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const inspectorName = user?.name || user?.email || '';
     setAnswers((prev) => {
       const next = { ...prev };
       for (const f of template.fields) {
-        if (next[f.key] === undefined) next[f.key] = f.type === 'date' ? todayIso : '';
+        if (next[f.key] !== undefined) continue;
+        if (f.type === 'date') next[f.key] = todayIso;
+        else if (f.key === 'assignedInspector') next[f.key] = inspectorName;
+        else next[f.key] = '';
       }
+      draft.setAnswers(SECTION_KEY, next);
       return next;
     });
-  }, [template]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, user]);
 
   const setAnswer = (key: string) => (value: AnswerValue) =>
     setAnswers((a) => {
@@ -207,6 +222,14 @@ export function JobInformationScreen({
         <ProgressBar progress={0.5} />
       </View>
 
+      {/* Keeps the footer's Back/Next buttons above the keyboard instead of
+          hidden behind it -- wraps the scroll area and footer together so
+          both shift up as one when a text field is focused. */}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoider}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
       {!template ? (
         <View style={styles.loadingWrap}>
           {loadError ? (
@@ -217,7 +240,7 @@ export function JobInformationScreen({
                 variant="outline"
                 onPress={() => {
                   setLoadError(false);
-                  getActiveTemplate(selection.inspectionTypeId, selection.propertyTypeId, SECTION_KEY)
+                  getActiveTemplateCached(selection.inspectionTypeId, selection.propertyTypeId, SECTION_KEY)
                     .then((t) => {
                       draft.setActiveTemplate(pinKey, t);
                       setTemplate(t);
@@ -408,6 +431,7 @@ export function JobInformationScreen({
           </Text>
         )}
       </SafeAreaView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -423,6 +447,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
+  keyboardAvoider: { flex: 1 },
   body: { flex: 1 },
   bodyContent: { padding: spacing.lg, paddingBottom: spacing.xxxl },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },

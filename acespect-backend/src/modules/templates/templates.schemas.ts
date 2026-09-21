@@ -37,6 +37,11 @@ const templateFieldOptionSchema = z.object({
   label: z.string().min(1).max(200),
   icon: z.string().max(60).optional(),
   color: z.string().max(20).optional(),
+  // Chip-multiselect only: selecting this option clears every other
+  // selection on the same field (e.g. "No chimney present" alongside a list
+  // of chimney defects that can't apply if there's no chimney), and
+  // selecting any other option clears this one.
+  exclusive: z.boolean().optional(),
 });
 
 const fieldGateSchema = z.object({
@@ -147,6 +152,7 @@ export interface TemplateFieldOption {
   label: string;
   icon?: string;
   color?: string;
+  exclusive?: boolean;
 }
 export interface FieldGate {
   fieldKey: string;

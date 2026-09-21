@@ -1,5 +1,6 @@
 import type { ReportHeader } from "../report";
 import { MetaRow, Para, reportTokens } from "./reportKit";
+import { resolveMediaUrl } from "../api";
 
 // Acespect Pty Ltd trades AS Houspect Victoria -- this report should carry
 // that real trading identity, not the internal ACESPECT app's own logo.
@@ -101,9 +102,9 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
       {/* Front-of-property photo -- matches the reference report's cover, which embeds this photo directly below Purpose. */}
       {r.coverPhotoUrl && (
         <div style={{ marginTop: compact ? "16px" : "24px" }}>
-          <a href={r.coverPhotoUrl} target="_blank" rel="noopener noreferrer">
+          <a href={resolveMediaUrl(r.coverPhotoUrl)} target="_blank" rel="noopener noreferrer">
             <img
-              src={r.coverPhotoUrl}
+              src={resolveMediaUrl(r.coverPhotoUrl)}
               alt="Front of property"
               style={{
                 width: compact ? "160px" : "260px",

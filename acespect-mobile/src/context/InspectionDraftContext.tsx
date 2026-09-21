@@ -1,6 +1,8 @@
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef } from 'react';
+import * as Crypto from 'expo-crypto';
 import type { ActiveTemplate } from '../services/templateApi';
 import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
+import { DraftSnapshot, clearDraftSnapshot, saveDraftSnapshot } from '../services/offlineStorage';
 
 /**
  * In-memory draft of the inspection being filled. Each section screen writes its
@@ -41,6 +43,13 @@ export interface DraftTop {
    *  the wizard's InspectionDraftSelection (today: Job Information). */
   inspectionTypeId?: string;
   propertyTypeId?: string;
+  /** This draft's own id, generated the moment it starts (well before
+   *  submit) — used as the Egnyte inspection folder for every photo
+   *  uploaded along the way, and sent as `id` at submit time so the created
+   *  row's id matches the folder those photos already live under. A
+   *  Post-Dilapidation job picked up via `assignmentId` uses that instead
+   *  (see `folderId` below) since its row already exists. */
+  draftId: string;
   jobNo?: string;
   address?: string;
   suburb?: string;
@@ -61,6 +70,10 @@ export interface DraftTop {
 }
 
 export interface SubmitPayload extends DraftTop {
+  /** The backend's Inspection.id to create (or reuse) this row under — set
+   *  at submit time from `getFolderId()`, matching the Egnyte folder every
+   *  photo was already uploaded into along the way. */
+  id?: string;
   sections: DraftSection[];
 }
 
@@ -77,6 +90,10 @@ interface DraftValue {
   reset: () => void;
   /** All local photo URIs across sections + damages + the registry (to upload). */
   collectPhotoUris: () => string[];
+  /** Same set as `collectPhotoUris`, each tagged with its top-level section key — for uploading into that section's own Egnyte folder. */
+  collectPhotoUrisBySection: () => { sectionKey: string; uri: string }[];
+  /** The id every photo for this draft is (or should be) uploaded under in Egnyte — the assigned job's existing row id if picked up from the assigned list, else this draft's own generated id. */
+  getFolderId: () => string;
   /** Build the submit payload, mapping each local photo URI via `resolve`. */
   buildPayload: (resolve: (uri: string) => string) => SubmitPayload;
   /**
@@ -107,6 +124,10 @@ interface DraftValue {
    */
   getBaselineSections: () => BaselineSectionRef[] | null;
   setBaselineSections: (sections: BaselineSectionRef[]) => void;
+  /** Replace the entire in-memory draft with a persisted snapshot (see
+   *  `offlineStorage.ts`) — used to resume an inspection left in progress
+   *  from a previous app session, offline or not. */
+  hydrateFromSnapshot: (snapshot: DraftSnapshot) => void;
 }
 
 /** Local mirror of services/inspectionApi.ts's BaselineSection -- kept separate to avoid a circular import (that module imports SubmitPayload from this file). */
@@ -127,22 +148,48 @@ export function useInspectionDraft(): DraftValue {
 }
 
 export function InspectionDraftProvider({ children }: { children: React.ReactNode }) {
-  const topRef = useRef<DraftTop>({ inspectionType: 'Dilapidation', propertyType: 'Residential House' });
+  const topRef = useRef<DraftTop>({
+    inspectionType: 'Dilapidation',
+    propertyType: 'Residential House',
+    draftId: Crypto.randomUUID(),
+  });
   const sectionsRef = useRef<Record<string, DraftSection>>({});
   const photosRef = useRef<Record<string, string[]>>({});
   const templatesRef = useRef<Record<string, ActiveTemplate>>({});
   const baselineSectionsRef = useRef<BaselineSectionRef[] | null>(null);
   const answersRef = useRef<Record<string, AnswerTree>>({});
 
+  // Debounced auto-save: every mutation schedules a snapshot write a moment
+  // later (coalescing rapid-fire changes, e.g. typing) rather than hitting
+  // AsyncStorage on every keystroke. This is what makes a force-quit or
+  // crash mid-inspection resumable instead of losing everything, since the
+  // rest of this draft otherwise lives only in these refs.
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const schedulePersist = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const snapshot: DraftSnapshot = {
+        top: topRef.current,
+        sections: sectionsRef.current,
+        photos: photosRef.current,
+        answers: answersRef.current,
+        templates: templatesRef.current,
+      };
+      void saveDraftSnapshot(snapshot);
+    }, 800);
+  }, []);
+
   const setTop = useCallback((patch: Partial<DraftTop>) => {
     topRef.current = { ...topRef.current, ...patch };
-  }, []);
+    schedulePersist();
+  }, [schedulePersist]);
 
   const getTop = useCallback(() => topRef.current, []);
 
   const setSection = useCallback((section: DraftSection) => {
     sectionsRef.current = { ...sectionsRef.current, [section.key]: section };
-  }, []);
+    schedulePersist();
+  }, [schedulePersist]);
 
   const getSection = useCallback((key: string) => sectionsRef.current[key], []);
 
@@ -151,15 +198,30 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
   const addPhoto = useCallback((sectionKey: string, uri: string) => {
     const cur = photosRef.current[sectionKey] ?? [];
     photosRef.current = { ...photosRef.current, [sectionKey]: [...cur, uri] };
-  }, []);
+    schedulePersist();
+  }, [schedulePersist]);
 
   const reset = useCallback(() => {
-    topRef.current = { inspectionType: 'Dilapidation', propertyType: 'Residential House' };
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    topRef.current = {
+      inspectionType: 'Dilapidation',
+      propertyType: 'Residential House',
+      draftId: Crypto.randomUUID(),
+    };
     sectionsRef.current = {};
     photosRef.current = {};
     templatesRef.current = {};
     answersRef.current = {};
     baselineSectionsRef.current = null;
+    void clearDraftSnapshot();
+  }, []);
+
+  const hydrateFromSnapshot = useCallback((snapshot: DraftSnapshot) => {
+    topRef.current = snapshot.top;
+    sectionsRef.current = snapshot.sections;
+    photosRef.current = snapshot.photos;
+    answersRef.current = snapshot.answers;
+    templatesRef.current = snapshot.templates;
   }, []);
 
   const getActiveTemplate = useCallback(
@@ -169,7 +231,8 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
 
   const setActiveTemplate = useCallback((sectionKey: string, template: ActiveTemplate) => {
     templatesRef.current = { ...templatesRef.current, [sectionKey]: template };
-  }, []);
+    schedulePersist();
+  }, [schedulePersist]);
 
   const getBaselineSections = useCallback(() => baselineSectionsRef.current, []);
   const setBaselineSections = useCallback((sections: BaselineSectionRef[]) => {
@@ -183,7 +246,8 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
 
   const setAnswers = useCallback((sectionKey: string, answers: AnswerTree) => {
     answersRef.current = { ...answersRef.current, [sectionKey]: answers };
-  }, []);
+    schedulePersist();
+  }, [schedulePersist]);
 
   // Photos registered under a section key or any "key:n" sub-key.
   const photosForSection = useCallback((key: string): string[] => {
@@ -201,6 +265,27 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     });
     return [...uris].filter((u) => u.startsWith('file:'));
   }, []);
+
+  const collectPhotoUrisBySection = useCallback((): { sectionKey: string; uri: string }[] => {
+    const seen = new Set<string>();
+    const out: { sectionKey: string; uri: string }[] = [];
+    const add = (sectionKey: string, uri: string) => {
+      if (!uri.startsWith('file:') || seen.has(uri)) return;
+      seen.add(uri);
+      // photosRef is keyed by the field's full nesting path (e.g.
+      // "driveway:0:photos" for a damage-list instance's photos) — the
+      // Egnyte folder groups by the top-level section only.
+      out.push({ sectionKey: sectionKey.split(':')[0] ?? sectionKey, uri });
+    };
+    Object.entries(photosRef.current).forEach(([key, arr]) => arr.forEach((u) => add(key, u)));
+    Object.values(sectionsRef.current).forEach((s) => {
+      (s.photos ?? []).forEach((u) => add(s.key, u));
+      (s.damages ?? []).forEach((d) => (d.photos ?? []).forEach((u) => add(s.key, u)));
+    });
+    return out;
+  }, []);
+
+  const getFolderId = useCallback((): string => topRef.current.assignmentId ?? topRef.current.draftId, []);
 
   const buildPayload = useCallback(
     (resolve: (uri: string) => string): SubmitPayload => ({
@@ -234,6 +319,8 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       addPhoto,
       reset,
       collectPhotoUris,
+      collectPhotoUrisBySection,
+      getFolderId,
       buildPayload,
       getActiveTemplate,
       setActiveTemplate,
@@ -241,6 +328,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       setAnswers,
       getBaselineSections,
       setBaselineSections,
+      hydrateFromSnapshot,
     }),
     [
       setTop,
@@ -251,6 +339,8 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       addPhoto,
       reset,
       collectPhotoUris,
+      collectPhotoUrisBySection,
+      getFolderId,
       buildPayload,
       getActiveTemplate,
       setActiveTemplate,
@@ -258,6 +348,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       setAnswers,
       getBaselineSections,
       setBaselineSections,
+      hydrateFromSnapshot,
     ],
   );
 

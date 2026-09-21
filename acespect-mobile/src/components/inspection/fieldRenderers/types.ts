@@ -26,6 +26,24 @@ export interface FieldRendererProps {
    * "Damages"). Optional so existing renderers that ignore it are unaffected.
    */
   scope?: AnswerTree;
+  /**
+   * True when THIS field is currently a required-but-unfilled gap -- set by
+   * `FieldListRenderer` (which has every sibling, needed to resolve
+   * either/or `requiredGroup`s) right before rendering each field. Leaf
+   * renderers use it to draw a red outline; only meaningful once
+   * `showMissing` (below) has turned highlighting on in the first place.
+   */
+  missing?: boolean;
+  /**
+   * Turns the red-outline-on-incomplete-fields behavior on for this render
+   * pass -- off by default (a fresh section shouldn't look like it's
+   * already full of errors), turned on by `DynamicSectionScreen` once the
+   * inspector has actually tried to leave an incomplete section. Threaded
+   * through every container renderer (repeating-group, damage-list, the
+   * section-nav modal, ...) purely so their own nested `FieldListRenderer`
+   * calls can keep computing `missing` for fields at every depth.
+   */
+  showMissing?: boolean;
 }
 
 /**

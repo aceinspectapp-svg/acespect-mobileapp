@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { resolveMediaUrl } from "../api";
 
 /**
  * Shared visual language for the generated inspection report — one modern,
@@ -241,9 +242,9 @@ export function PhotoGrid({ photos, compact }: { photos: string[]; compact: bool
       }}
     >
       {photos.map((url, i) => (
-        <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+        <a key={i} href={resolveMediaUrl(url)} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
           <img
-            src={url}
+            src={resolveMediaUrl(url)}
             alt=""
             style={{
               width: "100%",

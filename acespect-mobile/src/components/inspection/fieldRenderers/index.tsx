@@ -32,11 +32,13 @@ export function FieldListRenderer({
   scope,
   onChange,
   path,
+  showMissing,
 }: {
   fields: TemplateField[];
   scope: AnswerTree;
   onChange: (key: string, value: AnswerValue) => void;
   path: string[];
+  showMissing?: boolean;
 }) {
   const visible = [...fields].filter((f) => isGateSatisfied(f, scope)).sort((a, b) => a.order - b.order);
   let lastLetter: string | undefined;
@@ -62,12 +64,31 @@ export function FieldListRenderer({
               onChange={(v) => onChange(field.key, v)}
               path={[...path, field.key]}
               scope={scope}
+              missing={!!showMissing && isFieldMissing(field, visible, scope)}
+              showMissing={showMissing}
             />
           </React.Fragment>
         );
       })}
     </>
   );
+}
+
+/**
+ * Whether `field` is a currently-unmet required field within `siblings` (the
+ * full sibling list at this level, needed to resolve either/or
+ * `requiredGroup`s the same way `meetsAllRequiredFields` does) against
+ * `scope`. A gated-off field is never "missing" -- it isn't asking anything
+ * right now.
+ */
+function isFieldMissing(field: TemplateField, siblings: TemplateField[], scope: AnswerTree): boolean {
+  if (!field.required) return false;
+  if (!isGateSatisfied(field, scope)) return false;
+  if (field.requiredGroup) {
+    const group = siblings.filter((f) => f.requiredGroup === field.requiredGroup);
+    return !group.some((f) => isAnswered(scope[f.key]));
+  }
+  return !isAnswered(scope[field.key]);
 }
 
 function asAnswerTree(v: AnswerValue): AnswerTree {
@@ -88,12 +109,14 @@ export function SectionNavRenderer({
   scope,
   onChange,
   path,
+  showMissing,
 }: {
   fields: TemplateField[];
   layout: TemplateLayout;
   scope: AnswerTree;
   onChange: (key: string, value: AnswerValue) => void;
   path: string[];
+  showMissing?: boolean;
 }) {
   const [openLetter, setOpenLetter] = useState<string | null>(null);
 
@@ -152,6 +175,7 @@ export function SectionNavRenderer({
                 scope={scope}
                 onChange={onChange}
                 path={[...path, openLetter ?? '']}
+                showMissing={showMissing}
               />
             )}
           </ScrollView>
@@ -187,11 +211,11 @@ export function RepeatingFieldRenderer(props: FieldRendererProps) {
 }
 
 /** Fixed rows, each an implicit yes/no + conditional note (e.g. NotesPostProject's movement checklist). No hooks needed. */
-function ChecklistRenderer({ field, value, onChange, path }: FieldRendererProps) {
+function ChecklistRenderer({ field, value, onChange, path, showMissing, missing }: FieldRendererProps) {
   const itemFields = field.itemFields ?? [];
   const record = asAnswerTree(value) as unknown as Record<string, AnswerTree>;
   return (
-    <View style={styles.block}>
+    <View style={[styles.block, missing && styles.missingBlock]}>
       <Text style={styles.groupLabel}>{field.label}</Text>
       {(field.repeat?.fixedInstances ?? []).map((inst) => {
         const instScope = record[inst.key] ?? {};
@@ -202,6 +226,7 @@ function ChecklistRenderer({ field, value, onChange, path }: FieldRendererProps)
               scope={instScope}
               onChange={(k, v) => onChange({ ...record, [inst.key]: { ...instScope, [k]: v } })}
               path={[...path, inst.key]}
+              showMissing={showMissing}
             />
           </View>
         );
@@ -211,7 +236,7 @@ function ChecklistRenderer({ field, value, onChange, path }: FieldRendererProps)
 }
 
 /** Fixed named tabs (Elevations' 4 sides, RoofChimneys' 2) or a fixed set with addable extra instances (InternalAreas' room types). */
-function FixedTabsRenderer({ field, value, onChange, path }: FieldRendererProps) {
+function FixedTabsRenderer({ field, value, onChange, path, showMissing, missing }: FieldRendererProps) {
   const repeat = field.repeat ?? { presentation: 'fixed-tabs' as const };
   const itemFields = field.itemFields ?? [];
   const record = asAnswerTree(value) as unknown as Record<string, AnswerTree>;
@@ -234,7 +259,7 @@ function FixedTabsRenderer({ field, value, onChange, path }: FieldRendererProps)
   }
 
   return (
-    <View style={styles.block}>
+    <View style={[styles.block, missing && styles.missingBlock]}>
       <Text style={styles.groupLabel}>{field.label}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabStrip}>
         {allInstances.map((inst) => {
@@ -262,6 +287,7 @@ function FixedTabsRenderer({ field, value, onChange, path }: FieldRendererProps)
             scope={record[active.key] ?? {}}
             onChange={(k, v) => onChange({ ...record, [active.key]: { ...(record[active.key] ?? {}), [k]: v } })}
             path={[...path, active.key]}
+            showMissing={showMissing}
           />
         </View>
       )}
@@ -321,12 +347,14 @@ function CategoryNavForm({
   scope,
   onChange,
   path,
+  showMissing,
 }: {
   itemFields: TemplateField[];
   selectorFieldKey: string;
   scope: AnswerTree;
   onChange: (key: string, value: AnswerValue) => void;
   path: string[];
+  showMissing?: boolean;
 }) {
   const leadFields = itemFields.filter((f) => !f.sectionLetter);
   const selectorField = itemFields.find((f) => f.key === selectorFieldKey);
@@ -338,7 +366,7 @@ function CategoryNavForm({
 
   return (
     <>
-      <FieldListRenderer fields={leadFields} scope={scope} onChange={onChange} path={path} />
+      <FieldListRenderer fields={leadFields} scope={scope} onChange={onChange} path={path} showMissing={showMissing} />
       {selected.length > 0 && (
         <View style={styles.categoryNavBlock}>
           <Text style={styles.groupLabel}>Fill in each selected item</Text>
@@ -379,6 +407,7 @@ function CategoryNavForm({
                 scope={scope}
                 onChange={onChange}
                 path={[...path, openGroup.letter]}
+                showMissing={showMissing}
               />
             )}
           </ScrollView>
@@ -405,7 +434,7 @@ function CategoryNavForm({
  * gives no sense of how much is left. Each row opens its own full-screen form.
  * Opted into with `repeat.collapsible`.
  */
-function FixedListRenderer({ field, value, onChange, path }: FieldRendererProps) {
+function FixedListRenderer({ field, value, onChange, path, showMissing, missing }: FieldRendererProps) {
   const repeat = field.repeat ?? { presentation: 'fixed-tabs' as const };
   const itemFields = field.itemFields ?? [];
   const record = asAnswerTree(value) as unknown as Record<string, AnswerTree>;
@@ -456,7 +485,7 @@ function FixedListRenderer({ field, value, onChange, path }: FieldRendererProps)
   }
 
   return (
-    <View style={styles.block}>
+    <View style={[styles.block, missing && styles.missingBlock]}>
       <View style={styles.progressCard}>
         <View style={styles.progressHeadRow}>
           <Text style={styles.progressTitle}>{nounTitle} Progress</Text>
@@ -518,6 +547,7 @@ function FixedListRenderer({ field, value, onChange, path }: FieldRendererProps)
                 scope={record[open.key] ?? {}}
                 onChange={(k, v) => onChange({ ...record, [open.key]: { ...(record[open.key] ?? {}), [k]: v } })}
                 path={[...path, open.key]}
+                showMissing={showMissing}
               />
             )}
           </ScrollView>
@@ -538,7 +568,7 @@ function FixedListRenderer({ field, value, onChange, path }: FieldRendererProps)
 }
 
 /** Scrollable, freely addable list of instances (most sections) or a damage-list. State mostly lives in the answer tree; only which modal (if any) is open is local. */
-function StripListRenderer({ field, value, onChange, path, scope }: FieldRendererProps) {
+function StripListRenderer({ field, value, onChange, path, scope, showMissing, missing }: FieldRendererProps) {
   const itemFields = field.itemFields ?? [];
   const list = Array.isArray(value) ? (value as AnswerTree[]) : [];
   const requirementMet = isRepeatRequirementMet(field, value, scope);
@@ -578,7 +608,7 @@ function StripListRenderer({ field, value, onChange, path, scope }: FieldRendere
   if (openInModal) {
     const openInst = openIdx !== null ? list[openIdx] : undefined;
     return (
-      <View style={styles.block}>
+      <View style={[styles.block, missing && styles.missingBlock]}>
         <Text style={styles.groupLabel}>{field.label}</Text>
         {!requirementMet && requireWhen && (
           <View style={styles.requireWarning}>
@@ -631,6 +661,7 @@ function StripListRenderer({ field, value, onChange, path, scope }: FieldRendere
                     scope={openInst}
                     onChange={(k, v) => updateInstance(openIdx, k, v)}
                     path={[...path, String(openIdx)]}
+                    showMissing={showMissing}
                   />
                 ) : (
                   <FieldListRenderer
@@ -638,6 +669,7 @@ function StripListRenderer({ field, value, onChange, path, scope }: FieldRendere
                     scope={openInst}
                     onChange={(k, v) => updateInstance(openIdx, k, v)}
                     path={[...path, String(openIdx)]}
+                    showMissing={showMissing}
                   />
                 )
               )}
@@ -659,7 +691,7 @@ function StripListRenderer({ field, value, onChange, path, scope }: FieldRendere
   }
 
   return (
-    <View style={styles.block}>
+    <View style={[styles.block, missing && styles.missingBlock]}>
       <Text style={styles.groupLabel}>{field.label}</Text>
       {!requirementMet && requireWhen && (
         <View style={styles.requireWarning}>
@@ -684,6 +716,7 @@ function StripListRenderer({ field, value, onChange, path, scope }: FieldRendere
             scope={instScope}
             onChange={(k, v) => updateInstance(idx, k, v)}
             path={[...path, String(idx)]}
+            showMissing={showMissing}
           />
         </View>
       ))}
@@ -720,6 +753,16 @@ export * from './types';
 
 const styles = StyleSheet.create({
   block: { marginBottom: spacing.lg },
+  // Applied on top of `block` (or similar) once `missing` is true -- a
+  // required-but-unfilled repeating-group/damage-list container (e.g. an
+  // addable list that needs at least one instance) gets the same red
+  // outline treatment as any other missing field.
+  missingBlock: {
+    borderWidth: 1.5,
+    borderColor: colors.danger,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
   letterHeaderBand: {
     backgroundColor: colors.accentBlue,
     borderLeftWidth: 4,
