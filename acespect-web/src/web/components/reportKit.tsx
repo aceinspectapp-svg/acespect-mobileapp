@@ -22,7 +22,7 @@ export const reportTokens = {
   placeholderInk: "#8a6d2f",
 };
 
-/** Section banner — full-width label with a colored left accent bar, replacing the old solid-fill banners. */
+/** Section banner — a plain full-width pale band, matching the reference report's category headings (no left accent stripe). */
 export function SectionBand({
   children,
   tone = "accent",
@@ -33,14 +33,12 @@ export function SectionBand({
   compact?: boolean;
 }) {
   const bg = tone === "accent" ? reportTokens.accentSoft : "#f4f5f7";
-  const bar = tone === "accent" ? reportTokens.accent : "#9aa3b0";
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
         background: bg,
-        borderLeft: `4px solid ${bar}`,
         borderRadius: "4px",
         padding: compact ? "6px 10px" : "9px 14px",
         margin: compact ? "16px 0 9px" : "26px 0 14px",
@@ -208,22 +206,29 @@ export function MetaRow({
         style={{
           width: `${labelWidth}px`,
           flexShrink: 0,
-          fontWeight: 600,
-          fontSize: "0.82em",
-          textTransform: "uppercase",
-          letterSpacing: "0.03em",
-          color: reportTokens.inkMuted,
+          fontWeight: 700,
+          fontSize: "1em",
+          color: reportTokens.ink,
           paddingTop: "1px",
         }}
       >
         {label}
+        {/* Title-Case label + trailing colon, matching the reference report's cover field style. */}
+        :
       </span>
       <div style={{ flex: 1, color: reportTokens.ink }}>{children}</div>
     </div>
   );
 }
 
-/** Modern photo grid — rounded thumbnails with a subtle shadow. */
+/**
+ * Modern photo grid — rounded thumbnails with a subtle shadow. Each photo is
+ * a real hyperlink to its own full-size URL (matching the reference report's
+ * convention of linking inserted photos), so it opens full-size in a new tab
+ * on screen and survives as an actual clickable link annotation in the
+ * exported PDF (Puppeteer/Chromium turns an `<a>` around an image into a
+ * real PDF link, not just a picture).
+ */
 export function PhotoGrid({ photos, compact }: { photos: string[]; compact: boolean }) {
   if (photos.length === 0) return null;
   return (
@@ -236,19 +241,20 @@ export function PhotoGrid({ photos, compact }: { photos: string[]; compact: bool
       }}
     >
       {photos.map((url, i) => (
-        <img
-          key={i}
-          src={url}
-          alt=""
-          style={{
-            width: "100%",
-            aspectRatio: "4 / 3",
-            objectFit: "cover",
-            borderRadius: "8px",
-            border: `1px solid ${reportTokens.border}`,
-            boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
-          }}
-        />
+        <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+          <img
+            src={url}
+            alt=""
+            style={{
+              width: "100%",
+              aspectRatio: "4 / 3",
+              objectFit: "cover",
+              borderRadius: "8px",
+              border: `1px solid ${reportTokens.border}`,
+              boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
+            }}
+          />
+        </a>
       ))}
     </div>
   );

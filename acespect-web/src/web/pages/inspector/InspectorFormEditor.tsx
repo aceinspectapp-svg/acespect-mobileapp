@@ -99,9 +99,10 @@ export function InspectorFormEditor() {
   // damages list never drift out of sync with what was edited here.
   function buildSectionsPayload() {
     return inspection!.sections.map((s, idx) => {
-      const template = templates[s.key ?? s.id];
+      const sectionKey = s.key ?? s.id;
+      const template = templates[sectionKey];
       const answers = answerEdits[s.id] ?? (s.answers as AnswerTree | null | undefined) ?? undefined;
-      const derived = template && answers ? flattenSectionToDraft(template.fields, answers) : null;
+      const derived = template && answers ? flattenSectionToDraft(template.fields, answers, sectionKey) : null;
       return {
         key: s.key ?? s.id,
         name: s.name,
