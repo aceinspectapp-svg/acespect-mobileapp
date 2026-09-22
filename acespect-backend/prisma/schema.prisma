@@ -31,6 +31,12 @@ model User {
   avatarUrl    String?
   avatar       String? // short initials shown in the web UI, e.g. "JT"
   region       String?
+  // Inspector's building-inspector license/registration number (e.g. DBU
+  // license). Shown alongside their name in the reviewer pane and used as
+  // the report cover's "Inspector DBU License" fallback when the inspection
+  // itself doesn't override it. Meaningful for INSPECTOR accounts; left
+  // null for other roles.
+  licenseNumber String?
   role         Role     @default(INSPECTOR)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())

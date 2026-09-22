@@ -312,6 +312,59 @@ export const SCOPE_BLOCKS: ScopeBlock[] = [
       { label: "e)", text: "Adequacy of roof drainage as installed." },
       { label: "f)", text: "Gas fittings and fixtures." },
       { label: "g)", text: "Air-conditioning." },
+      { label: "h)", text: "Automatic garage door mechanisms." },
+      {
+        label: "i)",
+        text: "Swimming pools and associated filtration and similar equipment.",
+        note:
+          "NOTE: If a swimming pool is present it should be the subject of a Special Purpose Property Report. " +
+          "A detailed inspection on the status or serviceability of any swimming pool or associated pool " +
+          "equipment has not been carried out and is not within the scope of this report. Additionally, to " +
+          "adequately inspect a swimming pool, the water must be completely drained and all internal surfaces " +
+          "must be fully accessible.",
+      },
+      { label: "j)", text: "The operation of fireplaces and solid fuel heaters, including chimneys and flues." },
+      { label: "k)", text: "Alarm systems." },
+      { label: "l)", text: "Electrical appliances including dishwashers, incinerators, ovens, ducted vacuum systems." },
+      { label: "m)", text: "Paint coatings, except external protective coatings." },
+      { label: "n)", text: "Health hazards (eg. allergies, lead content, presence of asbestos, soil toxicity)." },
+      { label: "o)", text: "Timber and metal framing sizes and adequacy." },
+      { label: "p)", text: "Concealed tie-downs and bracing." },
+      { label: "q)", text: "Timber pest activity." },
+      { label: "r)", text: "Soil conditions." },
+      { label: "s)", text: "Control joints." },
+      { label: "t)", text: "Concealed framing-timber or any areas concealed by wall linings/sidings." },
+      { label: "u)", text: "Furniture and accessories." },
     ],
+  },
+  {
+    kind: "para",
+    text:
+      "Estimating the cost of remedying defects is not included in a standard Property report, although it " +
+      "may form part of a special-purpose Property report.",
+  },
+  {
+    kind: "list",
+    intro: "Houspect has tried to categorise our gradings as:",
+    items: [
+      { label: "•", text: "New: Self-explanatory." },
+      { label: "•", text: "Satisfactory: Generally good condition." },
+      { label: "•", text: "Fair: Starting to look like it needs maintenance." },
+      { label: "•", text: "Average: Working but needs maintenance within 6 months." },
+      { label: "•", text: "Poor: Needs replacement." },
+    ],
+  },
+  {
+    kind: "para",
+    text:
+      "As appropriate to any particular property or material other terms may be used for gradings and to " +
+      "describe condition such as aged, dilapidated, deteriorated, weathered, rusting, delaminated, rotted, " +
+      "decayed, subsided, etc.",
+  },
+  {
+    kind: "para",
+    text:
+      "Wherever we describe a building material in this report, the client acknowledges that the material " +
+      "described represents a substantial component of the building material observed.",
   },
 ];

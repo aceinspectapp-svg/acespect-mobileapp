@@ -1,4 +1,5 @@
 import { API_BASE, getToken } from "./api";
+import { composeSectionSentence } from "./reportSentences";
 
 /**
  * Template/answer-tree types + pure logic, ported from the mobile app
@@ -240,7 +241,10 @@ export function asString(v: AnswerValue): string {
   return typeof v === "string" ? v : "";
 }
 
-export function resolveInstances(field: TemplateField, value: AnswerValue): { label: string; scope: AnswerTree }[] {
+export function resolveInstances(
+  field: TemplateField,
+  value: AnswerValue,
+): { key?: string; label: string; scope: AnswerTree }[] {
   const repeat = field.repeat ?? { presentation: "strip" as const };
   const titleKey = repeat.titleFieldKey;
   const named = (scope: AnswerTree, fallback: string): string => {
@@ -255,12 +259,18 @@ export function resolveInstances(field: TemplateField, value: AnswerValue): { la
   const record = asAnswerTree(value) as unknown as Record<string, AnswerTree>;
   const fixed = repeat.fixedInstances ?? [];
   const seen = new Set(fixed.map((f) => f.key));
-  const out = fixed.map((f) => ({ label: named(record[f.key] ?? {}, f.label), scope: record[f.key] ?? {} }));
+  // `key` here is the fixed instance's own stable identity -- callers that
+  // write back an edit must key off *this*, not try to rediscover it by
+  // scanning `record` for a value `===` this scope object: a fixed instance
+  // with no data yet gets a freshly-allocated `{}` below, which is never
+  // reference-equal to anything already in `record`, so that reverse lookup
+  // silently fails (and the edit is dropped) for any instance not yet started.
+  const out = fixed.map((f) => ({ key: f.key, label: named(record[f.key] ?? {}, f.label), scope: record[f.key] ?? {} }));
   let extra = 0;
   for (const [key, scope] of Object.entries(record)) {
     if (seen.has(key)) continue;
     extra += 1;
-    out.push({ label: named(scope, `${field.label} ${fixed.length + extra}`), scope });
+    out.push({ key, label: named(scope, `${field.label} ${fixed.length + extra}`), scope });
   }
   return out;
 }
@@ -298,14 +308,27 @@ export interface FlattenedSection {
 /**
  * Derives the flattened report `fields`, the flat `damages[]` array, and a
  * summary `reportText` from a raw answer tree -- the same walk
- * acespect-mobile's flattenSectionToDraft does. Run on save so editing
- * answers here never leaves the report/damages view stale.
+ * acespect-mobile's flattenSectionToDraft does, except that when `sectionKey`
+ * matches one of `reportSentences.ts`'s composers, each top-level instance's
+ * paragraph is built with that exact Houspect-Victoria wording instead of
+ * the generic "Label: value." fallback below. Run on save (web inspector
+ * editor only -- mobile has its own copy of this function, untouched) so
+ * editing answers here never leaves the report/damages view stale.
  */
-export function flattenSectionToDraft(templateFields: TemplateField[], answers: AnswerTree): FlattenedSection {
-  return walk(templateFields, answers, []);
+export function flattenSectionToDraft(
+  templateFields: TemplateField[],
+  answers: AnswerTree,
+  sectionKey?: string,
+): FlattenedSection {
+  return walk(templateFields, answers, [], sectionKey);
 }
 
-function walk(templateFields: TemplateField[], scope: AnswerTree, ancestorLabels: string[]): FlattenedSection {
+function walk(
+  templateFields: TemplateField[],
+  scope: AnswerTree,
+  ancestorLabels: string[],
+  sectionKey?: string,
+): FlattenedSection {
   const fields: Record<string, unknown> = {};
   const damages: FlattenedSection["damages"] = [];
   const textParts: string[] = [];
@@ -341,11 +364,32 @@ function walk(templateFields: TemplateField[], scope: AnswerTree, ancestorLabels
     if (field.type === "repeating-group") {
       const instances = resolveInstances(field, value);
       const labels: string[] = [];
+      // Only the section's own top-level repeating field (not one nested
+      // inside another repeating-group) stands for "this whole section is
+      // one instance-per-paragraph list" -- that's what every composer in
+      // reportSentences.ts assumes.
+      const composed = ancestorLabels.length === 0 ? sectionKey : undefined;
+      // Houspect Victoria's template groups Internal Areas rooms under a
+      // floor heading (Ground Floor / First Floor / ...) rather than
+      // mentioning the floor in each room's own sentence -- track the
+      // floor across instances (in the order they were added) and inject a
+      // heading line whenever it changes.
+      const floorLevelField = (field.itemFields ?? []).find((f) => f.key === "floorLevel");
+      let lastFloorLevel: string | undefined;
       for (const { label, scope: inst } of instances) {
         const sub = walk(field.itemFields ?? [], inst, [...ancestorLabels, label]);
         damages.push(...sub.damages);
         labels.push(label);
-        if (sub.reportText) textParts.push(`${label}: ${sub.reportText}`.trim());
+        if (composed === "internal_areas" && floorLevelField) {
+          const floorRaw = asString(inst.floorLevel);
+          if (floorRaw && floorRaw !== lastFloorLevel) {
+            textParts.push((floorLevelField.options?.find((o) => o.value === floorRaw)?.label ?? floorRaw).toUpperCase());
+            lastFloorLevel = floorRaw;
+          }
+        }
+        const composedSentence = composed ? composeSectionSentence(composed, inst, field.itemFields ?? [], label) : undefined;
+        if (composedSentence) textParts.push(composedSentence);
+        else if (sub.reportText) textParts.push(`${label}: ${sub.reportText}`.trim());
       }
       fields[field.key] = labels.join(", ");
       continue;
@@ -359,5 +403,9 @@ function walk(templateFields: TemplateField[], scope: AnswerTree, ancestorLabels
     textParts.push(`${field.label}: ${strValue}.`);
   }
 
-  return { fields, damages, reportText: textParts.join(" ") };
+  // "\n\n" so multiple instances (several driveways, each elevation, each
+  // room) render as their own paragraphs in ReportSection.tsx rather than
+  // one run-on block -- safe for the generic per-field fallback too, since
+  // nothing downstream depends on reportText staying single-line.
+  return { fields, damages, reportText: textParts.join("\n\n") };
 }

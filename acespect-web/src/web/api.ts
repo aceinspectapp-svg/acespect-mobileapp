@@ -113,6 +113,12 @@ export const api = {
   getInspection: (id: string) => req<{ inspection: Inspection }>(`/web/inspections/${id}`).then((d) => d.inspection),
   getUsers: () => req<{ users: User[] }>("/web/users").then((d) => d.users),
 
+  /** Admin-only: edit another user's profile (name/phone/region/license). */
+  updateUser: (
+    id: string,
+    patch: { name?: string; phone?: string | null; region?: string | null; licenseNumber?: string | null },
+  ) => req<{ user: User }>(`/web/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) }).then((d) => d.user),
+
   updateSection: (
     id: string,
     patch: {
@@ -171,6 +177,49 @@ export const api = {
   ) => req<{ inspection: unknown }>(`/inspections/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
   finalizeInspection: (id: string) => req<{ inspection: unknown }>(`/inspections/${id}/finalize`, { method: "POST" }),
+
+  /**
+   * Starts a brand-new draft from the web (mobile's own "new inspection"
+   * flow never touches the backend until it already has answers to submit,
+   * since it works from a local offline DB first -- web has no equivalent,
+   * so this creates the draft row immediately, pre-seeded with one empty
+   * section per templatable key so InspectorFormEditor has something to
+   * show right away). Returns the new inspection's id to navigate to.
+   */
+  createInspection: (input: {
+    inspectionType: string;
+    propertyType: string;
+    jobNo?: string;
+    address?: string;
+    suburb?: string;
+    client?: string;
+    date?: string;
+    sections: Array<{
+      key: string;
+      name: string;
+      icon: string;
+      order: number;
+      status: "complete" | "partial" | "pending";
+      reportText: string;
+      fields: Record<string, unknown>;
+      answers?: Record<string, unknown>;
+      photos: string[];
+      damages: Array<{
+        type: string;
+        location: string;
+        direction: string;
+        widthMm: number;
+        lengthMm: number;
+        notes: string;
+        photos: string[];
+        order: number;
+      }>;
+    }>;
+  }) =>
+    req<{ inspectionId: string; status: string }>("/inspections/submit", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 
   /**
    * Uploads one photo taken on a different device than the one the

@@ -1,5 +1,5 @@
-import type { FormSection, Inspection } from "./mockData";
-import { getReportSigner, getUser } from "./mockData";
+import type { FormSection, Inspection, User } from "./mockData";
+import { getReportSigner } from "./mockData";
 
 /** The front-matter of a Dilapidation Report, derived from Job Information. */
 export interface ReportHeader {
@@ -17,6 +17,8 @@ export interface ReportHeader {
   inspector: string;
   inspectorRegistration?: string;
   purpose: string;
+  /** The Description & Overview section's "Front Elevation" photo -- embedded on the cover, matching the reference report's placement. */
+  coverPhotoUrl?: string;
   signatureUrl?: string;
   signatureName?: string;
   signatureTitle?: string;
@@ -112,12 +114,15 @@ export const CRACK_CATEGORISATION_TABLE_FOOTNOTE =
 
 /* ── Pool & Spa boilerplate, appended after the Pool / Spa section ── */
 
-export const POOL_SPA_DISCLAIMER_TITLE = "Pool and Spa Inspection Disclaimer";
+export const POOL_SPA_DISCLAIMER_TITLE = "Pool and Spa Safety Disclaimer";
 
+// Verbatim from Houspect Victoria's own master report template -- "Houspect"
+// here is this business's own real trading name (Acespect Pty Ltd trades as
+// Houspect Victoria), not a third party's, so it belongs in this content.
 export const POOL_SPA_DISCLAIMER: string[] = [
-  "This inspection does not provide Pool or Spa certification or safety inspection services. The Building Inspector's comments on pools or spas are general observations only.",
-  "All pools and spas must be registered with the local council and certified for pool safety by an appropriately licensed building surveyor or registered pool inspector.",
-  "This inspection does not cover pool pumps, filters, solar panels, pool cleaning equipment, play equipment, etc.",
+  "The Houspect building inspector's comments are observations only, and any comments offered about the pool area are of a general nature and should not be relied upon.",
+  "All pools and spas in Victoria must be registered with local council and certified for a pool safety barrier by a building surveyor or registered pool inspector (licensed by the VBA).",
+  "Houspect does not inspect pool pumps, filters, solar panels, pool cleaning equipment, play equipment, etc.",
   "It is recommended that all electrical circuits and equipment to the pool area be checked by a licensed electrician or pool specialist for function and performance.",
 ];
 
@@ -153,12 +158,26 @@ function str(v: unknown, fallback = ""): string {
 /**
  * Build the report front-matter from an inspection's Job Information section,
  * falling back to top-level inspection data when a field isn't recorded.
+ *
+ * `inspector` is the live, API-backed user record for `inspection.inspectorId`
+ * (from `useAppData().getUser`) -- callers must pass it in since this is a
+ * plain function with no access to that context. Previously this looked the
+ * inspector up in `mockData.USERS`, a hardcoded demo list whose ids ("u1",
+ * "u2", …) never match a real database UUID, so the inspector name/license
+ * fallback silently never worked for any real inspection.
  */
-export function buildReportHeader(inspection: Inspection): ReportHeader {
+export function buildReportHeader(inspection: Inspection, inspector?: Pick<User, "name" | "licenseNumber">): ReportHeader {
   const jobInfo = inspection.sections.find((s) => (s.key ?? s.id).startsWith("job-info"));
   const f = jobInfo?.fields ?? {};
-  const inspector = getUser(inspection.inspectorId);
   const signer = getReportSigner();
+
+  // "Front Elevation" from Description & Overview -- embedded on the cover
+  // itself, matching the reference report's "insert photograph of front of
+  // property" placement, rather than only appearing later in that section.
+  const description = inspection.sections.find((s) => (s.key ?? s.id).startsWith("description"));
+  const frontElevation = (description?.answers as Record<string, unknown> | null | undefined)?.front_elevation;
+  const coverPhotoUrl =
+    Array.isArray(frontElevation) && typeof frontElevation[0] === "string" ? frontElevation[0] : undefined;
 
   const baseTitle = inspection.type === "Dilapidation" ? "Dilapidation Report" : `${inspection.type} Report`;
   const reportTitle = `${baseTitle} - ${shortPropertyTypeLabel(inspection.propertyType)} ${reportStatusSuffix(inspection.status)}`;
@@ -176,8 +195,9 @@ export function buildReportHeader(inspection: Inspection): ReportHeader {
     inspectionDate: formatLongDate(str(f.date, inspection.date)),
     weather: str(f.weather, "—"),
     inspector: str(f.inspector, inspector?.name ?? "—"),
-    inspectorRegistration: str(f.inspectorRegistration) || undefined,
+    inspectorRegistration: str(f.inspectorRegistration) || inspector?.licenseNumber || undefined,
     purpose: str(f.purpose) || DEFAULT_PURPOSE,
+    coverPhotoUrl,
     signatureUrl: signer?.signatureUrl,
     signatureName: signer?.name,
     signatureTitle: signer?.signatureTitle,

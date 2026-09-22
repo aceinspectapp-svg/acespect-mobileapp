@@ -24,6 +24,17 @@ export const inspectionUpdateSchema = z.object({
   reviewerId: z.string().uuid().nullable().optional(),
 });
 
+// Admin editing another user's profile -- currently just the fields already
+// shown in the Users table (name/phone/region) plus the inspector license
+// number the reviewer pane and report cover fall back to.
+export const userUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  phone: z.string().max(50).nullable().optional(),
+  region: z.string().max(200).nullable().optional(),
+  licenseNumber: z.string().max(100).nullable().optional(),
+});
+
 export type SectionUpdateInput = z.infer<typeof sectionUpdateSchema>;
 export type DamageUpdateInput = z.infer<typeof damageUpdateSchema>;
 export type InspectionUpdateInput = z.infer<typeof inspectionUpdateSchema>;
+export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
