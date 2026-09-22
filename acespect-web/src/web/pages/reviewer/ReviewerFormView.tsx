@@ -20,16 +20,8 @@ import { ReportScope } from "../../components/ReportScope";
 import { ReportConditions } from "../../components/ReportConditions";
 import { ReportSection } from "../../components/ReportSection";
 import { buildReportHeader, DEFAULT_PURPOSE, withExcludedPhotosRemoved } from "../../report";
-import { SectionFieldView } from "../../components/SectionFieldView";
 import { SectionFieldEditor } from "../../components/SectionFieldEditor";
-import {
-  ActiveTemplate,
-  AnswerTree,
-  AnswerValue,
-  TemplateFieldOption,
-  fetchActiveTemplate,
-  flattenSectionToDraft,
-} from "../../templateFields";
+import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSectionToDraft, fetchActiveTemplate } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { api, resolveMediaUrl } from "../../api";
 
