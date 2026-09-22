@@ -1,6 +1,25 @@
 import type { ReportHeader } from "../report";
 import { MetaRow, Para, reportTokens } from "./reportKit";
-import { AcespectLogo } from "../../components/AcespectLogo";
+import { resolveMediaUrl } from "../api";
+
+// Acespect Pty Ltd trades AS Houspect Victoria -- this report should carry
+// that real trading identity, not the internal ACESPECT app's own logo.
+// TODO: replace with the real Houspect Victoria logo image once supplied
+// (swap this lockup for an <img>); this is a visual placeholder in the same
+// position/style as the wordmark on Houspect Victoria's own report template.
+function HouspectVictoriaLogo() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+      <span style={{ fontSize: "10px", color: reportTokens.inkMuted, letterSpacing: "0.03em" }}>
+        Building Inspections
+      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        <span style={{ width: "16px", height: "16px", borderRadius: "4px", background: "#dc2626", display: "inline-block" }} />
+        <span style={{ fontSize: "20px", fontWeight: 800, color: reportTokens.accent }}>Houspect</span>
+      </div>
+    </div>
+  );
+}
 
 /**
  * The Dilapidation Report front matter (cover), generated from Job Information.
@@ -21,10 +40,7 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
         // showing both here would double it up on page 1. Still shown in
         // the live browser view, which has no per-page header of its own.
         <div className="screen-only" style={{ display: "flex", justifyContent: "flex-end", marginBottom: "24px" }}>
-          {/* `sm` is the variant meant for light/white backgrounds (navy wordmark) --
-              `md`/`lg` assume a dark hero background and render white text, which
-              disappears against the report's white page. */}
-          <AcespectLogo size="sm" />
+          <HouspectVictoriaLogo />
         </div>
       )}
 
@@ -39,22 +55,20 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
         <MetaRow label="Our Reference" labelWidth={labelW} compact={compact}>{r.ourReference}</MetaRow>
       </div>
 
-      {/* Title */}
+      {/* Title -- a plain bordered box, matching the reference report's cover exactly (not colored rule lines). */}
       <div
         style={{
           textAlign: "center",
-          padding: compact ? "18px 0 14px" : "34px 0 26px",
+          padding: compact ? "16px 0" : "22px 0",
           margin: compact ? "18px 0" : "32px 0",
-          borderTop: `2px solid ${reportTokens.accent}`,
-          borderBottom: `2px solid ${reportTokens.accent}`,
+          border: `1.5px solid ${reportTokens.ink}`,
         }}
       >
         <span
           style={{
             fontSize: `${titleSize}px`,
-            fontWeight: 800,
-            letterSpacing: "0.01em",
-            color: reportTokens.accent,
+            fontWeight: 700,
+            color: reportTokens.ink,
           }}
         >
           {r.reportTitle}
@@ -84,6 +98,26 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
           <Para style={{ margin: 0 }}>{r.purpose}</Para>
         </MetaRow>
       </div>
+
+      {/* Front-of-property photo -- matches the reference report's cover, which embeds this photo directly below Purpose. */}
+      {r.coverPhotoUrl && (
+        <div style={{ marginTop: compact ? "16px" : "24px" }}>
+          <a href={resolveMediaUrl(r.coverPhotoUrl)} target="_blank" rel="noopener noreferrer">
+            <img
+              src={resolveMediaUrl(r.coverPhotoUrl)}
+              alt="Front of property"
+              style={{
+                width: compact ? "160px" : "260px",
+                aspectRatio: "4 / 3",
+                objectFit: "cover",
+                borderRadius: "4px",
+                border: `1px solid ${reportTokens.border}`,
+                display: "block",
+              }}
+            />
+          </a>
+        </div>
+      )}
 
       {/* Signature */}
       {(r.signatureUrl || r.signatureName) && (

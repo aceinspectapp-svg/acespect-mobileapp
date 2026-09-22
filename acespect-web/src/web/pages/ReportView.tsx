@@ -8,9 +8,8 @@ import { ReportDescription } from "../components/ReportDescription";
 import { ReportScope } from "../components/ReportScope";
 import { ReportConditions } from "../components/ReportConditions";
 import { ReportSection } from "../components/ReportSection";
-import { ReportFrontMatter } from "../components/ReportFrontMatter";
-import { ReportCrackTable } from "../components/ReportCrackTable";
 import { ReportPoolSpaDisclaimer } from "../components/ReportPoolSpaDisclaimer";
+import { SECTION_SENTENCE_COMPOSERS } from "../reportSentences";
 import { Para, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
@@ -129,16 +128,6 @@ export function ReportView() {
         {/* Cover / front matter, generated from Job Information */}
         <ReportCover header={r} />
 
-        {/* Scope / Condition Definitions / Dilapidation Report Information */}
-        <div className="report-page-break" style={{ marginTop: "40px" }}>
-          <ReportFrontMatter />
-        </div>
-
-        {/* Crack Categorisation Table (AS4349.1-2007 Table E1) */}
-        <div className="report-page-break" style={{ marginTop: "40px" }}>
-          <ReportCrackTable />
-        </div>
-
         {/* Report body — approved section report text, written on approval */}
         {renderList.length > 0 ? (
           <div className="report-page-break" style={{ marginTop: "40px" }}>
@@ -193,7 +182,7 @@ export function ReportView() {
           /* Every inspection category: description → photographs → cracks (described + imaged).
              Filtered first so any photo the reviewer excluded never reaches the printed report. */
           <>
-            <ReportSection section={withExcludedPhotosRemoved(s)} />
+            <ReportSection section={withExcludedPhotosRemoved(s)} hideDamageText={slug(s) in SECTION_SENTENCE_COMPOSERS} />
             {slug(s).startsWith("pool") && <ReportPoolSpaDisclaimer />}
           </>
         )}

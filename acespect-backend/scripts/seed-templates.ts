@@ -88,7 +88,11 @@ const SECTION_DEFAULTS: Record<string, TemplateField[]> = {
     { key: 'inspectionDate', label: 'Inspection Date', type: 'date', required: true },
     { key: 'clientName', label: 'Client Name', type: 'text', required: true },
     { key: 'inspectionAddress', label: 'Inspection Address', type: 'text', required: true },
-    { key: 'assignedInspector', label: 'Assigned Inspector', type: 'text', required: true, readOnly: true },
+    // Was `readOnly: true` (meant to be auto-filled by an admin-assignment
+    // flow), but nothing anywhere ever actually sets that value -- the field
+    // was permanently blank and unfillable. Editable until a real
+    // auto-assign mechanism exists.
+    { key: 'assignedInspector', label: 'Assigned Inspector', type: 'text', required: true },
     {
       key: 'weather',
       label: 'Current Onsite Weather',
@@ -487,7 +491,10 @@ SECTION_DEFAULTS.internal_areas = numbered([
         key: 'floorLevel',
         label: 'Floor Level',
         type: 'pill-select',
-        options: [opt('ground', 'Ground Floor'), opt('upper', 'Upper Floor')],
+        // Matches Houspect Victoria's own report template, which groups
+        // Internal Areas by these four floor headings (see ReportView.tsx's
+        // FLOOR_LEVEL_ORDER, used to render the same grouping in the report).
+        options: [opt('ground', 'Ground Floor'), opt('first', 'First Floor'), opt('second', 'Second Floor'), opt('basement', 'Basement')],
       },
       {
         key: 'obstruction',
