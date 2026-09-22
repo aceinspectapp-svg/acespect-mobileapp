@@ -162,7 +162,7 @@ export function InspectorFormEditor() {
       const sKey = sectionKeyOf(s);
       const template = templates[sKey];
       const answers = answerEdits[sKey] ?? (s.answers as AnswerTree | null | undefined) ?? undefined;
-      const derived = template && answers ? flattenSectionToDraft(template.fields, answers) : null;
+      const derived = template && answers ? flattenSectionToDraft(template.fields, answers, sKey) : null;
       return {
         key: sKey,
         name: s.name,
