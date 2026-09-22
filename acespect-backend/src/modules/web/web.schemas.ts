@@ -13,6 +13,29 @@ export const sectionUpdateSchema = z.object({
   // reviewer attach an extra photo (uploaded via POST /inspections/photos)
   // onto this section, same as excludedPhotoUrls above.
   photos: z.array(z.string()).optional(),
+  // The inspector's raw answer tree, as edited by the reviewer in the
+  // Field Data editor -- same shape mobile/the inspector's own web editor
+  // write. Sent together with `fields`/`reportText` above (re-derived from
+  // it client-side, the same way the inspector's own save does) so the
+  // report never drifts out of sync with what's recorded here.
+  answers: z.record(z.string(), z.unknown()).optional(),
+  // This section's damage-list entries, re-derived from `answers` the same
+  // way. Deliberately excludes `photos`/`excludedPhotoUrls` -- those stay
+  // under the reviewer's dedicated photo-selection UI above and are never
+  // touched by this path; see updateSection for how existing damage rows
+  // are matched back up and preserved rather than replaced wholesale.
+  damages: z
+    .array(
+      z.object({
+        type: z.string(),
+        location: z.string(),
+        direction: z.string(),
+        widthMm: z.number(),
+        lengthMm: z.number(),
+        notes: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 // A damage record's own photo-exclusion list -- same idea as the section's,

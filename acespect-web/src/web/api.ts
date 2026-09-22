@@ -122,6 +122,9 @@ export const api = {
       fields?: Record<string, unknown>;
       excludedPhotoUrls?: string[];
       photos?: string[];
+      // The reviewer's Field Data edit -- see web.schemas.ts's sectionUpdateSchema.
+      answers?: Record<string, unknown>;
+      damages?: { type: string; location: string; direction: string; widthMm: number; lengthMm: number; notes: string }[];
     },
   ) => req<{ section: unknown }>(`/web/sections/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 

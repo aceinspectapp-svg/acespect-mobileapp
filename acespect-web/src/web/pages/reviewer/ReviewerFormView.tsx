@@ -18,8 +18,8 @@ import { ReportScope } from "../../components/ReportScope";
 import { ReportConditions } from "../../components/ReportConditions";
 import { ReportSection } from "../../components/ReportSection";
 import { buildReportHeader, withExcludedPhotosRemoved } from "../../report";
-import { SectionFieldView } from "../../components/SectionFieldView";
-import { ActiveTemplate, AnswerTree, fetchActiveTemplate } from "../../templateFields";
+import { SectionFieldEditor } from "../../components/SectionFieldEditor";
+import { ActiveTemplate, AnswerTree, AnswerValue, flattenSectionToDraft, fetchActiveTemplate } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { api, resolveMediaUrl } from "../../api";
 
@@ -514,6 +514,13 @@ export function ReviewerFormView() {
   // sectionKey -> its current published template (or null once we know none
   // exists for that key, e.g. a legacy/custom section).
   const [templates, setTemplates] = useState<Record<string, ActiveTemplate | null>>({});
+  // sectionId -> the inspector's answer tree as the reviewer has edited it
+  // here, not yet saved -- same idea as the inspector's own web editor
+  // (InspectorFormEditor's answerEdits), just scoped to the reviewer's
+  // Field Data card instead of a whole-inspection draft save.
+  const [answerEdits, setAnswerEdits] = useState<Record<string, AnswerTree>>({});
+  const [savingAnswersFor, setSavingAnswersFor] = useState<string | null>(null);
+  const [answersSavedAt, setAnswersSavedAt] = useState<Record<string, number>>({});
 
   // Seed selection + comment drafts once the inspection is loaded.
   useEffect(() => {
@@ -648,6 +655,54 @@ export function ReviewerFormView() {
       await patchDamage(inspection!.id, damage.id, { photos: [...damage.photos, url] });
     } finally {
       setUploadingFor(null);
+    }
+  }
+
+  /** One field edit inside a section's Field Data card -- staged locally until Save Changes. */
+  function setSectionAnswer(section: FormSection, key: string, value: AnswerValue) {
+    setAnswerEdits((prev) => {
+      const base = prev[section.id] ?? ((section.answers as AnswerTree | null | undefined) ?? {});
+      return { ...prev, [section.id]: { ...base, [key]: value } };
+    });
+  }
+
+  /**
+   * Persists the reviewer's edits to the inspector's recorded answers.
+   * Re-derives `fields`/`reportText`/`damages` from the edited answer tree
+   * the same way the inspector's own web editor does on save, so the
+   * printed report never drifts out of sync with what's shown here --
+   * `damages` deliberately omits `photos`/`excludedPhotoUrls` (see
+   * web.schemas.ts) so this never touches the reviewer's separate
+   * photo-selection/attachment work on this section's damages.
+   */
+  async function saveSectionAnswers(section: FormSection) {
+    const answers = answerEdits[section.id];
+    const template = templates[section.key ?? section.id];
+    if (!answers || !template) return;
+    const derived = flattenSectionToDraft(template.fields, answers, section.key ?? section.id);
+    setSavingAnswersFor(section.id);
+    try {
+      await patchSection(inspection!.id, section.id, {
+        answers,
+        fields: derived.fields,
+        reportText: derived.reportText,
+        damages: derived.damages.map((d) => ({
+          type: d.type,
+          location: d.location,
+          direction: d.direction,
+          widthMm: d.widthMm,
+          lengthMm: d.lengthMm,
+          notes: d.notes,
+        })),
+      });
+      setAnswerEdits((prev) => {
+        const next = { ...prev };
+        delete next[section.id];
+        return next;
+      });
+      setAnswersSavedAt((prev) => ({ ...prev, [section.id]: Date.now() }));
+    } finally {
+      setSavingAnswersFor(null);
     }
   }
 
@@ -905,16 +960,48 @@ export function ReviewerFormView() {
                         onSave={(fields) => updateSectionFields(selectedSection.id, fields)}
                       />
                     </div>
-                  ) : template ? (
-                    <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                      <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
-                        <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, display: "flex", alignItems: "center", gap: "5px" }}>
-                          <FileText size={12} /> Field Data
-                        </p>
+                  ) : template ? (() => {
+                    const currentAnswers = answerEdits[selectedSection.id] ?? ((selectedSection.answers as AnswerTree | null | undefined) ?? {});
+                    const dirty = selectedSection.id in answerEdits;
+                    const saving = savingAnswersFor === selectedSection.id;
+                    return (
+                      <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                        <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, display: "flex", alignItems: "center", gap: "5px" }}>
+                            <FileText size={12} /> Field Data — editable
+                          </p>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            {!dirty && answersSavedAt[selectedSection.id] && (
+                              <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: 600 }}>Saved</span>
+                            )}
+                            <button
+                              onClick={() => saveSectionAnswers(selectedSection)}
+                              disabled={!dirty || saving}
+                              style={{
+                                display: "flex", alignItems: "center", gap: "6px",
+                                padding: "6px 13px", borderRadius: "7px",
+                                background: !dirty || saving ? "#94a3b8" : "#1a2a4a",
+                                color: "white", fontSize: "11px", fontWeight: 700, border: "none",
+                                cursor: !dirty || saving ? "not-allowed" : "pointer",
+                              }}
+                            >
+                              <Save size={12} />
+                              {saving ? "Saving…" : "Save Changes"}
+                            </button>
+                          </div>
+                        </div>
+                        <div style={{ padding: "16px" }}>
+                          <SectionFieldEditor
+                            fields={template.fields}
+                            scope={currentAnswers}
+                            onChange={(key, value) => setSectionAnswer(selectedSection, key, value)}
+                            readOnly={false}
+                            disablePhotoEditing
+                          />
+                        </div>
                       </div>
-                      <SectionFieldView fields={template.fields} scope={(selectedSection.answers ?? {}) as AnswerTree} />
-                    </div>
-                  ) : Object.keys(selectedSection.fields).length > 0 && (
+                    );
+                  })() : Object.keys(selectedSection.fields).length > 0 && (
                     <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
                       <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
                         <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, display: "flex", alignItems: "center", gap: "5px" }}>

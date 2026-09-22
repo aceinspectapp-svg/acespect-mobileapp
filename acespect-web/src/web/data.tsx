@@ -24,6 +24,8 @@ interface AppData {
       fields?: Record<string, unknown>;
       excludedPhotoUrls?: string[];
       photos?: string[];
+      answers?: Record<string, unknown>;
+      damages?: { type: string; location: string; direction: string; widthMm: number; lengthMm: number; notes: string }[];
     },
   ) => Promise<void>;
   /** Same idea as patchSection, one level down -- a damage record's own photo-exclusion list. */
