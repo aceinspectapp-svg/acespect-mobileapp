@@ -150,7 +150,7 @@ export const TEMPLATE_STATUS_CONFIG: Record<TemplateStatus, { label: string; col
 
 /* ─── Users ─────────────────────────────────────────────────────── */
 export const USERS: User[] = [
-  { id: "u1", name: "Admin User",       email: "admin@acespect.com.au",    role: "admin",     avatar: "AU", region: "VIC", signatureTitle: "Director – Houspect Victoria" },
+  { id: "u1", name: "Admin User",       email: "admin@acespect.com.au",    role: "admin",     avatar: "AU", region: "VIC", signatureTitle: "Director – Houspect Victoria", signatureUrl: "/houspect-signature.png" },
   { id: "u2", name: "James Thompson",   email: "james@acespect.com.au",    role: "inspector", avatar: "JT", phone: "0412 345 678", region: "VIC" },
   { id: "u3", name: "Priya Nair",       email: "priya@acespect.com.au",    role: "inspector", avatar: "PN", phone: "0423 456 789", region: "VIC" },
   { id: "u4", name: "Sarah Chen",       email: "sarah@acespect.com.au",    role: "reviewer",  avatar: "SC", region: "VIC" },
