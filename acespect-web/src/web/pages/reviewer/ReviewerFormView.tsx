@@ -432,6 +432,48 @@ function SelectablePhotoGrid({
   );
 }
 
+/**
+ * A small "+ Add Photo" pill that opens the device's file picker and hands
+ * the chosen file to `onPick` -- the caller decides whether it lands on a
+ * section or one specific damage. `busy` disables it and swaps the label
+ * while that particular upload is in flight.
+ */
+function AddPhotoButton({ label = "+ Add Photo", busy, onPick }: { label?: string; busy: boolean; onPick: (file: File) => void }) {
+  const inputId = `add-photo-${Math.random().toString(36).slice(2)}`;
+  return (
+    <label
+      htmlFor={inputId}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "4px",
+        fontSize: "11px",
+        fontWeight: 700,
+        color: busy ? "#94a3b8" : "#2563eb",
+        cursor: busy ? "default" : "pointer",
+        padding: "4px 9px",
+        border: `1px dashed ${busy ? "#cbd5e1" : "#93c5fd"}`,
+        borderRadius: "999px",
+        background: "#f8fafc",
+      }}
+    >
+      {busy ? "Uploading…" : label}
+      <input
+        id={inputId}
+        type="file"
+        accept="image/*"
+        disabled={busy}
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = ""; // let picking the same file again re-fire onChange
+          if (file) onPick(file);
+        }}
+      />
+    </label>
+  );
+}
+
 function EmptyState({ message }: { message: string }) {
   return (
     <div style={{ padding: "32px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
@@ -467,6 +509,8 @@ export function ReviewerFormView() {
   const [selectedSectionId, setSelectedSectionId] = useState<string>("");
   const [reviewComments, setReviewComments] = useState<Record<string, string>>({});
   const [, setBusy] = useState(false);
+  /** id of the section/damage a photo upload is currently in flight for -- disables just that one "Add Photo" button. */
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   // sectionKey -> its current published template (or null once we know none
   // exists for that key, e.g. a legacy/custom section).
   const [templates, setTemplates] = useState<Record<string, ActiveTemplate | null>>({});
@@ -575,6 +619,35 @@ export function ReviewerFormView() {
       await patchDamage(inspection!.id, damage.id, { excludedPhotoUrls: next });
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * Reviewer attaches a new photo (from their own device) directly onto this
+   * section -- e.g. a follow-up shot the inspector never took. Uploads it
+   * through the same endpoint mobile uses for out-of-app photos, then adds
+   * the returned URL onto the section's own photo list, so it appears in
+   * that exact spot in the generated report, right alongside the
+   * inspector's own photos.
+   */
+  async function addSectionPhoto(section: FormSection, file: File) {
+    setUploadingFor(section.id);
+    try {
+      const { url } = await api.uploadInspectionPhoto(file, inspection!.id, section.key ?? section.id);
+      await patchSection(inspection!.id, section.id, { photos: [...section.photos, url] });
+    } finally {
+      setUploadingFor(null);
+    }
+  }
+
+  /** Same as addSectionPhoto, but pinned to one specific damage/defect -- it prints with that damage's own photos, not the section's general ones. */
+  async function addDamagePhoto(section: FormSection, damage: FormSection["damages"][number], file: File) {
+    setUploadingFor(damage.id);
+    try {
+      const { url } = await api.uploadInspectionPhoto(file, inspection!.id, section.key ?? section.id);
+      await patchDamage(inspection!.id, damage.id, { photos: [...damage.photos, url] });
+    } finally {
+      setUploadingFor(null);
     }
   }
 
@@ -1054,33 +1127,51 @@ export function ReviewerFormView() {
                     {/* Every photo captured for this category, with a checkbox to
                         leave specific ones out of the report above -- unchecking
                         one here is exactly what the preview and the printed
-                        report both reflect. */}
-                    {(selectedSection.photos.length > 0 || selectedSection.damages.some((d) => d.photos.length > 0)) && (
-                      <div style={{ marginTop: "14px" }}>
-                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "8px" }}>
+                        report both reflect. The reviewer can also attach an
+                        extra photo of their own here, either onto the
+                        section generally or onto one specific crack/defect
+                        below -- it then prints in that exact spot. */}
+                    <div style={{ marginTop: "14px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                           Select Photos For Report
                         </label>
-                        <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "14px 16px" }}>
-                          {selectedSection.photos.length > 0 && (
-                            <SelectablePhotoGrid
-                              photos={selectedSection.photos}
-                              excludedPhotoUrls={selectedSection.excludedPhotoUrls ?? []}
-                              onToggle={(url) => toggleSectionPhoto(selectedSection, url)}
-                            />
-                          )}
-                          {selectedSection.damages.filter((d) => d.photos.length > 0).map((d) => (
-                            <div key={d.id} style={{ marginTop: "10px" }}>
-                              <p style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", margin: "0 0 6px" }}>{d.type} — {d.location}</p>
+                        <AddPhotoButton
+                          busy={uploadingFor === selectedSection.id}
+                          onPick={(file) => addSectionPhoto(selectedSection, file)}
+                        />
+                      </div>
+                      <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "14px 16px" }}>
+                        {selectedSection.photos.length > 0 ? (
+                          <SelectablePhotoGrid
+                            photos={selectedSection.photos}
+                            excludedPhotoUrls={selectedSection.excludedPhotoUrls ?? []}
+                            onToggle={(url) => toggleSectionPhoto(selectedSection, url)}
+                          />
+                        ) : (
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0 }}>No general photos for this section yet.</p>
+                        )}
+                        {selectedSection.damages.map((d) => (
+                          <div key={d.id} style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                              <p style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", margin: 0 }}>{d.type} — {d.location}</p>
+                              <AddPhotoButton
+                                label="+ Add"
+                                busy={uploadingFor === d.id}
+                                onPick={(file) => addDamagePhoto(selectedSection, d, file)}
+                              />
+                            </div>
+                            {d.photos.length > 0 && (
                               <SelectablePhotoGrid
                                 photos={d.photos}
                                 excludedPhotoUrls={d.excludedPhotoUrls ?? []}
                                 onToggle={(url) => toggleDamagePhoto(d, url)}
                               />
-                            </div>
-                          ))}
-                        </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
 

@@ -9,6 +9,10 @@ export const sectionUpdateSchema = z.object({
   // leave out of the generated report. Replaces the stored list wholesale --
   // the reviewer's UI always sends the full current exclusion set.
   excludedPhotoUrls: z.array(z.string()).optional(),
+  // This section's own photo list itself, replaced wholesale -- lets a
+  // reviewer attach an extra photo (uploaded via POST /inspections/photos)
+  // onto this section, same as excludedPhotoUrls above.
+  photos: z.array(z.string()).optional(),
 });
 
 // A damage record's own photo-exclusion list -- same idea as the section's,
@@ -16,6 +20,9 @@ export const sectionUpdateSchema = z.object({
 // damages before this; this is the smallest schema that adds one.
 export const damageUpdateSchema = z.object({
   excludedPhotoUrls: z.array(z.string()).optional(),
+  // This damage record's own photo list, replaced wholesale -- lets a
+  // reviewer attach a photo directly to this specific crack/defect.
+  photos: z.array(z.string()).optional(),
 });
 
 export const inspectionUpdateSchema = z.object({

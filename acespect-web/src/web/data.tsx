@@ -23,10 +23,15 @@ interface AppData {
       reportText?: string;
       fields?: Record<string, unknown>;
       excludedPhotoUrls?: string[];
+      photos?: string[];
     },
   ) => Promise<void>;
   /** Same idea as patchSection, one level down -- a damage record's own photo-exclusion list. */
-  patchDamage: (inspectionId: string, damageId: string, patch: { excludedPhotoUrls?: string[] }) => Promise<void>;
+  patchDamage: (
+    inspectionId: string,
+    damageId: string,
+    patch: { excludedPhotoUrls?: string[]; photos?: string[] },
+  ) => Promise<void>;
   patchInspection: (id: string, patch: { status?: Inspection["status"]; notes?: string }) => Promise<void>;
   /** Inspector's own draft save -- replaces the section set. Refreshes the inspection on success. */
   saveInspectionDraft: (id: string, patch: Parameters<typeof api.updateInspectionDraft>[1]) => Promise<void>;

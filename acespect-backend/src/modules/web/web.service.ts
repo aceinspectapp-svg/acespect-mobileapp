@@ -71,6 +71,9 @@ async function updateSection(id: string, input: SectionUpdateInput) {
       ...(input.excludedPhotoUrls !== undefined
         ? { excludedPhotoUrls: input.excludedPhotoUrls as Prisma.InputJsonValue }
         : {}),
+      // Same replace-wholesale idea -- the reviewer's UI sends the full
+      // current photo list (existing + any it just uploaded and appended).
+      ...(input.photos !== undefined ? { photos: input.photos as Prisma.InputJsonValue } : {}),
     },
     include: { damages: { orderBy: { order: 'asc' } } },
   });
@@ -88,6 +91,7 @@ async function updateDamage(id: string, input: DamageUpdateInput) {
       ...(input.excludedPhotoUrls !== undefined
         ? { excludedPhotoUrls: input.excludedPhotoUrls as Prisma.InputJsonValue }
         : {}),
+      ...(input.photos !== undefined ? { photos: input.photos as Prisma.InputJsonValue } : {}),
     },
   });
 }
