@@ -113,6 +113,12 @@ export const api = {
   getInspection: (id: string) => req<{ inspection: Inspection }>(`/web/inspections/${id}`).then((d) => d.inspection),
   getUsers: () => req<{ users: User[] }>("/web/users").then((d) => d.users),
 
+  /** Admin-only: edit another user's profile (name/phone/region/license). */
+  updateUser: (
+    id: string,
+    patch: { name?: string; phone?: string | null; region?: string | null; licenseNumber?: string | null },
+  ) => req<{ user: User }>(`/web/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) }).then((d) => d.user),
+
   updateSection: (
     id: string,
     patch: {
@@ -177,6 +183,49 @@ export const api = {
   finalizeInspection: (id: string) => req<{ inspection: unknown }>(`/inspections/${id}/finalize`, { method: "POST" }),
 
   /**
+   * Starts a brand-new draft from the web (mobile's own "new inspection"
+   * flow never touches the backend until it already has answers to submit,
+   * since it works from a local offline DB first -- web has no equivalent,
+   * so this creates the draft row immediately, pre-seeded with one empty
+   * section per templatable key so InspectorFormEditor has something to
+   * show right away). Returns the new inspection's id to navigate to.
+   */
+  createInspection: (input: {
+    inspectionType: string;
+    propertyType: string;
+    jobNo?: string;
+    address?: string;
+    suburb?: string;
+    client?: string;
+    date?: string;
+    sections: Array<{
+      key: string;
+      name: string;
+      icon: string;
+      order: number;
+      status: "complete" | "partial" | "pending";
+      reportText: string;
+      fields: Record<string, unknown>;
+      answers?: Record<string, unknown>;
+      photos: string[];
+      damages: Array<{
+        type: string;
+        location: string;
+        direction: string;
+        widthMm: number;
+        lengthMm: number;
+        notes: string;
+        photos: string[];
+        order: number;
+      }>;
+    }>;
+  }) =>
+    req<{ inspectionId: string; status: string }>("/inspections/submit", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  /**
    * Uploads one photo taken on a different device than the one the
    * inspection was started on (e.g. a proper camera) so it lands in the
    * same photo store as everything shot in-app. `sectionKey` groups it
@@ -227,4 +276,26 @@ export const api = {
     ),
   publishTemplate: (id: string) =>
     req<{ template: Template }>(`/templates/${id}/publish`, { method: "POST" }).then((d) => d.template),
+  getTemplateAdoption: (inspectionType: string, propertyType: string) =>
+    req<{ adoption: TemplateAdoptionRow[] }>(
+      `/templates/adoption/${encodeURIComponent(inspectionType)}/${encodeURIComponent(propertyType)}`,
+    ).then((d) => d.adoption),
 };
+
+/** One inspector's adoption status for a profile's set of section templates — see templates.service.ts `getAdoption`. */
+export interface TemplateAdoptionRow {
+  inspectorId: string;
+  name: string | null;
+  email: string;
+  status: "NOT_STARTED" | "UP_TO_DATE" | "UPDATE_AVAILABLE";
+  notifiedAt: string | null;
+  acceptedAt: string | null;
+  sections: {
+    sectionKey: string;
+    currentVersion: number | null;
+    latestVersion: number | null;
+    upToDate: boolean;
+    notifiedAt: string | null;
+    acceptedAt: string | null;
+  }[];
+}

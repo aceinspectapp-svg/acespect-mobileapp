@@ -27,6 +27,7 @@ const FIELD_TYPES = [
   'select-tiles',
   'color-select',
   'chip-multiselect',
+  'tile-multiselect',
   'photos',
   'repeating-group',
   'damage-list',

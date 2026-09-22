@@ -1,5 +1,5 @@
-import type { FormSection, Inspection } from "./mockData";
-import { getReportSigner, getUser } from "./mockData";
+import type { FormSection, Inspection, User } from "./mockData";
+import { getReportSigner } from "./mockData";
 
 /** The front-matter of a Dilapidation Report, derived from Job Information. */
 export interface ReportHeader {
@@ -158,11 +158,17 @@ function str(v: unknown, fallback = ""): string {
 /**
  * Build the report front-matter from an inspection's Job Information section,
  * falling back to top-level inspection data when a field isn't recorded.
+ *
+ * `inspector` is the live, API-backed user record for `inspection.inspectorId`
+ * (from `useAppData().getUser`) -- callers must pass it in since this is a
+ * plain function with no access to that context. Previously this looked the
+ * inspector up in `mockData.USERS`, a hardcoded demo list whose ids ("u1",
+ * "u2", …) never match a real database UUID, so the inspector name/license
+ * fallback silently never worked for any real inspection.
  */
-export function buildReportHeader(inspection: Inspection): ReportHeader {
+export function buildReportHeader(inspection: Inspection, inspector?: Pick<User, "name" | "licenseNumber">): ReportHeader {
   const jobInfo = inspection.sections.find((s) => (s.key ?? s.id).startsWith("job-info"));
   const f = jobInfo?.fields ?? {};
-  const inspector = getUser(inspection.inspectorId);
   const signer = getReportSigner();
 
   // "Front Elevation" from Description & Overview -- embedded on the cover
@@ -189,7 +195,7 @@ export function buildReportHeader(inspection: Inspection): ReportHeader {
     inspectionDate: formatLongDate(str(f.date, inspection.date)),
     weather: str(f.weather, "—"),
     inspector: str(f.inspector, inspector?.name ?? "—"),
-    inspectorRegistration: str(f.inspectorRegistration) || undefined,
+    inspectorRegistration: str(f.inspectorRegistration) || inspector?.licenseNumber || undefined,
     purpose: str(f.purpose) || DEFAULT_PURPOSE,
     coverPhotoUrl,
     signatureUrl: signer?.signatureUrl,

@@ -49,7 +49,7 @@ export function ChipMultiSelect({
   otherValue,
   onOtherChange,
 }: {
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; icon?: keyof typeof Ionicons.glyphMap }[];
   selected: string[];
   onToggle: (v: string) => void;
   allowOther?: boolean;
@@ -66,10 +66,13 @@ export function ChipMultiSelect({
             <Pressable
               key={o.value}
               onPress={() => onToggle(o.value)}
-              style={[styles.pill, active && styles.pillActive]}
+              style={[styles.pill, styles.pillWithIcon, active && styles.pillActive]}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: active }}
             >
+              {o.icon && (
+                <Ionicons name={o.icon} size={15} color={active ? colors.barBlue : colors.textSecondary} />
+              )}
               <Text style={[styles.pillText, active && styles.pillTextActive]}>{o.label}</Text>
             </Pressable>
           );
@@ -203,6 +206,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   pillActive: { borderColor: colors.barBlue, backgroundColor: colors.accentBlue },
+  pillWithIcon: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   pillText: { ...typography.bodySm, color: colors.textSecondary },
   pillTextActive: { color: colors.barBlue, fontWeight: '700' },
   conditionRow: {

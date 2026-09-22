@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { Directory, File, Paths } from 'expo-file-system';
@@ -9,6 +9,7 @@ import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { AppScreenProps } from '../../navigation/types';
 import { getWifiOnlySync, setWifiOnlySync, QueuedSubmission } from '../../services/offlineStorage';
 import { subscribe as subscribeSyncQueue } from '../../services/syncManager';
+import { getTemplateUpdates } from '../../services/templateApi';
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -34,6 +35,7 @@ export function SettingsScreen({ navigation }: AppScreenProps<'Settings'>) {
   const [loaded, setLoaded] = useState(false);
   const [localStats, setLocalStats] = useState({ count: 0, bytes: 0 });
   const [pendingQueue, setPendingQueue] = useState<QueuedSubmission[]>([]);
+  const [pendingTemplateUpdates, setPendingTemplateUpdates] = useState(0);
 
   useEffect(() => {
     getWifiOnlySync().then((v) => {
@@ -41,6 +43,14 @@ export function SettingsScreen({ navigation }: AppScreenProps<'Settings'>) {
       setLoaded(true);
     });
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      getTemplateUpdates()
+        .then((updates) => setPendingTemplateUpdates(updates.length))
+        .catch(() => {});
+    }, []),
+  );
 
   useEffect(() => subscribeSyncQueue(setPendingQueue), []);
 
@@ -62,6 +72,25 @@ export function SettingsScreen({ navigation }: AppScreenProps<'Settings'>) {
       <InspectionHeader title="Settings" onBack={() => navigation.goBack()} />
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>TEMPLATES</Text>
+          <Pressable style={styles.linkRow} onPress={() => navigation.navigate('TemplateUpdates')}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowLabel}>Template Updates</Text>
+              <Text style={styles.rowHint}>
+                Review and apply admin-published template versions on your own schedule. Applying one never changes
+                an inspection already in progress.
+              </Text>
+            </View>
+            {pendingTemplateUpdates > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{pendingTemplateUpdates}</Text>
+              </View>
+            )}
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+        </View>
+
         <View style={styles.card}>
           <Text style={styles.cardTitle}>SYNC</Text>
           <View style={styles.row}>
@@ -123,6 +152,10 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   rowLabel: { ...typography.body, fontWeight: '700', color: colors.textPrimary },
   rowHint: { ...typography.caption, color: colors.textMuted, marginTop: 4, lineHeight: 17 },
+
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  badge: { backgroundColor: colors.primary, borderRadius: radius.pill, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  badgeText: { ...typography.caption, color: colors.white, fontWeight: '700', fontSize: 11 },
 
   statRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   statLabel: { ...typography.bodySm, color: colors.textSecondary, flex: 1 },

@@ -19,22 +19,35 @@ import type { FormSection } from "../../mockData";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { api } from "../../api";
 
+// Sections are deleted + recreated wholesale on every draft save (see
+// inspections.service.ts `update`), so `section.id` is a new DB row id after
+// each save/autosave. `key` (falling back to `id` for legacy/custom sections
+// that predate it) is the stable identity that survives across saves -- used
+// here to key selection + in-progress edits so autosaving mid-edit doesn't
+// knock the inspector back out of the section they're editing.
+function sectionKeyOf(s: Pick<FormSection, "id" | "key">): string {
+  return s.key ?? s.id;
+}
+
 export function InspectorFormEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getInspectionById, saveInspectionDraft, finalizeInspection } = useAppData();
   const inspection = id ? getInspectionById(id) ?? null : null;
   const [note, setNote] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [photoHover, setPhotoHover] = useState(false);
-  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+  const [selectedSectionKey, setSelectedSectionKey] = useState<string | null>(null);
   // sectionKey -> its current published template (or null once we know none
   // exists for that key, e.g. a legacy/custom section).
   const [templates, setTemplates] = useState<Record<string, ActiveTemplate | null>>({});
-  // sectionId -> its answers as edited here, not yet saved. Overrides
+  // sectionKey -> its answers as edited here, not yet saved. Overrides
   // section.answers only for display/save purposes until Save Draft succeeds.
+  // Keyed by the stable section key (not the DB row id -- see sectionKeyOf).
   const [answerEdits, setAnswerEdits] = useState<Record<string, AnswerTree>>({});
   // Off until the inspector actually tries to Submit an incomplete
   // inspection -- same "don't show errors on a fresh screen" rule mobile's
@@ -42,14 +55,14 @@ export function InspectorFormEditor() {
   // leaving each section (the web editor shows every section on one page,
   // not a linear per-section flow).
   const [showMissing, setShowMissing] = useState(false);
-  // sectionId -> its "additional photos" (not tied to any template field --
+  // sectionKey -> its "additional photos" (not tied to any template field --
   // e.g. extra shots from an external camera), as edited here. Overrides
   // section.photos the same way answerEdits overrides section.answers.
   const [photoEdits, setPhotoEdits] = useState<Record<string, string[]>>({});
 
   const isDraft = inspection?.status === "draft";
   const isCompleted = inspection ? (inspection.status === "approved" || inspection.status === "in-review") : false;
-  const selectedSection = inspection?.sections.find(s => s.id === selectedSectionId) ?? null;
+  const selectedSection = inspection?.sections.find(s => sectionKeyOf(s) === selectedSectionKey) ?? null;
 
   // A different inspection loaded (or none) -- drop any unsaved edits so
   // they can't bleed from one job into another.
@@ -65,9 +78,9 @@ export function InspectorFormEditor() {
   // section with no matching template (legacy/custom data) has nothing to
   // validate against, so it's never treated as incomplete.
   function isSectionComplete(section: FormSection): boolean {
-    const template = templates[section.key ?? section.id];
+    const template = templates[sectionKeyOf(section)];
     if (!template) return true;
-    const answers = answerEdits[section.id] ?? (section.answers as AnswerTree | null | undefined) ?? {};
+    const answers = answerEdits[sectionKeyOf(section)] ?? (section.answers as AnswerTree | null | undefined) ?? {};
     return meetsAllRequireWhen(template.fields, answers) && meetsAllRequiredFields(template.fields, answers);
   }
 
@@ -95,6 +108,24 @@ export function InspectorFormEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inspection]);
 
+  // Autosave: any unsaved answer/photo edit is written to the server ~1s
+  // after the inspector stops typing/uploading, so a reload (or navigating
+  // away without remembering to hit "Save Draft") never loses work the way
+  // it did when Save Draft was the only path to persistence. Declared above
+  // the early "not found" return so hook order stays stable across renders.
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasPendingEdits = Object.keys(answerEdits).length > 0 || Object.keys(photoEdits).length > 0;
+  useEffect(() => {
+    if (!isDraft || !hasPendingEdits) return;
+    autosaveTimer.current = setTimeout(() => {
+      saveDraft();
+    }, 1000);
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answerEdits, photoEdits, isDraft]);
+
   if (!inspection) {
     return (
       <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8", fontFamily: "Inter, sans-serif", background: "#f5f6fa", minHeight: "100vh" }}>
@@ -111,15 +142,15 @@ export function InspectorFormEditor() {
 
   const sc = STATUS_CONFIG[inspection.status];
 
-  function setAnswer(sectionId: string, key: string, value: AnswerValue) {
+  function setAnswer(sectionKey: string, key: string, value: AnswerValue) {
     setAnswerEdits(prev => {
-      const base = prev[sectionId] ?? ((inspection!.sections.find(s => s.id === sectionId)?.answers as AnswerTree | undefined) ?? {});
-      return { ...prev, [sectionId]: { ...base, [key]: value } };
+      const base = prev[sectionKey] ?? ((inspection!.sections.find(s => sectionKeyOf(s) === sectionKey)?.answers as AnswerTree | undefined) ?? {});
+      return { ...prev, [sectionKey]: { ...base, [key]: value } };
     });
   }
 
-  function setSectionPhotos(sectionId: string, photos: string[]) {
-    setPhotoEdits(prev => ({ ...prev, [sectionId]: photos }));
+  function setSectionPhotos(sectionKey: string, photos: string[]) {
+    setPhotoEdits(prev => ({ ...prev, [sectionKey]: photos }));
   }
 
   // Sections are sent whole — the API replaces the stored set. Any
@@ -128,12 +159,12 @@ export function InspectorFormEditor() {
   // damages list never drift out of sync with what was edited here.
   function buildSectionsPayload() {
     return inspection!.sections.map((s, idx) => {
-      const sectionKey = s.key ?? s.id;
-      const template = templates[sectionKey];
-      const answers = answerEdits[s.id] ?? (s.answers as AnswerTree | null | undefined) ?? undefined;
-      const derived = template && answers ? flattenSectionToDraft(template.fields, answers, sectionKey) : null;
+      const sKey = sectionKeyOf(s);
+      const template = templates[sKey];
+      const answers = answerEdits[sKey] ?? (s.answers as AnswerTree | null | undefined) ?? undefined;
+      const derived = template && answers ? flattenSectionToDraft(template.fields, answers, sKey) : null;
       return {
-        key: s.key ?? s.id,
+        key: sKey,
         name: s.name,
         icon: s.icon ?? "",
         order: idx,
@@ -141,7 +172,7 @@ export function InspectorFormEditor() {
         reportText: derived ? derived.reportText : s.reportText ?? "",
         fields: derived ? derived.fields : s.fields ?? {},
         answers: answers as Record<string, unknown> | undefined,
-        photos: photoEdits[s.id] ?? s.photos ?? [],
+        photos: photoEdits[sKey] ?? s.photos ?? [],
         damages: (derived ? derived.damages : s.damages ?? []).map((dm, dIdx) => ({
           type: dm.type || "Damage",
           location: dm.location ?? "",
@@ -158,12 +189,26 @@ export function InspectorFormEditor() {
 
   async function saveDraft(): Promise<boolean> {
     if (!isDraft) return true;
+    // Snapshot what's being sent so success only clears edits that made it
+    // to the server -- a keystroke/photo change that lands while this
+    // request is in flight stays queued for the next autosave instead of
+    // being silently discarded.
+    const answerSnapshot = answerEdits;
+    const photoSnapshot = photoEdits;
     setBusy(true);
     setSaveError(null);
     try {
       await saveInspectionDraft(inspection!.id, { sections: buildSectionsPayload() });
-      setAnswerEdits({});
-      setPhotoEdits({});
+      setAnswerEdits(prev => {
+        const next = { ...prev };
+        for (const [k, v] of Object.entries(answerSnapshot)) if (next[k] === v) delete next[k];
+        return next;
+      });
+      setPhotoEdits(prev => {
+        const next = { ...prev };
+        for (const [k, v] of Object.entries(photoSnapshot)) if (next[k] === v) delete next[k];
+        return next;
+      });
       return true;
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed to save");
@@ -174,10 +219,43 @@ export function InspectorFormEditor() {
   }
 
   async function handleSaveDraftClick() {
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     const ok = await saveDraft();
     if (ok) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    }
+  }
+
+  // Flush any pending edit immediately before leaving the page, rather than
+  // relying on the debounce timer (which may not have fired yet).
+  async function handleBack() {
+    if (isDraft && hasPendingEdits) {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+      await saveDraft();
+    }
+    navigate("/inspector/dashboard");
+  }
+
+  async function handleSaveNote() {
+    // `patchInspection` (PATCH /web/inspections/:id) is the reviewer/admin
+    // endpoint and 403s for an inspector. The inspector's own draft-editing
+    // endpoint (PATCH /inspections/:id, same one Save Draft uses) also
+    // accepts `notes`, and is the one an inspector is actually allowed to
+    // call on their own draft.
+    if (!note.trim() || !inspection || !isDraft) return;
+    setNoteBusy(true);
+    setSaveError(null);
+    try {
+      const combined = inspection.notes ? `${inspection.notes}\n${note.trim()}` : note.trim();
+      await saveInspectionDraft(inspection.id, { notes: combined });
+      setNote("");
+      setNoteSaved(true);
+      setTimeout(() => setNoteSaved(false), 2000);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Failed to save note");
+    } finally {
+      setNoteBusy(false);
     }
   }
 
@@ -191,7 +269,7 @@ export function InspectorFormEditor() {
     const incomplete = inspection!.sections.filter((s) => !isSectionComplete(s));
     if (incomplete.length > 0) {
       setShowMissing(true);
-      setSelectedSectionId(incomplete[0].id);
+      setSelectedSectionKey(sectionKeyOf(incomplete[0]));
       setSaveError(
         `${incomplete.length} section${incomplete.length > 1 ? "s" : ""} still ${incomplete.length > 1 ? "have" : "has"} required fields missing: ${incomplete.map((s) => s.name).join(", ")}. Fill these in before submitting.`,
       );
@@ -217,7 +295,7 @@ export function InspectorFormEditor() {
       {/* Header */}
       <div style={{ background: "white", borderBottom: "1px solid #e5e7eb", padding: "14px 24px", display: "flex", alignItems: "center", gap: "16px", flexShrink: 0 }}>
         <button
-          onClick={() => navigate("/inspector/dashboard")}
+          onClick={handleBack}
           style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", background: "white", cursor: "pointer", fontSize: "13px", color: "#374151", fontWeight: 500 }}
         >
           <ArrowLeft size={14} /> Back
@@ -231,6 +309,11 @@ export function InspectorFormEditor() {
           </div>
           <p style={{ fontSize: "12px", color: "#94a3b8", margin: "2px 0 0" }}>
             Job No. {inspection.jobNo} · {inspection.type} · {inspection.date}
+            {isDraft && (
+              <span style={{ marginLeft: "10px", color: busy ? "#2563eb" : hasPendingEdits ? "#b45309" : "#16a34a", fontWeight: 600 }}>
+                {busy ? "· Saving…" : hasPendingEdits ? "· Unsaved changes" : "· All changes saved"}
+              </span>
+            )}
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
@@ -266,7 +349,7 @@ export function InspectorFormEditor() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
               <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#1a2a4a", margin: 0 }}>Inspection Sections</h3>
               {selectedSection && (
-                <button onClick={() => setSelectedSectionId(null)} style={{ fontSize: "12px", color: "#64748b", background: "none", border: "none", cursor: "pointer" }}>
+                <button onClick={() => setSelectedSectionKey(null)} style={{ fontSize: "12px", color: "#64748b", background: "none", border: "none", cursor: "pointer" }}>
                   ✕ Close
                 </button>
               )}
@@ -279,7 +362,8 @@ export function InspectorFormEditor() {
                 </div>
               ) : (
                 inspection.sections.map((section, idx) => {
-                  const isActive = selectedSectionId === section.id;
+                  const sKey = sectionKeyOf(section);
+                  const isActive = selectedSectionKey === sKey;
                   // Red outline once the inspector has tried to Submit and
                   // this section is one of the ones still blocking it --
                   // the same "highlight what's incomplete" treatment mobile
@@ -287,8 +371,8 @@ export function InspectorFormEditor() {
                   const flagged = isDraft && showMissing && !isSectionComplete(section);
                   return (
                     <button
-                      key={section.id}
-                      onClick={() => setSelectedSectionId(isActive ? null : section.id)}
+                      key={sKey}
+                      onClick={() => setSelectedSectionKey(isActive ? null : sKey)}
                       style={{
                         width: "100%", background: "white", borderRadius: "12px",
                         border: `1.5px solid ${flagged ? "#dc2626" : isActive ? "#2563eb" : "#e5e7eb"}`,
@@ -334,7 +418,8 @@ export function InspectorFormEditor() {
                  mobile, in the same order/grouping, driven by the section's
                  actual template (not a hand-picked summary). */
               (() => {
-                const template = templates[selectedSection.key ?? selectedSection.id];
+                const selectedKey = sectionKeyOf(selectedSection);
+                const template = templates[selectedKey];
                 return (
                   <>
                     <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
@@ -350,11 +435,11 @@ export function InspectorFormEditor() {
                       </div>
                       {template ? (
                         <div style={{ padding: "16px 18px" }}>
-                          <PhotoUploadContext.Provider value={{ inspectionId: inspection.id, sectionKey: selectedSection.key ?? selectedSection.id }}>
+                          <PhotoUploadContext.Provider value={{ inspectionId: inspection.id, sectionKey: selectedKey }}>
                             <SectionFieldEditor
                               fields={template.fields}
-                              scope={answerEdits[selectedSection.id] ?? (selectedSection.answers as AnswerTree | null | undefined) ?? {}}
-                              onChange={(key, value) => setAnswer(selectedSection.id, key, value)}
+                              scope={answerEdits[selectedKey] ?? (selectedSection.answers as AnswerTree | null | undefined) ?? {}}
+                              onChange={(key, value) => setAnswer(selectedKey, key, value)}
                               readOnly={!isDraft}
                               showMissing={isDraft && showMissing}
                             />
@@ -395,13 +480,13 @@ export function InspectorFormEditor() {
                       </div>
                     )}
                     <AdditionalPhotosCard
-                      photos={photoEdits[selectedSection.id] ?? selectedSection.photos}
+                      photos={photoEdits[selectedKey] ?? selectedSection.photos}
                       savedPhotos={selectedSection.photos}
                       sectionId={selectedSection.id}
                       inspectionId={inspection.id}
-                      sectionKey={selectedSection.key ?? selectedSection.id}
+                      sectionKey={selectedKey}
                       readOnly={!isDraft}
-                      onChange={(photos) => setSectionPhotos(selectedSection.id, photos)}
+                      onChange={(photos) => setSectionPhotos(selectedKey, photos)}
                     />
                   </>
                 );
@@ -424,8 +509,12 @@ export function InspectorFormEditor() {
                         rows={4}
                         style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1.5px solid #e5e7eb", fontSize: "13px", color: "#1a2a4a", resize: "vertical", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
                       />
-                      <button style={{ marginTop: "10px", width: "100%", padding: "9px", borderRadius: "8px", background: "#2563eb", color: "white", border: "none", fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
-                        <Plus size={14} /> Save Note
+                      <button
+                        onClick={handleSaveNote}
+                        disabled={noteBusy || !note.trim() || !isDraft}
+                        style={{ marginTop: "10px", width: "100%", padding: "9px", borderRadius: "8px", background: "#2563eb", color: "white", border: "none", fontSize: "13px", fontWeight: 600, cursor: noteBusy || !note.trim() || !isDraft ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", opacity: !note.trim() || !isDraft ? 0.6 : 1 }}
+                      >
+                        {noteSaved ? <><CheckCircle size={14} /> Saved!</> : <><Plus size={14} /> {noteBusy ? "Saving…" : "Save Note"}</>}
                       </button>
                     </div>
                     <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", padding: "20px" }}>

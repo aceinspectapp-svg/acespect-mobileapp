@@ -51,6 +51,10 @@ export function serializeUser(u: User) {
     avatar: u.avatar ?? initials(u.name),
     phone: u.phone ?? undefined,
     region: u.region ?? undefined,
+    // Inspector's license/registration number (e.g. DBU license) -- shown
+    // alongside their name in the reviewer pane and used as the report
+    // cover's fallback when the inspection itself doesn't override it.
+    licenseNumber: u.licenseNumber ?? undefined,
   };
 }
 

@@ -10,6 +10,7 @@ import { ReportSummaryScreen } from '../screens/inspection/ReportSummaryScreen';
 import { AddCustomSectionScreen } from '../screens/inspection/AddCustomSectionScreen';
 import { AssignedJobsScreen } from '../screens/inspection/AssignedJobsScreen';
 import { SettingsScreen } from '../screens/inspection/SettingsScreen';
+import { TemplateUpdatesScreen } from '../screens/inspection/TemplateUpdatesScreen';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
@@ -18,6 +19,7 @@ export function AppNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="SelectInspectionType" component={SelectInspectionTypeScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="TemplateUpdates" component={TemplateUpdatesScreen} />
       <Stack.Screen name="AssignedJobs" component={AssignedJobsScreen} />
       <Stack.Screen name="JobInformation" component={JobInformationScreen} />
       <Stack.Screen name="InspectionSetupStep2" component={InspectionSetupStep2Screen} />

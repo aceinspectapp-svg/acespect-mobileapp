@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router";
 import {
   LayoutDashboard, FileText, Users, Settings, LogOut,
@@ -14,7 +15,7 @@ const ROLE_NAV: Record<Role, { to: string; icon: React.ElementType; label: strin
   ],
   inspector: [
     { to: "/inspector/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/inspector/forms",     icon: FileText,         label: "My Forms" },
+    { to: "/inspector/forms",     icon: ClipboardCheck,   label: "Inspections" },
   ],
   admin: [
     { to: "/admin/dashboard",   icon: LayoutDashboard, label: "Dashboard" },
@@ -36,6 +37,7 @@ export function WebLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser, logout } = useAppData();
+  const [showNotifications, setShowNotifications] = useState(false);
   const role: Role = currentUser?.role ?? "reviewer";
   const nav = ROLE_NAV[role];
   const rm = ROLE_META[role];
@@ -141,15 +143,35 @@ export function WebLayout() {
           justifyContent: "flex-end",
           padding: "0 24px", gap: "10px",
         }}>
-          <button style={{
-            width: "34px", height: "34px", borderRadius: "8px",
-            background: "#f8fafc", border: "1px solid #e5e7eb",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", position: "relative",
-          }}>
-            <Bell size={15} color="#64748b" strokeWidth={1.8} />
-            <span style={{ position: "absolute", top: "8px", right: "8px", width: "6px", height: "6px", borderRadius: "50%", background: "#e63329", border: "1.5px solid white" }} />
-          </button>
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setShowNotifications((v) => !v)}
+              style={{
+                width: "34px", height: "34px", borderRadius: "8px",
+                background: showNotifications ? "#eff6ff" : "#f8fafc",
+                border: `1px solid ${showNotifications ? "#93c5fd" : "#e5e7eb"}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", position: "relative",
+              }}
+            >
+              <Bell size={15} color="#64748b" strokeWidth={1.8} />
+              <span style={{ position: "absolute", top: "8px", right: "8px", width: "6px", height: "6px", borderRadius: "50%", background: "#e63329", border: "1.5px solid white" }} />
+            </button>
+            {showNotifications && (
+              <>
+                {/* Click-away catcher */}
+                <div onClick={() => setShowNotifications(false)} style={{ position: "fixed", inset: 0, zIndex: 10 }} />
+                <div style={{
+                  position: "absolute", top: "42px", right: 0, width: "260px", zIndex: 11,
+                  background: "white", borderRadius: "10px", border: "1px solid #e5e7eb",
+                  boxShadow: "0 8px 24px rgba(15,23,42,0.12)", padding: "14px 16px",
+                }}>
+                  <p style={{ fontSize: "12px", fontWeight: 700, color: "#1a2a4a", margin: "0 0 4px" }}>Notifications</p>
+                  <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0 }}>No new notifications.</p>
+                </div>
+              </>
+            )}
+          </div>
         </header>
 
         {/* Page */}

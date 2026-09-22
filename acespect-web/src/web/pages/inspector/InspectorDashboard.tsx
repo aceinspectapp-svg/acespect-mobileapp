@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Plus, Pencil, MessageSquare, Eye } from "lucide-react";
+import { Plus, Pencil, MessageSquare, Eye, X } from "lucide-react";
 import { STATUS_CONFIG } from "../../mockData";
 import type { InspectionStatus } from "../../mockData";
 import { useAppData } from "../../data";
 import { PageShell, StatusBadge, TableCard, PrimaryBtn } from "../../components/WebLayout";
+import { INSPECTION_TYPES, PROPERTY_TYPES, TEMPLATABLE_SECTIONS, isValidCombo } from "../../constants/inspectionData";
 
 type TabFilter = "all" | InspectionStatus;
 
@@ -20,6 +21,7 @@ export function InspectorDashboard() {
   const navigate = useNavigate();
   const { currentUser, getInspectionsByInspector } = useAppData();
   const [activeTab, setActiveTab] = useState<TabFilter>("all");
+  const [showNewModal, setShowNewModal] = useState(false);
 
   const allInspections = currentUser ? getInspectionsByInspector(currentUser.id) : [];
   const filtered =
@@ -28,11 +30,12 @@ export function InspectorDashboard() {
       : allInspections.filter((i) => i.status === activeTab);
 
   return (
+    <>
     <PageShell
       title="My Inspections"
       subtitle="James Thompson — Inspector"
       actions={
-        <PrimaryBtn color="#e63329" onClick={() => navigate("/inspector/form/new")}>
+        <PrimaryBtn color="#e63329" onClick={() => setShowNewModal(true)}>
           <Plus size={15} strokeWidth={2.5} />
           New Inspection
         </PrimaryBtn>
@@ -259,6 +262,8 @@ export function InspectorDashboard() {
         </TableCard>
       )}
     </PageShell>
+    {showNewModal && <NewInspectionModal onClose={() => setShowNewModal(false)} />}
+    </>
   );
 }
 
@@ -334,6 +339,171 @@ function EmptyState({ tab }: { tab: TabFilter }) {
           ? "You have no inspections yet."
           : `No inspections with status "${tab}".`}
       </p>
+    </div>
+  );
+}
+
+const modalFieldStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "8px 10px",
+  borderRadius: "8px",
+  border: "1.5px solid #e5e7eb",
+  fontSize: "13px",
+  color: "#1a2a4a",
+  outline: "none",
+  boxSizing: "border-box",
+  fontFamily: "inherit",
+  background: "white",
+};
+
+/**
+ * Starts a brand-new draft. Mobile's own "new inspection" flow never
+ * touches the backend at this point (it works from a local offline DB,
+ * only syncing once there's something to submit) -- web has no equivalent
+ * local store, so this creates the draft on the server immediately, with
+ * one empty placeholder section per templatable key so InspectorFormEditor
+ * has the full section list to fill in right away, the same set mobile
+ * would build up to over the course of the inspection.
+ */
+function NewInspectionModal({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate();
+  const { createInspection } = useAppData();
+  const [inspectionTypeId, setInspectionTypeId] = useState(INSPECTION_TYPES[0].id);
+  const [propertyTypeId, setPropertyTypeId] = useState("");
+  const [jobNo, setJobNo] = useState("");
+  const [client, setClient] = useState("");
+  const [address, setAddress] = useState("");
+  const [suburb, setSuburb] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedType = INSPECTION_TYPES.find((t) => t.id === inspectionTypeId)!;
+  const availableProperties = PROPERTY_TYPES.filter((p) => selectedType.applicableProperties.includes(p.id));
+
+  async function handleCreate() {
+    if (!propertyTypeId) {
+      setError("Choose a property type");
+      return;
+    }
+    if (!isValidCombo(inspectionTypeId, propertyTypeId)) {
+      setError("That property type isn't available for this inspection type");
+      return;
+    }
+    if (!jobNo.trim() || !address.trim() || !client.trim()) {
+      setError("Job number, address and client are required");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const propertyType = PROPERTY_TYPES.find((p) => p.id === propertyTypeId)!;
+      const sections = TEMPLATABLE_SECTIONS.map((s, idx) => ({
+        key: s.key,
+        name: s.name,
+        icon: s.icon,
+        order: idx,
+        status: "pending" as const,
+        reportText: "",
+        fields: {},
+        photos: [],
+        damages: [],
+      }));
+      const id = await createInspection({
+        inspectionType: selectedType.title,
+        propertyType: propertyType.title,
+        jobNo: jobNo.trim(),
+        address: address.trim(),
+        suburb: suburb.trim(),
+        client: client.trim(),
+        date,
+        sections,
+      });
+      navigate(`/inspector/form/${id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create inspection");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: "white", borderRadius: "14px", width: "420px", maxWidth: "calc(100vw - 32px)", maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "0 20px 50px rgba(0,0,0,0.25)" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #f1f5f9" }}>
+          <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#1a2a4a", margin: 0 }}>New Inspection</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: "4px" }}>
+            <X size={16} />
+          </button>
+        </div>
+        <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>Inspection Type</label>
+            <select
+              value={inspectionTypeId}
+              onChange={(e) => {
+                setInspectionTypeId(e.target.value);
+                setPropertyTypeId(""); // selected property may not apply to the new type
+              }}
+              style={modalFieldStyle}
+            >
+              {INSPECTION_TYPES.map((t) => (
+                <option key={t.id} value={t.id}>{t.title}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>Property Type</label>
+            <select value={propertyTypeId} onChange={(e) => setPropertyTypeId(e.target.value)} style={modalFieldStyle}>
+              <option value="">Select…</option>
+              {availableProperties.map((p) => (
+                <option key={p.id} value={p.id}>{p.title}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>Job Number</label>
+            <input value={jobNo} onChange={(e) => setJobNo(e.target.value)} style={modalFieldStyle} placeholder="e.g. VIC-124" />
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>Client</label>
+            <input value={client} onChange={(e) => setClient(e.target.value)} style={modalFieldStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>Property Address</label>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} style={modalFieldStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>Suburb</label>
+            <input value={suburb} onChange={(e) => setSuburb(e.target.value)} style={modalFieldStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>Inspection Date</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={modalFieldStyle} />
+          </div>
+          {error && <p style={{ fontSize: "12px", color: "#dc2626", margin: 0 }}>{error}</p>}
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "14px 20px", borderTop: "1px solid #f1f5f9" }}>
+          <button
+            onClick={onClose}
+            style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid #e5e7eb", background: "white", fontSize: "12px", fontWeight: 600, color: "#374151", cursor: "pointer" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleCreate}
+            disabled={saving}
+            style={{ padding: "8px 14px", borderRadius: "8px", border: "none", background: saving ? "#94a3b8" : "#e63329", fontSize: "12px", fontWeight: 600, color: "white", cursor: saving ? "default" : "pointer" }}
+          >
+            {saving ? "Creating…" : "Create Inspection"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

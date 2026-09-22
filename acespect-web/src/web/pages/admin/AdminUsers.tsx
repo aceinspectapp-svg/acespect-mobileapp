@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Plus, Search, Mail, Phone } from "lucide-react";
+import { Plus, Search, Mail, Phone, X } from "lucide-react";
 import { useAppData } from "../../data";
 import { PageShell, PrimaryBtn, StatusBadge, TableCard } from "../../components/WebLayout";
-import type { Role } from "../../mockData";
+import type { Role, User } from "../../mockData";
 
 const ROLE_CONFIG: Record<Role, { color: string; bg: string }> = {
   inspector: { color: "#16a34a", bg: "#dcfce7" },
@@ -11,9 +11,10 @@ const ROLE_CONFIG: Record<Role, { color: string; bg: string }> = {
 };
 
 export function AdminUsers() {
-  const { users: USERS } = useAppData();
+  const { users: USERS, patchUser } = useAppData();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Role | "all">("all");
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const filtered = USERS.filter(u => {
     const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
@@ -89,7 +90,7 @@ export function AdminUsers() {
       </div>
 
       {/* Table */}
-      <TableCard headers={["User", "Role", "Email", "Phone", "Region", "Actions"]}>
+      <TableCard headers={["User", "Role", "Email", "Phone", "Region", "License", "Actions"]}>
         {filtered.map((user, i) => {
           const rc = ROLE_CONFIG[user.role];
           return (
@@ -156,10 +157,18 @@ export function AdminUsers() {
                 <span style={{ fontSize: "12px", color: "#374151" }}>{user.region ?? "—"}</span>
               </td>
 
+              {/* License -- inspector's DBU/registration number, shown next to their name/role. */}
+              <td style={{ padding: "14px 16px" }}>
+                <span style={{ fontSize: "12px", color: user.licenseNumber ? "#374151" : "#d1d5db" }}>
+                  {user.licenseNumber ?? "—"}
+                </span>
+              </td>
+
               {/* Actions */}
               <td style={{ padding: "14px 16px" }}>
                 <div style={{ display: "flex", gap: "6px" }}>
                   <button
+                    onClick={() => setEditingUser(user)}
                     style={{
                       padding: "5px 10px",
                       borderRadius: "6px",
@@ -199,6 +208,116 @@ export function AdminUsers() {
           );
         })}
       </TableCard>
+
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onSave={async (patch) => {
+            await patchUser(editingUser.id, patch);
+            setEditingUser(null);
+          }}
+        />
+      )}
     </PageShell>
+  );
+}
+
+/** Name / phone / region / license -- the fields already shown in this table. */
+function EditUserModal({
+  user,
+  onClose,
+  onSave,
+}: {
+  user: User;
+  onClose: () => void;
+  onSave: (patch: { name: string; phone: string | null; region: string | null; licenseNumber: string | null }) => Promise<void>;
+}) {
+  const [name, setName] = useState(user.name);
+  const [phone, setPhone] = useState(user.phone ?? "");
+  const [region, setRegion] = useState(user.region ?? "");
+  const [licenseNumber, setLicenseNumber] = useState(user.licenseNumber ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fieldStyle: React.CSSProperties = {
+    width: "100%", padding: "8px 10px", borderRadius: "8px", border: "1.5px solid #e5e7eb",
+    fontSize: "13px", color: "#1a2a4a", outline: "none", boxSizing: "border-box", fontFamily: "inherit",
+  };
+
+  async function handleSave() {
+    if (!name.trim()) {
+      setError("Name is required");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        name: name.trim(),
+        phone: phone.trim() || null,
+        region: region.trim() || null,
+        licenseNumber: licenseNumber.trim() || null,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: "white", borderRadius: "14px", width: "360px", maxWidth: "calc(100vw - 32px)", boxShadow: "0 20px 50px rgba(0,0,0,0.25)" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #f1f5f9" }}>
+          <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#1a2a4a", margin: 0 }}>Edit {user.name}</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: "4px" }}>
+            <X size={16} />
+          </button>
+        </div>
+        <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} style={fieldStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>Phone</label>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} style={fieldStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>Region</label>
+            <input value={region} onChange={(e) => setRegion(e.target.value)} style={fieldStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>
+              License / DBU registration number
+            </label>
+            <input value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} style={fieldStyle} placeholder="e.g. DBU-12345" />
+          </div>
+          {error && <p style={{ fontSize: "12px", color: "#dc2626", margin: 0 }}>{error}</p>}
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "14px 20px", borderTop: "1px solid #f1f5f9" }}>
+          <button
+            onClick={onClose}
+            style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid #e5e7eb", background: "white", fontSize: "12px", fontWeight: 600, color: "#374151", cursor: "pointer" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{ padding: "8px 14px", borderRadius: "8px", border: "none", background: saving ? "#94a3b8" : "#1a2a4a", fontSize: "12px", fontWeight: 600, color: "white", cursor: saving ? "default" : "pointer" }}
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
