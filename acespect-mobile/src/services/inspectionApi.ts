@@ -41,7 +41,15 @@ export async function uploadPhoto(
 export async function submitInspection(
   payload: SubmitPayload,
 ): Promise<{ inspectionId: string; reviewJobId: string; status: string }> {
-  const { data } = await api.post('/inspections/submit', payload);
+  const { data } = await api.post('/inspections/submit', payload, {
+    // Same reasoning as uploadPhoto's override above: the payload itself is
+    // small (photos are already-uploaded URLs by this point), but creating
+    // the inspection + every section + damage row + the review job is real
+    // work, and over a slow/tunnelled dev connection the shared client's
+    // default 15s (apiClient.ts) has been tight enough to throw a spurious
+    // "Network Error" on an otherwise-successful submit.
+    timeout: 60000,
+  });
   return data;
 }
 
