@@ -24,9 +24,17 @@ export function createApp() {
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: '1mb' }));
-  app.use(express.urlencoded({ extended: true }));
+  // Logged before body-parsing so a payload-too-large rejection below still
+  // shows up here -- express.json() throwing calls next(err), which skips
+  // any regular middleware registered after it (morgan included), so a
+  // rejected submit would otherwise leave zero trace in these logs.
   if (env.NODE_ENV !== 'test') app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+  // A full multi-section inspection submit (every section's answers +
+  // damages, no photo bytes -- those are separate uploads) can run well
+  // past 1mb for a long/detailed report; that default was tight enough to
+  // silently reject real submits.
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // Liveness — no DB dependency.
   app.get('/health', (_req: Request, res: Response) => {
