@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppTextInput, DateField, SegmentedToggle } from '../../ui';
-import { ChoiceTileGrid, TileOption } from '../ChoiceTile';
+import { ChoiceTileGrid, ChoiceTileMultiGrid, TileOption } from '../ChoiceTile';
 import { ChipMultiSelect, ColorSelect, FieldLabel, PillSelect, PlainTextInput } from '../fieldKit';
 import { colors, radius, spacing } from '../../../theme';
 import { usePhotoCapture } from '../../../hooks/usePhotoCapture';
 import { PhotoAnnotator } from '../PhotoAnnotator';
-import type { FieldRendererProps } from './types';
+import type { AnswerValue, FieldRendererProps } from './types';
 
 const asString = (v: unknown): string => (typeof v === 'string' ? v : '');
 const asStringArray = (v: unknown): string[] => (Array.isArray(v) ? (v as string[]) : []);
@@ -130,7 +130,16 @@ export function ColorSelectFieldRenderer({ field, value, onChange, missing }: Fi
   );
 }
 
-export function ChipMultiSelectFieldRenderer({ field, value, onChange, missing }: FieldRendererProps) {
+/**
+ * Shared multi-select toggle semantics for chip- and tile-multiselect: an
+ * `exclusive` option (e.g. "No chimney present" sitting alongside a list of
+ * actual defects) can't logically coexist with any other selection --
+ * selecting it clears every other pick, and picking anything else drops
+ * whichever exclusive option was selected. The `__other__:<text>` entry
+ * carries the gated "Other, specify" companion field's value alongside the
+ * plain `other` selection itself.
+ */
+function useMultiSelectToggle(field: FieldRendererProps['field'], value: AnswerValue, onChange: (v: AnswerValue) => void) {
   const selected = asStringArray(value);
   const otherKey = '__other__';
   const otherValue = typeof selected.find((s) => s.startsWith(`${otherKey}:`)) === 'string'
@@ -140,10 +149,6 @@ export function ChipMultiSelectFieldRenderer({ field, value, onChange, missing }
     selected.includes('other') ? ['other'] : [],
   );
 
-  // A chip marked `exclusive` (e.g. "No chimney present" sitting alongside a
-  // list of actual defects) can't logically be true at the same time as any
-  // other option in the same field -- selecting it clears every other pick,
-  // and picking anything else drops whichever exclusive chip was selected.
   const isExclusive = (v: string) => !!field.options?.find((o) => o.value === v)?.exclusive;
 
   function toggle(v: string) {
@@ -166,17 +171,48 @@ export function ChipMultiSelectFieldRenderer({ field, value, onChange, missing }
     onChange([...next, ...(text ? [`${otherKey}:${text}`] : [])]);
   }
 
+  return { baseSelected, otherValue, toggle, setOther };
+}
+
+export function ChipMultiSelectFieldRenderer({ field, value, onChange, missing }: FieldRendererProps) {
+  const { baseSelected, otherValue, toggle, setOther } = useMultiSelectToggle(field, value, onChange);
+
   return (
     <View style={blockStyle(missing)}>
       <FieldLabel required={field.required}>{field.label}</FieldLabel>
       <ChipMultiSelect
-        options={field.options ?? []}
+        options={(field.options ?? []).map((o) => ({ ...o, icon: o.icon as keyof typeof Ionicons.glyphMap | undefined }))}
         selected={baseSelected}
         onToggle={toggle}
         allowOther={field.allowOther}
         otherValue={otherValue}
         onOtherChange={setOther}
       />
+    </View>
+  );
+}
+
+/** Same tile-card look as the old single-select weather tiles, but more than one can be active at once. */
+export function TileMultiSelectFieldRenderer({ field, value, onChange, missing }: FieldRendererProps) {
+  const { baseSelected, otherValue, toggle, setOther } = useMultiSelectToggle(field, value, onChange);
+  const options: TileOption[] = (field.options ?? []).map((o) => ({
+    value: o.value,
+    label: o.label,
+    icon: (o.icon ?? 'help-circle-outline') as TileOption['icon'],
+  }));
+
+  return (
+    <View style={blockStyle(missing)}>
+      <FieldLabel required={field.required}>{field.label}</FieldLabel>
+      <ChoiceTileMultiGrid options={options} selected={baseSelected} onToggle={toggle} columns={3} />
+      {field.allowOther && baseSelected.includes('other') && (
+        <PlainTextInput
+          placeholder="Please specify"
+          value={otherValue}
+          onChangeText={setOther}
+          style={{ marginTop: spacing.sm }}
+        />
+      )}
     </View>
   );
 }

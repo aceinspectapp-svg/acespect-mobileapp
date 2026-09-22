@@ -8,7 +8,7 @@ import {
   WEB_TO_INS_STATUS,
   WEB_TO_REV_STATUS,
 } from './web.serializers';
-import { DamageUpdateInput, InspectionUpdateInput, SectionUpdateInput } from './web.schemas';
+import { DamageUpdateInput, InspectionUpdateInput, SectionUpdateInput, UserUpdateInput } from './web.schemas';
 
 const SECTIONS_INCLUDE = {
   sections: {
@@ -44,6 +44,23 @@ async function listUsers() {
     orderBy: { createdAt: 'asc' },
   });
   return rows.map(serializeUser);
+}
+
+/** Admin edits another user's profile (name/phone/region/license). */
+async function updateUser(id: string, input: UserUpdateInput) {
+  const exists = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+  if (!exists) throw ApiError.notFound('User not found');
+
+  const row = await prisma.user.update({
+    where: { id },
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.phone !== undefined ? { phone: input.phone } : {}),
+      ...(input.region !== undefined ? { region: input.region } : {}),
+      ...(input.licenseNumber !== undefined ? { licenseNumber: input.licenseNumber } : {}),
+    },
+  });
+  return serializeUser(row);
 }
 
 /** Reviewer edits a section's verdict / report text / recorded field data. */
@@ -175,6 +192,7 @@ export const webService = {
   listInspections,
   getInspection,
   listUsers,
+  updateUser,
   updateSection,
   updateDamage,
   updateInspection,

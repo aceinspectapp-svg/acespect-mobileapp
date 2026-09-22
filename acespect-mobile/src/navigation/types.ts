@@ -14,6 +14,9 @@ export type AppStackParamList = {
   SelectInspectionType: undefined;
   // Sync/storage preferences — Wi-Fi-only upload toggle, local storage usage.
   Settings: undefined;
+  // Admin-published template versions this inspector hasn't accepted yet —
+  // accepting one only affects inspections started after that point.
+  TemplateUpdates: undefined;
   // Post-Dilapidation jobs admin has pushed to the signed-in inspector.
   AssignedJobs: undefined;
   // Inspection Setup · Step 1 of 2 — receives the wizard's selection.

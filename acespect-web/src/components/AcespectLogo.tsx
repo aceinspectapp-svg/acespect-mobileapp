@@ -1,47 +1,78 @@
-import { Building2 } from "lucide-react";
+import logoSrc from "../assets/acespect-logo.png";
 
 /**
- * Brand mark. `md`/`lg` are used on the dark login hero (white wordmark);
- * `sm` is used on the white sidebar (navy wordmark).
+ * Brand mark — the provided logo file (`src/assets/acespect-logo.png`),
+ * used as-is/unedited: a roofline mark, the "ACESPECT" wordmark (with a
+ * magnifying-glass accent) and a "Quality Inspections Assured" tagline,
+ * all rendered in white -- invisible against a white canvas preview, which
+ * is why it looks empty until composited onto a dark background. The
+ * source PNG is a 500×200 transparent canvas with that mark sitting in a
+ * sub-region of it, so this crops the empty transparent margin out via CSS
+ * (the file itself is never touched) rather than shrinking the whole
+ * canvas down to a speck.
  */
-export function AcespectLogo({ size = "sm" }: { size?: "sm" | "md" | "lg" }) {
-  const dims = {
-    sm: { box: 30, radius: 8, icon: 17, font: 16, gap: 9 },
-    md: { box: 46, radius: 12, icon: 26, font: 24, gap: 12 },
-    lg: { box: 58, radius: 14, icon: 33, font: 30, gap: 14 },
-  }[size];
+const SRC_W = 500;
+const SRC_H = 200;
+// Pixel region of the source canvas that contains the full mark, plus a
+// small even margin -- measured directly from the file's alpha channel,
+// not guessed.
+const CROP = { x: 111, y: 0, w: 294, h: 185 };
 
-  const onDark = size !== "sm";
-  const wordColor = onDark ? "#ffffff" : "#1a2a4a";
+// Everything in the mark except the "ACE" box is rendered in white with no
+// fill behind it, so on a light background only that blue box stays
+// visible and the rest disappears. `sm` is the variant used on light/white
+// backgrounds (the sidebar, the report cover) -- give it a small dark plate
+// behind the mark, matching the app's own navy, so the white roofline/
+// wordmark tail/tagline stay legible there the same way they are against
+// the dark login hero `md`/`lg` already sit on.
+const BACKDROP = "#0f1d35";
+
+export function AcespectLogo({ size = "sm" }: { size?: "sm" | "md" | "lg" }) {
+  const onLight = size === "sm";
+  const heightPx = { sm: 40, md: 80, lg: 100 }[size];
+  const padding = onLight ? { x: 10, y: 8 } : { x: 0, y: 0 };
+  const scale = heightPx / CROP.h;
+  const containerW = CROP.w * scale;
+  const containerH = CROP.h * scale;
+
+  const mark = (
+    <div
+      style={{
+        width: containerW,
+        height: containerH,
+        overflow: "hidden",
+        position: "relative",
+        flexShrink: 0,
+      }}
+    >
+      <img
+        src={logoSrc}
+        alt="Acespect"
+        style={{
+          position: "absolute",
+          left: -CROP.x * scale,
+          top: -CROP.y * scale,
+          width: SRC_W * scale,
+          height: SRC_H * scale,
+          maxWidth: "none",
+        }}
+      />
+    </div>
+  );
+
+  if (!onLight) return mark;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: dims.gap }}>
-      <div
-        style={{
-          width: dims.box,
-          height: dims.box,
-          borderRadius: dims.radius,
-          background: "linear-gradient(135deg, #e63329, #b91c1c)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0 2px 10px rgba(230,51,41,0.35)",
-          flexShrink: 0,
-        }}
-      >
-        <Building2 size={dims.icon} color="#fff" strokeWidth={2.2} />
-      </div>
-      <span
-        style={{
-          fontSize: dims.font,
-          fontWeight: 800,
-          letterSpacing: "-0.5px",
-          color: wordColor,
-          lineHeight: 1,
-        }}
-      >
-        ACE<span style={{ color: "#e63329" }}>SPECT</span>
-      </span>
+    <div
+      style={{
+        display: "inline-flex",
+        padding: `${padding.y}px ${padding.x}px`,
+        background: BACKDROP,
+        borderRadius: "8px",
+        flexShrink: 0,
+      }}
+    >
+      {mark}
     </div>
   );
 }

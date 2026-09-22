@@ -168,6 +168,7 @@ function FieldRenderer(props: RendererProps) {
     case "color-select":
       return <ToggleField {...props} />;
     case "chip-multiselect":
+    case "tile-multiselect":
       return <ChipField {...props} />;
     case "photos":
       return <PhotosField {...props} readOnly={props.readOnly || !!props.disablePhotoEditing} />;
@@ -563,11 +564,13 @@ function RepeatingField({ field, value, onChange, scope, readOnly, showMissing, 
       {instances.length === 0 && <p style={{ fontSize: "12px", color: "#c1c9d4", margin: 0 }}>None recorded</p>}
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         {instances.map((inst, idx) => {
-          const key = isArrayBacked
-            ? String(idx)
-            : Object.keys(asAnswerTree(value) as unknown as Record<string, AnswerTree>).find(
-                (k) => (asAnswerTree(value) as unknown as Record<string, AnswerTree>)[k] === inst.scope,
-              );
+          // Record-backed instances (fixed or dynamically-added) carry their
+          // own stable key from resolveInstances now -- previously this
+          // re-derived it by scanning `value` for an entry `===` inst.scope,
+          // which fails for any fixed instance with no data yet (its scope
+          // is a freshly-allocated `{}`, never reference-equal to anything
+          // already stored), silently dropping every edit to that instance.
+          const key = isArrayBacked ? String(idx) : inst.key;
           const removable = isArrayBacked ? instances.length > 1 || field.type === "damage-list" : key !== undefined && !fixedKeys.has(key);
           return (
             <div key={isArrayBacked ? idx : key ?? idx} style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "10px", overflow: "hidden" }}>

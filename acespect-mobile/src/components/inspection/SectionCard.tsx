@@ -12,19 +12,20 @@ const ACCENT_COLOR: Record<SectionAccent, string> = {
 };
 
 interface SectionCardProps {
-  title: string;
+  /** Omit to render the card with no heading (just the accent bar + content). */
+  title?: string;
   accent: SectionAccent;
   children: React.ReactNode;
   style?: ViewStyle;
 }
 
-/** White card with a colored left-accent bar and an uppercase section title. */
+/** White card with a colored left-accent bar and an optional uppercase section title. */
 export function SectionCard({ title, accent, children, style }: SectionCardProps) {
   return (
     <View style={[styles.card, style]}>
       <View style={[styles.bar, { backgroundColor: ACCENT_COLOR[accent] }]} />
       <View style={styles.body}>
-        <Text style={styles.title}>{title}</Text>
+        {title && <Text style={styles.title}>{title}</Text>}
         {children}
       </View>
     </View>

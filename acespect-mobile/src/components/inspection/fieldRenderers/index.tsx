@@ -16,6 +16,7 @@ import {
   SelectTilesFieldRenderer,
   TextFieldRenderer,
   TextareaFieldRenderer,
+  TileMultiSelectFieldRenderer,
   YesNoFieldRenderer,
 } from './leafRenderers';
 
@@ -744,6 +745,7 @@ export const FIELD_RENDERERS: Record<TemplateFieldType, React.ComponentType<Fiel
   'select-tiles': SelectTilesFieldRenderer,
   'color-select': ColorSelectFieldRenderer,
   'chip-multiselect': ChipMultiSelectFieldRenderer,
+  'tile-multiselect': TileMultiSelectFieldRenderer,
   photos: PhotosFieldRenderer,
   'repeating-group': RepeatingFieldRenderer,
   'damage-list': RepeatingFieldRenderer,

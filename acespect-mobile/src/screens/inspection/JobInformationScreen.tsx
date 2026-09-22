@@ -16,6 +16,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
 import { ActiveTemplate, getActiveTemplateCached, TemplateField } from '../../services/templateApi';
 import { meetsAllRequiredFields } from '../../utils/flattenSectionToDraft';
+import { pinAllSectionTemplates } from '../../utils/pinAllSectionTemplates';
 import { FieldListRenderer } from '../../components/inspection/fieldRenderers';
 import { isGateSatisfied, type AnswerTree, type AnswerValue } from '../../components/inspection/fieldRenderers/types';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
@@ -64,6 +65,11 @@ export function JobInformationScreen({
       inspectionType: typeDef?.title ?? selection.inspectionTypeId,
       propertyType: PROPERTY_LABELS[selection.propertyTypeId] ?? selection.propertyTypeId,
     });
+    // Snapshot every section's template up front, not just this one -- so a
+    // section not yet visited in this inspection can't pick up a version
+    // published (or accepted elsewhere) after this inspection started. See
+    // pinAllSectionTemplates for why lazy per-section fetching isn't enough.
+    pinAllSectionTemplates(draft, selection.inspectionTypeId, selection.propertyTypeId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -357,7 +363,7 @@ export function JobInformationScreen({
               counting it as "there's content" left an empty card showing
               with nothing inside it. */}
           {remainingFields.some((f) => isGateSatisfied(f, answers)) && (
-            <SectionCard title="ADDITIONAL DETAILS" accent="blue">
+            <SectionCard accent="blue">
               <FieldListRenderer
                 fields={remainingFields}
                 scope={answers}
