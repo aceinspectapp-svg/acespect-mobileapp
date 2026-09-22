@@ -11,4 +11,11 @@ export default defineConfig({
     // check entirely. Dev-only, matches how the tunnel is already used.
     allowedHosts: true,
   },
+  preview: {
+    // Same reasoning as server.allowedHosts above, for the production
+    // "start" script (vite preview) -- Railway's public domain proxies
+    // requests through with its own Host header, which vite preview
+    // would otherwise reject.
+    allowedHosts: true,
+  },
 });
