@@ -23,10 +23,13 @@ export function ReportSection({
   section,
   showHeading = true,
   compact = false,
+  hideDamageText = false,
 }: {
   section: FormSection;
   showHeading?: boolean;
   compact?: boolean;
+  /** True for a section whose reportText already narrates each crack/damage inline (see reportSentences.ts) -- skip the sentence here so it isn't said twice, but still show that damage's photos. */
+  hideDamageText?: boolean;
 }) {
   const paras = section.reportText
     .split(/\n{2,}|\n/)
@@ -52,10 +55,10 @@ export function ReportSection({
         </>
       )}
 
-      {/* Cracks / damages — described and imaged */}
+      {/* Cracks / damages — described and imaged (text skipped when reportText already narrates it) */}
       {section.damages.map((d) => (
         <div key={d.id} style={{ margin: "10px 0 0" }}>
-          <Para style={{ margin: "0 0 6px" }}>{describeDamage(d)}</Para>
+          {!hideDamageText && <Para style={{ margin: "0 0 6px" }}>{describeDamage(d)}</Para>}
           <PhotoGrid photos={d.photos} compact={compact} />
         </div>
       ))}
