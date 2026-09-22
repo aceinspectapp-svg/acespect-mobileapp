@@ -398,7 +398,17 @@ function walk(
     if (field.type === "photos") continue;
 
     if (value === undefined || value === "") continue;
-    const strValue = Array.isArray(value) ? value.filter((v) => typeof v === "string").join(", ") : String(value);
+    // Select-type fields (pill-select, select-tiles, color-select,
+    // chip-multiselect) store the option's raw `value` (e.g.
+    // "single_storey_house"), not its display text -- every other path in
+    // this file resolves that through `field.options` before it reaches the
+    // report; this generic fallback used to skip that step, so an unfilled-
+    // in field with no sentence composer printed the raw snake_case key
+    // straight into the report text instead of its label.
+    const toLabel = (raw: string) => field.options?.find((o) => o.value === raw)?.label ?? raw;
+    const strValue = Array.isArray(value)
+      ? value.filter((v) => typeof v === "string").map(toLabel).join(", ")
+      : toLabel(String(value));
     fields[field.key] = strValue;
     textParts.push(`${field.label}: ${strValue}.`);
   }

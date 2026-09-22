@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer';
 import { env } from '../config/env';
+import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
 
 /**
  * Renders the inspection report to a real PDF by pointing a headless browser
@@ -16,6 +17,7 @@ import { env } from '../config/env';
 
 const BRAND_NAVY = '#1a2a4a';
 const BRAND_RED = '#dc2626';
+const FOOTER_META_COLOR = '#5b6472';
 
 // Acespect Pty Ltd trades AS Houspect Victoria -- this is this business's
 // own real identity on the report, not a third party's. Real details taken
@@ -27,40 +29,68 @@ const COMPANY_EMAIL = 'E info@houspectvic.com.au';
 const COMPANY_WEB = 'W www.houspect.com.au/victoria';
 const COMPANY_ABN_ACN = 'ABN 24 237 148 557 ACN 688 819 712';
 
+// Puppeteer's header/footer templates are their own isolated, unscripted
+// document -- values from the page being printed (client name, job no) have
+// to be baked into the template's own HTML string before it's handed to
+// page.pdf(), so this escapes them the same way React would.
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // Puppeteer's header/footer templates are plain, unscripted HTML -- no access
-// to the report's own React components, so the wordmark is re-declared here
-// by hand as a placeholder. TODO: replace with the real Houspect Victoria
-// logo image once supplied -- swap this <span> lockup for
-// `<img src="..." style="height:20px;" />` pointing at that asset.
+// to the report's own React components or this server's filesystem paths, so
+// the real logo is inlined as a data URI (see assets/houspectLogoBase64.ts)
+// rather than referenced by URL.
 const HEADER_TEMPLATE = `
   <div style="width:100%; font-family: Arial, Helvetica, sans-serif; padding: 0 18mm; box-sizing: border-box;">
-    <div style="display:flex; flex-direction:column; align-items:flex-end;">
-      <span style="font-size:7px; color:#5b6472; letter-spacing:0.03em;">Building Inspections</span>
-      <div style="display:flex; align-items:center; gap:5px;">
-        <span style="width:12px; height:12px; border-radius:3px; background:${BRAND_RED}; display:inline-block;"></span>
-        <span style="font-size:14px; font-weight:800; color:${BRAND_NAVY};">Houspect</span>
+    <div style="display:flex; justify-content:flex-end;">
+      <img src="${HOUSPECT_LOGO_DATA_URI}" style="height:30px; width:auto; display:block;" />
+    </div>
+  </div>
+`;
+
+// Matches Houspect Victoria's own master template footer: Client Name, then
+// a Date/Job No/Page No line with red pipe separators, a red bar, a navy
+// bar, then the two company-details lines. "Date" here is the day the PDF
+// was generated (not the inspection date, which already has its own row on
+// the cover) -- same as the reference template, where it differs from the
+// inspection date for the same reason.
+function buildFooterTemplate(clientName: string, jobNo: string): string {
+  const today = new Date();
+  const dateStr = [today.getDate(), today.getMonth() + 1, today.getFullYear()]
+    .map((n, i) => (i < 2 ? String(n).padStart(2, '0') : String(n)))
+    .join('.');
+  const pipe = `<span style="color:${BRAND_RED};">|</span>`;
+  const client = escapeHtml(clientName || '—');
+  const job = escapeHtml(jobNo || '—');
+
+  return `
+    <div style="width:100%; font-family: Arial, Helvetica, sans-serif; padding: 0 18mm; box-sizing: border-box; color:${FOOTER_META_COLOR}; font-size:9px;">
+      <div style="text-align:center;">
+        <span style="font-weight:700;">Client Name:</span>&nbsp; ${client}
+      </div>
+      <div style="text-align:center; margin-top:3px;">
+        ${pipe} <span style="font-weight:700;">Date:</span> ${dateStr}
+        &nbsp;${pipe} <span style="font-weight:700;">Job No:</span> ${job}
+        &nbsp;${pipe} <span style="font-weight:700;">Page No:</span> <span class="pageNumber"></span> of <span class="totalPages"></span>
+      </div>
+      <div style="height:1.5mm; background:${BRAND_RED}; margin-top:5px; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
+      <div style="height:4mm; background:${BRAND_NAVY}; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
+      <div style="font-size:8px; text-align:center; margin-top:5px;">
+        ${COMPANY_ADDRESS} &nbsp;|&nbsp; ${COMPANY_PHONE} &nbsp;|&nbsp; ${COMPANY_EMAIL}
+      </div>
+      <div style="font-size:8px; text-align:center; margin-top:2px;">
+        ${COMPANY_WEB} &nbsp;|&nbsp; ${COMPANY_NAME} ${COMPANY_ABN_ACN}
       </div>
     </div>
-  </div>
-`;
+  `;
+}
 
-const FOOTER_TEMPLATE = `
-  <div style="width:100%; font-family: Arial, Helvetica, sans-serif; padding: 0 18mm; box-sizing: border-box; color:#5b6472;">
-    <div style="display:flex; justify-content:space-between; font-size:9px; border-top:1px solid #e2e6ec; padding-top:4px;">
-      <span class="date"></span>
-      <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
-    </div>
-    <div style="font-size:8px; text-align:center; margin-top:3px;">
-      ${COMPANY_ADDRESS} &nbsp;|&nbsp; ${COMPANY_PHONE} &nbsp;|&nbsp; ${COMPANY_EMAIL}
-    </div>
-    <div style="font-size:8px; text-align:center; margin-top:2px;">
-      ${COMPANY_WEB} &nbsp;|&nbsp; ${COMPANY_NAME} ${COMPANY_ABN_ACN}
-    </div>
-    <div style="height:4mm; background:${BRAND_RED}; margin-top:3px;"></div>
-  </div>
-`;
-
-export async function generateInspectionReportPdf(inspectionId: string, authToken: string): Promise<Buffer> {
+export async function generateInspectionReportPdf(
+  inspectionId: string,
+  authToken: string,
+  meta: { clientName: string; jobNo: string },
+): Promise<Buffer> {
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -90,8 +120,8 @@ export async function generateInspectionReportPdf(inspectionId: string, authToke
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: HEADER_TEMPLATE,
-      footerTemplate: FOOTER_TEMPLATE,
-      margin: { top: '24mm', bottom: '30mm', left: '18mm', right: '18mm' },
+      footerTemplate: buildFooterTemplate(meta.clientName, meta.jobNo),
+      margin: { top: '24mm', bottom: '34mm', left: '18mm', right: '18mm' },
     });
     return Buffer.from(pdf);
   } finally {

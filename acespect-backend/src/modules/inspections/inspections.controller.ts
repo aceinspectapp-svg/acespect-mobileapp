@@ -76,7 +76,10 @@ export const inspectionsController = {
     const token = authHeader.slice('Bearer '.length).trim();
 
     const inspection = await inspectionsService.getById(id);
-    const pdf = await generateInspectionReportPdf(id, token);
+    const pdf = await generateInspectionReportPdf(id, token, {
+      clientName: inspection.client ?? '',
+      jobNo: inspection.jobNo ?? '',
+    });
 
     const fileName = `${inspection.jobNo || id}-dilapidation-report.pdf`.replace(/[^a-z0-9.-]+/gi, '-');
     res.setHeader('Content-Type', 'application/pdf');

@@ -2,23 +2,14 @@ import type { ReportHeader } from "../report";
 import { MetaRow, Para, reportTokens } from "./reportKit";
 import { resolveMediaUrl } from "../api";
 
-// Acespect Pty Ltd trades AS Houspect Victoria -- this report should carry
-// that real trading identity, not the internal ACESPECT app's own logo.
-// TODO: replace with the real Houspect Victoria logo image once supplied
-// (swap this lockup for an <img>); this is a visual placeholder in the same
-// position/style as the wordmark on Houspect Victoria's own report template.
+// Acespect Pty Ltd trades AS Houspect Victoria -- this report carries that
+// real trading identity, not the internal ACESPECT app's own logo. The image
+// is served from acespect-web/public/houspect-logo.png (see also the
+// separately-embedded copy the PDF pipeline's own page header/footer use, in
+// acespect-backend/src/lib/assets/houspect-logo.png -- Puppeteer's
+// header/footer templates can't reach this page's own asset URL).
 function HouspectVictoriaLogo() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-      <span style={{ fontSize: "10px", color: reportTokens.inkMuted, letterSpacing: "0.03em" }}>
-        Building Inspections
-      </span>
-      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-        <span style={{ width: "16px", height: "16px", borderRadius: "4px", background: "#dc2626", display: "inline-block" }} />
-        <span style={{ fontSize: "20px", fontWeight: 800, color: reportTokens.accent }}>Houspect</span>
-      </div>
-    </div>
-  );
+  return <img src="/houspect-logo.png" alt="Houspect Building Inspections" style={{ height: "56px", width: "auto", display: "block" }} />;
 }
 
 /**

@@ -127,11 +127,15 @@ export const api = {
       reportText?: string;
       fields?: Record<string, unknown>;
       excludedPhotoUrls?: string[];
+      photos?: string[];
+      // The reviewer's Field Data edit -- see web.schemas.ts's sectionUpdateSchema.
+      answers?: Record<string, unknown>;
+      damages?: { type: string; location: string; direction: string; widthMm: number; lengthMm: number; notes: string }[];
     },
   ) => req<{ section: unknown }>(`/web/sections/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
   /** A damage record's own photo-exclusion list -- see updateSection above for the same idea, one level down. */
-  updateDamage: (id: string, patch: { excludedPhotoUrls?: string[] }) =>
+  updateDamage: (id: string, patch: { excludedPhotoUrls?: string[]; photos?: string[] }) =>
     req<{ damage: unknown }>(`/web/damages/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
   updateInspection: (id: string, patch: { status?: InspectionStatus; notes?: string; reviewerId?: string | null }) =>

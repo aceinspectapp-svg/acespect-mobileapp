@@ -602,6 +602,48 @@ function SelectablePhotoGrid({
   );
 }
 
+/**
+ * A small "+ Add Photo" pill that opens the device's file picker and hands
+ * the chosen file to `onPick` -- the caller decides whether it lands on a
+ * section or one specific damage. `busy` disables it and swaps the label
+ * while that particular upload is in flight.
+ */
+function AddPhotoButton({ label = "+ Add Photo", busy, onPick }: { label?: string; busy: boolean; onPick: (file: File) => void }) {
+  const inputId = `add-photo-${Math.random().toString(36).slice(2)}`;
+  return (
+    <label
+      htmlFor={inputId}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "4px",
+        fontSize: "11px",
+        fontWeight: 700,
+        color: busy ? "#94a3b8" : "#2563eb",
+        cursor: busy ? "default" : "pointer",
+        padding: "4px 9px",
+        border: `1px dashed ${busy ? "#cbd5e1" : "#93c5fd"}`,
+        borderRadius: "999px",
+        background: "#f8fafc",
+      }}
+    >
+      {busy ? "Uploading…" : label}
+      <input
+        id={inputId}
+        type="file"
+        accept="image/*"
+        disabled={busy}
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = ""; // let picking the same file again re-fire onChange
+          if (file) onPick(file);
+        }}
+      />
+    </label>
+  );
+}
+
 function EmptyState({ message }: { message: string }) {
   return (
     <div style={{ padding: "32px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
@@ -637,9 +679,18 @@ export function ReviewerFormView() {
   const [selectedSectionId, setSelectedSectionId] = useState<string>("");
   const [reviewComments, setReviewComments] = useState<Record<string, string>>({});
   const [, setBusy] = useState(false);
+  /** id of the section/damage a photo upload is currently in flight for -- disables just that one "Add Photo" button. */
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   // sectionKey -> its current published template (or null once we know none
   // exists for that key, e.g. a legacy/custom section).
   const [templates, setTemplates] = useState<Record<string, ActiveTemplate | null>>({});
+  // sectionId -> the inspector's answer tree as the reviewer has edited it
+  // here, not yet saved -- same idea as the inspector's own web editor
+  // (InspectorFormEditor's answerEdits), just scoped to the reviewer's
+  // Field Data card instead of a whole-inspection draft save.
+  const [answerEdits, setAnswerEdits] = useState<Record<string, AnswerTree>>({});
+  const [savingAnswersFor, setSavingAnswersFor] = useState<string | null>(null);
+  const [answersSavedAt, setAnswersSavedAt] = useState<Record<string, number>>({});
 
   // Seed selection + comment drafts once the inspection is loaded.
   useEffect(() => {
@@ -745,6 +796,83 @@ export function ReviewerFormView() {
       await patchDamage(inspection!.id, damage.id, { excludedPhotoUrls: next });
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * Reviewer attaches a new photo (from their own device) directly onto this
+   * section -- e.g. a follow-up shot the inspector never took. Uploads it
+   * through the same endpoint mobile uses for out-of-app photos, then adds
+   * the returned URL onto the section's own photo list, so it appears in
+   * that exact spot in the generated report, right alongside the
+   * inspector's own photos.
+   */
+  async function addSectionPhoto(section: FormSection, file: File) {
+    setUploadingFor(section.id);
+    try {
+      const { url } = await api.uploadInspectionPhoto(file, inspection!.id, section.key ?? section.id);
+      await patchSection(inspection!.id, section.id, { photos: [...section.photos, url] });
+    } finally {
+      setUploadingFor(null);
+    }
+  }
+
+  /** Same as addSectionPhoto, but pinned to one specific damage/defect -- it prints with that damage's own photos, not the section's general ones. */
+  async function addDamagePhoto(section: FormSection, damage: FormSection["damages"][number], file: File) {
+    setUploadingFor(damage.id);
+    try {
+      const { url } = await api.uploadInspectionPhoto(file, inspection!.id, section.key ?? section.id);
+      await patchDamage(inspection!.id, damage.id, { photos: [...damage.photos, url] });
+    } finally {
+      setUploadingFor(null);
+    }
+  }
+
+  /** One field edit inside a section's Field Data card -- staged locally until Save Changes. */
+  function setSectionAnswer(section: FormSection, key: string, value: AnswerValue) {
+    setAnswerEdits((prev) => {
+      const base = prev[section.id] ?? ((section.answers as AnswerTree | null | undefined) ?? {});
+      return { ...prev, [section.id]: { ...base, [key]: value } };
+    });
+  }
+
+  /**
+   * Persists the reviewer's edits to the inspector's recorded answers.
+   * Re-derives `fields`/`reportText`/`damages` from the edited answer tree
+   * the same way the inspector's own web editor does on save, so the
+   * printed report never drifts out of sync with what's shown here --
+   * `damages` deliberately omits `photos`/`excludedPhotoUrls` (see
+   * web.schemas.ts) so this never touches the reviewer's separate
+   * photo-selection/attachment work on this section's damages.
+   */
+  async function saveSectionAnswers(section: FormSection) {
+    const answers = answerEdits[section.id];
+    const template = templates[section.key ?? section.id];
+    if (!answers || !template) return;
+    const derived = flattenSectionToDraft(template.fields, answers, section.key ?? section.id);
+    setSavingAnswersFor(section.id);
+    try {
+      await patchSection(inspection!.id, section.id, {
+        answers,
+        fields: derived.fields,
+        reportText: derived.reportText,
+        damages: derived.damages.map((d) => ({
+          type: d.type,
+          location: d.location,
+          direction: d.direction,
+          widthMm: d.widthMm,
+          lengthMm: d.lengthMm,
+          notes: d.notes,
+        })),
+      });
+      setAnswerEdits((prev) => {
+        const next = { ...prev };
+        delete next[section.id];
+        return next;
+      });
+      setAnswersSavedAt((prev) => ({ ...prev, [section.id]: Date.now() }));
+    } finally {
+      setSavingAnswersFor(null);
     }
   }
 
@@ -1005,16 +1133,48 @@ export function ReviewerFormView() {
                         onSave={(fields) => updateSectionFields(selectedSection.id, fields)}
                       />
                     </div>
-                  ) : template ? (
-                    <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-                      <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
-                        <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, display: "flex", alignItems: "center", gap: "5px" }}>
-                          <FileText size={12} /> Field Data
-                        </p>
+                  ) : template ? (() => {
+                    const currentAnswers = answerEdits[selectedSection.id] ?? ((selectedSection.answers as AnswerTree | null | undefined) ?? {});
+                    const dirty = selectedSection.id in answerEdits;
+                    const saving = savingAnswersFor === selectedSection.id;
+                    return (
+                      <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                        <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, display: "flex", alignItems: "center", gap: "5px" }}>
+                            <FileText size={12} /> Field Data — editable
+                          </p>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            {!dirty && answersSavedAt[selectedSection.id] && (
+                              <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: 600 }}>Saved</span>
+                            )}
+                            <button
+                              onClick={() => saveSectionAnswers(selectedSection)}
+                              disabled={!dirty || saving}
+                              style={{
+                                display: "flex", alignItems: "center", gap: "6px",
+                                padding: "6px 13px", borderRadius: "7px",
+                                background: !dirty || saving ? "#94a3b8" : "#1a2a4a",
+                                color: "white", fontSize: "11px", fontWeight: 700, border: "none",
+                                cursor: !dirty || saving ? "not-allowed" : "pointer",
+                              }}
+                            >
+                              <Save size={12} />
+                              {saving ? "Saving…" : "Save Changes"}
+                            </button>
+                          </div>
+                        </div>
+                        <div style={{ padding: "16px" }}>
+                          <SectionFieldEditor
+                            fields={template.fields}
+                            scope={currentAnswers}
+                            onChange={(key, value) => setSectionAnswer(selectedSection, key, value)}
+                            readOnly={false}
+                            disablePhotoEditing
+                          />
+                        </div>
                       </div>
-                      <SectionFieldView fields={template.fields} scope={(selectedSection.answers ?? {}) as AnswerTree} />
-                    </div>
-                  ) : Object.keys(selectedSection.fields).length > 0 && (
+                    );
+                  })() : Object.keys(selectedSection.fields).length > 0 && (
                     <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
                       <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
                         <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, display: "flex", alignItems: "center", gap: "5px" }}>
@@ -1227,33 +1387,51 @@ export function ReviewerFormView() {
                     {/* Every photo captured for this category, with a checkbox to
                         leave specific ones out of the report above -- unchecking
                         one here is exactly what the preview and the printed
-                        report both reflect. */}
-                    {(selectedSection.photos.length > 0 || selectedSection.damages.some((d) => d.photos.length > 0)) && (
-                      <div style={{ marginTop: "14px" }}>
-                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "8px" }}>
+                        report both reflect. The reviewer can also attach an
+                        extra photo of their own here, either onto the
+                        section generally or onto one specific crack/defect
+                        below -- it then prints in that exact spot. */}
+                    <div style={{ marginTop: "14px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                           Select Photos For Report
                         </label>
-                        <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "14px 16px" }}>
-                          {selectedSection.photos.length > 0 && (
-                            <SelectablePhotoGrid
-                              photos={selectedSection.photos}
-                              excludedPhotoUrls={selectedSection.excludedPhotoUrls ?? []}
-                              onToggle={(url) => toggleSectionPhoto(selectedSection, url)}
-                            />
-                          )}
-                          {selectedSection.damages.filter((d) => d.photos.length > 0).map((d) => (
-                            <div key={d.id} style={{ marginTop: "10px" }}>
-                              <p style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", margin: "0 0 6px" }}>{d.type} — {d.location}</p>
+                        <AddPhotoButton
+                          busy={uploadingFor === selectedSection.id}
+                          onPick={(file) => addSectionPhoto(selectedSection, file)}
+                        />
+                      </div>
+                      <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "14px 16px" }}>
+                        {selectedSection.photos.length > 0 ? (
+                          <SelectablePhotoGrid
+                            photos={selectedSection.photos}
+                            excludedPhotoUrls={selectedSection.excludedPhotoUrls ?? []}
+                            onToggle={(url) => toggleSectionPhoto(selectedSection, url)}
+                          />
+                        ) : (
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0 }}>No general photos for this section yet.</p>
+                        )}
+                        {selectedSection.damages.map((d) => (
+                          <div key={d.id} style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                              <p style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", margin: 0 }}>{d.type} — {d.location}</p>
+                              <AddPhotoButton
+                                label="+ Add"
+                                busy={uploadingFor === d.id}
+                                onPick={(file) => addDamagePhoto(selectedSection, d, file)}
+                              />
+                            </div>
+                            {d.photos.length > 0 && (
                               <SelectablePhotoGrid
                                 photos={d.photos}
                                 excludedPhotoUrls={d.excludedPhotoUrls ?? []}
                                 onToggle={(url) => toggleDamagePhoto(d, url)}
                               />
-                            </div>
-                          ))}
-                        </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
 
