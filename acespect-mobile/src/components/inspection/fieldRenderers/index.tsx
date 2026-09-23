@@ -42,13 +42,19 @@ export function FieldListRenderer({
   showMissing?: boolean;
 }) {
   const visible = [...fields].filter((f) => isGateSatisfied(f, scope)).sort((a, b) => a.order - b.order);
+  // A section-letter band only earns its place when it's actually dividing
+  // this list into more than one named group -- a template where every
+  // field shares the same letter (e.g. Job Information's whole form under
+  // "A") would otherwise show a single, meaningless "SECTION A" banner.
+  const distinctLetters = new Set(visible.map((f) => f.sectionLetter).filter(Boolean));
+  const lettersAreMeaningful = distinctLetters.size > 1;
   let lastLetter: string | undefined;
   return (
     <>
       {visible.map((field) => {
         const Renderer = FIELD_RENDERERS[field.type];
         if (!Renderer) return null;
-        const showLetterHeader = field.sectionLetter && field.sectionLetter !== lastLetter;
+        const showLetterHeader = lettersAreMeaningful && field.sectionLetter && field.sectionLetter !== lastLetter;
         lastLetter = field.sectionLetter;
         return (
           <React.Fragment key={field.key}>
