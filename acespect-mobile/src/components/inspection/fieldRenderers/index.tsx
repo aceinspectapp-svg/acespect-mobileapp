@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { colors, radius, spacing, typography } from '../../../theme';
 import { Button, ProgressBar } from '../../ui';
 import type { TemplateField, TemplateFieldType, TemplateLayout } from '../../../services/templateApi';
 import { AnswerTree, AnswerValue, FieldRendererProps, isGateSatisfied, isRepeatRequirementMet } from './types';
+import { useVoiceMode } from '../../../context/VoiceModeContext';
 import {
   ChipMultiSelectFieldRenderer,
   ColorSelectFieldRenderer,
@@ -34,12 +35,23 @@ export function FieldListRenderer({
   onChange,
   path,
   showMissing,
+  voiceHandlers,
 }: {
   fields: TemplateField[];
   scope: AnswerTree;
   onChange: (key: string, value: AnswerValue) => void;
   path: string[];
   showMissing?: boolean;
+  /**
+   * Opts this specific call into voice-navigation registration (Voice Mode's
+   * "current field" cursor + next/back/home/save-draft commands) --
+   * `DynamicSectionScreen`/`JobInformationScreen` pass this on their
+   * top-level call; a nested `FieldListRenderer` call (a repeating-group
+   * instance, a damage-list item, a category-nav modal) must NOT, or it
+   * would silently steal the active registration out from under the real
+   * screen. Repeating-group/damage-list voice support is Phase 2.
+   */
+  voiceHandlers?: { onNext?: () => void; onBack?: () => void; onHome?: () => void };
 }) {
   const visible = [...fields].filter((f) => isGateSatisfied(f, scope)).sort((a, b) => a.order - b.order);
   // A section-letter band only earns its place when it's actually dividing
@@ -49,6 +61,16 @@ export function FieldListRenderer({
   const distinctLetters = new Set(visible.map((f) => f.sectionLetter).filter(Boolean));
   const lettersAreMeaningful = distinctLetters.size > 1;
   let lastLetter: string | undefined;
+
+  const { registerFields, currentFieldKey, enabled: voiceEnabled } = useVoiceMode();
+  useEffect(() => {
+    if (voiceHandlers) registerFields(visible, scope, onChange, voiceHandlers);
+    // Re-registers whenever the visible field set, answers, or handlers
+    // change -- cheap (ref writes), and only resets the cursor when the
+    // set of field keys actually differs (see VoiceModeContext).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceHandlers, visible, scope, onChange, registerFields]);
+
   return (
     <>
       {visible.map((field) => {
@@ -56,6 +78,7 @@ export function FieldListRenderer({
         if (!Renderer) return null;
         const showLetterHeader = lettersAreMeaningful && field.sectionLetter && field.sectionLetter !== lastLetter;
         lastLetter = field.sectionLetter;
+        const voiceFocused = !!voiceHandlers && voiceEnabled && currentFieldKey === field.key;
         return (
           <React.Fragment key={field.key}>
             {showLetterHeader && (
@@ -65,15 +88,17 @@ export function FieldListRenderer({
                 </Text>
               </View>
             )}
-            <Renderer
-              field={field}
-              value={scope[field.key]}
-              onChange={(v) => onChange(field.key, v)}
-              path={[...path, field.key]}
-              scope={scope}
-              missing={!!showMissing && isFieldMissing(field, visible, scope)}
-              showMissing={showMissing}
-            />
+            <View style={voiceFocused && styles.voiceFocusedBlock}>
+              <Renderer
+                field={field}
+                value={scope[field.key]}
+                onChange={(v) => onChange(field.key, v)}
+                path={[...path, field.key]}
+                scope={scope}
+                missing={!!showMissing && isFieldMissing(field, visible, scope)}
+                showMissing={showMissing}
+              />
+            </View>
           </React.Fragment>
         );
       })}
@@ -777,6 +802,15 @@ const styles = StyleSheet.create({
   missingBlock: {
     borderWidth: 1.5,
     borderColor: colors.danger,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  // The field Voice Mode's cursor is currently on -- distinct color from
+  // `missingBlock` so the two states (missing vs voice-focused) never look
+  // the same field.
+  voiceFocusedBlock: {
+    borderWidth: 1.5,
+    borderColor: colors.barBlue,
     borderRadius: radius.md,
     padding: spacing.sm,
   },

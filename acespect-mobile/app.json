@@ -45,7 +45,20 @@
         }
       ],
       "expo-build-properties",
-      "expo-status-bar"
-    ]
+      "expo-status-bar",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "ACE SPECT uses your microphone for hands-free Voice Mode.",
+          "speechRecognitionPermission": "ACE SPECT uses on-device speech recognition for hands-free Voice Mode."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3367546c-c603-419a-854b-deb28159268f"
+      }
+    },
+    "owner": "anuka02"
   }
 }

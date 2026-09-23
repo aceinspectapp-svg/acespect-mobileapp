@@ -9,6 +9,7 @@ import { SectionCard } from '../../components/inspection/SectionCard';
 import { FieldListRenderer, SectionNavRenderer } from '../../components/inspection/fieldRenderers';
 import type { AnswerTree, AnswerValue } from '../../components/inspection/fieldRenderers/types';
 import { useInspectionDraft, BaselineSectionRef } from '../../context/InspectionDraftContext';
+import { useVoiceMode } from '../../context/VoiceModeContext';
 import { ActiveTemplate, getActiveTemplateCached, TemplateField } from '../../services/templateApi';
 import { flattenSectionToDraft, meetsAllRequireWhen, meetsAllRequiredFields } from '../../utils/flattenSectionToDraft';
 import { InspectionDraftSelection } from '../../types/inspection';
@@ -84,6 +85,7 @@ export function DynamicSectionScreen({
   selection,
 }: DynamicSectionScreenProps) {
   const draft = useInspectionDraft();
+  const voiceMode = useVoiceMode();
   const [template, setTemplate] = useState<ActiveTemplate | null>(null);
   const [loadError, setLoadError] = useState(false);
   // Restore whatever was already filled in for this section -- a fresh {}
@@ -288,6 +290,11 @@ export function DynamicSectionScreen({
             },
           },
           { icon: 'home-outline', accessibilityLabel: 'Home', onPress: handleGoHome },
+          {
+            icon: voiceMode.enabled ? 'mic' : 'mic-outline',
+            accessibilityLabel: voiceMode.enabled ? 'Turn off Voice Mode' : 'Turn on Voice Mode',
+            onPress: voiceMode.toggle,
+          },
         ]}
       />
       <View style={styles.progressWrap}>
@@ -355,6 +362,7 @@ export function DynamicSectionScreen({
                   onChange={setAnswer}
                   path={[sectionKey]}
                   showMissing={showMissing}
+                  voiceHandlers={{ onNext: handleComplete, onBack: handleBack, onHome: handleGoHome }}
                 />
               )}
             </SectionCard>

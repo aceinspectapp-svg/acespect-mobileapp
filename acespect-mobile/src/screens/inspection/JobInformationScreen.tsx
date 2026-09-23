@@ -14,6 +14,7 @@ import { AppScreenProps } from '../../navigation/types';
 import { useSystemStatus } from '../../hooks/useSystemStatus';
 import { useAuth } from '../../context/AuthContext';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
+import { useVoiceMode } from '../../context/VoiceModeContext';
 import { ActiveTemplate, getActiveTemplateCached, TemplateField } from '../../services/templateApi';
 import { meetsAllRequiredFields } from '../../utils/flattenSectionToDraft';
 import { pinAllSectionTemplates } from '../../utils/pinAllSectionTemplates';
@@ -202,6 +203,27 @@ export function JobInformationScreen({
     navigation.navigate('InspectionSetupStep2', { data });
   };
 
+  // Unlike `DynamicSectionScreen`, this screen's main fields (job number,
+  // date, weather, etc.) aren't rendered through `FieldListRenderer` -- they
+  // have their own hand-tuned layout (`textFields`/`tileFields`/`yesNoFields`
+  // below) -- so voice registration has to be done directly here rather than
+  // via `FieldListRenderer`'s `voiceHandlers` prop, combining every group
+  // (including `remainingFields`, which IS the generic engine) into one
+  // ordered list so the voice cursor still walks the whole screen in the
+  // same top-to-bottom order it's displayed in.
+  const voiceMode = useVoiceMode();
+  const allVoiceFields = [...textFields, ...tileFields, ...yesNoFields, ...remainingFields]
+    .filter((f) => isGateSatisfied(f, answers))
+    .sort((a, b) => a.order - b.order);
+  useEffect(() => {
+    voiceMode.registerFields(allVoiceFields, answers, (key, value) => setAnswer(key)(value), {
+      onNext,
+      onBack: () => navigation.goBack(),
+      onHome: () => navigation.popToTop(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allVoiceFields, answers, voiceMode.registerFields]);
+
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -220,6 +242,11 @@ export function JobInformationScreen({
             icon: 'home-outline',
             accessibilityLabel: 'Home',
             onPress: () => navigation.popToTop(),
+          },
+          {
+            icon: voiceMode.enabled ? 'mic' : 'mic-outline',
+            accessibilityLabel: voiceMode.enabled ? 'Turn off Voice Mode' : 'Turn on Voice Mode',
+            onPress: voiceMode.toggle,
           },
         ]}
       />
