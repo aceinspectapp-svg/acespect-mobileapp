@@ -51497,17 +51497,6 @@
             "required": true
           },
           {
-            "key": "withEnsuite",
-            "gate": {
-              "equals": "yes",
-              "fieldKey": "present"
-            },
-            "type": "yesno",
-            "label": "With ensuite? (bedrooms only)",
-            "order": 3,
-            "required": true
-          },
-          {
             "key": "obscuredBy",
             "gate": {
               "equals": "yes",
