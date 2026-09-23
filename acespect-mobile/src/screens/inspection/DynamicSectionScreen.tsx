@@ -251,6 +251,12 @@ export function DynamicSectionScreen({
           { text: 'Complete Section', style: 'cancel' },
           { text: 'Save as Draft', onPress: () => { persistSection('partial'); leaveFn(); } },
         ],
+        // Tapping the dimmed area outside the box (Android only -- iOS's
+        // native Alert has no backdrop-tap gesture at all) should count the
+        // same as tapping "Complete Section": stay put, no save. That's
+        // already what "Complete Section" itself does (no onPress), so
+        // `onDismiss` is a deliberate no-op, not a missed handler.
+        { cancelable: true, onDismiss: () => {} },
       );
       return;
     }
