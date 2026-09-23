@@ -509,14 +509,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -581,7 +581,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -589,7 +589,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -1059,14 +1059,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -1160,7 +1160,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -1168,7 +1168,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -1691,14 +1691,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -1759,7 +1759,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -1767,7 +1767,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -2344,14 +2344,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "E"
@@ -2406,7 +2406,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 11,
-            "required": true,
+            "required": false,
             "maxLength": 500,
             "sectionLetter": "F"
           },
@@ -2415,7 +2415,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 12,
-            "required": true,
+            "required": false,
             "sectionLetter": "F"
           }
         ]
@@ -2957,14 +2957,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -3007,7 +3007,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -3015,7 +3015,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -3660,14 +3660,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -4118,14 +4118,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -4205,7 +4205,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -4213,7 +4213,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -4772,14 +4772,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -4823,7 +4823,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 10,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -4831,7 +4831,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 11,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -5317,14 +5317,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -5385,7 +5385,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -5393,7 +5393,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -5537,7 +5537,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 5,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -5545,7 +5545,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 6,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -6061,14 +6061,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -6133,7 +6133,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -6141,7 +6141,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -6611,14 +6611,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -6712,7 +6712,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -6720,7 +6720,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -7243,14 +7243,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -7311,7 +7311,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -7319,7 +7319,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -7896,14 +7896,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "E"
@@ -7958,7 +7958,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 11,
-            "required": true,
+            "required": false,
             "maxLength": 500,
             "sectionLetter": "F"
           },
@@ -7967,7 +7967,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 12,
-            "required": true,
+            "required": false,
             "sectionLetter": "F"
           }
         ]
@@ -8509,14 +8509,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -8559,7 +8559,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -8567,7 +8567,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -9212,14 +9212,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -9670,14 +9670,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -9757,7 +9757,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -9765,7 +9765,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -10324,14 +10324,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -10375,7 +10375,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 10,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -10383,7 +10383,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 11,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -10869,14 +10869,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -10937,7 +10937,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -10945,7 +10945,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -11089,7 +11089,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 5,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -11097,7 +11097,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 6,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -11582,14 +11582,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -11598,14 +11598,14 @@
         "type": "photos",
         "label": "Pics",
         "order": 5,
-        "required": true
+        "required": false
       },
       {
         "key": "notes",
         "type": "textarea",
         "label": "Notes",
         "order": 6,
-        "required": true
+        "required": false
       }
     ]
   },
@@ -12554,14 +12554,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -12626,7 +12626,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -12634,7 +12634,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -13186,14 +13186,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "External Walls & Cladding"
@@ -13751,14 +13751,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "External Walls & Cladding"
@@ -14264,14 +14264,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Garage / Car Space"
@@ -14790,14 +14790,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Front Door & Frame"
@@ -15332,14 +15332,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Other External Doors"
@@ -15865,14 +15865,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Balconies"
@@ -16522,14 +16522,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -16590,7 +16590,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -16598,7 +16598,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -17345,14 +17345,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Ceilings"
@@ -17830,14 +17830,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Internal Walls"
@@ -18491,14 +18491,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Internal Stairs"
@@ -19003,14 +19003,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Windows (Internal)"
@@ -19559,14 +19559,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Internal Doors"
@@ -20025,14 +20025,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Cabinets"
@@ -21267,14 +21267,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Foyer / Reception"
@@ -21763,14 +21763,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Letterboxes / Lift Areas"
@@ -22262,14 +22262,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Driveway"
@@ -22745,14 +22745,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "External Paving"
@@ -23676,14 +23676,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -23727,7 +23727,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 10,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -23735,7 +23735,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 11,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -24217,14 +24217,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -24285,7 +24285,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -24293,7 +24293,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -24835,14 +24835,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Eaves / Soffits"
@@ -25320,14 +25320,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Fascia"
@@ -25853,14 +25853,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Gutters"
@@ -26372,14 +26372,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Downpipes"
@@ -26911,14 +26911,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -26927,14 +26927,14 @@
         "type": "photos",
         "label": "Pics",
         "order": 5,
-        "required": true
+        "required": false
       },
       {
         "key": "notes",
         "type": "textarea",
         "label": "Notes",
         "order": 6,
-        "required": true
+        "required": false
       }
     ]
   },
@@ -27990,14 +27990,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -28077,7 +28077,7 @@
         "type": "photos",
         "label": "Pic seq",
         "order": 9,
-        "required": true
+        "required": false
       },
       {
         "key": "notes",
@@ -28088,7 +28088,7 @@
         "type": "textarea",
         "label": "Notes",
         "order": 10,
-        "required": true
+        "required": false
       }
     ]
   },
@@ -28621,14 +28621,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -28708,7 +28708,7 @@
             "type": "photos",
             "label": "Pic seq",
             "order": 12,
-            "required": true
+            "required": false
           },
           {
             "key": "cladding",
@@ -28811,7 +28811,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 19,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -29346,14 +29346,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -29415,7 +29415,7 @@
             "type": "photos",
             "label": "Pics",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -29981,14 +29981,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -30105,7 +30105,7 @@
             "type": "photos",
             "label": "Pic seq",
             "order": 11,
-            "required": true
+            "required": false
           },
           {
             "key": "cladding",
@@ -30236,7 +30236,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 18,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -30863,14 +30863,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Warehouse Area"
@@ -31407,14 +31407,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Production Area"
@@ -31951,14 +31951,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Hardstand & Floors"
@@ -32483,14 +32483,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Roof Underside & Frame"
@@ -33117,14 +33117,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -33608,14 +33608,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -33666,7 +33666,7 @@
             "type": "photos",
             "label": "Pics",
             "order": 7,
-            "required": true
+            "required": false
           },
           {
             "key": "notes",
@@ -33677,7 +33677,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -34217,14 +34217,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -34262,7 +34262,7 @@
             "type": "photos",
             "label": "Pic seq",
             "order": 6,
-            "required": true
+            "required": false
           },
           {
             "key": "notes",
@@ -34273,7 +34273,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -34764,14 +34764,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -34821,7 +34821,7 @@
             "type": "photos",
             "label": "Pics",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -35270,14 +35270,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -35286,14 +35286,14 @@
         "type": "photos",
         "label": "Pics",
         "order": 4,
-        "required": true
+        "required": false
       },
       {
         "key": "notes",
         "type": "textarea",
         "label": "Notes",
         "order": 5,
-        "required": true
+        "required": false
       }
     ]
   },
@@ -35776,14 +35776,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -35792,14 +35792,14 @@
         "type": "photos",
         "label": "Pics",
         "order": 5,
-        "required": true
+        "required": false
       },
       {
         "key": "notes",
         "type": "textarea",
         "label": "Notes",
         "order": 6,
-        "required": true
+        "required": false
       }
     ]
   },
@@ -36565,14 +36565,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -36637,7 +36637,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -36645,7 +36645,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -37318,14 +37318,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Footpaths & Crossovers"
@@ -37555,7 +37555,7 @@
                 "type": "photos",
                 "label": "Photos",
                 "order": 7,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Footpaths & Crossovers"
@@ -38058,14 +38058,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Nature Strip, Light Posts, Signage, Trees"
@@ -38295,7 +38295,7 @@
                 "type": "photos",
                 "label": "Photos",
                 "order": 7,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Nature Strip, Light Posts, Signage, Trees"
@@ -38798,14 +38798,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Kerbs & Channel"
@@ -39035,7 +39035,7 @@
                 "type": "photos",
                 "label": "Photos",
                 "order": 7,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Kerbs & Channel"
@@ -39538,14 +39538,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Road Surface & Parking Bays"
@@ -39775,7 +39775,7 @@
                 "type": "photos",
                 "label": "Photos",
                 "order": 7,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Road Surface & Parking Bays"
@@ -40215,14 +40215,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Road Surface & Parking Bays"
@@ -40648,14 +40648,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Road Surface & Parking Bays"
@@ -41081,14 +41081,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Road Surface & Parking Bays"
@@ -41612,14 +41612,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Left Side Fences & Walls of Laneway"
@@ -41849,7 +41849,7 @@
                 "type": "photos",
                 "label": "Photos",
                 "order": 7,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Left Side Fences & Walls of Laneway"
@@ -42348,14 +42348,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Right Side Fences & Walls of Laneway"
@@ -42585,7 +42585,7 @@
                 "type": "photos",
                 "label": "Photos",
                 "order": 7,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Right Side Fences & Walls of Laneway"
@@ -43088,14 +43088,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Laneway Surface"
@@ -43325,7 +43325,7 @@
                 "type": "photos",
                 "label": "Photos",
                 "order": 7,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "Laneway Surface"
@@ -43908,14 +43908,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -43976,7 +43976,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -43984,7 +43984,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -44557,14 +44557,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "E"
@@ -44619,7 +44619,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 11,
-            "required": true,
+            "required": false,
             "maxLength": 500,
             "sectionLetter": "F"
           },
@@ -44628,7 +44628,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 12,
-            "required": true,
+            "required": false,
             "sectionLetter": "F"
           }
         ]
@@ -45166,14 +45166,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -45216,7 +45216,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -45224,7 +45224,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -45822,14 +45822,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -45909,7 +45909,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -45917,7 +45917,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -46472,14 +46472,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -46523,7 +46523,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 10,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -46531,7 +46531,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 11,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -47050,14 +47050,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -47118,7 +47118,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -47126,7 +47126,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -47270,7 +47270,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 5,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -47278,7 +47278,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 6,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -47763,14 +47763,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -47779,14 +47779,14 @@
         "type": "photos",
         "label": "Pics",
         "order": 5,
-        "required": true
+        "required": false
       },
       {
         "key": "notes",
         "type": "textarea",
         "label": "Notes",
         "order": 6,
-        "required": true
+        "required": false
       }
     ]
   },
@@ -48911,14 +48911,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 14,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 15,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -48998,7 +48998,7 @@
         "type": "photos",
         "label": "Driveway pics",
         "order": 9,
-        "required": true
+        "required": false
       },
       {
         "key": "notes",
@@ -49009,7 +49009,7 @@
         "type": "textarea",
         "label": "Notes",
         "order": 10,
-        "required": true
+        "required": false
       }
     ]
   },
@@ -49532,14 +49532,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -49619,7 +49619,7 @@
             "type": "photos",
             "label": "Elevation pics",
             "order": 11,
-            "required": true
+            "required": false
           },
           {
             "key": "cladding",
@@ -49754,7 +49754,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 20,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -50279,14 +50279,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -50337,7 +50337,7 @@
             "type": "photos",
             "label": "Pics",
             "order": 7,
-            "required": true
+            "required": false
           },
           {
             "key": "notes",
@@ -50348,7 +50348,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -50920,14 +50920,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -51048,7 +51048,7 @@
             "type": "photos",
             "label": "Pics",
             "order": 10,
-            "required": true
+            "required": false
           },
           {
             "key": "cladding",
@@ -51223,7 +51223,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 19,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -51961,14 +51961,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -52006,7 +52006,7 @@
             "type": "photos",
             "label": "Pics (typically 8–12: walls, windows, ceiling & cornices, floor coverings, skirts, doors & architraves)",
             "order": 9,
-            "required": true
+            "required": false
           },
           {
             "key": "notes",
@@ -52017,7 +52017,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 10,
-            "required": true
+            "required": false
           }
         ],
         "sectionLetter": "Rooms"
@@ -52596,14 +52596,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -53094,14 +53094,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -53152,7 +53152,7 @@
             "type": "photos",
             "label": "Pics",
             "order": 7,
-            "required": true
+            "required": false
           },
           {
             "key": "notes",
@@ -53163,7 +53163,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -53778,14 +53778,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -53836,7 +53836,7 @@
         "type": "photos",
         "label": "Pool / spa pics",
         "order": 13,
-        "required": true
+        "required": false
       },
       {
         "key": "notes",
@@ -53847,7 +53847,7 @@
         "type": "textarea",
         "label": "Notes",
         "order": 14,
-        "required": true
+        "required": false
       }
     ]
   },
@@ -54334,14 +54334,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -54382,14 +54382,14 @@
             "type": "photos",
             "label": "Pics",
             "order": 7,
-            "required": true
+            "required": false
           },
           {
             "key": "notes",
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -54870,14 +54870,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -54886,14 +54886,14 @@
             "type": "photos",
             "label": "Pics",
             "order": 4,
-            "required": true
+            "required": false
           },
           {
             "key": "notes",
             "type": "textarea",
             "label": "Notes",
             "order": 5,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -55409,14 +55409,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -55481,7 +55481,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -55489,7 +55489,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -55959,14 +55959,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -56060,7 +56060,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -56068,7 +56068,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -56591,14 +56591,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -56659,7 +56659,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -56667,7 +56667,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -57244,14 +57244,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "E"
@@ -57306,7 +57306,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 11,
-            "required": true,
+            "required": false,
             "maxLength": 500,
             "sectionLetter": "F"
           },
@@ -57315,7 +57315,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 12,
-            "required": true,
+            "required": false,
             "sectionLetter": "F"
           }
         ]
@@ -57857,14 +57857,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -57907,7 +57907,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -57915,7 +57915,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -58560,14 +58560,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -59018,14 +59018,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -59105,7 +59105,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -59113,7 +59113,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -59672,14 +59672,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -59723,7 +59723,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 10,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -59731,7 +59731,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 11,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -60217,14 +60217,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -60285,7 +60285,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -60293,7 +60293,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -60437,7 +60437,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 5,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -60445,7 +60445,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 6,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -60961,14 +60961,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -61033,7 +61033,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -61041,7 +61041,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -61511,14 +61511,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -61612,7 +61612,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -61620,7 +61620,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -62143,14 +62143,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -62211,7 +62211,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -62219,7 +62219,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -62796,14 +62796,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "E"
@@ -62858,7 +62858,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 11,
-            "required": true,
+            "required": false,
             "maxLength": 500,
             "sectionLetter": "F"
           },
@@ -62867,7 +62867,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 12,
-            "required": true,
+            "required": false,
             "sectionLetter": "F"
           }
         ]
@@ -63409,14 +63409,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -63459,7 +63459,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -63467,7 +63467,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -64112,14 +64112,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -64570,14 +64570,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -64657,7 +64657,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -64665,7 +64665,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -65224,14 +65224,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -65275,7 +65275,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 10,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -65283,7 +65283,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 11,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -65769,14 +65769,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -65837,7 +65837,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -65845,7 +65845,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -65989,7 +65989,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 5,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -65997,7 +65997,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 6,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -66513,14 +66513,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -66585,7 +66585,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -66593,7 +66593,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -67063,14 +67063,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -67164,7 +67164,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -67172,7 +67172,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -67695,14 +67695,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -67763,7 +67763,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -67771,7 +67771,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -68348,14 +68348,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ],
             "sectionLetter": "E"
@@ -68410,7 +68410,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 11,
-            "required": true,
+            "required": false,
             "maxLength": 500,
             "sectionLetter": "F"
           },
@@ -68419,7 +68419,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 12,
-            "required": true,
+            "required": false,
             "sectionLetter": "F"
           }
         ]
@@ -68961,14 +68961,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -69011,7 +69011,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -69019,7 +69019,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -69664,14 +69664,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -70122,14 +70122,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -70209,7 +70209,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -70217,7 +70217,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -70776,14 +70776,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -70827,7 +70827,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 10,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -70835,7 +70835,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 11,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -71321,14 +71321,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -71389,7 +71389,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -71397,7 +71397,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -71541,7 +71541,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 5,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -71549,7 +71549,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 6,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -72065,14 +72065,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -72137,7 +72137,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 7,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -72145,7 +72145,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 8,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -72615,14 +72615,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -72716,7 +72716,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -72724,7 +72724,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -73174,14 +73174,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -73810,14 +73810,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -74432,14 +74432,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -75021,14 +75021,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -75583,14 +75583,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -76132,14 +76132,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -76816,14 +76816,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -76884,7 +76884,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -76892,7 +76892,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -77347,14 +77347,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -77977,14 +77977,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -78382,14 +78382,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -78432,7 +78432,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -78440,7 +78440,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -79046,14 +79046,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -79565,14 +79565,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -80216,14 +80216,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -80737,14 +80737,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -81212,14 +81212,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -81705,14 +81705,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -82172,14 +82172,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -83697,14 +83697,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -84229,14 +84229,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -84316,7 +84316,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -84324,7 +84324,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -84883,14 +84883,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -84934,7 +84934,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 10,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -84942,7 +84942,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 11,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -85428,14 +85428,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -85496,7 +85496,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -85504,7 +85504,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       }
@@ -86063,14 +86063,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -86598,14 +86598,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -87155,14 +87155,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -87698,14 +87698,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -88373,14 +88373,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 14,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 15,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -88474,7 +88474,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -88482,7 +88482,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -88932,14 +88932,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -89568,14 +89568,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -90297,14 +90297,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -90832,14 +90832,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -91421,14 +91421,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -91983,14 +91983,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -92536,14 +92536,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -93127,14 +93127,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -93764,14 +93764,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -94606,14 +94606,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -95196,14 +95196,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -95790,14 +95790,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -96419,14 +96419,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -96946,14 +96946,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -97482,14 +97482,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -98073,14 +98073,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -98478,14 +98478,14 @@
                 "type": "textarea",
                 "label": "Notes",
                 "order": 15,
-                "required": true
+                "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
                 "order": 16,
-                "required": true
+                "required": false
               }
             ]
           },
@@ -98528,7 +98528,7 @@
             "type": "textarea",
             "label": "Notes",
             "order": 8,
-            "required": true,
+            "required": false,
             "maxLength": 500
           },
           {
@@ -98536,7 +98536,7 @@
             "type": "photos",
             "label": "Photos",
             "order": 9,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -99138,14 +99138,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -99665,14 +99665,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -100324,14 +100324,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -100845,14 +100845,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -101320,14 +101320,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -101813,14 +101813,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -102280,14 +102280,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -103836,14 +103836,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -104835,14 +104835,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -105388,14 +105388,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -105971,14 +105971,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -106532,14 +106532,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -107093,14 +107093,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -107650,14 +107650,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -108145,14 +108145,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -108662,14 +108662,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -109211,14 +109211,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -109742,14 +109742,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -110957,14 +110957,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -111002,7 +111002,7 @@
         "type": "photos",
         "label": "Photo Nos",
         "order": 5,
-        "required": true
+        "required": false
       },
       {
         "key": "comments",
@@ -111456,14 +111456,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -112057,14 +112057,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -112650,14 +112650,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -113177,14 +113177,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -113710,14 +113710,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -114291,14 +114291,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -114832,14 +114832,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -115413,14 +115413,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -116004,14 +116004,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -116475,14 +116475,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -117038,14 +117038,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -117509,14 +117509,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -118275,14 +118275,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -118357,7 +118357,7 @@
         "type": "photos",
         "label": "Photo Nos",
         "order": 7,
-        "required": true
+        "required": false
       },
       {
         "key": "comments",
@@ -118989,14 +118989,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -119672,14 +119672,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -120235,14 +120235,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -120736,14 +120736,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -121261,14 +121261,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -121791,14 +121791,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -122804,14 +122804,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -123319,14 +123319,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -124010,14 +124010,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -124519,14 +124519,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -124984,14 +124984,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -125475,14 +125475,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -125948,14 +125948,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -127398,14 +127398,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -127458,7 +127458,7 @@
         "type": "photos",
         "label": "Photo Nos",
         "order": 6,
-        "required": true
+        "required": false
       },
       {
         "key": "comments",
@@ -127625,7 +127625,7 @@
         "type": "photos",
         "label": "Photo Nos",
         "order": 8,
-        "required": true
+        "required": false
       },
       {
         "key": "comments",
@@ -128366,14 +128366,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -128969,14 +128969,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -129554,14 +129554,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -130093,14 +130093,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -130646,14 +130646,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -131215,14 +131215,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -131760,14 +131760,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -132285,14 +132285,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
@@ -132852,14 +132852,14 @@
             "type": "textarea",
             "label": "Notes",
             "order": 15,
-            "required": true
+            "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
             "order": 16,
-            "required": true
+            "required": false
           }
         ]
       },
