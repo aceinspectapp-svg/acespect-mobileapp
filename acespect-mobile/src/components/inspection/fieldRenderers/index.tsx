@@ -545,7 +545,16 @@ function FixedListRenderer({ field, value, onChange, path, showMissing, missing 
             {open && (
               <FieldListRenderer
                 fields={itemFields}
-                scope={record[open.key] ?? {}}
+                // The title field (roomName) shows the instance's standard
+                // name by default rather than sitting empty -- inspectors
+                // couldn't see what name they'd end up with. Display-only:
+                // nothing is written to the answer tree unless they actually
+                // edit it, so "blank = standard name" still holds if untouched.
+                scope={
+                  titleKey && !customName(open.key)
+                    ? { ...(record[open.key] ?? {}), [titleKey]: open.label }
+                    : record[open.key] ?? {}
+                }
                 onChange={(k, v) => onChange({ ...record, [open.key]: { ...(record[open.key] ?? {}), [k]: v } })}
                 path={[...path, open.key]}
                 showMissing={showMissing}
