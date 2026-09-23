@@ -12198,7 +12198,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "materialOther",
@@ -12752,7 +12753,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Building Description"
+        "sectionLetter": "Building Description",
+        "allowOther": true
       },
       {
         "key": "buildingTypeOther",
@@ -12849,7 +12851,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Building Description"
+        "sectionLetter": "Building Description",
+        "allowOther": true
       },
       {
         "key": "claddingOther",
@@ -12889,7 +12892,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Building Description"
+        "sectionLetter": "Building Description",
+        "allowOther": true
       },
       {
         "key": "foundationsOther",
@@ -12933,7 +12937,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Building Description"
+        "sectionLetter": "Building Description",
+        "allowOther": true
       },
       {
         "key": "roofDesignOther",
@@ -12973,7 +12978,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Building Description"
+        "sectionLetter": "Building Description",
+        "allowOther": true
       },
       {
         "key": "roofCoveringOther",
@@ -13017,7 +13023,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Building Description"
+        "sectionLetter": "Building Description",
+        "allowOther": true
       },
       {
         "key": "windowsOther",
@@ -13073,7 +13080,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Scope, Safety and Limitations"
+        "sectionLetter": "Scope, Safety and Limitations",
+        "allowOther": true
       },
       {
         "key": "worksTypeOther",
@@ -15664,7 +15672,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Front Door & Frame"
+        "sectionLetter": "Front Door & Frame",
+        "allowOther": true
       },
       {
         "key": "front_door_materialOther",
@@ -16892,7 +16901,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Balconies"
+        "sectionLetter": "Balconies",
+        "allowOther": true
       },
       {
         "key": "balconies_materialOther",
@@ -18453,7 +18463,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Ceilings"
+        "sectionLetter": "Ceilings",
+        "allowOther": true
       },
       {
         "key": "ceilings_materialOther",
@@ -19031,7 +19042,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Internal Walls"
+        "sectionLetter": "Internal Walls",
+        "allowOther": true
       },
       {
         "key": "int_walls_materialOther",
@@ -19570,7 +19582,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Floors"
+        "sectionLetter": "Floors",
+        "allowOther": true
       },
       {
         "key": "floors_materialOther",
@@ -19618,7 +19631,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Floors"
+        "sectionLetter": "Floors",
+        "allowOther": true
       },
       {
         "key": "floors_coveringsOther",
@@ -19743,7 +19757,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Internal Stairs"
+        "sectionLetter": "Internal Stairs",
+        "allowOther": true
       },
       {
         "key": "int_stairs_materialOther",
@@ -22194,7 +22209,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Electrical"
+        "sectionLetter": "Electrical",
+        "allowOther": true
       },
       {
         "key": "electrical_rcdCountOther",
@@ -22242,7 +22258,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Electrical"
+        "sectionLetter": "Electrical",
+        "allowOther": true
       },
       {
         "key": "electrical_batteryAlarmsCountOther",
@@ -22290,7 +22307,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Electrical"
+        "sectionLetter": "Electrical",
+        "allowOther": true
       },
       {
         "key": "electrical_hardwiredCountOther",
@@ -23869,7 +23887,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Driveway"
+        "sectionLetter": "Driveway",
+        "allowOther": true
       },
       {
         "key": "driveway_common_materialOther",
@@ -24993,7 +25012,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Pool / Spa"
+        "sectionLetter": "Pool / Spa",
+        "allowOther": true
       },
       {
         "key": "pool_materialOther",
@@ -26672,7 +26692,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Eaves / Soffits"
+        "sectionLetter": "Eaves / Soffits",
+        "allowOther": true
       },
       {
         "key": "eaves_materialOther",
@@ -27202,7 +27223,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Fascia"
+        "sectionLetter": "Fascia",
+        "allowOther": true
       },
       {
         "key": "fascia_materialOther",
@@ -27790,7 +27812,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Gutters"
+        "sectionLetter": "Gutters",
+        "allowOther": true
       },
       {
         "key": "gutters_materialOther",
@@ -28359,7 +28382,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Downpipes"
+        "sectionLetter": "Downpipes",
+        "allowOther": true
       },
       {
         "key": "downpipes_materialOther",
@@ -28917,7 +28941,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "materialOther",
@@ -29491,7 +29516,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property Description"
+        "sectionLetter": "Property Description",
+        "allowOther": true
       },
       {
         "key": "constructionIsOther",
@@ -29661,7 +29687,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property Description"
+        "sectionLetter": "Property Description",
+        "allowOther": true
       },
       {
         "key": "foundationsOther",
@@ -29701,7 +29728,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property Description"
+        "sectionLetter": "Property Description",
+        "allowOther": true
       },
       {
         "key": "roofDesignOther",
@@ -29780,7 +29808,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property Description"
+        "sectionLetter": "Property Description",
+        "allowOther": true
       },
       {
         "key": "windowsOther",
@@ -29836,7 +29865,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Scope, Safety and Limitations"
+        "sectionLetter": "Scope, Safety and Limitations",
+        "allowOther": true
       },
       {
         "key": "proposedWorksTypeOther",
@@ -30095,7 +30125,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "materialOther",
@@ -30608,7 +30639,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "obscuredByOther",
@@ -30719,7 +30751,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "orientationOther",
@@ -30779,7 +30812,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "partialInspectionOther",
@@ -31267,7 +31301,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "obscuredByOther",
@@ -31519,7 +31554,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "materialOther",
@@ -32045,7 +32081,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "obscuredByOther",
@@ -32811,7 +32848,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "obscuredByOther",
@@ -33058,7 +33096,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "General"
+        "sectionLetter": "General",
+        "allowOther": true
       },
       {
         "key": "gen_safetyAdvisoryTypesOther",
@@ -33172,7 +33211,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Warehouse Area"
+        "sectionLetter": "Warehouse Area",
+        "allowOther": true
       },
       {
         "key": "wh_obscuredByOther",
@@ -33766,7 +33806,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Production Area"
+        "sectionLetter": "Production Area",
+        "allowOther": true
       },
       {
         "key": "prod_obscuredByOther",
@@ -34360,7 +34401,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Hardstand & Floors"
+        "sectionLetter": "Hardstand & Floors",
+        "allowOther": true
       },
       {
         "key": "hard_obscuredByOther",
@@ -34916,7 +34958,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Roof Underside & Frame"
+        "sectionLetter": "Roof Underside & Frame",
+        "allowOther": true
       },
       {
         "key": "roofin_coveringOfOther",
@@ -36697,7 +36740,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "obscuredByOther",
@@ -37472,7 +37516,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "materialsOther",
@@ -37944,7 +37989,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "obscuredByOther",
@@ -38547,7 +38593,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "materialOther",
@@ -51599,7 +51646,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "materialOther",
@@ -52285,7 +52333,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property Description"
+        "sectionLetter": "Property Description",
+        "allowOther": true
       },
       {
         "key": "wallCladdingGroundOther",
@@ -52343,7 +52392,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property Description"
+        "sectionLetter": "Property Description",
+        "allowOther": true
       },
       {
         "key": "wallCladdingFirstOther",
@@ -52381,7 +52431,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property Description"
+        "sectionLetter": "Property Description",
+        "allowOther": true
       },
       {
         "key": "foundationsOther",
@@ -52419,7 +52470,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property Description"
+        "sectionLetter": "Property Description",
+        "allowOther": true
       },
       {
         "key": "roofDesignOther",
@@ -52461,7 +52513,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property Description"
+        "sectionLetter": "Property Description",
+        "allowOther": true
       },
       {
         "key": "roofCoveringOther",
@@ -52499,7 +52552,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property Description"
+        "sectionLetter": "Property Description",
+        "allowOther": true
       },
       {
         "key": "windowsOther",
@@ -52553,7 +52607,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Scope, Safety and Limitations"
+        "sectionLetter": "Scope, Safety and Limitations",
+        "allowOther": true
       },
       {
         "key": "proposedWorksTypeOther",
@@ -52826,7 +52881,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "materialOther",
@@ -53339,7 +53395,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "obscuredByOther",
@@ -53440,7 +53497,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "orientationOther",
@@ -53500,7 +53558,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "partialInspectionOther",
@@ -53988,7 +54047,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "obscuredByOther",
@@ -54267,7 +54327,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "materialOther",
@@ -54793,7 +54854,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "obscuredByOther",
@@ -55569,7 +55631,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "obscuredByOther",
@@ -55865,7 +55928,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "General"
+        "sectionLetter": "General",
+        "allowOther": true
       },
       {
         "key": "safetyAdvisoryTypesOther",
@@ -56084,7 +56148,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "obscuredByOther",
@@ -57354,7 +57419,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "materialOther",
@@ -57838,7 +57904,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "obscuredByOther",
@@ -57945,7 +58012,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "constructedOther",
@@ -57987,7 +58055,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "pavingOther",
@@ -58029,7 +58098,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "poolFenceOther",
@@ -58572,7 +58642,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "obscuredByOther",
@@ -58691,7 +58762,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "materialsOther",
@@ -59169,7 +59241,8 @@
                 "value": "other"
               }
             ],
-            "required": true
+            "required": true,
+            "allowOther": true
           },
           {
             "key": "obscuredByOther",
@@ -91335,7 +91408,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "generalCommentsOther",
@@ -113334,7 +113408,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "generalCommentsOther",
@@ -120245,7 +120320,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property & Site Overview"
+        "sectionLetter": "Property & Site Overview",
+        "allowOther": true
       },
       {
         "key": "streetFrontageOther",
@@ -120328,7 +120404,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property Description"
+        "sectionLetter": "Property Description",
+        "allowOther": true
       },
       {
         "key": "commercialTypeOther",
@@ -120435,7 +120512,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Property Description"
+        "sectionLetter": "Property Description",
+        "allowOther": true
       },
       {
         "key": "additionsAtOther",
@@ -122405,7 +122483,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Sub-Floor"
+        "sectionLetter": "Sub-Floor",
+        "allowOther": true
       },
       {
         "key": "subfloor_accessOther",
@@ -124230,7 +124309,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Front Door/s & Frames"
+        "sectionLetter": "Front Door/s & Frames",
+        "allowOther": true
       },
       {
         "key": "front_door_constructionOther",
@@ -125468,7 +125548,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "External Stairs"
+        "sectionLetter": "External Stairs",
+        "allowOther": true
       },
       {
         "key": "ext_stairs_constructionOther",
@@ -126114,7 +126195,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Balconies"
+        "sectionLetter": "Balconies",
+        "allowOther": true
       },
       {
         "key": "balconies_constructionOther",
@@ -127253,7 +127335,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Verandah / Front Porch / Decking"
+        "sectionLetter": "Verandah / Front Porch / Decking",
+        "allowOther": true
       },
       {
         "key": "verandah_constructionOther",
@@ -128461,7 +128544,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Alfresco / Pergola"
+        "sectionLetter": "Alfresco / Pergola",
+        "allowOther": true
       },
       {
         "key": "alfresco_coveringOther",
@@ -128607,7 +128691,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "constructionOther",
@@ -129328,7 +129413,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Garage"
+        "sectionLetter": "Garage",
+        "allowOther": true
       },
       {
         "key": "garage_wallsOther",
@@ -129384,7 +129470,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Garage"
+        "sectionLetter": "Garage",
+        "allowOther": true
       },
       {
         "key": "garage_roofCoveringOther",
@@ -130079,7 +130166,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Carport"
+        "sectionLetter": "Carport",
+        "allowOther": true
       },
       {
         "key": "carport_frameOther",
@@ -130127,7 +130215,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Carport"
+        "sectionLetter": "Carport",
+        "allowOther": true
       },
       {
         "key": "carport_roofCoveringOther",
@@ -130733,7 +130822,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Sheds"
+        "sectionLetter": "Sheds",
+        "allowOther": true
       },
       {
         "key": "sheds_countOther",
@@ -133520,7 +133610,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Ceilings"
+        "sectionLetter": "Ceilings",
+        "allowOther": true
       },
       {
         "key": "ceilings_materialOther",
@@ -134722,7 +134813,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Floors"
+        "sectionLetter": "Floors",
+        "allowOther": true
       },
       {
         "key": "floors_constructionOther",
@@ -134890,7 +134982,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Internal Stairs"
+        "sectionLetter": "Internal Stairs",
+        "allowOther": true
       },
       {
         "key": "int_stairs_constructionOther",
@@ -137908,7 +138001,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Electrical"
+        "sectionLetter": "Electrical",
+        "allowOther": true
       },
       {
         "key": "electrical_rcdCountOther",
@@ -137956,7 +138050,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Electrical"
+        "sectionLetter": "Electrical",
+        "allowOther": true
       },
       {
         "key": "electrical_batteryCountOther",
@@ -138004,7 +138099,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Electrical"
+        "sectionLetter": "Electrical",
+        "allowOther": true
       },
       {
         "key": "electrical_hardwiredCountOther",
@@ -138558,7 +138654,8 @@
             "value": "other"
           }
         ],
-        "required": true
+        "required": true,
+        "allowOther": true
       },
       {
         "key": "generalCommentsOther",
@@ -139583,7 +139680,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Roof Covering"
+        "sectionLetter": "Roof Covering",
+        "allowOther": true
       },
       {
         "key": "roof_covering_roofIsOther",
@@ -139631,7 +139729,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Roof Covering"
+        "sectionLetter": "Roof Covering",
+        "allowOther": true
       },
       {
         "key": "roof_covering_coveringOther",
@@ -140299,7 +140398,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Eaves / Soffits"
+        "sectionLetter": "Eaves / Soffits",
+        "allowOther": true
       },
       {
         "key": "eaves_constructionOther",
@@ -142790,7 +142890,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Gutters & Valleys"
+        "sectionLetter": "Gutters & Valleys",
+        "allowOther": true
       },
       {
         "key": "gutters_gutterMaterialOther",
@@ -143984,7 +144085,8 @@
           }
         ],
         "required": true,
-        "sectionLetter": "Downpipes"
+        "sectionLetter": "Downpipes",
+        "allowOther": true
       },
       {
         "key": "downpipes_materialOther",
