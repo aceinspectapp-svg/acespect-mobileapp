@@ -252,10 +252,20 @@ function DateFieldR({ field, value, onChange, readOnly }: RendererProps) {
   );
 }
 
-/** Rounded pill buttons -- yesno / pill-select / select-tiles / color-select all render this way. */
+/**
+ * Rounded pill buttons -- yesno / pill-select / select-tiles / color-select
+ * all render this way. `allowOther` (pill-select only, in practice -- the
+ * other two never set it) adds the same "__other__:<text>" escape hatch
+ * ChipField gives multiselects, encoded as a single scalar value here
+ * instead of an array entry; `displayValue`'s `__other__:` unwrap already
+ * handles both.
+ */
 function ToggleField({ field, value, onChange, readOnly, defaultOptions }: RendererProps & { defaultOptions?: { value: string; label: string }[] }) {
   const options = field.options?.length ? field.options : defaultOptions ?? [];
   const current = asString(value);
+  const otherKey = "__other__";
+  const otherActive = current === "other" || current.startsWith(`${otherKey}:`);
+  const otherValue = current.startsWith(`${otherKey}:`) ? current.slice(otherKey.length + 1) : "";
   return (
     <div>
       <Label field={field} />
@@ -284,8 +294,41 @@ function ToggleField({ field, value, onChange, readOnly, defaultOptions }: Rende
             </button>
           );
         })}
-        {options.length === 0 && <ReadValue text="—" />}
+        {field.allowOther && (
+          <button
+            type="button"
+            disabled={readOnly || field.readOnly}
+            onClick={() => onChange("other")}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "20px",
+              border: `1.5px solid ${otherActive ? "#2563eb" : "#e5e7eb"}`,
+              background: otherActive ? "#2563eb" : "white",
+              color: otherActive ? "white" : "#374151",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: readOnly || field.readOnly ? "default" : "pointer",
+            }}
+          >
+            Other
+          </button>
+        )}
+        {options.length === 0 && !field.allowOther && <ReadValue text="—" />}
       </div>
+      {field.allowOther && otherActive && (
+        readOnly || field.readOnly ? (
+          <div style={{ marginTop: "8px" }}>
+            <ReadValue text={otherValue || "—"} />
+          </div>
+        ) : (
+          <input
+            style={{ ...inputStyle, marginTop: "8px" }}
+            placeholder="Specify…"
+            value={otherValue}
+            onChange={(e) => onChange(e.target.value ? `${otherKey}:${e.target.value}` : "other")}
+          />
+        )
+      )}
     </div>
   );
 }
