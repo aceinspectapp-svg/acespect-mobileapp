@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppTextInput, DateField, SegmentedToggle } from '../../ui';
 import { ChoiceTileGrid, ChoiceTileMultiGrid, TileOption } from '../ChoiceTile';
 import { ChipMultiSelect, ColorSelect, FieldLabel, PillSelect, PlainTextInput } from '../fieldKit';
+import { appendDictated, DictationMicButton } from '../DictationMic';
 import { colors, radius, spacing } from '../../../theme';
 import { usePhotoCapture } from '../../../hooks/usePhotoCapture';
 import { PhotoAnnotator } from '../PhotoAnnotator';
@@ -25,17 +26,28 @@ export function TextFieldRenderer({ field, value, onChange, missing }: FieldRend
   // the stored value is permanently prefixed with no downstream change needed.
   const raw = asString(value);
   const suffix = prefix && raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
+  const shown = prefix ? suffix : raw;
+  const setShown = (text: string) => onChange(prefix ? `${prefix}${text}` : text);
   return (
     <View style={blockStyle(missing)}>
-      <AppTextInput
-        label={field.label}
-        required={field.required}
-        readOnly={field.readOnly}
-        placeholder={field.placeholder}
-        prefix={prefix}
-        value={prefix ? suffix : raw}
-        onChangeText={(text) => onChange(prefix ? `${prefix}${text}` : text)}
-      />
+      <View style={styles.textFieldRow}>
+        <View style={styles.textFieldInput}>
+          <AppTextInput
+            label={field.label}
+            required={field.required}
+            readOnly={field.readOnly}
+            placeholder={field.placeholder}
+            prefix={prefix}
+            value={shown}
+            onChangeText={setShown}
+          />
+        </View>
+        {!field.readOnly && (
+          <View style={styles.textFieldMic}>
+            <DictationMicButton onResult={(spoken) => setShown(appendDictated(shown, spoken))} />
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -311,6 +323,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.sm,
   },
+  textFieldRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
+  textFieldInput: { flex: 1 },
+  textFieldMic: { marginBottom: 7 },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   photoThumb: { width: 64, height: 64, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
   photoThumbBadge: {

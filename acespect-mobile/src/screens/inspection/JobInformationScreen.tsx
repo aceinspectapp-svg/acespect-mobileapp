@@ -14,11 +14,11 @@ import { AppScreenProps } from '../../navigation/types';
 import { useSystemStatus } from '../../hooks/useSystemStatus';
 import { useAuth } from '../../context/AuthContext';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
-import { useVoiceMode } from '../../context/VoiceModeContext';
 import { ActiveTemplate, getActiveTemplateCached, TemplateField } from '../../services/templateApi';
 import { meetsAllRequiredFields } from '../../utils/flattenSectionToDraft';
 import { pinAllSectionTemplates } from '../../utils/pinAllSectionTemplates';
 import { FieldListRenderer } from '../../components/inspection/fieldRenderers';
+import { appendDictated, DictationMicButton } from '../../components/inspection/DictationMic';
 import { isGateSatisfied, type AnswerTree, type AnswerValue } from '../../components/inspection/fieldRenderers/types';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
 
@@ -203,27 +203,6 @@ export function JobInformationScreen({
     navigation.navigate('InspectionSetupStep2', { data });
   };
 
-  // Unlike `DynamicSectionScreen`, this screen's main fields (job number,
-  // date, weather, etc.) aren't rendered through `FieldListRenderer` -- they
-  // have their own hand-tuned layout (`textFields`/`tileFields`/`yesNoFields`
-  // below) -- so voice registration has to be done directly here rather than
-  // via `FieldListRenderer`'s `voiceHandlers` prop, combining every group
-  // (including `remainingFields`, which IS the generic engine) into one
-  // ordered list so the voice cursor still walks the whole screen in the
-  // same top-to-bottom order it's displayed in.
-  const voiceMode = useVoiceMode();
-  const allVoiceFields = [...textFields, ...tileFields, ...yesNoFields, ...remainingFields]
-    .filter((f) => isGateSatisfied(f, answers))
-    .sort((a, b) => a.order - b.order);
-  useEffect(() => {
-    voiceMode.registerFields(allVoiceFields, answers, (key, value) => setAnswer(key)(value), {
-      onNext,
-      onBack: () => navigation.goBack(),
-      onHome: () => navigation.popToTop(),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allVoiceFields, answers, voiceMode.registerFields]);
-
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -242,11 +221,6 @@ export function JobInformationScreen({
             icon: 'home-outline',
             accessibilityLabel: 'Home',
             onPress: () => navigation.popToTop(),
-          },
-          {
-            icon: voiceMode.enabled ? 'mic' : 'mic-outline',
-            accessibilityLabel: voiceMode.enabled ? 'Turn off Voice Mode' : 'Turn on Voice Mode',
-            onPress: voiceMode.toggle,
           },
         ]}
       />
@@ -315,18 +289,35 @@ export function JobInformationScreen({
                       onChange={setAnswer(field.key)}
                     />
                   ) : (
-                    <AppTextInput
-                      label={field.label}
-                      required={field.required}
-                      readOnly={field.readOnly}
-                      prefix={field.prefix}
-                      value={
-                        field.prefix && asStr(answers[field.key]).startsWith(field.prefix)
-                          ? asStr(answers[field.key]).slice(field.prefix.length)
-                          : asStr(answers[field.key])
-                      }
-                      onChangeText={(text) => setAnswer(field.key)(field.prefix ? `${field.prefix}${text}` : text)}
-                    />
+                    <View style={styles.textFieldRow}>
+                      <View style={styles.textFieldInput}>
+                        <AppTextInput
+                          label={field.label}
+                          required={field.required}
+                          readOnly={field.readOnly}
+                          prefix={field.prefix}
+                          value={
+                            field.prefix && asStr(answers[field.key]).startsWith(field.prefix)
+                              ? asStr(answers[field.key]).slice(field.prefix.length)
+                              : asStr(answers[field.key])
+                          }
+                          onChangeText={(text) => setAnswer(field.key)(field.prefix ? `${field.prefix}${text}` : text)}
+                        />
+                      </View>
+                      {!field.readOnly && (
+                        <View style={styles.textFieldMic}>
+                          <DictationMicButton
+                            onResult={(spoken) => {
+                              const raw = field.prefix && asStr(answers[field.key]).startsWith(field.prefix)
+                                ? asStr(answers[field.key]).slice(field.prefix.length)
+                                : asStr(answers[field.key]);
+                              const next = appendDictated(raw, spoken);
+                              setAnswer(field.key)(field.prefix ? `${field.prefix}${next}` : next);
+                            }}
+                          />
+                        </View>
+                      )}
+                    </View>
                   )}
                 </React.Fragment>
               ))}
@@ -483,6 +474,9 @@ const styles = StyleSheet.create({
   keyboardAvoider: { flex: 1 },
   body: { flex: 1 },
   bodyContent: { padding: spacing.lg, paddingBottom: spacing.xxxl },
+  textFieldRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
+  textFieldInput: { flex: 1 },
+  textFieldMic: { marginBottom: 7 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   banner: {
     flexDirection: 'row',
