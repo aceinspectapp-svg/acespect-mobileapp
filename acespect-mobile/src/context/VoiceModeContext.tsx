@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { Alert } from 'react-native';
 import * as Speech from 'expo-speech';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import type { TemplateField } from '../services/templateApi';
@@ -93,7 +94,11 @@ export function VoiceModeProvider({ children }: { children: React.ReactNode }) {
         lang: 'en-US',
         interimResults: false,
         continuous: false,
-        requiresOnDeviceRecognition: true,
+        // NOT forced on-device: on a device without an installed on-device
+        // English model, requiresOnDeviceRecognition:true makes every
+        // single start() fail immediately (silently, before this bug fix),
+        // which looks exactly like "nothing is ever recognized". The OS
+        // still prefers on-device when it can.
       });
     } catch {
       // Recognizer busy/unavailable -- the next 'end' or manual toggle retries.
@@ -219,15 +224,19 @@ export function VoiceModeProvider({ children }: { children: React.ReactNode }) {
     ExpoSpeechRecognitionModule.requestPermissionsAsync()
       .then((perm) => {
         if (!perm.granted) {
-          Speech.speak('Microphone or speech recognition permission was not granted.');
+          Alert.alert('Voice Mode', 'Microphone or speech recognition permission was not granted. Enable it in Settings to use Voice Mode.');
+          return;
+        }
+        if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+          Alert.alert('Voice Mode', 'Speech recognition is not available on this device.');
           return;
         }
         enabledRef.current = true;
         setEnabled(true);
         speak(registeredRef.current?.fields.length ? 'Voice mode on. ' + describeField(registeredRef.current.fields[currentIndexRef.current]) : 'Voice mode on.');
       })
-      .catch(() => {
-        Speech.speak('Could not start speech recognition.');
+      .catch((e) => {
+        Alert.alert('Voice Mode', `Could not start speech recognition: ${e instanceof Error ? e.message : String(e)}`);
       });
   }, [speak]);
 
@@ -239,6 +248,22 @@ export function VoiceModeProvider({ children }: { children: React.ReactNode }) {
 
   useSpeechRecognitionEvent('end', () => {
     if (enabledRef.current && !speakingRef.current) startListening();
+  });
+
+  // 'no-speech'/'speech-timeout' are the expected shape of "nobody said
+  // anything for a while" in a continuous restart loop -- not a real
+  // problem, `end` already handles restarting. Anything else means
+  // recognition genuinely can't run right now (permission revoked, service
+  // unavailable, no on-device model, audio hardware busy, ...), and was
+  // previously failing completely silently -- surfaced now via an alert
+  // (works even if TTS itself is the thing that's broken) plus a spoken
+  // version, and Voice Mode turns itself off rather than looping errors.
+  useSpeechRecognitionEvent('error', (event) => {
+    if (event.error === 'no-speech' || event.error === 'speech-timeout') return;
+    if (!enabledRef.current) return;
+    enabledRef.current = false;
+    setEnabled(false);
+    Alert.alert('Voice Mode stopped', `${event.error}: ${event.message || 'Speech recognition error.'}`);
   });
 
   return (
