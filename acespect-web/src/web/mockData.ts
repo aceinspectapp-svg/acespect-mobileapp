@@ -15,6 +15,11 @@ export interface User {
   /** The report cover's signature block, when this user is the one whose signature appears there (typically the admin/director). */
   signatureUrl?: string;
   signatureTitle?: string;
+  /** Name printed under the signature -- separate from `name` (the account's
+   *  own display name shown everywhere else, e.g. Team Overview) so the
+   *  report can show the actual signatory's name without renaming the
+   *  account. Falls back to `name` when not set. */
+  signatureName?: string;
 }
 
 export interface DamageRecord {
@@ -152,7 +157,7 @@ export const TEMPLATE_STATUS_CONFIG: Record<TemplateStatus, { label: string; col
 
 /* ─── Users ─────────────────────────────────────────────────────── */
 export const USERS: User[] = [
-  { id: "u1", name: "Admin User",       email: "admin@acespect.com.au",    role: "admin",     avatar: "AU", region: "VIC", signatureTitle: "Director – Houspect Victoria", signatureUrl: "/houspect-signature.png" },
+  { id: "u1", name: "Admin User",       email: "admin@acespect.com.au",    role: "admin",     avatar: "AU", region: "VIC", signatureTitle: "Director – Houspect Victoria", signatureUrl: "/houspect-signature.png", signatureName: "Dinuke De Coonghe" },
   { id: "u2", name: "James Thompson",   email: "james@acespect.com.au",    role: "inspector", avatar: "JT", phone: "0412 345 678", region: "VIC" },
   { id: "u3", name: "Priya Nair",       email: "priya@acespect.com.au",    role: "inspector", avatar: "PN", phone: "0423 456 789", region: "VIC" },
   { id: "u4", name: "Sarah Chen",       email: "sarah@acespect.com.au",    role: "reviewer",  avatar: "SC", region: "VIC" },

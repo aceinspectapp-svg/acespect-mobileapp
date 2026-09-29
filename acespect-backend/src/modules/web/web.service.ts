@@ -106,16 +106,24 @@ async function updateSection(id: string, input: SectionUpdateInput) {
     // own editor uses) and sends the full new list here. Matched back onto
     // the EXISTING damage rows by position -- both sides are built by
     // walking the same template in the same order, so index i is the same
-    // crack/defect on both -- so each row keeps its id, `photos` and
-    // `excludedPhotoUrls` (the reviewer's own separate photo-selection/
-    // attachment work on that exact damage, untouched by this path). Only
-    // an actual add/remove of a damage-list entry changes the row count.
+    // crack/defect on both -- so each row keeps its id and `excludedPhotoUrls`
+    // (the reviewer's own separate photo-exclusion work on that exact
+    // damage, untouched by this path). Only an actual add/remove of a
+    // damage-list entry changes the row count.
     const existingDamages = row.damages;
     const nextDamages = input.damages;
     const matched = Math.min(existingDamages.length, nextDamages.length);
 
     for (let i = 0; i < matched; i++) {
       const d = nextDamages[i]!;
+      // `photos` here comes from the Field Data editor's own photo control
+      // on this damage -- a second write path onto the same `Damage.photos`
+      // column the reviewer's separate "+ Add" button also writes to.
+      // Merged (union), never replaced, so neither path can silently drop
+      // a photo the other one added; `undefined` (field editor never
+      // touched photos this save) leaves the column alone entirely.
+      const existingPhotos = (existingDamages[i]!.photos as string[] | null) ?? [];
+      const mergedPhotos = d.photos !== undefined ? Array.from(new Set([...existingPhotos, ...d.photos])) : undefined;
       await tx.damage.update({
         where: { id: existingDamages[i]!.id },
         data: {
@@ -126,6 +134,7 @@ async function updateSection(id: string, input: SectionUpdateInput) {
           lengthMm: d.lengthMm,
           notes: d.notes,
           order: i,
+          ...(mergedPhotos !== undefined ? { photos: mergedPhotos as Prisma.InputJsonValue } : {}),
         },
       });
     }
@@ -133,7 +142,9 @@ async function updateSection(id: string, input: SectionUpdateInput) {
     for (let i = matched; i < existingDamages.length; i++) {
       await tx.damage.delete({ where: { id: existingDamages[i]!.id } });
     }
-    // Reviewer added an entry -- a brand new row, no photos yet.
+    // Reviewer added a brand new entry -- no existing row to merge with, so
+    // whatever photos the field editor already has on it (if any) are all
+    // there is.
     for (let i = matched; i < nextDamages.length; i++) {
       const d = nextDamages[i]!;
       await tx.damage.create({
@@ -146,6 +157,7 @@ async function updateSection(id: string, input: SectionUpdateInput) {
           lengthMm: d.lengthMm,
           notes: d.notes,
           order: i,
+          photos: (d.photos ?? []) as Prisma.InputJsonValue,
         },
       });
     }

@@ -199,7 +199,7 @@ export function buildReportHeader(inspection: Inspection, inspector?: Pick<User,
     purpose: str(f.purpose) || DEFAULT_PURPOSE,
     coverPhotoUrl,
     signatureUrl: signer?.signatureUrl,
-    signatureName: signer?.name,
+    signatureName: signer?.signatureName ?? signer?.name,
     signatureTitle: signer?.signatureTitle,
   };
 }
