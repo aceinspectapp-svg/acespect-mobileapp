@@ -1,5 +1,12 @@
 import type { DamageRecord, FormSection } from "../mockData";
-import { Heading, Para, PhotoGrid, reportTextStyle, reportTokens } from "./reportKit";
+import { Heading, Para, PhotoGrid, reportTextStyle, reportTokens, SectionBand } from "./reportKit";
+
+// Internal Areas' floor headings (see reportSentences.ts's internal_areas
+// composer) are injected as plain uppercase lines within the section's flat
+// reportText, not as a separate structured field -- matched here by their
+// fixed, known text so they can render as the reference's own tan/khaki
+// bar instead of an ordinary paragraph.
+const FLOOR_HEADINGS = ["GROUND FLOOR", "FIRST FLOOR", "SECOND FLOOR", "BASEMENT"];
 
 /** Turn a damage record into a report sentence. */
 function describeDamage(d: DamageRecord): string {
@@ -40,20 +47,27 @@ export function ReportSection({
     <div style={reportTextStyle(compact)}>
       {showHeading && <Heading compact={compact}>{section.name}</Heading>}
 
+      {/* "Please refer to Photographs" sits directly under the heading in
+          the reference report, in body style (not a distinct grey label) --
+          matched here once per section rather than repeated after every
+          paragraph the way the reference's own blank fill-in template does,
+          since our photos are one flat list per section, not tied to a
+          specific paragraph the way separate raw fields were. */}
+      {section.photos.length > 0 && <Para>Please refer to Photographs:</Para>}
+
       {/* Description */}
-      {paras.map((p, i) => (
-        <Para key={i}>{p}</Para>
-      ))}
+      {paras.map((p, i) =>
+        FLOOR_HEADINGS.includes(p) ? (
+          <SectionBand key={i} tone="khaki" compact={compact}>
+            {p}
+          </SectionBand>
+        ) : (
+          <Para key={i}>{p}</Para>
+        ),
+      )}
 
       {/* Photographs for the category */}
-      {section.photos.length > 0 && (
-        <>
-          <p style={{ fontWeight: 600, color: reportTokens.inkMuted, margin: "4px 0 2px", fontSize: "0.88em" }}>
-            Please refer to Photographs:
-          </p>
-          <PhotoGrid photos={section.photos} compact={compact} />
-        </>
-      )}
+      {section.photos.length > 0 && <PhotoGrid photos={section.photos} compact={compact} />}
 
       {/* Cracks / damages — described and imaged (text skipped when reportText already narrates it) */}
       {section.damages.map((d) => (

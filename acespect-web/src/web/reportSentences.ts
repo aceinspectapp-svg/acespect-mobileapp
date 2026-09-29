@@ -44,6 +44,13 @@ function joinList(items: string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
+/** Stitches already-worded clause fragments with a trailing "and" and no comma -- e.g. ["with a pitched roof", "a covering of concrete tiles"] -> "with a pitched roof and a covering of concrete tiles", matching how the reference template's sentences run several prepositional clauses together. */
+function joinClauses(clauses: string[]): string {
+  if (clauses.length === 0) return "";
+  if (clauses.length === 1) return clauses[0];
+  return `${clauses.slice(0, -1).join(" ")} and ${clauses[clauses.length - 1]}`;
+}
+
 function yesNo(itemFields: TemplateField[], inst: AnswerTree, key: string): boolean | undefined {
   const raw = asString(inst[key]);
   if (!raw) return undefined;
@@ -246,8 +253,68 @@ const internalAreas: Composer = (inst, itemFields, label) => {
   return parts.join("\n\n");
 };
 
+/**
+ * Description & Overview's property-description fields, composed into the
+ * reference template's flowing prose ("The property is a single storey
+ * house, facing north on a flat block of land and estimated to have been
+ * constructed around 1980s. It is constructed of brick walls on concrete
+ * slab with a pitched roof and a covering of concrete tiles. Windows are
+ * constructed of aluminium.") instead of one "Label: value." line per field.
+ * Unlike every other composer here, this one runs on the section's own flat
+ * top-level fields directly (there's no repeating-group / per-instance
+ * wrapper for Description) -- see templateFields.ts's `isFlatComposedSection`.
+ * The section's other fields (site address, scope, safety) aren't part of
+ * this paragraph; they stay in `fields` for the reviewer's own editing view.
+ */
+const description: Composer = (inst, itemFields) => {
+  const constructionType = optionLabel(itemFields, "constructionIs", asString(inst.constructionIs));
+  const streetFrontage = optionLabel(itemFields, "streetFrontage", asString(inst.streetFrontage));
+  const blockSlope = optionLabel(itemFields, "blockSlope", asString(inst.blockSlope));
+  const constructedYear = asString(inst.constructedYear);
+  const underConstructionStage = asString(inst.underConstructionStage);
+  const wallGround = optionLabels(itemFields, "wallCladdingGround", asStringArray(inst.wallCladdingGround)).map(lower);
+  const wallFirst = optionLabels(itemFields, "wallCladdingFirst", asStringArray(inst.wallCladdingFirst)).map(lower);
+  const foundations = optionLabel(itemFields, "foundations", asString(inst.foundations));
+  const roofDesign = optionLabel(itemFields, "roofDesign", asString(inst.roofDesign));
+  const roofCovering = optionLabels(itemFields, "roofCovering", asStringArray(inst.roofCovering)).map(lower);
+  const windows = optionLabels(itemFields, "windows", asStringArray(inst.windows)).map(lower);
+
+  const parts: string[] = [];
+
+  const frontageBlockBits: string[] = [];
+  if (streetFrontage) frontageBlockBits.push(`facing ${lower(streetFrontage)}`);
+  if (blockSlope) frontageBlockBits.push(`on a ${lower(blockSlope)} block of land`);
+  const ageBit = constructedYear
+    ? `estimated to have been constructed around ${constructedYear}`
+    : underConstructionStage
+      ? `currently under construction at ${lower(underConstructionStage)} stage`
+      : "";
+  const openingClauses = [frontageBlockBits.join(" "), ageBit].filter(Boolean);
+  if (constructionType || openingClauses.length) {
+    const subject = constructionType ? `The property is a ${lower(constructionType)}` : "The property is";
+    parts.push(openingClauses.length ? `${subject}, ${joinClauses(openingClauses)}.` : `${subject}.`);
+  }
+
+  const wallsBit = wallGround.length
+    ? `${joinList(wallGround)} walls${wallFirst.length ? ` to the ground floor and ${joinList(wallFirst)} to the first floor` : ""}`
+    : wallFirst.length
+      ? `${joinList(wallFirst)} walls`
+      : "";
+  const buildClauses: string[] = [];
+  if (wallsBit) buildClauses.push(`constructed of ${wallsBit}`);
+  if (foundations) buildClauses.push(`on ${lower(foundations)}`);
+  if (roofDesign) buildClauses.push(`with a ${lower(roofDesign)} roof`);
+  if (roofCovering.length) buildClauses.push(`a covering of ${joinList(roofCovering)}`);
+  if (buildClauses.length) parts.push(`It is ${joinClauses(buildClauses)}.`);
+
+  if (windows.length) parts.push(`Windows are constructed of ${joinList(windows)}.`);
+
+  return parts.join(" ");
+};
+
 /** Section key -> its composer. Sections not listed here keep the generic "Label: value." fallback. */
 export const SECTION_SENTENCE_COMPOSERS: Record<string, Composer> = {
+  description,
   driveway,
   paving_paths: pavingPaths,
   fences,

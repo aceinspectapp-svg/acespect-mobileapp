@@ -347,11 +347,11 @@ export const SCOPE_BLOCKS: ScopeBlock[] = [
     kind: "list",
     intro: "Houspect has tried to categorise our gradings as:",
     items: [
-      { label: "•", text: "New: Self-explanatory." },
-      { label: "•", text: "Satisfactory: Generally good condition." },
-      { label: "•", text: "Fair: Starting to look like it needs maintenance." },
-      { label: "•", text: "Average: Working but needs maintenance within 6 months." },
-      { label: "•", text: "Poor: Needs replacement." },
+      { label: "●", text: "New: Self-explanatory." },
+      { label: "●", text: "Satisfactory: Generally good condition." },
+      { label: "●", text: "Fair: Starting to look like it needs maintenance." },
+      { label: "●", text: "Average: Working but needs maintenance within 6 months." },
+      { label: "●", text: "Poor: Needs replacement." },
     ],
   },
   {

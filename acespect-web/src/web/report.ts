@@ -17,8 +17,6 @@ export interface ReportHeader {
   inspector: string;
   inspectorRegistration?: string;
   purpose: string;
-  /** The Description & Overview section's "Front Elevation" photo -- embedded on the cover, matching the reference report's placement. */
-  coverPhotoUrl?: string;
   signatureUrl?: string;
   signatureName?: string;
   signatureTitle?: string;
@@ -135,11 +133,6 @@ function shortPropertyTypeLabel(propertyType: string): string {
   return words[words.length - 1] || propertyType;
 }
 
-/** Draft until a report's sections have all been reviewed and approved. */
-function reportStatusSuffix(status: Inspection["status"]): string {
-  return status === "approved" ? "(FINAL)" : "(DRAFT)";
-}
-
 /** "2024-06-15" → "Thursday, 18 June, 2026" (en-AU style with comma before year). */
 export function formatLongDate(value: string): string {
   const d = new Date(value);
@@ -171,16 +164,8 @@ export function buildReportHeader(inspection: Inspection, inspector?: Pick<User,
   const f = jobInfo?.fields ?? {};
   const signer = getReportSigner();
 
-  // "Front Elevation" from Description & Overview -- embedded on the cover
-  // itself, matching the reference report's "insert photograph of front of
-  // property" placement, rather than only appearing later in that section.
-  const description = inspection.sections.find((s) => (s.key ?? s.id).startsWith("description"));
-  const frontElevation = (description?.answers as Record<string, unknown> | null | undefined)?.front_elevation;
-  const coverPhotoUrl =
-    Array.isArray(frontElevation) && typeof frontElevation[0] === "string" ? frontElevation[0] : undefined;
-
   const baseTitle = inspection.type === "Dilapidation" ? "Dilapidation Report" : `${inspection.type} Report`;
-  const reportTitle = `${baseTitle} - ${shortPropertyTypeLabel(inspection.propertyType)} ${reportStatusSuffix(inspection.status)}`;
+  const reportTitle = `${baseTitle} - ${shortPropertyTypeLabel(inspection.propertyType)}`;
 
   return {
     reportTitle,
@@ -197,7 +182,6 @@ export function buildReportHeader(inspection: Inspection, inspector?: Pick<User,
     inspector: str(f.inspector, inspector?.name ?? "—"),
     inspectorRegistration: str(f.inspectorRegistration) || inspector?.licenseNumber || undefined,
     purpose: str(f.purpose) || DEFAULT_PURPOSE,
-    coverPhotoUrl,
     signatureUrl: signer?.signatureUrl,
     signatureName: signer?.signatureName ?? signer?.name,
     signatureTitle: signer?.signatureTitle,

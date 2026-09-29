@@ -1,6 +1,5 @@
 import type { ReportHeader } from "../report";
 import { MetaRow, Para, reportTokens } from "./reportKit";
-import { resolveMediaUrl } from "../api";
 
 // Acespect Pty Ltd trades AS Houspect Victoria -- this report carries that
 // real trading identity, not the internal ACESPECT app's own logo. The image
@@ -18,9 +17,10 @@ function HouspectVictoriaLogo() {
  * full size is used on the official report page.
  */
 export function ReportCover({ header: r, compact = false }: { header: ReportHeader; compact?: boolean }) {
-  const labelW = compact ? 100 : 150;
+  // Wide enough that "Weather Conditions" (the longest label) never wraps.
+  const labelW = compact ? 120 : 170;
   const fontSize = compact ? 12.5 : 15;
-  const titleSize = compact ? 19 : 32;
+  const titleSize = compact ? 22 : 38;
 
   return (
     <div style={{ fontFamily: reportTokens.font, color: reportTokens.ink, fontSize: `${fontSize}px`, lineHeight: 1.5 }}>
@@ -46,19 +46,21 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
         <MetaRow label="Our Reference" labelWidth={labelW} compact={compact}>{r.ourReference}</MetaRow>
       </div>
 
-      {/* Title -- a plain bordered box, matching the reference report's cover exactly (not colored rule lines). */}
+      {/* Title -- a plain bordered box. Regular weight and a tighter box
+          than a typical web heading, matching the reference report's own
+          (larger type, less padding, not bold). */}
       <div
         style={{
           textAlign: "center",
-          padding: compact ? "16px 0" : "22px 0",
-          margin: compact ? "18px 0" : "32px 0",
+          padding: compact ? "10px 0" : "12px 0",
+          margin: compact ? "14px 0" : "20px 0",
           border: `1.5px solid ${reportTokens.ink}`,
         }}
       >
         <span
           style={{
             fontSize: `${titleSize}px`,
-            fontWeight: 700,
+            fontWeight: 400,
             color: reportTokens.ink,
           }}
         >
@@ -90,43 +92,34 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
         </MetaRow>
       </div>
 
-      {/* Front-of-property photo -- matches the reference report's cover, which embeds this photo directly below Purpose. */}
-      {r.coverPhotoUrl && (
-        <div style={{ marginTop: compact ? "16px" : "24px" }}>
-          <a href={resolveMediaUrl(r.coverPhotoUrl)} target="_blank" rel="noopener noreferrer">
-            <img
-              src={resolveMediaUrl(r.coverPhotoUrl)}
-              alt="Front of property"
-              style={{
-                width: compact ? "160px" : "260px",
-                aspectRatio: "4 / 3",
-                objectFit: "cover",
-                borderRadius: "4px",
-                border: `1px solid ${reportTokens.border}`,
-                display: "block",
-              }}
-            />
-          </a>
-        </div>
-      )}
+      {/* No front-of-property photo here -- it belongs in the Description &
+          Overview section instead (see ReportDescription's own photo slot),
+          matching the reference report exactly: its cover carries no photo
+          at all, and the front-of-property image sits on the Description
+          page. `coverPhotoUrl` is no longer read by this component. */}
 
-      {/* Signature */}
+      {/* Signature -- left-aligned with the value column (not centered),
+          matching the reference's own placement. The reference actually
+          repeats this at the bottom of both cover pages; Chromium's print
+          pagination doesn't expose "where will page 1 end" to this static
+          HTML, so reliably anchoring a second copy to that exact spot isn't
+          practical here -- this renders once, in the reference's own style. */}
       {(r.signatureUrl || r.signatureName) && (
-        <div style={{ marginTop: compact ? "24px" : "48px", textAlign: "center" }}>
+        <div style={{ marginTop: compact ? "20px" : "36px", paddingLeft: `${labelW + 14}px` }}>
           {r.signatureUrl && (
             <img
               src={r.signatureUrl}
               alt="Signature"
-              style={{ height: compact ? "36px" : "56px", display: "block", margin: "0 auto 4px" }}
+              style={{ height: compact ? "36px" : "56px", display: "block", marginBottom: "4px" }}
             />
           )}
           {r.signatureName && (
-            <div style={{ fontWeight: 700, color: reportTokens.accent, fontSize: compact ? "0.95em" : "1.05em" }}>
+            <div style={{ fontWeight: 400, color: "#5b7ba8", fontSize: compact ? "0.95em" : "1.05em" }}>
               {r.signatureName}
             </div>
           )}
           {r.signatureTitle && (
-            <div style={{ color: reportTokens.inkMuted, fontSize: "0.85em" }}>{r.signatureTitle}</div>
+            <div style={{ fontWeight: 700, color: reportTokens.accent, fontSize: "0.85em" }}>{r.signatureTitle}</div>
           )}
         </div>
       )}
