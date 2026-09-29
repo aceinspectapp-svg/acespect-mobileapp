@@ -20,7 +20,7 @@ import { ReportScope } from "../../components/ReportScope";
 import { ReportConditions } from "../../components/ReportConditions";
 import { ReportSection } from "../../components/ReportSection";
 import { buildReportHeader, DEFAULT_PURPOSE, withExcludedPhotosRemoved } from "../../report";
-import { SectionFieldEditor } from "../../components/SectionFieldEditor";
+import { SectionFieldEditor, PhotoUploadContext } from "../../components/SectionFieldEditor";
 import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSectionToDraft, fetchActiveTemplate } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { api, resolveMediaUrl } from "../../api";
@@ -840,10 +840,16 @@ export function ReviewerFormView() {
    * Persists the reviewer's edits to the inspector's recorded answers.
    * Re-derives `fields`/`reportText`/`damages` from the edited answer tree
    * the same way the inspector's own web editor does on save, so the
-   * printed report never drifts out of sync with what's shown here --
-   * `damages` deliberately omits `photos`/`excludedPhotoUrls` (see
-   * web.schemas.ts) so this never touches the reviewer's separate
-   * photo-selection/attachment work on this section's damages.
+   * printed report never drifts out of sync with what's shown here.
+   *
+   * `damages[].photos` IS included now (photo editing is on in the field
+   * editor above) -- but this is a second write path onto the same
+   * `Damage.photos` column the reviewer's separate "+ Add"/exclude-photo
+   * controls also write to, so the backend merges rather than replaces
+   * (see updateSection in web.service.ts): a photo added either way is
+   * kept, never silently dropped by whichever save happens to land last.
+   * `excludedPhotoUrls` is untouched here -- exclusion stays exclusively
+   * that separate mechanism's job.
    */
   async function saveSectionAnswers(section: FormSection) {
     const answers = answerEdits[section.id];
@@ -863,6 +869,7 @@ export function ReviewerFormView() {
           widthMm: d.widthMm,
           lengthMm: d.lengthMm,
           notes: d.notes,
+          photos: d.photos,
         })),
       });
       setAnswerEdits((prev) => {
@@ -1164,13 +1171,21 @@ export function ReviewerFormView() {
                           </div>
                         </div>
                         <div style={{ padding: "16px" }}>
-                          <SectionFieldEditor
-                            fields={template.fields}
-                            scope={currentAnswers}
-                            onChange={(key, value) => setSectionAnswer(selectedSection, key, value)}
-                            readOnly={false}
-                            disablePhotoEditing
-                          />
+                          {/* Photo editing is ON here (unlike before) -- the reviewer
+                              can now attach a photo straight into the same per-field
+                              "Photos" slot the inspector filled in (a specific
+                              damage's own photos, an item's own photos, etc.),
+                              not just the generic section/damage sidecar lists
+                              below. See saveSectionAnswers for how this is kept
+                              from conflicting with that separate mechanism. */}
+                          <PhotoUploadContext.Provider value={{ inspectionId: inspection!.id, sectionKey: selectedSection.key ?? selectedSection.id }}>
+                            <SectionFieldEditor
+                              fields={template.fields}
+                              scope={currentAnswers}
+                              onChange={(key, value) => setSectionAnswer(selectedSection, key, value)}
+                              readOnly={false}
+                            />
+                          </PhotoUploadContext.Provider>
                         </div>
                       </div>
                     );

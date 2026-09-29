@@ -112,12 +112,12 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
 
       {/* Signature */}
       {(r.signatureUrl || r.signatureName) && (
-        <div style={{ marginTop: compact ? "24px" : "48px" }}>
+        <div style={{ marginTop: compact ? "24px" : "48px", textAlign: "center" }}>
           {r.signatureUrl && (
             <img
               src={r.signatureUrl}
               alt="Signature"
-              style={{ height: compact ? "36px" : "56px", display: "block", marginBottom: "4px" }}
+              style={{ height: compact ? "36px" : "56px", display: "block", margin: "0 auto 4px" }}
             />
           )}
           {r.signatureName && (

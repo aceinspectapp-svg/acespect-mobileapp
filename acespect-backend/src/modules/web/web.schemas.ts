@@ -20,10 +20,13 @@ export const sectionUpdateSchema = z.object({
   // report never drifts out of sync with what's recorded here.
   answers: z.record(z.string(), z.unknown()).optional(),
   // This section's damage-list entries, re-derived from `answers` the same
-  // way. Deliberately excludes `photos`/`excludedPhotoUrls` -- those stay
-  // under the reviewer's dedicated photo-selection UI above and are never
-  // touched by this path; see updateSection for how existing damage rows
-  // are matched back up and preserved rather than replaced wholesale.
+  // way. `photos` here is the Field Data editor's own photo control on that
+  // damage's "Photos" field (the reviewer can now attach straight to it,
+  // not just the section/damage sidecar) -- see updateSection for how it's
+  // merged rather than replaced, since the reviewer's separate dedicated
+  // photo-attach/exclude UI writes to the same `Damage.photos` column.
+  // `excludedPhotoUrls` is not part of this shape -- exclusion stays
+  // exclusively that separate mechanism's job.
   damages: z
     .array(
       z.object({
@@ -33,6 +36,7 @@ export const sectionUpdateSchema = z.object({
         widthMm: z.number(),
         lengthMm: z.number(),
         notes: z.string(),
+        photos: z.array(z.string()).optional(),
       }),
     )
     .optional(),
