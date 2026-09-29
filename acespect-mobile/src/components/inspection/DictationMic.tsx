@@ -18,14 +18,24 @@ let sessionCounter = 0;
 export function useDictation(onResult: (text: string) => void) {
   const [listening, setListening] = useState(false);
   const sessionIdRef = useRef(0);
+  const startedRef = useRef(false);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onResultRef = useRef(onResult);
   onResultRef.current = onResult;
 
-  const stopInternal = useCallback(() => {
-    sessionIdRef.current = 0;
-    if (activeSessionId === sessionIdRef.current) activeSessionId = 0;
-    setListening(false);
+  const clearWatchdog = useCallback(() => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
   }, []);
+
+  const stopInternal = useCallback(() => {
+    clearWatchdog();
+    sessionIdRef.current = 0;
+    activeSessionId = 0;
+    setListening(false);
+  }, [clearWatchdog]);
 
   const toggle = useCallback(async () => {
     if (sessionIdRef.current) {
@@ -51,18 +61,49 @@ export function useDictation(onResult: (text: string) => void) {
       const id = ++sessionCounter;
       sessionIdRef.current = id;
       activeSessionId = id;
+      startedRef.current = false;
       setListening(true);
-      ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: false, continuous: false });
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        continuous: false,
+        androidIntentOptions: { EXTRA_LANGUAGE_MODEL: 'web_search' },
+      });
+      // The native side has silently failed on some devices before (a permission
+      // that reports granted but doesn't actually work, a missing recognition
+      // service) with no 'error' event ever firing -- leaving the mic stuck
+      // "listening" forever with nothing captured. If nothing at all has
+      // happened within 8s, force it off and say so instead of hanging silently.
+      watchdogRef.current = setTimeout(() => {
+        if (sessionIdRef.current !== id) return;
+        try {
+          ExpoSpeechRecognitionModule.abort();
+        } catch {
+          // already stopped
+        }
+        stopInternal();
+        Alert.alert(
+          'No response from microphone',
+          startedRef.current
+            ? "Didn't catch anything that time -- try again, speaking right after tapping the mic."
+            : 'Speech recognition never started. Check that this app has Microphone permission, and that the Google app (or Android System Intelligence) also has microphone access, in Settings.',
+        );
+      }, 8000);
     } catch (e) {
       sessionIdRef.current = 0;
       activeSessionId = 0;
       setListening(false);
       Alert.alert('Microphone', `Could not start dictation: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, []);
+  }, [stopInternal]);
+
+  useSpeechRecognitionEvent('start', () => {
+    if (sessionIdRef.current && sessionIdRef.current === activeSessionId) startedRef.current = true;
+  });
 
   useSpeechRecognitionEvent('result', (event) => {
     if (!sessionIdRef.current || sessionIdRef.current !== activeSessionId) return;
+    if (!event.isFinal) return;
     const transcript = event.results?.[0]?.transcript;
     if (transcript) onResultRef.current(transcript);
   });

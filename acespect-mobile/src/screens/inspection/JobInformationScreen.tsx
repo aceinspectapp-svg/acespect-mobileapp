@@ -18,7 +18,6 @@ import { ActiveTemplate, getActiveTemplateCached, TemplateField } from '../../se
 import { meetsAllRequiredFields } from '../../utils/flattenSectionToDraft';
 import { pinAllSectionTemplates } from '../../utils/pinAllSectionTemplates';
 import { FieldListRenderer } from '../../components/inspection/fieldRenderers';
-import { appendDictated, DictationMicButton } from '../../components/inspection/DictationMic';
 import { isGateSatisfied, type AnswerTree, type AnswerValue } from '../../components/inspection/fieldRenderers/types';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
 
@@ -289,35 +288,18 @@ export function JobInformationScreen({
                       onChange={setAnswer(field.key)}
                     />
                   ) : (
-                    <View style={styles.textFieldRow}>
-                      <View style={styles.textFieldInput}>
-                        <AppTextInput
-                          label={field.label}
-                          required={field.required}
-                          readOnly={field.readOnly}
-                          prefix={field.prefix}
-                          value={
-                            field.prefix && asStr(answers[field.key]).startsWith(field.prefix)
-                              ? asStr(answers[field.key]).slice(field.prefix.length)
-                              : asStr(answers[field.key])
-                          }
-                          onChangeText={(text) => setAnswer(field.key)(field.prefix ? `${field.prefix}${text}` : text)}
-                        />
-                      </View>
-                      {!field.readOnly && (
-                        <View style={styles.textFieldMic}>
-                          <DictationMicButton
-                            onResult={(spoken) => {
-                              const raw = field.prefix && asStr(answers[field.key]).startsWith(field.prefix)
-                                ? asStr(answers[field.key]).slice(field.prefix.length)
-                                : asStr(answers[field.key]);
-                              const next = appendDictated(raw, spoken);
-                              setAnswer(field.key)(field.prefix ? `${field.prefix}${next}` : next);
-                            }}
-                          />
-                        </View>
-                      )}
-                    </View>
+                    <AppTextInput
+                      label={field.label}
+                      required={field.required}
+                      readOnly={field.readOnly}
+                      prefix={field.prefix}
+                      value={
+                        field.prefix && asStr(answers[field.key]).startsWith(field.prefix)
+                          ? asStr(answers[field.key]).slice(field.prefix.length)
+                          : asStr(answers[field.key])
+                      }
+                      onChangeText={(text) => setAnswer(field.key)(field.prefix ? `${field.prefix}${text}` : text)}
+                    />
                   )}
                 </React.Fragment>
               ))}
@@ -474,9 +456,6 @@ const styles = StyleSheet.create({
   keyboardAvoider: { flex: 1 },
   body: { flex: 1 },
   bodyContent: { padding: spacing.lg, paddingBottom: spacing.xxxl },
-  textFieldRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
-  textFieldInput: { flex: 1 },
-  textFieldMic: { marginBottom: 7 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   banner: {
     flexDirection: 'row',
