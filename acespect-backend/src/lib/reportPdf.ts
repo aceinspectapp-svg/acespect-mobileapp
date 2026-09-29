@@ -94,6 +94,12 @@ export async function generateInspectionReportPdf(
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    // In the production container this points at Alpine's own `chromium`
+    // package (see Dockerfile) instead of Puppeteer's bundled download --
+    // that download is a glibc build that doesn't run on Alpine's musl libc
+    // anyway, and PUPPETEER_SKIP_DOWNLOAD skips fetching it at install time.
+    // Unset locally, so `npm install`'s own downloaded Chrome is used as-is.
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
   });
   try {
     const page = await browser.newPage();
