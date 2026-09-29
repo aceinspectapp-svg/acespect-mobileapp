@@ -194,11 +194,41 @@ export function SelectInspectionTypeScreen({
   const canBegin = !!typeId && !!propertyId;
 
   // Inspector has acknowledged the pre-start checklist — proceed into setup.
+  // The draft (sections/answers/photos/templates) lives in a handful of
+  // module-level refs keyed only by section key ("job-info", "driveway", ...)
+  // -- NOT by inspection/property type -- so without an explicit reset here,
+  // starting a genuinely new inspection while an unfinished one is still in
+  // memory (app backgrounded rather than force-quit, not resumed via the
+  // banner below) would silently carry its answers into the new one, since
+  // both use the exact same section keys. A resumable draft still gets a
+  // heads-up before it's discarded -- resuming it is what the banner's for.
   const onConfirmStart = () => {
     setConfirmVisible(false);
-    navigation.navigate('JobInformation', {
-      selection: { inspectionTypeId: typeId!, propertyTypeId: propertyId! },
-    });
+    const proceed = () => {
+      draft.reset();
+      navigation.navigate('JobInformation', {
+        selection: { inspectionTypeId: typeId!, propertyTypeId: propertyId! },
+      });
+    };
+    if (resumableDraft) {
+      Alert.alert(
+        'Discard unfinished inspection?',
+        `You have an unfinished ${resumableDraft.top.inspectionType} (${resumableDraft.top.propertyType}) inspection from last session. Starting a new one will discard it — this can't be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Discard & Start New',
+            style: 'destructive',
+            onPress: () => {
+              setResumableDraft(null);
+              proceed();
+            },
+          },
+        ],
+      );
+      return;
+    }
+    proceed();
   };
 
   const { signOut } = useAuth();
