@@ -6,7 +6,8 @@ import {
   SCOPE_PHOTOS_REF,
   SITE_IMAGE_NOTE,
 } from "../report";
-import { Note, Para, Placeholder, reportTextStyle, SectionBand } from "./reportKit";
+import { Note, Para, Placeholder, reportTextStyle, reportTokens, SectionBand } from "./reportKit";
+import { resolveMediaUrl } from "../api";
 
 /**
  * The Description & Overview report section, in the standard Houspect layout:
@@ -29,6 +30,13 @@ export function ReportDescription({
     .filter(Boolean);
   const property = `${inspection.address}, ${inspection.suburb}`;
 
+  // The front-of-property photo lives here, not on the cover (which the
+  // reference report never puts one on -- see ReportCover). Read straight
+  // off this same section's own "front_elevation" answer field.
+  const description = inspection.sections.find((s) => (s.key ?? s.id).startsWith("description"));
+  const frontElevation = (description?.answers as Record<string, unknown> | null | undefined)?.front_elevation;
+  const photoUrl = Array.isArray(frontElevation) && typeof frontElevation[0] === "string" ? frontElevation[0] : undefined;
+
   return (
     <div style={reportTextStyle(compact)}>
       <SectionBand compact={compact}>Description and Overview</SectionBand>
@@ -37,7 +45,17 @@ export function ReportDescription({
       ) : (
         <Placeholder>Insert property description (storeys, orientation, construction, roof, windows).</Placeholder>
       )}
-      <Placeholder>{DESCRIPTION_PHOTO_PLACEHOLDER}</Placeholder>
+      {photoUrl ? (
+        <a href={resolveMediaUrl(photoUrl)} target="_blank" rel="noopener noreferrer" style={{ display: "block", margin: "6px 0 12px" }}>
+          <img
+            src={resolveMediaUrl(photoUrl)}
+            alt="Front of property"
+            style={{ width: "5.9cm", aspectRatio: "4 / 3", objectFit: "cover", border: `1px solid ${reportTokens.border}`, display: "block" }}
+          />
+        </a>
+      ) : (
+        <Placeholder>{DESCRIPTION_PHOTO_PLACEHOLDER}</Placeholder>
+      )}
 
       <SectionBand compact={compact}>Photographs</SectionBand>
       <Para>

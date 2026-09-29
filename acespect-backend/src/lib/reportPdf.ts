@@ -17,17 +17,27 @@ import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
 
 const BRAND_NAVY = '#1a2a4a';
 const BRAND_RED = '#dc2626';
-const FOOTER_META_COLOR = '#5b6472';
+const FOOTER_META_COLOR = '#7b93b5'; // light blue-grey, matching the reference's own meta-line color
+const FOOTER_LABEL_COLOR = '#8a97a8'; // grey "PA / P / E / W" style labels
+const MARGIN_H = '22mm'; // wider side margins than before, matching the reference
 
 // Acespect Pty Ltd trades AS Houspect Victoria -- this is this business's
 // own real identity on the report, not a third party's. Real details taken
 // straight off Houspect Victoria's own master report template's footer.
 const COMPANY_NAME = 'Acespect Pty Ltd trading as Houspect Victoria';
-const COMPANY_ADDRESS = 'PA PO Box 2521 Mt Waverley VIC 3149';
-const COMPANY_PHONE = 'P (03) 9808 4000';
-const COMPANY_EMAIL = 'E info@houspectvic.com.au';
-const COMPANY_WEB = 'W www.houspect.com.au/victoria';
 const COMPANY_ABN_ACN = 'ABN 24 237 148 557 ACN 688 819 712';
+// Each address segment as its own {label, value} so the label can render
+// grey and the value navy, matching the reference's own styling (a single
+// plain string couldn't carry that split).
+const ADDRESS_LINE_1: { label: string; value: string }[] = [
+  { label: 'PA', value: 'PO BOX 2521 Mt Waverley VIC 3149' },
+  { label: 'P', value: '(03) 9808 4000' },
+  { label: 'E', value: 'info@houspectvic.com.au' },
+];
+const ADDRESS_LINE_2: { label: string; value: string }[] = [
+  { label: 'W', value: 'www.houspect.com.au/victoria' },
+  { label: '', value: `${COMPANY_NAME} ${COMPANY_ABN_ACN}` },
+];
 
 // Puppeteer's header/footer templates are their own isolated, unscripted
 // document -- values from the page being printed (client name, job no) have
@@ -37,14 +47,27 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function addressLine(parts: { label: string; value: string }[]): string {
+  const pipe = `<span style="color:${BRAND_RED};">|</span>`;
+  return parts
+    .map(
+      (p) =>
+        (p.label ? `<span style="color:${FOOTER_LABEL_COLOR};">${p.label}</span> ` : '') +
+        `<span style="color:${BRAND_NAVY};">${p.value}</span>`,
+    )
+    .join(` &nbsp;${pipe}&nbsp; `);
+}
+
 // Puppeteer's header/footer templates are plain, unscripted HTML -- no access
 // to the report's own React components or this server's filesystem paths, so
 // the real logo is inlined as a data URI (see assets/houspectLogoBase64.ts)
-// rather than referenced by URL.
+// rather than referenced by URL. Sized and positioned to match the
+// reference's own larger, lower-sitting logo (the previous size read as a
+// visibly different, much smaller logo next to the reference).
 const HEADER_TEMPLATE = `
-  <div style="width:100%; font-family: Arial, Helvetica, sans-serif; padding: 0 18mm; box-sizing: border-box;">
+  <div style="width:100%; font-family: Arial, Helvetica, sans-serif; padding: 4mm ${MARGIN_H} 0; box-sizing: border-box;">
     <div style="display:flex; justify-content:flex-end;">
-      <img src="${HOUSPECT_LOGO_DATA_URI}" style="height:30px; width:auto; display:block;" />
+      <img src="${HOUSPECT_LOGO_DATA_URI}" style="height:20mm; width:auto; display:block;" />
     </div>
   </div>
 `;
@@ -55,6 +78,17 @@ const HEADER_TEMPLATE = `
 // was generated (not the inspection date, which already has its own row on
 // the cover) -- same as the reference template, where it differs from the
 // inspection date for the same reason.
+//
+// The reference's own footer actually varies its bar/line order across
+// different page ranges (pages 1-2, 3-4, and 5+ each arrange the address
+// lines and bars differently) -- Puppeteer's footerTemplate is one static
+// HTML string applied to every page with no way to key off which page
+// number it's currently rendering, so reproducing that exactly isn't
+// possible here. This uses the one structure the reference itself settles
+// into from page 5 onward (bar, then both address lines below) consistently
+// on every page, rather than the apparently inconsistent early-page
+// formatting, which reads as leftover manual Word editing rather than
+// intentional design.
 function buildFooterTemplate(clientName: string, jobNo: string): string {
   const today = new Date();
   const dateStr = [today.getDate(), today.getMonth() + 1, today.getFullYear()]
@@ -65,22 +99,27 @@ function buildFooterTemplate(clientName: string, jobNo: string): string {
   const job = escapeHtml(jobNo || '—');
 
   return `
-    <div style="width:100%; font-family: Arial, Helvetica, sans-serif; padding: 0 18mm; box-sizing: border-box; color:${FOOTER_META_COLOR}; font-size:9px;">
-      <div style="text-align:center;">
-        <span style="font-weight:700;">Client Name:</span>&nbsp; ${client}
+    <div style="width:100%; font-family: Arial, Helvetica, sans-serif; box-sizing:border-box; color:${FOOTER_META_COLOR}; font-size:9px;">
+      <div style="padding:0 ${MARGIN_H};">
+        <div style="text-align:center;">
+          <span style="font-weight:700;">Client Name:</span>&nbsp; ${client}
+        </div>
+        <div style="text-align:center; margin-top:3px;">
+          ${pipe} <span style="font-weight:700;">Date:</span> ${dateStr}
+          &nbsp;${pipe} <span style="font-weight:700;">Job No:</span> ${job}
+          &nbsp;${pipe} <span style="font-weight:700;">Page No:</span> <span class="pageNumber"></span> of <span class="totalPages"></span>
+        </div>
       </div>
-      <div style="text-align:center; margin-top:3px;">
-        ${pipe} <span style="font-weight:700;">Date:</span> ${dateStr}
-        &nbsp;${pipe} <span style="font-weight:700;">Job No:</span> ${job}
-        &nbsp;${pipe} <span style="font-weight:700;">Page No:</span> <span class="pageNumber"></span> of <span class="totalPages"></span>
-      </div>
-      <div style="height:1.5mm; background:${BRAND_RED}; margin-top:5px; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
-      <div style="height:4mm; background:${BRAND_NAVY}; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
-      <div style="font-size:8px; text-align:center; margin-top:5px;">
-        ${COMPANY_ADDRESS} &nbsp;|&nbsp; ${COMPANY_PHONE} &nbsp;|&nbsp; ${COMPANY_EMAIL}
-      </div>
-      <div style="font-size:8px; text-align:center; margin-top:2px;">
-        ${COMPANY_WEB} &nbsp;|&nbsp; ${COMPANY_NAME} ${COMPANY_ABN_ACN}
+      <!-- Full-bleed, edge-to-edge -- outside the ${MARGIN_H} side padding above/below, unlike the text lines. -->
+      <div style="height:2mm; background:${BRAND_RED}; margin-top:7px; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
+      <div style="height:8mm; background:${BRAND_NAVY}; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
+      <div style="padding:0 ${MARGIN_H};">
+        <div style="font-size:8px; text-align:center; margin-top:5px;">
+          ${addressLine(ADDRESS_LINE_1)}
+        </div>
+        <div style="font-size:8px; text-align:center; margin-top:2px;">
+          ${addressLine(ADDRESS_LINE_2)}
+        </div>
       </div>
     </div>
   `;
@@ -127,7 +166,11 @@ export async function generateInspectionReportPdf(
       displayHeaderFooter: true,
       headerTemplate: HEADER_TEMPLATE,
       footerTemplate: buildFooterTemplate(meta.clientName, meta.jobNo),
-      margin: { top: '24mm', bottom: '34mm', left: '18mm', right: '18mm' },
+      // Wider side margins and a taller bottom margin than before (the
+      // previous 34mm let body text on several content-heavy pages run
+      // into the footer bars) -- the top margin grew slightly too, to fit
+      // the now-larger header logo without crowding the page content.
+      margin: { top: '30mm', bottom: '42mm', left: MARGIN_H, right: MARGIN_H },
     });
     return Buffer.from(pdf);
   } finally {

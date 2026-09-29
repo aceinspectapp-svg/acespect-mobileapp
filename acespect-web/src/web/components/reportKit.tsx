@@ -11,7 +11,7 @@ import { resolveMediaUrl } from "../api";
  */
 
 export const reportTokens = {
-  font: "'Inter', 'Segoe UI', system-ui, sans-serif",
+  font: "Arial, Helvetica, sans-serif",
   ink: "#1e2530", // primary text
   inkMuted: "#5b6472", // secondary text
   inkFaint: "#94a0b0", // tertiary / placeholder text
@@ -23,16 +23,41 @@ export const reportTokens = {
   placeholderInk: "#8a6d2f",
 };
 
-/** Section banner — a plain full-width pale band, matching the reference report's category headings (no left accent stripe). */
+/**
+ * Section banner. `accent` (light blue) is used for DESCRIPTION AND
+ * OVERVIEW / SCOPE OF INSPECTION AND COMMENTS, matching the reference.
+ * `peach` is the reference's own flat orange band with black text, used for
+ * the top-level EXTERNAL / INTERNAL dividers -- a different band style from
+ * the light-blue ones, not just a color swap, so it's its own tone rather
+ * than a variant.
+ */
 export function SectionBand({
   children,
   tone = "accent",
   compact = false,
 }: {
   children: ReactNode;
-  tone?: "accent" | "neutral";
+  tone?: "accent" | "neutral" | "peach" | "khaki";
   compact?: boolean;
 }) {
+  if (tone === "peach" || tone === "khaki") {
+    return (
+      <div
+        style={{
+          background: tone === "peach" ? "#f6c89f" : "#c7bd93",
+          padding: compact ? "5px 10px" : "6px 14px",
+          margin: compact ? "12px 0 8px" : "16px 0 10px",
+          color: "#000",
+          fontWeight: 700,
+          fontSize: compact ? "0.82em" : "0.95em",
+          letterSpacing: "0.02em",
+          textTransform: "uppercase",
+        }}
+      >
+        {children}
+      </div>
+    );
+  }
   const bg = tone === "accent" ? reportTokens.accentSoft : "#f4f5f7";
   return (
     <div
@@ -55,7 +80,12 @@ export function SectionBand({
   );
 }
 
-/** Plain heading (no banner fill) — used for per-category names and subheadings. */
+/**
+ * Plain heading (no banner fill) — used for per-category names and
+ * subheadings. Body-size bold with tight spacing and no rule, matching the
+ * reference report's sub-headings ("Driveway", "Fences", ...) -- these are
+ * not oversized/underlined the way a level-2 web heading usually is.
+ */
 export function Heading({
   children,
   level = 2,
@@ -69,11 +99,9 @@ export function Heading({
     <p
       style={{
         fontWeight: 700,
-        fontSize: level === 2 ? (compact ? "1.02em" : "1.08em") : "1em",
+        fontSize: "1em",
         color: reportTokens.ink,
-        margin: level === 2 ? "0 0 10px" : "14px 0 6px",
-        paddingBottom: level === 2 ? "6px" : 0,
-        borderBottom: level === 2 ? `1.5px solid ${reportTokens.border}` : "none",
+        margin: level === 2 ? "0 0 4px" : "10px 0 4px",
       }}
     >
       {children}
@@ -81,10 +109,12 @@ export function Heading({
   );
 }
 
-/** Body paragraph. */
+/** Body paragraph. Left-aligned (ragged right) by default, matching the
+ *  reference report -- only the Conditions appendix (which renders its own
+ *  `<p>` tags directly, not this component) stays justified. */
 export function Para({
   children,
-  justify = true,
+  justify = false,
   style,
 }: {
   children: ReactNode;
@@ -94,9 +124,9 @@ export function Para({
   return (
     <p
       style={{
-        margin: "0 0 11px",
+        margin: "0 0 8px",
         textAlign: justify ? "justify" : "left",
-        lineHeight: 1.65,
+        lineHeight: 1.45,
         color: reportTokens.ink,
         ...style,
       }}
@@ -199,8 +229,7 @@ export function MetaRow({
       style={{
         display: "flex",
         gap: "14px",
-        padding: compact ? "5px 0" : "7px 0",
-        borderBottom: `1px solid ${reportTokens.border}`,
+        padding: compact ? "4px 0" : "5px 0",
       }}
     >
       <span
@@ -223,26 +252,33 @@ export function MetaRow({
 }
 
 /**
- * Modern photo grid — rounded thumbnails with a subtle shadow. Each photo is
- * a real hyperlink to its own full-size URL (matching the reference report's
- * convention of linking inserted photos), so it opens full-size in a new tab
- * on screen and survives as an actual clickable link annotation in the
+ * Photo list — one photo per row (stacked), matching the reference report's
+ * own layout (it never runs two across, unlike this grid used to for
+ * Fences specifically once its content happened to be narrow enough).
+ * Sized to the reference's own admin note: 5.9cm wide for a landscape
+ * photo, 5.2cm for portrait -- there's no orientation metadata to pick
+ * between the two per photo, so this uses the landscape width (the more
+ * common case) and lets `aspect-ratio` size the height. Each photo is a
+ * real hyperlink to its own full-size URL (matching the reference report's
+ * convention of linking inserted photos), so it opens full-size in a new
+ * tab on screen and survives as an actual clickable link annotation in the
  * exported PDF (Puppeteer/Chromium turns an `<a>` around an image into a
- * real PDF link, not just a picture).
+ * real PDF link, not just a picture). Plain thin border only -- no rounded
+ * corners or shadow, which the reference doesn't use either.
  */
 export function PhotoGrid({ photos, compact }: { photos: string[]; compact: boolean }) {
   if (photos.length === 0) return null;
+  const widthCm = compact ? 4 : 5.9;
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? 88 : 152}px, 1fr))`,
-        gap: "10px",
-        margin: "8px 0 14px",
-      }}
-    >
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px", margin: "6px 0 12px" }}>
       {photos.map((url, i) => (
-        <a key={i} href={resolveMediaUrl(url)} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+        <a
+          key={i}
+          href={resolveMediaUrl(url)}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: "block", width: `${widthCm}cm` }}
+        >
           <img
             src={resolveMediaUrl(url)}
             alt=""
@@ -250,9 +286,8 @@ export function PhotoGrid({ photos, compact }: { photos: string[]; compact: bool
               width: "100%",
               aspectRatio: "4 / 3",
               objectFit: "cover",
-              borderRadius: "8px",
               border: `1px solid ${reportTokens.border}`,
-              boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
+              display: "block",
             }}
           />
         </a>
@@ -323,11 +358,11 @@ export function Table({
 
 /** Shared base text styles applied at the root of every report component. */
 export function reportTextStyle(compact: boolean, size?: { normal: string; compact: string }): React.CSSProperties {
-  const s = size ?? { normal: "15px", compact: "12.5px" };
+  const s = size ?? { normal: "12.5px", compact: "11px" };
   return {
     fontFamily: reportTokens.font,
     color: reportTokens.ink,
     fontSize: compact ? s.compact : s.normal,
-    lineHeight: 1.55,
+    lineHeight: 1.4,
   };
 }

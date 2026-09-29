@@ -12,7 +12,7 @@ import { ReportConditions } from "../components/ReportConditions";
 import { ReportSection } from "../components/ReportSection";
 import { ReportPoolSpaDisclaimer } from "../components/ReportPoolSpaDisclaimer";
 import { SECTION_SENTENCE_COMPOSERS } from "../reportSentences";
-import { Para, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
+import { reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
 const slug = (s: Pick<FormSection, "id" | "key">): string => s.key ?? s.id;
@@ -196,7 +196,7 @@ export function ReportView() {
           <div className="report-page-break" style={{ marginTop: "40px" }}>
             {renderList.map((item, i) =>
               item.type === "banner" ? (
-                <SectionBand key={item.label} compact={false}>
+                <SectionBand key={item.label} tone="peach" compact={false}>
                   {item.label}
                 </SectionBand>
               ) : (
@@ -219,24 +219,31 @@ export function ReportView() {
 
   function renderSection(s: (typeof bodySections)[number], i: number) {
     return (
-      <div key={s.id} style={{ marginTop: i === 0 ? 0 : "20px", breakInside: "avoid" }}>
+      <div key={s.id} style={{ marginTop: i === 0 ? 0 : "16px" }}>
         {slug(s).startsWith("description") ? (
           /* Description & Overview uses the full template layout */
           <ReportDescription inspection={inspection!} reportText={s.reportText} />
         ) : slug(s).startsWith("notes") ? (
-          /* Notes & Post Project: notes text + standard SCOPE / Conditions appendices */
+          /* Notes & Post Project: a bold "NOTES" heading + numbered list
+             (matching the reference exactly, rather than this section's own
+             name and plain paragraphs), then SCOPE / Conditions -- SCOPE
+             always starts on its own fresh page, matching the reference. */
           <>
-            <p style={{ fontWeight: 700, margin: "0 0 10px", color: reportTokens.ink }}>{s.name}</p>
-            {s.reportText
-              .split(/\n{2,}|\n/)
-              .map((para) => para.trim())
-              .filter(Boolean)
-              .map((para, j) => (
-                <Para key={j}>{para}</Para>
-              ))}
-            <div style={{ marginTop: "18px" }}>
+            <p style={{ fontWeight: 700, margin: "0 0 10px", color: reportTokens.ink }}>NOTES</p>
+            <ol style={{ margin: "0 0 10px", paddingLeft: "20px" }}>
+              {s.reportText
+                .split(/\n{2,}|\n/)
+                .map((para) => para.trim())
+                .filter(Boolean)
+                .map((para, j) => (
+                  <li key={j} style={{ margin: "0 0 6px", lineHeight: 1.45 }}>
+                    {para}
+                  </li>
+                ))}
+            </ol>
+            <div className="report-page-break">
               <ReportScope />
-              <div style={{ marginTop: "28px" }}>
+              <div style={{ marginTop: "20px" }}>
                 <ReportConditions />
               </div>
             </div>
