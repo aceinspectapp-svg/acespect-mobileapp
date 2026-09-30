@@ -11400,10 +11400,17 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Pics",
+        "order": 4,
+        "required": false
+      },
+      {
         "key": "damages",
         "type": "damage-list",
         "label": "Damages",
-        "order": 4,
+        "order": 5,
         "repeat": {
           "addable": true,
           "requireWhen": {
@@ -11809,13 +11816,6 @@
             "required": false
           }
         ]
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Pics",
-        "order": 5,
-        "required": false
       },
       {
         "key": "notes",
@@ -26935,10 +26935,17 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Pics",
+        "order": 4,
+        "required": false
+      },
+      {
         "key": "damages",
         "type": "damage-list",
         "label": "Damages",
-        "order": 4,
+        "order": 5,
         "repeat": {
           "addable": true,
           "requireWhen": {
@@ -27344,13 +27351,6 @@
             "required": false
           }
         ]
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Pics",
-        "order": 5,
-        "required": false
       },
       {
         "key": "notes",
@@ -28010,6 +28010,17 @@
         "required": true
       },
       {
+        "key": "photos",
+        "gate": {
+          "equals": "yes",
+          "fieldKey": "present"
+        },
+        "type": "photos",
+        "label": "Pic seq",
+        "order": 4,
+        "required": false
+      },
+      {
         "key": "condition",
         "gate": {
           "equals": "yes",
@@ -28017,7 +28028,7 @@
         },
         "type": "color-select",
         "label": "Condition",
-        "order": 4,
+        "order": 5,
         "options": [
           {
             "label": "Satisfactory with typical wear and tear",
@@ -28050,7 +28061,7 @@
         },
         "type": "damage-list",
         "label": "Cracking / gaps / other deterioration — note the 2 or 3 most significant items",
-        "order": 5,
+        "order": 6,
         "repeat": {
           "addable": true,
           "requireWhen": {
@@ -28427,7 +28438,7 @@
         },
         "type": "pill-select",
         "label": "Cracking overview",
-        "order": 6,
+        "order": 7,
         "options": [
           {
             "label": "No visible significant cracking",
@@ -28452,7 +28463,7 @@
         },
         "type": "chip-multiselect",
         "label": "Sections obscured by",
-        "order": 7,
+        "order": 8,
         "options": [
           {
             "label": "Vegetation",
@@ -28480,19 +28491,8 @@
         },
         "type": "textarea",
         "label": "If Other — please specify",
-        "order": 8,
-        "required": true
-      },
-      {
-        "key": "photos",
-        "gate": {
-          "equals": "yes",
-          "fieldKey": "present"
-        },
-        "type": "photos",
-        "label": "Pic seq",
         "order": 9,
-        "required": false
+        "required": true
       },
       {
         "key": "notes",
@@ -35894,10 +35894,17 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Pics",
+        "order": 4,
+        "required": false
+      },
+      {
         "key": "damages",
         "type": "damage-list",
         "label": "Damages",
-        "order": 4,
+        "order": 5,
         "repeat": {
           "addable": true,
           "requireWhen": {
@@ -36303,13 +36310,6 @@
             "required": false
           }
         ]
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Pics",
-        "order": 5,
-        "required": false
       },
       {
         "key": "notes",
@@ -48080,10 +48080,17 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Pics",
+        "order": 4,
+        "required": false
+      },
+      {
         "key": "damages",
         "type": "damage-list",
         "label": "Damages",
-        "order": 4,
+        "order": 5,
         "repeat": {
           "addable": true,
           "requireWhen": {
@@ -48489,13 +48496,6 @@
             "required": false
           }
         ]
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Pics",
-        "order": 5,
-        "required": false
       },
       {
         "key": "notes",
@@ -49214,6 +49214,17 @@
         "required": true
       },
       {
+        "key": "photos",
+        "gate": {
+          "equals": "yes",
+          "fieldKey": "present"
+        },
+        "type": "photos",
+        "label": "Driveway pics",
+        "order": 4,
+        "required": false
+      },
+      {
         "key": "condition",
         "gate": {
           "equals": "yes",
@@ -49221,7 +49232,7 @@
         },
         "type": "color-select",
         "label": "Condition",
-        "order": 4,
+        "order": 5,
         "options": [
           {
             "label": "Satisfactory with typical wear and tear",
@@ -49254,7 +49265,7 @@
         },
         "type": "damage-list",
         "label": "Cracking / gaps / other deterioration — note the 2 or 3 most significant items",
-        "order": 5,
+        "order": 6,
         "repeat": {
           "addable": true,
           "requireWhen": {
@@ -49631,7 +49642,7 @@
         },
         "type": "pill-select",
         "label": "Cracking overview",
-        "order": 6,
+        "order": 7,
         "options": [
           {
             "label": "No visible significant cracking",
@@ -49656,7 +49667,7 @@
         },
         "type": "chip-multiselect",
         "label": "Sections obscured by",
-        "order": 7,
+        "order": 8,
         "options": [
           {
             "label": "Vegetation",
@@ -49684,19 +49695,8 @@
         },
         "type": "textarea",
         "label": "If Other — please specify",
-        "order": 8,
-        "required": true
-      },
-      {
-        "key": "photos",
-        "gate": {
-          "equals": "yes",
-          "fieldKey": "present"
-        },
-        "type": "photos",
-        "label": "Driveway pics",
         "order": 9,
-        "required": false
+        "required": true
       },
       {
         "key": "notes",
@@ -53992,6 +53992,17 @@
         "required": true
       },
       {
+        "key": "photos",
+        "gate": {
+          "equals": "yes",
+          "fieldKey": "present"
+        },
+        "type": "photos",
+        "label": "Pool / spa pics",
+        "order": 4,
+        "required": false
+      },
+      {
         "key": "paving",
         "gate": {
           "equals": "yes",
@@ -53999,7 +54010,7 @@
         },
         "type": "chip-multiselect",
         "label": "Paving",
-        "order": 4,
+        "order": 5,
         "options": [
           {
             "label": "Tiles",
@@ -54027,7 +54038,7 @@
         },
         "type": "textarea",
         "label": "If Other — please specify",
-        "order": 5,
+        "order": 6,
         "required": true
       },
       {
@@ -54038,7 +54049,7 @@
         },
         "type": "chip-multiselect",
         "label": "Pool fence",
-        "order": 6,
+        "order": 7,
         "options": [
           {
             "label": "Metal",
@@ -54066,7 +54077,7 @@
         },
         "type": "textarea",
         "label": "If Other — please specify",
-        "order": 7,
+        "order": 8,
         "required": true
       },
       {
@@ -54077,7 +54088,7 @@
         },
         "type": "color-select",
         "label": "Is the pool / spa fence OK?",
-        "order": 8,
+        "order": 9,
         "options": [
           {
             "label": "Appears to be okay",
@@ -54098,7 +54109,7 @@
         },
         "type": "color-select",
         "label": "From limited views, condition is",
-        "order": 9,
+        "order": 10,
         "options": [
           {
             "label": "Satisfactory with typical wear and tear",
@@ -54127,7 +54138,7 @@
         "key": "damages",
         "type": "damage-list",
         "label": "Damages",
-        "order": 10,
+        "order": 11,
         "repeat": {
           "addable": true,
           "requireWhen": {
@@ -54542,7 +54553,7 @@
         },
         "type": "chip-multiselect",
         "label": "Sections obscured by",
-        "order": 11,
+        "order": 12,
         "options": [
           {
             "label": "Vegetation",
@@ -54566,19 +54577,8 @@
         },
         "type": "textarea",
         "label": "If Other — specify",
-        "order": 12,
-        "required": true
-      },
-      {
-        "key": "photos",
-        "gate": {
-          "equals": "yes",
-          "fieldKey": "present"
-        },
-        "type": "photos",
-        "label": "Pool / spa pics",
         "order": 13,
-        "required": false
+        "required": true
       },
       {
         "key": "notes",
@@ -112620,6 +112620,13 @@
         ]
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Photo Nos",
+        "order": 4,
+        "required": false
+      },
+      {
         "key": "checks",
         "gate": {
           "equals": "yes",
@@ -112627,7 +112634,7 @@
         },
         "type": "chip-multiselect",
         "label": "Observations",
-        "order": 4,
+        "order": 5,
         "options": [
           {
             "label": "Minor cracking",
@@ -112648,13 +112655,6 @@
         ],
         "required": true,
         "allowOther": true
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Photo Nos",
-        "order": 5,
-        "required": false
       },
       {
         "key": "comments",
@@ -119656,10 +119656,17 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Photo Nos",
+        "order": 4,
+        "required": false
+      },
+      {
         "key": "damages",
         "type": "damage-list",
         "label": "Damages",
-        "order": 4,
+        "order": 5,
         "repeat": {
           "addable": true,
           "requireWhen": {
@@ -120074,7 +120081,7 @@
         },
         "type": "pill-select",
         "label": "Require",
-        "order": 5,
+        "order": 6,
         "options": [
           {
             "label": "Repairs",
@@ -120100,7 +120107,7 @@
         },
         "type": "chip-multiselect",
         "label": "Observations & defects",
-        "order": 6,
+        "order": 7,
         "options": [
           {
             "label": "Timbers are loose requiring attention",
@@ -120133,13 +120140,6 @@
         ],
         "required": true,
         "allowOther": true
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Photo Nos",
-        "order": 7,
-        "required": false
       },
       {
         "key": "comments",
@@ -129325,6 +129325,13 @@
         ]
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Photo Nos",
+        "order": 4,
+        "required": false
+      },
+      {
         "key": "checks",
         "gate": {
           "equals": "yes",
@@ -129332,7 +129339,7 @@
         },
         "type": "chip-multiselect",
         "label": "Observations",
-        "order": 4,
+        "order": 5,
         "options": [
           {
             "label": "Minor cracking",
@@ -129366,15 +129373,8 @@
         },
         "type": "text",
         "label": "If settlement, where?",
-        "order": 5,
-        "required": true
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Photo Nos",
         "order": 6,
-        "required": false
+        "required": true
       },
       {
         "key": "comments",
@@ -129473,6 +129473,13 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Photo Nos",
+        "order": 4,
+        "required": false
+      },
+      {
         "key": "subsidence",
         "gate": {
           "equals": "yes",
@@ -129480,7 +129487,7 @@
         },
         "type": "yesno",
         "label": "There are signs of subsidence?",
-        "order": 4,
+        "order": 5,
         "required": true
       },
       {
@@ -129491,7 +129498,7 @@
         },
         "type": "yesno",
         "label": "The pool / spa fencing appears to be adequate?",
-        "order": 5,
+        "order": 6,
         "required": true
       },
       {
@@ -129502,7 +129509,7 @@
         },
         "type": "chip-multiselect",
         "label": "Pool safety concerns",
-        "order": 6,
+        "order": 7,
         "options": [
           {
             "label": "The pool is not adequately fenced from the house",
@@ -129536,15 +129543,8 @@
         },
         "type": "text",
         "label": "The areas of concern are",
-        "order": 7,
-        "required": true
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Photo Nos",
         "order": 8,
-        "required": false
+        "required": true
       },
       {
         "key": "comments",
