@@ -231,11 +231,20 @@ export async function enqueueSubmission(payload: SubmitPayload): Promise<void> {
 }
 
 /**
- * Flush the queue in order. Stops (without dropping remaining entries) the
- * moment one submission fails, so a dead connection doesn't get hammered
- * once per entry. `force` (the manual "Retry now" button) bypasses the
- * Wi-Fi-only preference -- every other caller here is an automatic trigger
- * that should respect it.
+ * Flush the queue in order. `force` (the manual "Retry now" button) bypasses
+ * the Wi-Fi-only preference -- every other caller here is an automatic
+ * trigger that should respect it.
+ *
+ * Every entry gets its own independent attempt every pass, success or
+ * failure of one never blocking another -- this used to `break` the whole
+ * loop on the first "no response reached us" failure (reasoning: assume a
+ * dead connection, don't hammer the rest). In practice that meant one entry
+ * with a permanent, non-connectivity problem (its local photo file no
+ * longer on disk, say) silently blocked every entry queued behind it
+ * forever -- discovered when a 254-attempt "Network Error" entry turned out
+ * to be starving two genuinely-pending inspections that had never been
+ * attempted even once. A real full outage still just means every entry
+ * fails once this pass, which costs nothing worth guarding against.
  */
 export async function processQueue(opts?: { force?: boolean }): Promise<void> {
   if (processing) return;
@@ -257,22 +266,17 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
         const message = err instanceof Error ? err.message : 'Unknown error';
         queueCache = queueCache.map((e) => (e.id === id ? { ...e, attempts: e.attempts + 1, lastError: message } : e));
         await persist();
-        // A response actually came back (e.g. a 400/422 validation error) --
-        // that specific payload was rejected, not merely unreachable, and
-        // retrying the exact same payload again right now won't change the
-        // outcome. It stays queued (so a server-side fix can still pick it
-        // up later, same as the photo-URL-format bug this was written for),
-        // but it shouldn't block whatever else is queued behind it.
-        if ((err as { response?: unknown })?.response) continue;
-        // No response reached us at all -- a real connectivity problem, so
-        // stop here rather than hammering a dead connection once per
-        // remaining entry.
-        break;
       }
     }
   } finally {
     setProcessing(false);
   }
+}
+
+/** An inspector-triggered "give up on this one" -- see the long-press queue-details alert on SelectInspectionTypeScreen. Never called automatically; a payload with a genuinely bad local file needs a human to decide it's not coming back. */
+export async function removeFromQueue(id: string): Promise<void> {
+  queueCache = queueCache.filter((e) => e.id !== id);
+  await persist();
 }
 
 /**

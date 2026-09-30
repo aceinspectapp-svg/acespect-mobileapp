@@ -23,6 +23,7 @@ import {
   subscribeProcessing,
   retryNow,
   isWaitingForWifi,
+  removeFromQueue,
 } from '../../services/syncManager';
 import { buildJobSetupDataFromDraft } from '../../utils/jobSetupFromDraft';
 import {
@@ -324,8 +325,14 @@ export function SelectInspectionTypeScreen({
             // (syncManager.ts's processQueue) but were never shown anywhere --
             // "it's stuck" had no way to say why. Long-press surfaces exactly
             // what each queued inspection's last failed attempt actually said,
-            // without triggering another retry itself.
+            // without triggering another retry itself. An entry with a huge
+            // attempt count (a payload whose local photo file is long gone,
+            // say) offers a manual "give up on this one" -- processQueue no
+            // longer lets one broken entry block the others behind it, but
+            // nothing auto-removes a permanently-failing entry; only a human
+            // deciding it's never coming back should.
             onLongPress={() => {
+              const STUCK_THRESHOLD = 20;
               const lines = pendingQueue.map((q, i) => {
                 const label = q.payload.jobNo || q.payload.address || `Inspection ${i + 1}`;
                 const attempted = q.attempts > 0
@@ -333,7 +340,31 @@ export function SelectInspectionTypeScreen({
                   : 'not attempted yet';
                 return `${i + 1}. ${label}\n${attempted}`;
               });
-              Alert.alert('Pending sync details', lines.join('\n\n'));
+              const stuck = pendingQueue.filter((q) => q.attempts >= STUCK_THRESHOLD);
+              const buttons: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [
+                { text: 'OK', style: 'cancel' },
+              ];
+              if (stuck.length > 0) {
+                buttons.push({
+                  text: `Give up on ${stuck.length} stuck ${stuck.length === 1 ? 'entry' : 'entries'}`,
+                  style: 'destructive',
+                  onPress: () => {
+                    Alert.alert(
+                      'Remove stuck inspection(s)?',
+                      `${stuck.map((q) => q.payload.jobNo || q.payload.address || 'Untitled').join(', ')} will be permanently deleted from this device and never reach the database. Only do this if you're certain the data is already lost (e.g. a missing local photo) -- this cannot be undone.`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete permanently',
+                          style: 'destructive',
+                          onPress: () => stuck.forEach((q) => void removeFromQueue(q.id)),
+                        },
+                      ],
+                    );
+                  },
+                });
+              }
+              Alert.alert('Pending sync details', lines.join('\n\n'), buttons);
             }}
           >
             {syncing ? (
