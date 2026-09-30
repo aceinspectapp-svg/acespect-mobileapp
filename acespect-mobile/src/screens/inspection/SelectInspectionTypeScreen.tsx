@@ -320,6 +320,21 @@ export function SelectInspectionTypeScreen({
               }
               setWaitingForWifi(false);
             }}
+            // `attempts`/`lastError` are already tracked per queued item
+            // (syncManager.ts's processQueue) but were never shown anywhere --
+            // "it's stuck" had no way to say why. Long-press surfaces exactly
+            // what each queued inspection's last failed attempt actually said,
+            // without triggering another retry itself.
+            onLongPress={() => {
+              const lines = pendingQueue.map((q, i) => {
+                const label = q.payload.jobNo || q.payload.address || `Inspection ${i + 1}`;
+                const attempted = q.attempts > 0
+                  ? `${q.attempts} attempt${q.attempts === 1 ? '' : 's'} — ${q.lastError ?? 'no error recorded'}`
+                  : 'not attempted yet';
+                return `${i + 1}. ${label}\n${attempted}`;
+              });
+              Alert.alert('Pending sync details', lines.join('\n\n'));
+            }}
           >
             {syncing ? (
               <ActivityIndicator size="small" color={colors.warning} />
@@ -331,7 +346,7 @@ export function SelectInspectionTypeScreen({
                 ? `Syncing ${pendingQueue.length} inspection${pendingQueue.length === 1 ? '' : 's'}… this can take a minute`
                 : `${pendingQueue.length} inspection${pendingQueue.length === 1 ? '' : 's'} waiting to sync${
                     waitingForWifi ? ' — waiting for Wi-Fi (tap to sync now anyway)' : ' — tap to retry now'
-                  }`}
+                  } (long-press for details)`}
             </Text>
           </Pressable>
         )}
