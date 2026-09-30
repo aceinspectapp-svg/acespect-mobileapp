@@ -68,30 +68,103 @@ async function updateSection(id: string, input: SectionUpdateInput) {
   const exists = await prisma.section.findUnique({ where: { id }, select: { id: true, fields: true } });
   if (!exists) throw ApiError.notFound('Section not found');
 
-  const row = await prisma.section.update({
-    where: { id },
-    data: {
-      ...(input.reviewStatus ? { reviewStatus: WEB_TO_REV_STATUS[input.reviewStatus] } : {}),
-      ...(input.reviewComment !== undefined ? { reviewComment: input.reviewComment } : {}),
-      ...(input.reportText !== undefined ? { reportText: input.reportText } : {}),
-      // Merge rather than replace so edits don't drop fields the form doesn't show (e.g. photo counters).
-      ...(input.fields
-        ? {
-            fields: {
-              ...(exists.fields as Prisma.InputJsonObject),
-              ...(input.fields as Prisma.InputJsonObject),
-            },
-          }
-        : {}),
-      // Replaced wholesale, not merged -- the reviewer's UI always sends the
-      // full current exclusion set, same as reportText above.
-      ...(input.excludedPhotoUrls !== undefined
-        ? { excludedPhotoUrls: input.excludedPhotoUrls as Prisma.InputJsonValue }
-        : {}),
-    },
-    include: { damages: { orderBy: { order: 'asc' } } },
+  return prisma.$transaction(async (tx) => {
+    const row = await tx.section.update({
+      where: { id },
+      data: {
+        ...(input.reviewStatus ? { reviewStatus: WEB_TO_REV_STATUS[input.reviewStatus] } : {}),
+        ...(input.reviewComment !== undefined ? { reviewComment: input.reviewComment } : {}),
+        ...(input.reportText !== undefined ? { reportText: input.reportText } : {}),
+        // Merge rather than replace so edits don't drop fields the form doesn't show (e.g. photo counters).
+        ...(input.fields
+          ? {
+              fields: {
+                ...(exists.fields as Prisma.InputJsonObject),
+                ...(input.fields as Prisma.InputJsonObject),
+              },
+            }
+          : {}),
+        // Replaced wholesale, not merged -- the reviewer's UI always sends the
+        // full current exclusion set, same as reportText above.
+        ...(input.excludedPhotoUrls !== undefined
+          ? { excludedPhotoUrls: input.excludedPhotoUrls as Prisma.InputJsonValue }
+          : {}),
+        // Same replace-wholesale idea -- the reviewer's UI sends the full
+        // current photo list (existing + any it just uploaded and appended).
+        ...(input.photos !== undefined ? { photos: input.photos as Prisma.InputJsonValue } : {}),
+        // Replaced wholesale -- the reviewer's Field Data editor always sends
+        // the section's complete, current answer tree.
+        ...(input.answers !== undefined ? { answers: input.answers as Prisma.InputJsonValue } : {}),
+      },
+      include: { damages: { orderBy: { order: 'asc' } } },
+    });
+
+    if (input.damages === undefined) return serializeSection(row);
+
+    // The reviewer's Field Data edit re-derives this section's damage-list
+    // entries from the just-saved answers (same derivation the inspector's
+    // own editor uses) and sends the full new list here. Matched back onto
+    // the EXISTING damage rows by position -- both sides are built by
+    // walking the same template in the same order, so index i is the same
+    // crack/defect on both -- so each row keeps its id and `excludedPhotoUrls`
+    // (the reviewer's own separate photo-exclusion work on that exact
+    // damage, untouched by this path). Only an actual add/remove of a
+    // damage-list entry changes the row count.
+    const existingDamages = row.damages;
+    const nextDamages = input.damages;
+    const matched = Math.min(existingDamages.length, nextDamages.length);
+
+    for (let i = 0; i < matched; i++) {
+      const d = nextDamages[i]!;
+      // `photos` here comes from the Field Data editor's own photo control
+      // on this damage -- a second write path onto the same `Damage.photos`
+      // column the reviewer's separate "+ Add" button also writes to.
+      // Merged (union), never replaced, so neither path can silently drop
+      // a photo the other one added; `undefined` (field editor never
+      // touched photos this save) leaves the column alone entirely.
+      const existingPhotos = (existingDamages[i]!.photos as string[] | null) ?? [];
+      const mergedPhotos = d.photos !== undefined ? Array.from(new Set([...existingPhotos, ...d.photos])) : undefined;
+      await tx.damage.update({
+        where: { id: existingDamages[i]!.id },
+        data: {
+          type: d.type,
+          location: d.location,
+          direction: d.direction,
+          widthMm: d.widthMm,
+          lengthMm: d.lengthMm,
+          notes: d.notes,
+          order: i,
+          ...(mergedPhotos !== undefined ? { photos: mergedPhotos as Prisma.InputJsonValue } : {}),
+        },
+      });
+    }
+    // Reviewer removed an entry -- its row (and photos) go with it.
+    for (let i = matched; i < existingDamages.length; i++) {
+      await tx.damage.delete({ where: { id: existingDamages[i]!.id } });
+    }
+    // Reviewer added a brand new entry -- no existing row to merge with, so
+    // whatever photos the field editor already has on it (if any) are all
+    // there is.
+    for (let i = matched; i < nextDamages.length; i++) {
+      const d = nextDamages[i]!;
+      await tx.damage.create({
+        data: {
+          sectionId: id,
+          type: d.type,
+          location: d.location,
+          direction: d.direction,
+          widthMm: d.widthMm,
+          lengthMm: d.lengthMm,
+          notes: d.notes,
+          order: i,
+          photos: (d.photos ?? []) as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    const finalRow = await tx.section.findUniqueOrThrow({ where: { id }, include: { damages: { orderBy: { order: 'asc' } } } });
+    return serializeSection(finalRow);
   });
-  return serializeSection(row);
 }
 
 /** Reviewer picks which of one damage record's own photos make the report. */
@@ -105,6 +178,7 @@ async function updateDamage(id: string, input: DamageUpdateInput) {
       ...(input.excludedPhotoUrls !== undefined
         ? { excludedPhotoUrls: input.excludedPhotoUrls as Prisma.InputJsonValue }
         : {}),
+      ...(input.photos !== undefined ? { photos: input.photos as Prisma.InputJsonValue } : {}),
     },
   });
 }
@@ -126,6 +200,35 @@ async function updateInspection(id: string, input: InspectionUpdateInput) {
   return serializeInspection(row);
 }
 
+/**
+ * Admin-only troubleshooting feed: the mobile submit/update/finalize/photo
+ * pipeline's own trail (see lib/submissionLog.ts), newest first. Filters are
+ * all optional and combine with AND -- `event: 'rejected'` narrowed to one
+ * `jobNo` is exactly the "why didn't this inspector's job arrive" query this
+ * page exists for.
+ */
+async function listSubmissionLogs(filters: {
+  event?: string;
+  inspectorId?: string;
+  jobNo?: string;
+  since?: Date;
+  limit?: number;
+}) {
+  const where: Prisma.SubmissionLogEntryWhereInput = {
+    ...(filters.event ? { event: filters.event } : {}),
+    ...(filters.inspectorId ? { inspectorId: filters.inspectorId } : {}),
+    ...(filters.jobNo ? { jobNo: { contains: filters.jobNo, mode: 'insensitive' } } : {}),
+    ...(filters.since ? { createdAt: { gte: filters.since } } : {}),
+  };
+  const rows = await prisma.submissionLogEntry.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(filters.limit ?? 100, 500),
+    include: { inspector: { select: { id: true, name: true, email: true } } },
+  });
+  return rows;
+}
+
 export const webService = {
   listInspections,
   getInspection,
@@ -134,4 +237,5 @@ export const webService = {
   updateSection,
   updateDamage,
   updateInspection,
+  listSubmissionLogs,
 };

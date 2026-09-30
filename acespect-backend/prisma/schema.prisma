@@ -56,6 +56,7 @@ model User {
   assignedQcDefects   QcDefect[]           @relation("QcDefectAssignedTo")
   assignedQcTasks     QcTask[]             @relation("QcTaskAssignedTo")
   qcTaskUpdates       QcTaskUpdate[]
+  submissionLogEntries SubmissionLogEntry[]
 
   @@map("users")
 }
@@ -571,4 +572,30 @@ model QcTaskUpdate {
 
   @@index([taskId])
   @@map("qc_task_updates")
+}
+
+/// Trace of the mobile app's submit/update/finalize/photo-upload attempts
+/// reaching (or failing to reach) the database -- surfaced in the admin
+/// dashboard as a troubleshooting view ("did this inspector's job actually
+/// arrive, and if not, why") without anyone needing direct server-log or
+/// database access. `inspector`/`inspectionId` are both nullable: a
+/// rejected submission (failed validation, bad auth) never created a real
+/// Inspection row and may not even have resolved a valid user.
+model SubmissionLogEntry {
+  id           String   @id @default(uuid())
+  /// "received" | "saved" | "updated" | "finalized" | "photo_uploaded" | "rejected"
+  event        String
+  inspector    User?    @relation(fields: [inspectorId], references: [id], onDelete: SetNull)
+  inspectorId  String?
+  inspectionId String?
+  jobNo        String?
+  statusCode   Int?
+  message      String?
+  detail       Json?
+  createdAt    DateTime @default(now())
+
+  @@index([inspectorId])
+  @@index([inspectionId])
+  @@index([createdAt])
+  @@map("submission_log_entries")
 }

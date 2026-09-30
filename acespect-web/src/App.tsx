@@ -17,6 +17,7 @@ import { AdminTemplateEditor } from "./web/pages/admin/AdminTemplateEditor";
 import { AdminQcDefects } from "./web/pages/admin/AdminQcDefects";
 import { AdminQcConfig } from "./web/pages/admin/AdminQcConfig";
 import { AdminQcUsers } from "./web/pages/admin/AdminQcUsers";
+import { AdminSubmissionLogs } from "./web/pages/admin/AdminSubmissionLogs";
 import { ReportView } from "./web/pages/ReportView";
 import type { Role } from "./web/mockData";
 
@@ -77,6 +78,7 @@ export default function App() {
             <Route path="/admin/qc/config" element={<AdminQcConfig />} />
             <Route path="/admin/qc/users" element={<AdminQcUsers />} />
             <Route path="/admin/reports" element={<Placeholder title="Reports" />} />
+            <Route path="/admin/troubleshoot" element={<AdminSubmissionLogs />} />
             <Route path="/admin/settings" element={<Placeholder title="Settings" />} />
           </Route>
 

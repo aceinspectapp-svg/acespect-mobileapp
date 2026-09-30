@@ -41,12 +41,25 @@ export function SectionFieldEditor({
   onChange,
   readOnly,
   showMissing,
+  disablePhotoEditing,
 }: {
   fields: TemplateField[];
   scope: AnswerTree;
   onChange: (key: string, value: AnswerValue) => void;
   readOnly: boolean;
   showMissing?: boolean;
+  /**
+   * Forces every "photos" field to render read-only regardless of `readOnly`
+   * above, while every other field type stays editable. Used by the
+   * reviewer's Field Data editor, which reuses this same component for
+   * everything BUT photos -- photo attachment/selection already has its own
+   * dedicated UI there (see ReviewerFormView's SelectablePhotoGrid/
+   * AddPhotoButton), writing straight to the section's/damage's own DB
+   * `photos` column; letting this editor's own upload control write photos
+   * into the answer tree too would silently lose whichever of the two
+   * writes didn't happen to be the one saved last.
+   */
+  disablePhotoEditing?: boolean;
 }) {
   const visible = [...fields].filter((f) => isGateSatisfied(f, scope)).sort((a, b) => a.order - b.order);
   let lastLetter: string | undefined;
@@ -84,6 +97,7 @@ export function SectionFieldEditor({
                 onChange={(v) => onChange(field.key, v)}
                 readOnly={readOnly}
                 showMissing={showMissing}
+                disablePhotoEditing={disablePhotoEditing}
               />
             </div>
           </div>
@@ -100,6 +114,7 @@ interface RendererProps {
   onChange: (v: AnswerValue) => void;
   readOnly: boolean;
   showMissing?: boolean;
+  disablePhotoEditing?: boolean;
 }
 
 const labelStyle: CSSProperties = {
@@ -156,7 +171,7 @@ function FieldRenderer(props: RendererProps) {
     case "tile-multiselect":
       return <ChipField {...props} />;
     case "photos":
-      return <PhotosField {...props} />;
+      return <PhotosField {...props} readOnly={props.readOnly || !!props.disablePhotoEditing} />;
     case "repeating-group":
     case "damage-list":
       return <RepeatingField {...props} />;
@@ -237,10 +252,20 @@ function DateFieldR({ field, value, onChange, readOnly }: RendererProps) {
   );
 }
 
-/** Rounded pill buttons -- yesno / pill-select / select-tiles / color-select all render this way. */
+/**
+ * Rounded pill buttons -- yesno / pill-select / select-tiles / color-select
+ * all render this way. `allowOther` (pill-select only, in practice -- the
+ * other two never set it) adds the same "__other__:<text>" escape hatch
+ * ChipField gives multiselects, encoded as a single scalar value here
+ * instead of an array entry; `displayValue`'s `__other__:` unwrap already
+ * handles both.
+ */
 function ToggleField({ field, value, onChange, readOnly, defaultOptions }: RendererProps & { defaultOptions?: { value: string; label: string }[] }) {
   const options = field.options?.length ? field.options : defaultOptions ?? [];
   const current = asString(value);
+  const otherKey = "__other__";
+  const otherActive = current === "other" || current.startsWith(`${otherKey}:`);
+  const otherValue = current.startsWith(`${otherKey}:`) ? current.slice(otherKey.length + 1) : "";
   return (
     <div>
       <Label field={field} />
@@ -269,8 +294,41 @@ function ToggleField({ field, value, onChange, readOnly, defaultOptions }: Rende
             </button>
           );
         })}
-        {options.length === 0 && <ReadValue text="—" />}
+        {field.allowOther && (
+          <button
+            type="button"
+            disabled={readOnly || field.readOnly}
+            onClick={() => onChange("other")}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "20px",
+              border: `1.5px solid ${otherActive ? "#2563eb" : "#e5e7eb"}`,
+              background: otherActive ? "#2563eb" : "white",
+              color: otherActive ? "white" : "#374151",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: readOnly || field.readOnly ? "default" : "pointer",
+            }}
+          >
+            Other
+          </button>
+        )}
+        {options.length === 0 && !field.allowOther && <ReadValue text="—" />}
       </div>
+      {field.allowOther && otherActive && (
+        readOnly || field.readOnly ? (
+          <div style={{ marginTop: "8px" }}>
+            <ReadValue text={otherValue || "—"} />
+          </div>
+        ) : (
+          <input
+            style={{ ...inputStyle, marginTop: "8px" }}
+            placeholder="Specify…"
+            value={otherValue}
+            onChange={(e) => onChange(e.target.value ? `${otherKey}:${e.target.value}` : "other")}
+          />
+        )
+      )}
     </div>
   );
 }
@@ -461,7 +519,7 @@ function humanizeList(values: string[]): string {
 }
 
 /** repeating-group / damage-list: a list of instance cards, each recursing back into SectionFieldEditor. */
-function RepeatingField({ field, value, onChange, scope, readOnly, showMissing }: RendererProps) {
+function RepeatingField({ field, value, onChange, scope, readOnly, showMissing, disablePhotoEditing }: RendererProps) {
   const presentation = field.repeat?.presentation ?? "strip";
   const itemFields = field.itemFields ?? [];
 
@@ -481,6 +539,7 @@ function RepeatingField({ field, value, onChange, scope, readOnly, showMissing }
                   onChange={(k, v) => onChange({ ...record, [inst.key]: { ...instScope, [k]: v } })}
                   readOnly={readOnly}
                   showMissing={showMissing}
+                  disablePhotoEditing={disablePhotoEditing}
                 />
               </div>
             );
@@ -577,6 +636,7 @@ function RepeatingField({ field, value, onChange, scope, readOnly, showMissing }
                   onChange={(k, v) => (isArrayBacked ? updateArrayInstance(idx, k, v) : key !== undefined ? updateRecordInstance(key, k, v) : undefined)}
                   readOnly={readOnly}
                   showMissing={showMissing}
+                  disablePhotoEditing={disablePhotoEditing}
                 />
               </div>
             </div>

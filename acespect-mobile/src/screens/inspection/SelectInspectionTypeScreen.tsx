@@ -23,6 +23,7 @@ import {
   subscribeProcessing,
   retryNow,
   isWaitingForWifi,
+  removeFromQueue,
 } from '../../services/syncManager';
 import { buildJobSetupDataFromDraft } from '../../utils/jobSetupFromDraft';
 import {
@@ -194,11 +195,41 @@ export function SelectInspectionTypeScreen({
   const canBegin = !!typeId && !!propertyId;
 
   // Inspector has acknowledged the pre-start checklist — proceed into setup.
+  // The draft (sections/answers/photos/templates) lives in a handful of
+  // module-level refs keyed only by section key ("job-info", "driveway", ...)
+  // -- NOT by inspection/property type -- so without an explicit reset here,
+  // starting a genuinely new inspection while an unfinished one is still in
+  // memory (app backgrounded rather than force-quit, not resumed via the
+  // banner below) would silently carry its answers into the new one, since
+  // both use the exact same section keys. A resumable draft still gets a
+  // heads-up before it's discarded -- resuming it is what the banner's for.
   const onConfirmStart = () => {
     setConfirmVisible(false);
-    navigation.navigate('JobInformation', {
-      selection: { inspectionTypeId: typeId!, propertyTypeId: propertyId! },
-    });
+    const proceed = () => {
+      draft.reset();
+      navigation.navigate('JobInformation', {
+        selection: { inspectionTypeId: typeId!, propertyTypeId: propertyId! },
+      });
+    };
+    if (resumableDraft) {
+      Alert.alert(
+        'Discard unfinished inspection?',
+        `You have an unfinished ${resumableDraft.top.inspectionType} (${resumableDraft.top.propertyType}) inspection from last session. Starting a new one will discard it — this can't be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Discard & Start New',
+            style: 'destructive',
+            onPress: () => {
+              setResumableDraft(null);
+              proceed();
+            },
+          },
+        ],
+      );
+      return;
+    }
+    proceed();
   };
 
   const { signOut } = useAuth();
@@ -290,6 +321,51 @@ export function SelectInspectionTypeScreen({
               }
               setWaitingForWifi(false);
             }}
+            // `attempts`/`lastError` are already tracked per queued item
+            // (syncManager.ts's processQueue) but were never shown anywhere --
+            // "it's stuck" had no way to say why. Long-press surfaces exactly
+            // what each queued inspection's last failed attempt actually said,
+            // without triggering another retry itself. An entry with a huge
+            // attempt count (a payload whose local photo file is long gone,
+            // say) offers a manual "give up on this one" -- processQueue no
+            // longer lets one broken entry block the others behind it, but
+            // nothing auto-removes a permanently-failing entry; only a human
+            // deciding it's never coming back should.
+            onLongPress={() => {
+              const STUCK_THRESHOLD = 20;
+              const lines = pendingQueue.map((q, i) => {
+                const label = q.payload.jobNo || q.payload.address || `Inspection ${i + 1}`;
+                const attempted = q.attempts > 0
+                  ? `${q.attempts} attempt${q.attempts === 1 ? '' : 's'} — ${q.lastError ?? 'no error recorded'}`
+                  : 'not attempted yet';
+                return `${i + 1}. ${label}\n${attempted}`;
+              });
+              const stuck = pendingQueue.filter((q) => q.attempts >= STUCK_THRESHOLD);
+              const buttons: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [
+                { text: 'OK', style: 'cancel' },
+              ];
+              if (stuck.length > 0) {
+                buttons.push({
+                  text: `Give up on ${stuck.length} stuck ${stuck.length === 1 ? 'entry' : 'entries'}`,
+                  style: 'destructive',
+                  onPress: () => {
+                    Alert.alert(
+                      'Remove stuck inspection(s)?',
+                      `${stuck.map((q) => q.payload.jobNo || q.payload.address || 'Untitled').join(', ')} will be permanently deleted from this device and never reach the database. Only do this if you're certain the data is already lost (e.g. a missing local photo) -- this cannot be undone.`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete permanently',
+                          style: 'destructive',
+                          onPress: () => stuck.forEach((q) => void removeFromQueue(q.id)),
+                        },
+                      ],
+                    );
+                  },
+                });
+              }
+              Alert.alert('Pending sync details', lines.join('\n\n'), buttons);
+            }}
           >
             {syncing ? (
               <ActivityIndicator size="small" color={colors.warning} />
@@ -301,7 +377,7 @@ export function SelectInspectionTypeScreen({
                 ? `Syncing ${pendingQueue.length} inspection${pendingQueue.length === 1 ? '' : 's'}… this can take a minute`
                 : `${pendingQueue.length} inspection${pendingQueue.length === 1 ? '' : 's'} waiting to sync${
                     waitingForWifi ? ' — waiting for Wi-Fi (tap to sync now anyway)' : ' — tap to retry now'
-                  }`}
+                  } (long-press for details)`}
             </Text>
           </Pressable>
         )}

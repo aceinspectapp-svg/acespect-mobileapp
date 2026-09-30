@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router";
 import {
   LayoutDashboard, FileText, Users, Settings, LogOut,
-  Bell, BarChart3, ClipboardCheck, ShieldCheck,
+  Bell, BarChart3, ClipboardCheck, ShieldCheck, Bug,
 } from "lucide-react";
 import { AcespectLogo } from "../../components/AcespectLogo";
 import { useAppData } from "../data";
@@ -24,6 +24,7 @@ const ROLE_NAV: Record<Role, { to: string; icon: React.ElementType; label: strin
     { to: "/admin/qc",          icon: ShieldCheck,      label: "QC" },
     { to: "/admin/users",       icon: Users,            label: "Users" },
     { to: "/admin/reports",     icon: BarChart3,        label: "Reports" },
+    { to: "/admin/troubleshoot", icon: Bug,             label: "Troubleshoot" },
     { to: "/admin/settings",    icon: Settings,         label: "Settings" },
   ],
 };

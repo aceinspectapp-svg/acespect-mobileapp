@@ -128,11 +128,15 @@ export const api = {
       reportText?: string;
       fields?: Record<string, unknown>;
       excludedPhotoUrls?: string[];
+      photos?: string[];
+      // The reviewer's Field Data edit -- see web.schemas.ts's sectionUpdateSchema.
+      answers?: Record<string, unknown>;
+      damages?: { type: string; location: string; direction: string; widthMm: number; lengthMm: number; notes: string; photos?: string[] }[];
     },
   ) => req<{ section: unknown }>(`/web/sections/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
   /** A damage record's own photo-exclusion list -- see updateSection above for the same idea, one level down. */
-  updateDamage: (id: string, patch: { excludedPhotoUrls?: string[] }) =>
+  updateDamage: (id: string, patch: { excludedPhotoUrls?: string[]; photos?: string[] }) =>
     req<{ damage: unknown }>(`/web/damages/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
   updateInspection: (id: string, patch: { status?: InspectionStatus; notes?: string; reviewerId?: string | null }) =>
@@ -326,7 +330,30 @@ export const api = {
       req("/qc/statuses", { method: "POST", body: JSON.stringify(input) }),
     deleteStatus: (id: string) => req(`/qc/statuses/${id}`, { method: "DELETE" }),
   },
+
+  /** Admin-only troubleshooting feed: the mobile submit/update/finalize/photo pipeline's own trail. See acespect-backend's SubmissionLogEntry. */
+  getSubmissionLogs: (filters: { event?: string; jobNo?: string; inspectorId?: string; limit?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.event) params.set("event", filters.event);
+    if (filters.jobNo) params.set("jobNo", filters.jobNo);
+    if (filters.inspectorId) params.set("inspectorId", filters.inspectorId);
+    params.set("limit", String(filters.limit ?? 200));
+    return req<{ logs: SubmissionLogEntry[] }>(`/web/submission-logs?${params.toString()}`).then((d) => d.logs);
+  },
 };
+
+export interface SubmissionLogEntry {
+  id: string;
+  event: "received" | "saved" | "updated" | "finalized" | "photo_uploaded" | "rejected";
+  inspector: { id: string; name: string | null; email: string } | null;
+  inspectorId: string | null;
+  inspectionId: string | null;
+  jobNo: string | null;
+  statusCode: number | null;
+  message: string | null;
+  detail: Record<string, unknown> | null;
+  createdAt: string;
+}
 
 /** One inspector's adoption status for a profile's set of section templates — see templates.service.ts `getAdoption`. */
 export interface TemplateAdoptionRow {

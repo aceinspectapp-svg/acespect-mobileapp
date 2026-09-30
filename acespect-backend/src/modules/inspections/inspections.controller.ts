@@ -6,6 +6,7 @@ import { ApiError } from '../../utils/ApiError';
 import { inspectionsService } from './inspections.service';
 import { fetchPhotoStream } from '../../lib/storage';
 import { generateInspectionReportPdf } from '../../lib/reportPdf';
+import { recordSubmissionEvent } from '../../lib/submissionLog';
 
 /** A photo URL is this backend's own `/api/v1/media/:id` proxy link -- pull the id back off the end of it. */
 function photoIdFromUrl(url: string): string | null {
@@ -13,12 +14,43 @@ function photoIdFromUrl(url: string): string | null {
   return match?.[1] ?? null;
 }
 
+/**
+ * Every one of these is a step in mobile's local-draft -> queued -> uploaded
+ * -> saved pipeline (see acespect-mobile's syncManager.ts) where "it never
+ * showed up" has historically meant digging through a raw DB query to find
+ * out what actually happened. Tagged `[submit]` in the console (grep-able
+ * live via `railway logs`) AND persisted to SubmissionLogEntry (queryable
+ * later from the admin dashboard's Troubleshooting page) -- the same event,
+ * two destinations, so neither a live-tailing engineer nor an admin looking
+ * back at yesterday's failed job is left without an answer.
+ */
+function logSubmit(
+  event: 'received' | 'saved' | 'updated' | 'finalized' | 'photo_uploaded',
+  ctx: { inspectorId?: string | null; inspectionId?: string | null; jobNo?: string | null },
+  detail: Record<string, unknown>,
+): void {
+  // eslint-disable-next-line no-console
+  console.log('[submit]', event, JSON.stringify({ ...ctx, ...detail }));
+  void recordSubmissionEvent({ event, ...ctx, detail });
+}
+
 /** Thin HTTP layer for inspection submission + lookup. */
 export const inspectionsController = {
   // Saves as a DRAFT the inspector still owns — review only starts at finalize.
   submit: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
+    const body = req.body as { jobNo?: string; id?: string; sections?: unknown[] };
+    logSubmit(
+      'received',
+      { inspectorId: req.user.id, jobNo: body.jobNo },
+      { draftId: body.id, sections: body.sections?.length ?? 0 },
+    );
     const { inspection } = await inspectionsService.submit(req.user.id, req.body);
+    logSubmit(
+      'saved',
+      { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo },
+      { status: inspection.status },
+    );
     res.status(201).json({ inspectionId: inspection.id, status: inspection.status });
   }),
 
@@ -27,6 +59,11 @@ export const inspectionsController = {
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
     const inspection = await inspectionsService.update(id, req.user.id, req.body);
+    logSubmit(
+      'updated',
+      { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo },
+      { status: inspection.status },
+    );
     res.status(200).json({ inspectionId: inspection.id, status: inspection.status });
   }),
 
@@ -36,6 +73,11 @@ export const inspectionsController = {
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
     const { inspection, reviewJob } = await inspectionsService.finalize(id, req.user.id);
+    logSubmit(
+      'finalized',
+      { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo },
+      { reviewJobId: reviewJob.id, status: inspection.status },
+    );
     res.status(202).json({
       inspectionId: inspection.id,
       reviewJobId: reviewJob.id,
@@ -76,7 +118,10 @@ export const inspectionsController = {
     const token = authHeader.slice('Bearer '.length).trim();
 
     const inspection = await inspectionsService.getById(id);
-    const pdf = await generateInspectionReportPdf(id, token);
+    const pdf = await generateInspectionReportPdf(id, token, {
+      clientName: inspection.client ?? '',
+      jobNo: inspection.jobNo ?? '',
+    });
 
     const fileName = `${inspection.jobNo || id}-dilapidation-report.pdf`.replace(/[^a-z0-9.-]+/gi, '-');
     res.setHeader('Content-Type', 'application/pdf');
@@ -100,6 +145,11 @@ export const inspectionsController = {
       file.originalname,
       inspectionId,
       sectionKey,
+    );
+    logSubmit(
+      'photo_uploaded',
+      { inspectorId: req.user.id, inspectionId },
+      { sectionKey, bytes: file.buffer.length, photoId: result.id },
     );
     res.status(201).json(result);
   }),

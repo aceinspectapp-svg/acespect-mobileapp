@@ -9,6 +9,37 @@ export const sectionUpdateSchema = z.object({
   // leave out of the generated report. Replaces the stored list wholesale --
   // the reviewer's UI always sends the full current exclusion set.
   excludedPhotoUrls: z.array(z.string()).optional(),
+  // This section's own photo list itself, replaced wholesale -- lets a
+  // reviewer attach an extra photo (uploaded via POST /inspections/photos)
+  // onto this section, same as excludedPhotoUrls above.
+  photos: z.array(z.string()).optional(),
+  // The inspector's raw answer tree, as edited by the reviewer in the
+  // Field Data editor -- same shape mobile/the inspector's own web editor
+  // write. Sent together with `fields`/`reportText` above (re-derived from
+  // it client-side, the same way the inspector's own save does) so the
+  // report never drifts out of sync with what's recorded here.
+  answers: z.record(z.string(), z.unknown()).optional(),
+  // This section's damage-list entries, re-derived from `answers` the same
+  // way. `photos` here is the Field Data editor's own photo control on that
+  // damage's "Photos" field (the reviewer can now attach straight to it,
+  // not just the section/damage sidecar) -- see updateSection for how it's
+  // merged rather than replaced, since the reviewer's separate dedicated
+  // photo-attach/exclude UI writes to the same `Damage.photos` column.
+  // `excludedPhotoUrls` is not part of this shape -- exclusion stays
+  // exclusively that separate mechanism's job.
+  damages: z
+    .array(
+      z.object({
+        type: z.string(),
+        location: z.string(),
+        direction: z.string(),
+        widthMm: z.number(),
+        lengthMm: z.number(),
+        notes: z.string(),
+        photos: z.array(z.string()).optional(),
+      }),
+    )
+    .optional(),
 });
 
 // A damage record's own photo-exclusion list -- same idea as the section's,
@@ -16,6 +47,9 @@ export const sectionUpdateSchema = z.object({
 // damages before this; this is the smallest schema that adds one.
 export const damageUpdateSchema = z.object({
   excludedPhotoUrls: z.array(z.string()).optional(),
+  // This damage record's own photo list, replaced wholesale -- lets a
+  // reviewer attach a photo directly to this specific crack/defect.
+  photos: z.array(z.string()).optional(),
 });
 
 export const inspectionUpdateSchema = z.object({

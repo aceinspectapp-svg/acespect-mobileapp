@@ -332,6 +332,14 @@ function walk(
   const fields: Record<string, unknown> = {};
   const damages: FlattenedSection["damages"] = [];
   const textParts: string[] = [];
+  // Description & Overview's fields are flat (no repeating-group), so they
+  // never reach the composer call below (that one only fires per-instance
+  // inside a repeating-group) -- the generic per-field fallback used to give
+  // every field its own "Label: value." line, rendering as a bullet-style
+  // list instead of the reference report's flowing prose paragraph. Route
+  // this section's flat fields through its own composer instead, same as
+  // every other section already does via SECTION_SENTENCE_COMPOSERS.
+  const isFlatComposedSection = ancestorLabels.length === 0 && sectionKey === "description";
 
   for (const field of templateFields) {
     if (!isGateSatisfied(field, scope)) continue;
@@ -398,9 +406,27 @@ function walk(
     if (field.type === "photos") continue;
 
     if (value === undefined || value === "") continue;
-    const strValue = Array.isArray(value) ? value.filter((v) => typeof v === "string").join(", ") : String(value);
+    // Select-type fields (pill-select, select-tiles, color-select,
+    // chip-multiselect) store the option's raw `value` (e.g.
+    // "single_storey_house"), not its display text -- every other path in
+    // this file resolves that through `field.options` before it reaches the
+    // report; this generic fallback used to skip that step, so an unfilled-
+    // in field with no sentence composer printed the raw snake_case key
+    // straight into the report text instead of its label.
+    const toLabel = (raw: string) => field.options?.find((o) => o.value === raw)?.label ?? raw;
+    const strValue = Array.isArray(value)
+      ? value.filter((v) => typeof v === "string").map(toLabel).join(", ")
+      : toLabel(String(value));
     fields[field.key] = strValue;
-    textParts.push(`${field.label}: ${strValue}.`);
+    // Still recorded in `fields` above (so the reviewer's Field Data view
+    // keeps every answer editable) -- just not echoed as its own bullet line
+    // when a whole-section composer is about to produce real prose instead.
+    if (!isFlatComposedSection) textParts.push(`${field.label}: ${strValue}.`);
+  }
+
+  if (isFlatComposedSection) {
+    const composed = composeSectionSentence(sectionKey!, scope, templateFields, "");
+    return { fields, damages, reportText: composed ?? textParts.join("\n\n") };
   }
 
   // "\n\n" so multiple instances (several driveways, each elevation, each

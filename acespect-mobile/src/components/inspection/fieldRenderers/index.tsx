@@ -42,13 +42,20 @@ export function FieldListRenderer({
   showMissing?: boolean;
 }) {
   const visible = [...fields].filter((f) => isGateSatisfied(f, scope)).sort((a, b) => a.order - b.order);
+  // A section-letter band only earns its place when it's actually dividing
+  // this list into more than one named group -- a template where every
+  // field shares the same letter (e.g. Job Information's whole form under
+  // "A") would otherwise show a single, meaningless "SECTION A" banner.
+  const distinctLetters = new Set(visible.map((f) => f.sectionLetter).filter(Boolean));
+  const lettersAreMeaningful = distinctLetters.size > 1;
   let lastLetter: string | undefined;
+
   return (
     <>
       {visible.map((field) => {
         const Renderer = FIELD_RENDERERS[field.type];
         if (!Renderer) return null;
-        const showLetterHeader = field.sectionLetter && field.sectionLetter !== lastLetter;
+        const showLetterHeader = lettersAreMeaningful && field.sectionLetter && field.sectionLetter !== lastLetter;
         lastLetter = field.sectionLetter;
         return (
           <React.Fragment key={field.key}>
@@ -285,7 +292,13 @@ function FixedTabsRenderer({ field, value, onChange, path, showMissing, missing 
         <View style={styles.instanceCard}>
           <FieldListRenderer
             fields={itemFields}
-            scope={record[active.key] ?? {}}
+            // `__instanceKey` is synthetic -- not a real template field, never
+            // written back by any renderer (nothing has that key) -- injected
+            // purely so an itemField can `gate` on which fixed instance it's
+            // currently being asked within (e.g. "Party wall abutting next
+            // property?" only makes physical sense on a Left/Right elevation,
+            // never Front/Rear: gate {fieldKey:"__instanceKey", equalsAny:["left","right"]}).
+            scope={{ ...(record[active.key] ?? {}), __instanceKey: active.key }}
             onChange={(k, v) => onChange({ ...record, [active.key]: { ...(record[active.key] ?? {}), [k]: v } })}
             path={[...path, active.key]}
             showMissing={showMissing}
@@ -337,10 +350,16 @@ function humanizeList(values: string[]): string {
 }
 
 /**
- * A Part's fields split into always-visible "lead" fields plus a tap-to-open
- * list of the categories the inspector checked off in the selector
- * (chip-multiselect) field -- each opens in its own full-screen form instead
- * of every selected category's fields piling up inline.
+ * A Part's fields split into always-visible "lead" fields plus a tab strip,
+ * one tab per category the inspector checked off in the selector
+ * (chip-multiselect) field -- switching categories swaps which group's
+ * fields render inline below the strip, no per-category modal round-trip
+ * (was: tap a row, open a full-screen form, back out, tap the next row).
+ * A tab's label turns red once the inspector has tried to leave the section
+ * (`showMissing`) and that category still has an unanswered required field --
+ * same "missing" signal every other field in the app already uses, just
+ * surfaced on the tab itself so an incomplete category is visible without
+ * having to open it first.
  */
 function CategoryNavForm({
   itemFields,
@@ -362,68 +381,52 @@ function CategoryNavForm({
   const groups = computeCategoryGroups(itemFields, selectorField);
   const selectedRaw = scope[selectorFieldKey];
   const selected = Array.isArray(selectedRaw) ? (selectedRaw as string[]) : [];
-  const [openLetter, setOpenLetter] = useState<string | null>(null);
-  const openGroup = groups.find((g) => g.letter === openLetter);
+  const selectedGroups = groups.filter((g) => selected.includes(g.equalsValue));
+  const [activeLetter, setActiveLetter] = useState<string | null>(null);
+  const active = selectedGroups.find((g) => g.letter === activeLetter) ?? selectedGroups[0];
 
   return (
     <>
       <FieldListRenderer fields={leadFields} scope={scope} onChange={onChange} path={path} showMissing={showMissing} />
-      {selected.length > 0 && (
+      {selectedGroups.length > 0 && (
         <View style={styles.categoryNavBlock}>
           <Text style={styles.groupLabel}>Fill in each selected item</Text>
-          {groups
-            .filter((g) => selected.includes(g.equalsValue))
-            .map((g) => {
-              const filled = g.fields.some((f) => isAnswered(scope[f.key]));
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabStrip}>
+            {selectedGroups.map((g) => {
+              const isActive = g.letter === active?.letter;
+              const incomplete = !!showMissing && g.fields.some((f) => isFieldMissing(f, g.fields, scope));
               return (
-                <Pressable key={g.letter} style={styles.categoryRow} onPress={() => setOpenLetter(g.letter)}>
-                  <View style={styles.instanceHeaderTitleRow}>
-                    <Ionicons
-                      name={filled ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={18}
-                      color={filled ? colors.barBlue : colors.textMuted}
-                    />
-                    <Text style={styles.categoryRowLabel}>{g.label}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                <Pressable
+                  key={g.letter}
+                  onPress={() => setActiveLetter(g.letter)}
+                  style={[styles.tab, isActive && styles.tabActive, incomplete && styles.tabIncomplete]}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      isActive && styles.tabTextActive,
+                      incomplete && styles.tabTextIncomplete,
+                    ]}
+                  >
+                    {g.label}
+                  </Text>
                 </Pressable>
               );
             })}
-        </View>
-      )}
-      <Modal visible={!!openGroup} animationType="slide" onRequestClose={() => setOpenLetter(null)}>
-        <SafeAreaView style={styles.categoryModalRoot} edges={['top', 'bottom']}>
-          <View style={styles.categoryModalHeader}>
-            <Pressable onPress={() => setOpenLetter(null)} hitSlop={8} style={styles.categoryModalBack}>
-              <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
-              <Text style={styles.categoryModalBackText}>Back</Text>
-            </Pressable>
-            <Text style={styles.categoryModalTitle} numberOfLines={1}>{openGroup?.label}</Text>
-            <View style={styles.categoryModalBack} />
-          </View>
-          <ScrollView style={styles.categoryModalBody} contentContainerStyle={styles.categoryModalBodyContent}>
-            {openGroup && (
+          </ScrollView>
+          {active && (
+            <View style={styles.instanceCard}>
               <FieldListRenderer
-                fields={openGroup.fields}
+                fields={active.fields}
                 scope={scope}
                 onChange={onChange}
-                path={[...path, openGroup.letter]}
+                path={[...path, active.letter]}
                 showMissing={showMissing}
               />
-            )}
-          </ScrollView>
-          <View style={styles.categoryModalFooter}>
-            <Button label="Back" variant="outline" leftIcon="chevron-back" fitContent onPress={() => setOpenLetter(null)} />
-            <Button
-              label="Next"
-              variant="primaryGradient"
-              rightIcon="checkmark"
-              style={styles.categoryModalFooterNext}
-              onPress={() => setOpenLetter(null)}
-            />
-          </View>
-        </SafeAreaView>
-      </Modal>
+            </View>
+          )}
+        </View>
+      )}
     </>
   );
 }
@@ -545,7 +548,16 @@ function FixedListRenderer({ field, value, onChange, path, showMissing, missing 
             {open && (
               <FieldListRenderer
                 fields={itemFields}
-                scope={record[open.key] ?? {}}
+                // The title field (roomName) shows the instance's standard
+                // name by default rather than sitting empty -- inspectors
+                // couldn't see what name they'd end up with. Display-only:
+                // nothing is written to the answer tree unless they actually
+                // edit it, so "blank = standard name" still holds if untouched.
+                scope={
+                  titleKey && !customName(open.key)
+                    ? { ...(record[open.key] ?? {}), [titleKey]: open.label }
+                    : record[open.key] ?? {}
+                }
                 onChange={(k, v) => onChange({ ...record, [open.key]: { ...(record[open.key] ?? {}), [k]: v } })}
                 path={[...path, open.key]}
                 showMissing={showMissing}
@@ -584,12 +596,23 @@ function StripListRenderer({ field, value, onChange, path, scope, showMissing, m
   const categoryNav = field.repeat?.categoryNav;
   const [openIdx, setOpenIdx] = useState<number | null>(null);
 
+  // "Part A", "Part B", ... when this group has a titleFieldKey -- the noun
+  // comes from repeat.itemNoun when a template sets it, else the addButtonLabel
+  // minus its "Add " prefix (e.g. "Add Part" -> "Part"), which every template
+  // using titleFieldKey here already has to set anyway. Mirrors FixedListRenderer's
+  // own default-name pattern (see its customName()) for the fixed-instance case;
+  // this is StripListRenderer's equivalent for a freely addable list.
+  function defaultInstanceLabel(idx: number): string {
+    const noun = field.repeat?.itemNoun ?? field.repeat?.addButtonLabel?.replace(/^Add\s+/i, '') ?? field.label;
+    return `${noun} ${String.fromCharCode(65 + idx)}`;
+  }
+
   function titleFor(instScope: AnswerTree, idx: number): string {
     const titleKey = field.repeat?.titleFieldKey;
     const customTitle = titleKey ? (instScope[titleKey] as string | undefined) : undefined;
-    return customTitle?.trim()
-      ? customTitle
-      : field.type === 'damage-list' ? `Item ${idx + 1}` : `${field.label} ${idx + 1}`;
+    if (customTitle?.trim()) return customTitle;
+    if (field.type === 'damage-list') return `Item ${idx + 1}`;
+    return titleKey ? defaultInstanceLabel(idx) : `${field.label} ${idx + 1}`;
   }
 
   function updateInstance(idx: number, k: string, v: AnswerValue) {
@@ -654,12 +677,21 @@ function StripListRenderer({ field, value, onChange, path, scope, showMissing, m
               <View style={styles.categoryModalBack} />
             </View>
             <ScrollView style={styles.categoryModalBody} contentContainerStyle={styles.categoryModalBodyContent}>
-              {openInst && openIdx !== null && (
-                categoryNav ? (
+              {openInst && openIdx !== null && (() => {
+                // Display-only default so a new instance's name field isn't
+                // just sitting blank -- nothing is written to the answer
+                // tree unless the inspector actually edits it, so "blank =
+                // standard name" still holds if untouched (same contract as
+                // FixedListRenderer's own version of this below).
+                const titleKey = field.repeat?.titleFieldKey;
+                const prefilledScope = titleKey && !(openInst[titleKey] as string | undefined)?.trim()
+                  ? { ...openInst, [titleKey]: defaultInstanceLabel(openIdx) }
+                  : openInst;
+                return categoryNav ? (
                   <CategoryNavForm
                     itemFields={itemFields}
                     selectorFieldKey={categoryNav.selectorFieldKey}
-                    scope={openInst}
+                    scope={prefilledScope}
                     onChange={(k, v) => updateInstance(openIdx, k, v)}
                     path={[...path, String(openIdx)]}
                     showMissing={showMissing}
@@ -667,13 +699,13 @@ function StripListRenderer({ field, value, onChange, path, scope, showMissing, m
                 ) : (
                   <FieldListRenderer
                     fields={itemFields}
-                    scope={openInst}
+                    scope={prefilledScope}
                     onChange={(k, v) => updateInstance(openIdx, k, v)}
                     path={[...path, String(openIdx)]}
                     showMissing={showMissing}
                   />
-                )
-              )}
+                );
+              })()}
             </ScrollView>
             <View style={styles.categoryModalFooter}>
               <Button label="Back" variant="outline" leftIcon="chevron-back" fitContent onPress={() => setOpenIdx(null)} />
@@ -798,6 +830,10 @@ const styles = StyleSheet.create({
   tabActive: { borderColor: colors.barBlue, backgroundColor: colors.accentBlue },
   tabText: { ...typography.bodySm, color: colors.textSecondary },
   tabTextActive: { color: colors.barBlue, fontWeight: '700' },
+  // Stays visible even on the active tab, so switching to an incomplete
+  // category doesn't make its incompleteness disappear.
+  tabIncomplete: { borderColor: colors.danger },
+  tabTextIncomplete: { color: colors.danger },
   instanceCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,

@@ -8,42 +8,42 @@ function Block({ block }: { block: ScopeBlock }) {
   switch (block.kind) {
     case "section":
       return (
-        <div style={{ display: "flex", gap: "10px", fontWeight: 700, color: reportTokens.accent, margin: "22px 0 9px" }}>
+        <div style={{ display: "flex", gap: "10px", fontWeight: 700, color: reportTokens.ink, margin: "18px 0 7px" }}>
           <span style={{ width: `${NUM_W}px`, flexShrink: 0 }}>{block.n}.</span>
-          <span style={{ letterSpacing: "0.02em" }}>{block.title}</span>
+          <span>{block.title}</span>
         </div>
       );
     case "subheading":
+      // Not bold in the reference (e.g. 7.1 / 7.3 / 7.5 / 7.6) -- only the
+      // top-level numbered section headings above are.
       return (
-        <div style={{ display: "flex", gap: "10px", margin: "12px 0 6px" }}>
-          <span style={{ width: `${NUM_W}px`, flexShrink: 0, fontWeight: 700, color: reportTokens.inkMuted }}>{block.n}</span>
-          <span style={{ fontWeight: 700 }}>{block.title}</span>
+        <div style={{ display: "flex", gap: "10px", margin: "10px 0 5px" }}>
+          <span style={{ width: `${NUM_W}px`, flexShrink: 0, color: reportTokens.ink }}>{block.n}</span>
+          <span>{block.title}</span>
         </div>
       );
     case "clause":
       return (
-        <div style={{ display: "flex", gap: "10px", margin: "0 0 10px" }}>
-          <span style={{ width: `${NUM_W}px`, flexShrink: 0, color: reportTokens.inkMuted }}>{block.n}</span>
-          <p style={{ margin: 0, flex: 1, textAlign: "justify", lineHeight: 1.6 }}>{block.text}</p>
+        <div style={{ display: "flex", gap: "10px", margin: "0 0 8px" }}>
+          <span style={{ width: `${NUM_W}px`, flexShrink: 0, color: reportTokens.ink }}>{block.n}</span>
+          <p style={{ margin: 0, flex: 1, textAlign: "left", lineHeight: 1.4 }}>{block.text}</p>
         </div>
       );
     case "para":
-      return (
-        <p style={{ margin: "0 0 10px", paddingLeft: `${NUM_W + 10}px`, textAlign: "justify", lineHeight: 1.6 }}>
-          {block.text}
-        </p>
-      );
+      // Starts at the left margin, not indented under the heading -- only
+      // sub-clauses (above) and list items (below) are indented.
+      return <p style={{ margin: "0 0 8px", textAlign: "left", lineHeight: 1.4 }}>{block.text}</p>;
     case "list":
       return (
-        <div style={{ paddingLeft: `${NUM_W + 10}px`, margin: "0 0 10px" }}>
-          {block.intro && <p style={{ margin: "0 0 6px", textAlign: "justify", lineHeight: 1.6 }}>{block.intro}</p>}
+        <div style={{ margin: "0 0 8px" }}>
+          {block.intro && <p style={{ margin: "0 0 5px", textAlign: "left", lineHeight: 1.4 }}>{block.intro}</p>}
           {block.items.map((it) => (
-            <div key={it.label} style={{ display: "flex", gap: "8px", margin: "0 0 6px" }}>
-              <span style={{ width: `${LIST_LABEL_W}px`, flexShrink: 0, color: reportTokens.inkMuted }}>{it.label}</span>
+            <div key={it.label} style={{ display: "flex", gap: "8px", margin: "0 0 5px" }}>
+              <span style={{ width: `${LIST_LABEL_W}px`, flexShrink: 0, color: reportTokens.ink }}>{it.label}</span>
               <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, textAlign: "justify", lineHeight: 1.6 }}>{it.text}</p>
+                <p style={{ margin: 0, textAlign: "left", lineHeight: 1.4 }}>{it.text}</p>
                 {it.note && (
-                  <p style={{ margin: "3px 0 0", paddingLeft: "16px", lineHeight: 1.5, color: reportTokens.inkMuted }}>
+                  <p style={{ margin: "3px 0 0", paddingLeft: "16px", lineHeight: 1.4, color: reportTokens.ink }}>
                     {it.note}
                   </p>
                 )}
@@ -58,17 +58,14 @@ function Block({ block }: { block: ScopeBlock }) {
 /** The standard SCOPE / limitations appendix. `compact` shrinks it for the panel. */
 export function ReportScope({ compact = false }: { compact?: boolean }) {
   return (
-    <div style={reportTextStyle(compact, { normal: "14px", compact: "11.5px" })}>
+    <div style={reportTextStyle(compact, { normal: "12.5px", compact: "11px" })}>
       <h2
         style={{
           textAlign: "center",
-          fontWeight: 800,
-          color: reportTokens.accent,
-          fontSize: compact ? "16px" : "22px",
-          letterSpacing: "0.02em",
-          margin: "8px 0 20px",
-          paddingBottom: "10px",
-          borderBottom: `2px solid ${reportTokens.accent}`,
+          fontWeight: 700,
+          color: reportTokens.ink,
+          fontSize: compact ? "15px" : "20px",
+          margin: "8px 0 16px",
         }}
       >
         {SCOPE_TITLE}

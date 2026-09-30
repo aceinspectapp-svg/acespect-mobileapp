@@ -102,7 +102,7 @@ export function PillSelectFieldRenderer({ field, value, onChange, missing }: Fie
   return (
     <View style={blockStyle(missing)}>
       <FieldLabel required={field.required}>{field.label}</FieldLabel>
-      <PillSelect options={field.options ?? []} value={asString(value)} onChange={onChange} />
+      <PillSelect options={field.options ?? []} value={asString(value)} onChange={onChange} allowOther={field.allowOther} />
     </View>
   );
 }
