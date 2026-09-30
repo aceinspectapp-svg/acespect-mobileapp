@@ -600,12 +600,23 @@ function StripListRenderer({ field, value, onChange, path, scope, showMissing, m
   const categoryNav = field.repeat?.categoryNav;
   const [openIdx, setOpenIdx] = useState<number | null>(null);
 
+  // "Part A", "Part B", ... when this group has a titleFieldKey -- the noun
+  // comes from repeat.itemNoun when a template sets it, else the addButtonLabel
+  // minus its "Add " prefix (e.g. "Add Part" -> "Part"), which every template
+  // using titleFieldKey here already has to set anyway. Mirrors FixedListRenderer's
+  // own default-name pattern (see its customName()) for the fixed-instance case;
+  // this is StripListRenderer's equivalent for a freely addable list.
+  function defaultInstanceLabel(idx: number): string {
+    const noun = field.repeat?.itemNoun ?? field.repeat?.addButtonLabel?.replace(/^Add\s+/i, '') ?? field.label;
+    return `${noun} ${String.fromCharCode(65 + idx)}`;
+  }
+
   function titleFor(instScope: AnswerTree, idx: number): string {
     const titleKey = field.repeat?.titleFieldKey;
     const customTitle = titleKey ? (instScope[titleKey] as string | undefined) : undefined;
-    return customTitle?.trim()
-      ? customTitle
-      : field.type === 'damage-list' ? `Item ${idx + 1}` : `${field.label} ${idx + 1}`;
+    if (customTitle?.trim()) return customTitle;
+    if (field.type === 'damage-list') return `Item ${idx + 1}`;
+    return titleKey ? defaultInstanceLabel(idx) : `${field.label} ${idx + 1}`;
   }
 
   function updateInstance(idx: number, k: string, v: AnswerValue) {
@@ -670,12 +681,21 @@ function StripListRenderer({ field, value, onChange, path, scope, showMissing, m
               <View style={styles.categoryModalBack} />
             </View>
             <ScrollView style={styles.categoryModalBody} contentContainerStyle={styles.categoryModalBodyContent}>
-              {openInst && openIdx !== null && (
-                categoryNav ? (
+              {openInst && openIdx !== null && (() => {
+                // Display-only default so a new instance's name field isn't
+                // just sitting blank -- nothing is written to the answer
+                // tree unless the inspector actually edits it, so "blank =
+                // standard name" still holds if untouched (same contract as
+                // FixedListRenderer's own version of this below).
+                const titleKey = field.repeat?.titleFieldKey;
+                const prefilledScope = titleKey && !(openInst[titleKey] as string | undefined)?.trim()
+                  ? { ...openInst, [titleKey]: defaultInstanceLabel(openIdx) }
+                  : openInst;
+                return categoryNav ? (
                   <CategoryNavForm
                     itemFields={itemFields}
                     selectorFieldKey={categoryNav.selectorFieldKey}
-                    scope={openInst}
+                    scope={prefilledScope}
                     onChange={(k, v) => updateInstance(openIdx, k, v)}
                     path={[...path, String(openIdx)]}
                     showMissing={showMissing}
@@ -683,13 +703,13 @@ function StripListRenderer({ field, value, onChange, path, scope, showMissing, m
                 ) : (
                   <FieldListRenderer
                     fields={itemFields}
-                    scope={openInst}
+                    scope={prefilledScope}
                     onChange={(k, v) => updateInstance(openIdx, k, v)}
                     path={[...path, String(openIdx)]}
                     showMissing={showMissing}
                   />
-                )
-              )}
+                );
+              })()}
             </ScrollView>
             <View style={styles.categoryModalFooter}>
               <Button label="Back" variant="outline" leftIcon="chevron-back" fitContent onPress={() => setOpenIdx(null)} />
