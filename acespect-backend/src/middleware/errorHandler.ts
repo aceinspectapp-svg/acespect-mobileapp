@@ -15,7 +15,7 @@ export function notFound(req: Request, _res: Response, next: NextFunction): void
  * error handler.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
+export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
   let status = 500;
   let message = 'Internal server error';
   let code = 'INTERNAL_ERROR';
@@ -43,6 +43,15 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   if (status >= 500) {
     // eslint-disable-next-line no-console
     console.error('[error]', err);
+  } else {
+    // 4xx never used to be logged at all -- a mobile submission rejected by
+    // validate() (schema mismatch, bad field) failed completely silently
+    // server-side: the phone would queue it and retry forever, always
+    // hitting the same rejection, with nothing in `railway logs` to show it
+    // was even trying. Concise on purpose (no stack -- this isn't a bug in
+    // this server, just a bad request), but enough to trace what and who.
+    // eslint-disable-next-line no-console
+    console.warn('[reject]', `${req.method} ${req.originalUrl}`, code, message, details ? JSON.stringify(details) : '');
   }
 
   res.status(status).json({

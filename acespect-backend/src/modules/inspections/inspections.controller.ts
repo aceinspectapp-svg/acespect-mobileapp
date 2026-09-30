@@ -13,12 +13,33 @@ function photoIdFromUrl(url: string): string | null {
   return match?.[1] ?? null;
 }
 
+/**
+ * Every one of these is a step in mobile's local-draft -> queued -> uploaded
+ * -> saved pipeline (see acespect-mobile's syncManager.ts) where "it never
+ * showed up" has historically meant digging through a raw DB query to find
+ * out what actually happened. `[submit]` tags them all the same way so
+ * `railway logs` (or a `--filter '[submit]'` search) traces one inspection's
+ * whole path end to end -- received, then either saved or rejected.
+ */
+function logSubmit(event: string, detail: Record<string, unknown>): void {
+  // eslint-disable-next-line no-console
+  console.log('[submit]', event, JSON.stringify(detail));
+}
+
 /** Thin HTTP layer for inspection submission + lookup. */
 export const inspectionsController = {
   // Saves as a DRAFT the inspector still owns — review only starts at finalize.
   submit: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
+    const body = req.body as { jobNo?: string; id?: string; sections?: unknown[] };
+    logSubmit('received', {
+      inspectorId: req.user.id,
+      jobNo: body.jobNo,
+      draftId: body.id,
+      sections: body.sections?.length ?? 0,
+    });
     const { inspection } = await inspectionsService.submit(req.user.id, req.body);
+    logSubmit('saved', { inspectionId: inspection.id, status: inspection.status, jobNo: inspection.jobNo });
     res.status(201).json({ inspectionId: inspection.id, status: inspection.status });
   }),
 
@@ -27,6 +48,7 @@ export const inspectionsController = {
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
     const inspection = await inspectionsService.update(id, req.user.id, req.body);
+    logSubmit('updated', { inspectionId: inspection.id, status: inspection.status });
     res.status(200).json({ inspectionId: inspection.id, status: inspection.status });
   }),
 
@@ -36,6 +58,7 @@ export const inspectionsController = {
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
     const { inspection, reviewJob } = await inspectionsService.finalize(id, req.user.id);
+    logSubmit('finalized', { inspectionId: inspection.id, reviewJobId: reviewJob.id, status: inspection.status });
     res.status(202).json({
       inspectionId: inspection.id,
       reviewJobId: reviewJob.id,
@@ -104,6 +127,7 @@ export const inspectionsController = {
       inspectionId,
       sectionKey,
     );
+    logSubmit('photo-uploaded', { inspectionId, sectionKey, bytes: file.buffer.length, photoId: result.id });
     res.status(201).json(result);
   }),
 
