@@ -37892,17 +37892,20 @@
               {
                 "label": "Numerous cracking throughout",
                 "value": "item2"
+              },
+              {
+                "value": "other",
+                "label": "Other"
               }
             ],
             "required": true,
-            "sectionLetter": "Footpaths & Crossovers",
-            "allowOther": true
+            "sectionLetter": "Footpaths & Crossovers"
           },
           {
             "key": "footpaths_summaryOther",
             "gate": {
-              "equals": "item0",
-              "fieldKey": "itemsPresent"
+              "fieldKey": "footpaths_summary",
+              "equals": "other"
             },
             "type": "text",
             "label": "Other (define)",
@@ -38640,17 +38643,20 @@
               {
                 "label": "Numerous cracking throughout",
                 "value": "item2"
+              },
+              {
+                "value": "other",
+                "label": "Other"
               }
             ],
             "required": true,
-            "sectionLetter": "Nature Strip, Light Posts, Signage, Trees",
-            "allowOther": true
+            "sectionLetter": "Nature Strip, Light Posts, Signage, Trees"
           },
           {
             "key": "naturestrip_summaryOther",
             "gate": {
-              "equals": "item1",
-              "fieldKey": "itemsPresent"
+              "fieldKey": "naturestrip_summary",
+              "equals": "other"
             },
             "type": "text",
             "label": "Other (define)",
@@ -39388,17 +39394,20 @@
               {
                 "label": "Numerous cracking throughout",
                 "value": "item2"
+              },
+              {
+                "value": "other",
+                "label": "Other"
               }
             ],
             "required": true,
-            "sectionLetter": "Kerbs & Channel",
-            "allowOther": true
+            "sectionLetter": "Kerbs & Channel"
           },
           {
             "key": "kerbs_summaryOther",
             "gate": {
-              "equals": "item2",
-              "fieldKey": "itemsPresent"
+              "fieldKey": "kerbs_summary",
+              "equals": "other"
             },
             "type": "text",
             "label": "Other (define)",
@@ -40136,17 +40145,20 @@
               {
                 "label": "Numerous cracking throughout",
                 "value": "item2"
+              },
+              {
+                "value": "other",
+                "label": "Other"
               }
             ],
             "required": true,
-            "sectionLetter": "Road Surface & Parking Bays",
-            "allowOther": true
+            "sectionLetter": "Road Surface & Parking Bays"
           },
           {
             "key": "roadsurface_summaryOther",
             "gate": {
-              "equals": "item3",
-              "fieldKey": "itemsPresent"
+              "fieldKey": "roadsurface_summary",
+              "equals": "other"
             },
             "type": "text",
             "label": "Other (define)",
@@ -42248,17 +42260,20 @@
               {
                 "label": "Numerous cracking throughout",
                 "value": "item2"
+              },
+              {
+                "value": "other",
+                "label": "Other"
               }
             ],
             "required": true,
-            "sectionLetter": "Left Side Fences & Walls of Laneway",
-            "allowOther": true
+            "sectionLetter": "Left Side Fences & Walls of Laneway"
           },
           {
             "key": "fenceleft_summaryOther",
             "gate": {
-              "equals": "item4",
-              "fieldKey": "itemsPresent"
+              "fieldKey": "fenceleft_summary",
+              "equals": "other"
             },
             "type": "text",
             "label": "Other (define)",
@@ -42992,17 +43007,20 @@
               {
                 "label": "Numerous cracking throughout",
                 "value": "item2"
+              },
+              {
+                "value": "other",
+                "label": "Other"
               }
             ],
             "required": true,
-            "sectionLetter": "Right Side Fences & Walls of Laneway",
-            "allowOther": true
+            "sectionLetter": "Right Side Fences & Walls of Laneway"
           },
           {
             "key": "fenceright_summaryOther",
             "gate": {
-              "equals": "item5",
-              "fieldKey": "itemsPresent"
+              "fieldKey": "fenceright_summary",
+              "equals": "other"
             },
             "type": "text",
             "label": "Other (define)",
@@ -43740,17 +43758,20 @@
               {
                 "label": "Numerous cracking throughout",
                 "value": "item2"
+              },
+              {
+                "value": "other",
+                "label": "Other"
               }
             ],
             "required": true,
-            "sectionLetter": "Laneway Surface",
-            "allowOther": true
+            "sectionLetter": "Laneway Surface"
           },
           {
             "key": "lanesurface_summaryOther",
             "gate": {
-              "equals": "item6",
-              "fieldKey": "itemsPresent"
+              "fieldKey": "lanesurface_summary",
+              "equals": "other"
             },
             "type": "text",
             "label": "Other (define)",
