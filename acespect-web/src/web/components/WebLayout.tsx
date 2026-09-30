@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router";
 import {
   LayoutDashboard, FileText, Users, Settings, LogOut,
-  Bell, BarChart3, ClipboardCheck, Bug,
+  Bell, BarChart3, ClipboardCheck, ShieldCheck, Bug,
 } from "lucide-react";
 import { AcespectLogo } from "../../components/AcespectLogo";
 import { useAppData } from "../data";
@@ -21,6 +21,7 @@ const ROLE_NAV: Record<Role, { to: string; icon: React.ElementType; label: strin
     { to: "/admin/dashboard",   icon: LayoutDashboard, label: "Dashboard" },
     { to: "/admin/inspections", icon: ClipboardCheck,  label: "Inspections" },
     { to: "/admin/templates",   icon: FileText,         label: "Templates" },
+    { to: "/admin/qc",          icon: ShieldCheck,      label: "QC" },
     { to: "/admin/users",       icon: Users,            label: "Users" },
     { to: "/admin/reports",     icon: BarChart3,        label: "Reports" },
     { to: "/admin/troubleshoot", icon: Bug,             label: "Troubleshoot" },
@@ -288,6 +289,38 @@ export function GhostBtn({ children, onClick }: { children: React.ReactNode; onC
     >
       {children}
     </button>
+  );
+}
+
+/* ─── QC sub-nav (Defects / Configuration / Field Users) ─────────── */
+export function QcSubNav() {
+  const location = useLocation();
+  const tabs = [
+    { to: "/admin/qc", label: "Defects" },
+    { to: "/admin/qc/config", label: "Configuration" },
+    { to: "/admin/qc/users", label: "Field Users" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
+      {tabs.map((t) => {
+        const active = location.pathname === t.to;
+        return (
+          <Link
+            key={t.to}
+            to={t.to}
+            style={{
+              padding: "7px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 600,
+              textDecoration: "none",
+              border: active ? "none" : "1px solid #e5e7eb",
+              background: active ? "#1a2a4a" : "white",
+              color: active ? "white" : "#374151",
+            }}
+          >
+            {t.label}
+          </Link>
+        );
+      })}
+    </div>
   );
 }
 

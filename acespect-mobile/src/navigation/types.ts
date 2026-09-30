@@ -11,6 +11,9 @@ export type AuthStackParamList = {
 
 /** Screens available once authenticated. */
 export type AppStackParamList = {
+  // Purpose gate — first screen after login. Chooses which flow to enter;
+  // does not itself belong to either one.
+  SelectPurpose: undefined;
   SelectInspectionType: undefined;
   // Sync/storage preferences — Wi-Fi-only upload toggle, local storage usage.
   Settings: undefined;
@@ -50,6 +53,14 @@ export type AppStackParamList = {
   CustomSection: { sectionKey: string; sectionName: string };
   // Final overview — receives the live completion map + job setup data.
   ReportSummary: { completed: Record<string, boolean>; data: JobSetupData };
+
+  // ─── QC flow — separate from the Houspect screens above, entered via
+  // SelectPurpose. See src/screens/qc/*. Client/project/property config and
+  // defect creation/assignment are admin-only now (acespect-web's QC
+  // section) — mobile is just "my assigned tasks" + posting updates.
+  QcTasksList: undefined;
+  QcTaskDetail: { taskId: string };
+  QcDefectDetail: { defectId: string };
 };
 
 export type AuthScreenProps<T extends keyof AuthStackParamList> =
