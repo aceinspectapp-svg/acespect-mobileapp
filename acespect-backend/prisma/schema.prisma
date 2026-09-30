@@ -12,11 +12,15 @@ datasource db {
 
 /// Single role for v1 (INSPECTOR). The enum is defined wide so RBAC can
 /// expand to ADMIN / REVIEWER / CLIENT without a data migration.
+/// FIELD_USER: a QC-only field worker (Trade/Builder) created by an ADMIN
+/// from the dashboard -- distinct from INSPECTOR (a Houspect account), but
+/// either role can be a QC defect/task assignee.
 enum Role {
   INSPECTOR
   ADMIN
   REVIEWER
   CLIENT
+  FIELD_USER
 }
 
 model User {
@@ -48,6 +52,10 @@ model User {
   reviewDecisions     ReviewDecision[]     @relation("ReviewerDecisions")
   createdTemplates    InspectionTemplate[]
   templateAcceptances TemplateAcceptance[]
+  createdQcDefects    QcDefect[]           @relation("QcDefectCreatedBy")
+  assignedQcDefects   QcDefect[]           @relation("QcDefectAssignedTo")
+  assignedQcTasks     QcTask[]             @relation("QcTaskAssignedTo")
+  qcTaskUpdates       QcTaskUpdate[]
 
   @@map("users")
 }
@@ -385,4 +393,182 @@ model Photo {
   createdAt   DateTime @default(now())
 
   @@map("photos")
+}
+
+// ───────────────────────── QC — admin-configured defect tracking ──────────────────
+// Client -> Project -> Property hierarchy, plus admin-defined severity and
+// defect-status lifecycles, and the defect/task/update records themselves.
+// An ADMIN (web dashboard) owns configuration, defect creation, and
+// assignment; a field user (INSPECTOR or FIELD_USER) only sees tasks
+// assigned to them and can post updates / mark their own task complete.
+// Ported from the mobile-only prototype in acespect-mobile's QcDataContext
+// and constants/qcData.ts -- same business rules, now shared/persisted.
+
+model QcClient {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects QcProject[]
+
+  @@map("qc_clients")
+}
+
+model QcProject {
+  id        String   @id @default(uuid())
+  name      String
+  client    QcClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  properties QcProperty[]
+
+  @@index([clientId])
+  @@map("qc_projects")
+}
+
+/// House / Apartment / Townhouse / Duplex, admin-editable (label/icon/order).
+model QcPropertyType {
+  id    String @id @default(uuid())
+  key   String @unique
+  label String
+  icon  String @default("home-outline")
+  order Int    @default(0)
+
+  properties QcProperty[]
+
+  @@map("qc_property_types")
+}
+
+model QcProperty {
+  id             String         @id @default(uuid())
+  name           String
+  project        QcProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId      String
+  propertyType   QcPropertyType @relation(fields: [propertyTypeId], references: [id])
+  propertyTypeId String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  defects QcDefect[]
+
+  @@index([projectId])
+  @@map("qc_properties")
+}
+
+/// Major / Moderate / Minor / Observation, admin-editable.
+model QcSeverity {
+  id    String @id @default(uuid())
+  key   String @unique
+  label String
+  color String
+  order Int    @default(0)
+
+  defects QcDefect[]
+
+  @@map("qc_severities")
+}
+
+/// The 11-stage defect lifecycle (Open -> ... -> Verified/Closed -> ...),
+/// admin-editable. `meaning` is the human-readable explanation shown in the
+/// status-change sheet.
+model QcStatus {
+  id      String @id @default(uuid())
+  key     String @unique
+  label   String
+  color   String
+  meaning String @default("")
+  order   Int    @default(0)
+
+  defects QcDefect[]
+
+  @@map("qc_statuses")
+}
+
+/// A logged defect. Only an ADMIN creates/edits/reassigns/reclassifies one --
+/// enforced at the API layer (requireRole('ADMIN')), not by this table shape.
+model QcDefect {
+  id              String     @id @default(uuid())
+  property        QcProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId      String
+  location        String
+  locationDetails String?
+  summary         String
+  severity        QcSeverity @relation(fields: [severityId], references: [id])
+  severityId      String
+  status          QcStatus   @relation(fields: [statusId], references: [id])
+  statusId        String
+  assignedTo      User?      @relation("QcDefectAssignedTo", fields: [assignedToId], references: [id])
+  assignedToId    String?
+  dueDate         DateTime?
+  createdBy       User       @relation("QcDefectCreatedBy", fields: [createdById], references: [id])
+  createdById     String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  tasks QcTask[]
+
+  @@index([propertyId])
+  @@index([assignedToId])
+  @@index([statusId])
+  @@map("qc_defects")
+}
+
+/// Simple 3-stage assignment-progress flag -- distinct from QcStatus's rich,
+/// admin-configurable defect lifecycle above.
+enum QcTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum QcTaskPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+/// The assignment wrapper around a QcDefect -- created automatically
+/// alongside the defect (see qc.service.ts createDefect) with the same
+/// assignee. Exists separately from QcDefect so "my assigned work" (task)
+/// stays conceptually distinct from "the formal defect record".
+model QcTask {
+  id           String         @id @default(uuid())
+  defect       QcDefect       @relation(fields: [defectId], references: [id], onDelete: Cascade)
+  defectId     String
+  assignedTo   User           @relation("QcTaskAssignedTo", fields: [assignedToId], references: [id])
+  assignedToId String
+  priority     QcTaskPriority @default(LOW)
+  status       QcTaskStatus   @default(PENDING)
+  dueDate      DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  updates QcTaskUpdate[]
+
+  @@index([defectId])
+  @@index([assignedToId])
+  @@map("qc_tasks")
+}
+
+/// One site-visit entry in a task's activity log. `photoUrls` holds
+/// `/api/v1/media/:id` proxy links (same convention as Section/Damage.photos
+/// elsewhere in this schema -- a JSON array of media URLs, not a relational
+/// join to Photo) built from the same lib/storage.ts upload pipeline.
+model QcTaskUpdate {
+  id            String       @id @default(uuid())
+  task          QcTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId        String
+  author        User         @relation(fields: [authorId], references: [id])
+  authorId      String
+  comment       String       @default("")
+  photoUrls     Json         @default("[]")
+  statusAfter   QcTaskStatus
+  statusChanged Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+
+  @@index([taskId])
+  @@map("qc_task_updates")
 }

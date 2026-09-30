@@ -35,6 +35,9 @@ const ROLE_TO_WEB = {
   REVIEWER: 'reviewer',
   INSPECTOR: 'inspector',
   CLIENT: 'inspector',
+  // QC-only field worker -- doesn't participate in this Houspect review
+  // flow at all, but needs a value here to keep this map exhaustive.
+  FIELD_USER: 'inspector',
 } as const;
 
 function initials(name: string | null): string {

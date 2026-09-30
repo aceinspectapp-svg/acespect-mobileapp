@@ -14,6 +14,9 @@ import { AdminTemplateProfiles } from "./web/pages/admin/AdminTemplateProfiles";
 import { AdminTemplateSections } from "./web/pages/admin/AdminTemplateSections";
 import { AdminTemplateAdoption } from "./web/pages/admin/AdminTemplateAdoption";
 import { AdminTemplateEditor } from "./web/pages/admin/AdminTemplateEditor";
+import { AdminQcDefects } from "./web/pages/admin/AdminQcDefects";
+import { AdminQcConfig } from "./web/pages/admin/AdminQcConfig";
+import { AdminQcUsers } from "./web/pages/admin/AdminQcUsers";
 import { ReportView } from "./web/pages/ReportView";
 import type { Role } from "./web/mockData";
 
@@ -70,6 +73,9 @@ export default function App() {
             <Route path="/admin/templates/:inspectionType/:propertyType" element={<AdminTemplateSections />} />
             <Route path="/admin/templates/:inspectionType/:propertyType/adoption" element={<AdminTemplateAdoption />} />
             <Route path="/admin/templates/:inspectionType/:propertyType/:sectionKey/:id" element={<AdminTemplateEditor />} />
+            <Route path="/admin/qc" element={<AdminQcDefects />} />
+            <Route path="/admin/qc/config" element={<AdminQcConfig />} />
+            <Route path="/admin/qc/users" element={<AdminQcUsers />} />
             <Route path="/admin/reports" element={<Placeholder title="Reports" />} />
             <Route path="/admin/settings" element={<Placeholder title="Settings" />} />
           </Route>

@@ -8,6 +8,7 @@ import type {
   TemplateField,
   TemplateSummaryRow,
 } from "./mockData";
+import type { QcConfigBundle, QcDefect, QcPerson } from "./qcTypes";
 
 export const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000/api/v1";
@@ -276,6 +277,55 @@ export const api = {
     req<{ adoption: TemplateAdoptionRow[] }>(
       `/templates/adoption/${encodeURIComponent(inspectionType)}/${encodeURIComponent(propertyType)}`,
     ).then((d) => d.adoption),
+
+  // ─── QC — admin config + defect assignment (see acespect-backend/src/modules/qc) ──
+  qc: {
+    getConfig: () => req<QcConfigBundle>("/qc/config"),
+    getDefects: () => req<{ defects: QcDefect[] }>("/qc/defects").then((d) => d.defects),
+    createDefect: (input: {
+      propertyId: string;
+      location: string;
+      locationDetails?: string;
+      summary: string;
+      severityId: string;
+      assignedToId: string;
+      dueDate?: string;
+    }) => req<{ defect: QcDefect }>("/qc/defects", { method: "POST", body: JSON.stringify(input) }).then((d) => d.defect),
+    updateDefect: (
+      id: string,
+      patch: Partial<{
+        location: string;
+        locationDetails: string;
+        summary: string;
+        severityId: string;
+        statusId: string;
+        assignedToId: string | null;
+        dueDate: string | null;
+      }>,
+    ) => req<{ defect: QcDefect }>(`/qc/defects/${id}`, { method: "PATCH", body: JSON.stringify(patch) }).then((d) => d.defect),
+
+    getAssignableUsers: () => req<{ users: QcPerson[] }>("/qc/users").then((d) => d.users),
+    createFieldUser: (input: { name: string; email: string; password: string }) =>
+      req<{ user: QcPerson }>("/qc/users", { method: "POST", body: JSON.stringify(input) }).then((d) => d.user),
+
+    createClient: (input: { name: string }) => req("/qc/clients", { method: "POST", body: JSON.stringify(input) }),
+    deleteClient: (id: string) => req(`/qc/clients/${id}`, { method: "DELETE" }),
+    createProject: (input: { name: string; clientId: string }) =>
+      req("/qc/projects", { method: "POST", body: JSON.stringify(input) }),
+    deleteProject: (id: string) => req(`/qc/projects/${id}`, { method: "DELETE" }),
+    createProperty: (input: { name: string; projectId: string; propertyTypeId: string }) =>
+      req("/qc/properties", { method: "POST", body: JSON.stringify(input) }),
+    deleteProperty: (id: string) => req(`/qc/properties/${id}`, { method: "DELETE" }),
+    createPropertyType: (input: { key: string; label: string; icon?: string }) =>
+      req("/qc/property-types", { method: "POST", body: JSON.stringify(input) }),
+    deletePropertyType: (id: string) => req(`/qc/property-types/${id}`, { method: "DELETE" }),
+    createSeverity: (input: { key: string; label: string; color: string }) =>
+      req("/qc/severities", { method: "POST", body: JSON.stringify(input) }),
+    deleteSeverity: (id: string) => req(`/qc/severities/${id}`, { method: "DELETE" }),
+    createStatus: (input: { key: string; label: string; color: string; meaning?: string }) =>
+      req("/qc/statuses", { method: "POST", body: JSON.stringify(input) }),
+    deleteStatus: (id: string) => req(`/qc/statuses/${id}`, { method: "DELETE" }),
+  },
 };
 
 /** One inspector's adoption status for a profile's set of section templates — see templates.service.ts `getAdoption`. */

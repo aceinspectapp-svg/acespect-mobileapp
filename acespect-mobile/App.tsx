@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import { InspectionDraftProvider } from './src/context/InspectionDraftContext';
+import { QcDataProvider } from './src/context/QcDataContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { database } from './src/db';
 import { initSyncManager } from './src/services/syncManager';
@@ -27,7 +28,9 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <InspectionDraftProvider>
-          <RootNavigator />
+          <QcDataProvider>
+            <RootNavigator />
+          </QcDataProvider>
         </InspectionDraftProvider>
       </AuthProvider>
     </SafeAreaProvider>

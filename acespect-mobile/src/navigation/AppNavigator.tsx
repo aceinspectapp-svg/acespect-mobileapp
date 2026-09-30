@@ -11,12 +11,17 @@ import { AddCustomSectionScreen } from '../screens/inspection/AddCustomSectionSc
 import { AssignedJobsScreen } from '../screens/inspection/AssignedJobsScreen';
 import { SettingsScreen } from '../screens/inspection/SettingsScreen';
 import { TemplateUpdatesScreen } from '../screens/inspection/TemplateUpdatesScreen';
+import { SelectPurposeScreen } from '../screens/SelectPurposeScreen';
+import { QcDefectDetailScreen } from '../screens/qc/DefectDetailScreen';
+import { QcTasksListScreen } from '../screens/qc/TasksListScreen';
+import { QcTaskDetailScreen } from '../screens/qc/TaskDetailScreen';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
 export function AppNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator initialRouteName="SelectPurpose" screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="SelectPurpose" component={SelectPurposeScreen} />
       <Stack.Screen name="SelectInspectionType" component={SelectInspectionTypeScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="TemplateUpdates" component={TemplateUpdatesScreen} />
@@ -207,6 +212,12 @@ export function AppNavigator() {
         )}
       </Stack.Screen>
       <Stack.Screen name="ReportSummary" component={ReportSummaryScreen} />
+
+      {/* ─── QC flow — "my tasks" only; config/creation/assignment live in
+          acespect-web's admin QC section now. ─────────────────────────── */}
+      <Stack.Screen name="QcTasksList" component={QcTasksListScreen} />
+      <Stack.Screen name="QcTaskDetail" component={QcTaskDetailScreen} />
+      <Stack.Screen name="QcDefectDetail" component={QcDefectDetailScreen} />
     </Stack.Navigator>
   );
 }
