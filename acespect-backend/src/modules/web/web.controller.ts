@@ -49,4 +49,16 @@ export const webController = {
     const damage = await webService.updateDamage(id, req.body);
     res.status(200).json({ damage });
   }),
+
+  listSubmissionLogs: asyncHandler(async (req: Request, res: Response) => {
+    const q = req.query as Record<string, string | undefined>;
+    const logs = await webService.listSubmissionLogs({
+      event: q.event || undefined,
+      inspectorId: q.inspectorId || undefined,
+      jobNo: q.jobNo || undefined,
+      since: q.since ? new Date(q.since) : undefined,
+      limit: q.limit ? Number(q.limit) : undefined,
+    });
+    res.status(200).json({ logs });
+  }),
 };

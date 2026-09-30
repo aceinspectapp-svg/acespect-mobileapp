@@ -200,6 +200,35 @@ async function updateInspection(id: string, input: InspectionUpdateInput) {
   return serializeInspection(row);
 }
 
+/**
+ * Admin-only troubleshooting feed: the mobile submit/update/finalize/photo
+ * pipeline's own trail (see lib/submissionLog.ts), newest first. Filters are
+ * all optional and combine with AND -- `event: 'rejected'` narrowed to one
+ * `jobNo` is exactly the "why didn't this inspector's job arrive" query this
+ * page exists for.
+ */
+async function listSubmissionLogs(filters: {
+  event?: string;
+  inspectorId?: string;
+  jobNo?: string;
+  since?: Date;
+  limit?: number;
+}) {
+  const where: Prisma.SubmissionLogEntryWhereInput = {
+    ...(filters.event ? { event: filters.event } : {}),
+    ...(filters.inspectorId ? { inspectorId: filters.inspectorId } : {}),
+    ...(filters.jobNo ? { jobNo: { contains: filters.jobNo, mode: 'insensitive' } } : {}),
+    ...(filters.since ? { createdAt: { gte: filters.since } } : {}),
+  };
+  const rows = await prisma.submissionLogEntry.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(filters.limit ?? 100, 500),
+    include: { inspector: { select: { id: true, name: true, email: true } } },
+  });
+  return rows;
+}
+
 export const webService = {
   listInspections,
   getInspection,
@@ -208,4 +237,5 @@ export const webService = {
   updateSection,
   updateDamage,
   updateInspection,
+  listSubmissionLogs,
 };

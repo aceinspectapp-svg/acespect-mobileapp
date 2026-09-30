@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { ApiError } from '../utils/ApiError';
 import { isProd } from '../config/env';
+import { isSubmissionPath, recordSubmissionEvent } from '../lib/submissionLog';
 
 /** 404 for unmatched routes. */
 export function notFound(req: Request, _res: Response, next: NextFunction): void {
@@ -52,6 +53,15 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     // this server, just a bad request), but enough to trace what and who.
     // eslint-disable-next-line no-console
     console.warn('[reject]', `${req.method} ${req.originalUrl}`, code, message, details ? JSON.stringify(details) : '');
+    if (isSubmissionPath(req.originalUrl)) {
+      void recordSubmissionEvent({
+        event: 'rejected',
+        inspectorId: req.user?.id ?? null,
+        statusCode: status,
+        message,
+        detail: { method: req.method, path: req.originalUrl, code, ...(details ? { fieldErrors: details } : {}) },
+      });
+    }
   }
 
   res.status(status).json({

@@ -14,6 +14,7 @@ import { AdminTemplateProfiles } from "./web/pages/admin/AdminTemplateProfiles";
 import { AdminTemplateSections } from "./web/pages/admin/AdminTemplateSections";
 import { AdminTemplateAdoption } from "./web/pages/admin/AdminTemplateAdoption";
 import { AdminTemplateEditor } from "./web/pages/admin/AdminTemplateEditor";
+import { AdminSubmissionLogs } from "./web/pages/admin/AdminSubmissionLogs";
 import { ReportView } from "./web/pages/ReportView";
 import type { Role } from "./web/mockData";
 
@@ -71,6 +72,7 @@ export default function App() {
             <Route path="/admin/templates/:inspectionType/:propertyType/adoption" element={<AdminTemplateAdoption />} />
             <Route path="/admin/templates/:inspectionType/:propertyType/:sectionKey/:id" element={<AdminTemplateEditor />} />
             <Route path="/admin/reports" element={<Placeholder title="Reports" />} />
+            <Route path="/admin/troubleshoot" element={<AdminSubmissionLogs />} />
             <Route path="/admin/settings" element={<Placeholder title="Settings" />} />
           </Route>
 
