@@ -11371,10 +11371,17 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Pics",
+        "order": 3,
+        "required": false
+      },
+      {
         "key": "condition",
         "type": "color-select",
         "label": "Condition",
-        "order": 3,
+        "order": 4,
         "options": [
           {
             "label": "Satisfactory with typical wear and tear",
@@ -11398,13 +11405,6 @@
           }
         ],
         "required": true
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Pics",
-        "order": 4,
-        "required": false
       },
       {
         "key": "damages",
@@ -26906,10 +26906,17 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Pics",
+        "order": 3,
+        "required": false
+      },
+      {
         "key": "condition",
         "type": "color-select",
         "label": "Condition",
-        "order": 3,
+        "order": 4,
         "options": [
           {
             "label": "Satisfactory with typical wear and tear",
@@ -26933,13 +26940,6 @@
           }
         ],
         "required": true
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Pics",
-        "order": 4,
-        "required": false
       },
       {
         "key": "damages",
@@ -35865,10 +35865,17 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Pics",
+        "order": 3,
+        "required": false
+      },
+      {
         "key": "condition",
         "type": "color-select",
         "label": "Condition",
-        "order": 3,
+        "order": 4,
         "options": [
           {
             "label": "Satisfactory with typical wear and tear",
@@ -35892,13 +35899,6 @@
           }
         ],
         "required": true
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Pics",
-        "order": 4,
-        "required": false
       },
       {
         "key": "damages",
@@ -48051,10 +48051,17 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Pics",
+        "order": 3,
+        "required": false
+      },
+      {
         "key": "condition",
         "type": "color-select",
         "label": "Condition",
-        "order": 3,
+        "order": 4,
         "options": [
           {
             "label": "Satisfactory with typical wear and tear",
@@ -48078,13 +48085,6 @@
           }
         ],
         "required": true
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Pics",
-        "order": 4,
-        "required": false
       },
       {
         "key": "damages",
@@ -112176,6 +112176,13 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Photo Nos",
+        "order": 2,
+        "required": false
+      },
+      {
         "key": "condition",
         "gate": {
           "equals": "yes",
@@ -112183,7 +112190,7 @@
         },
         "type": "color-select",
         "label": "Condition",
-        "order": 2,
+        "order": 3,
         "options": [
           {
             "label": "Satisfactory with typical wear and tear",
@@ -112212,7 +112219,7 @@
         "key": "damages",
         "type": "damage-list",
         "label": "Damages",
-        "order": 3,
+        "order": 4,
         "repeat": {
           "addable": true,
           "requireWhen": {
@@ -112618,13 +112625,6 @@
             "required": false
           }
         ]
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Photo Nos",
-        "order": 4,
-        "required": false
       },
       {
         "key": "checks",
@@ -119623,6 +119623,13 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Photo Nos",
+        "order": 3,
+        "required": false
+      },
+      {
         "key": "condition",
         "gate": {
           "equals": "yes",
@@ -119630,7 +119637,7 @@
         },
         "type": "color-select",
         "label": "Condition",
-        "order": 3,
+        "order": 4,
         "options": [
           {
             "label": "Satisfactory with typical wear and tear",
@@ -119654,13 +119661,6 @@
           }
         ],
         "required": true
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Photo Nos",
-        "order": 4,
-        "required": false
       },
       {
         "key": "damages",
@@ -128881,6 +128881,13 @@
         "required": true
       },
       {
+        "key": "photos",
+        "type": "photos",
+        "label": "Photo Nos",
+        "order": 2,
+        "required": false
+      },
+      {
         "key": "condition",
         "gate": {
           "equals": "yes",
@@ -128888,7 +128895,7 @@
         },
         "type": "color-select",
         "label": "Condition",
-        "order": 2,
+        "order": 3,
         "options": [
           {
             "label": "Satisfactory with typical wear and tear",
@@ -128917,7 +128924,7 @@
         "key": "damages",
         "type": "damage-list",
         "label": "Damages",
-        "order": 3,
+        "order": 4,
         "repeat": {
           "addable": true,
           "requireWhen": {
@@ -129323,13 +129330,6 @@
             "required": false
           }
         ]
-      },
-      {
-        "key": "photos",
-        "type": "photos",
-        "label": "Photo Nos",
-        "order": 4,
-        "required": false
       },
       {
         "key": "checks",
