@@ -28596,7 +28596,14 @@
             "type": "yesno",
             "label": "Party wall abutting next property?",
             "order": 3,
-            "required": true
+            "required": true,
+            "gate": {
+              "fieldKey": "__instanceKey",
+              "equalsAny": [
+                "left",
+                "right"
+              ]
+            }
           },
           {
             "key": "partyWallNumber",
@@ -49783,7 +49790,14 @@
             "type": "yesno",
             "label": "Party wall abutting next property?",
             "order": 2,
-            "required": true
+            "required": true,
+            "gate": {
+              "fieldKey": "__instanceKey",
+              "equalsAny": [
+                "left",
+                "right"
+              ]
+            }
           },
           {
             "key": "partyWallNumber",

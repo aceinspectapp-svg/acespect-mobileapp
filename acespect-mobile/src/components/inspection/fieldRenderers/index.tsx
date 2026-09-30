@@ -292,7 +292,13 @@ function FixedTabsRenderer({ field, value, onChange, path, showMissing, missing 
         <View style={styles.instanceCard}>
           <FieldListRenderer
             fields={itemFields}
-            scope={record[active.key] ?? {}}
+            // `__instanceKey` is synthetic -- not a real template field, never
+            // written back by any renderer (nothing has that key) -- injected
+            // purely so an itemField can `gate` on which fixed instance it's
+            // currently being asked within (e.g. "Party wall abutting next
+            // property?" only makes physical sense on a Left/Right elevation,
+            // never Front/Rear: gate {fieldKey:"__instanceKey", equalsAny:["left","right"]}).
+            scope={{ ...(record[active.key] ?? {}), __instanceKey: active.key }}
             onChange={(k, v) => onChange({ ...record, [active.key]: { ...(record[active.key] ?? {}), [k]: v } })}
             path={[...path, active.key]}
             showMissing={showMissing}
