@@ -344,10 +344,16 @@ function humanizeList(values: string[]): string {
 }
 
 /**
- * A Part's fields split into always-visible "lead" fields plus a tap-to-open
- * list of the categories the inspector checked off in the selector
- * (chip-multiselect) field -- each opens in its own full-screen form instead
- * of every selected category's fields piling up inline.
+ * A Part's fields split into always-visible "lead" fields plus a tab strip,
+ * one tab per category the inspector checked off in the selector
+ * (chip-multiselect) field -- switching categories swaps which group's
+ * fields render inline below the strip, no per-category modal round-trip
+ * (was: tap a row, open a full-screen form, back out, tap the next row).
+ * A tab's label turns red once the inspector has tried to leave the section
+ * (`showMissing`) and that category still has an unanswered required field --
+ * same "missing" signal every other field in the app already uses, just
+ * surfaced on the tab itself so an incomplete category is visible without
+ * having to open it first.
  */
 function CategoryNavForm({
   itemFields,
@@ -369,68 +375,52 @@ function CategoryNavForm({
   const groups = computeCategoryGroups(itemFields, selectorField);
   const selectedRaw = scope[selectorFieldKey];
   const selected = Array.isArray(selectedRaw) ? (selectedRaw as string[]) : [];
-  const [openLetter, setOpenLetter] = useState<string | null>(null);
-  const openGroup = groups.find((g) => g.letter === openLetter);
+  const selectedGroups = groups.filter((g) => selected.includes(g.equalsValue));
+  const [activeLetter, setActiveLetter] = useState<string | null>(null);
+  const active = selectedGroups.find((g) => g.letter === activeLetter) ?? selectedGroups[0];
 
   return (
     <>
       <FieldListRenderer fields={leadFields} scope={scope} onChange={onChange} path={path} showMissing={showMissing} />
-      {selected.length > 0 && (
+      {selectedGroups.length > 0 && (
         <View style={styles.categoryNavBlock}>
           <Text style={styles.groupLabel}>Fill in each selected item</Text>
-          {groups
-            .filter((g) => selected.includes(g.equalsValue))
-            .map((g) => {
-              const filled = g.fields.some((f) => isAnswered(scope[f.key]));
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabStrip}>
+            {selectedGroups.map((g) => {
+              const isActive = g.letter === active?.letter;
+              const incomplete = !!showMissing && g.fields.some((f) => isFieldMissing(f, g.fields, scope));
               return (
-                <Pressable key={g.letter} style={styles.categoryRow} onPress={() => setOpenLetter(g.letter)}>
-                  <View style={styles.instanceHeaderTitleRow}>
-                    <Ionicons
-                      name={filled ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={18}
-                      color={filled ? colors.barBlue : colors.textMuted}
-                    />
-                    <Text style={styles.categoryRowLabel}>{g.label}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                <Pressable
+                  key={g.letter}
+                  onPress={() => setActiveLetter(g.letter)}
+                  style={[styles.tab, isActive && styles.tabActive, incomplete && styles.tabIncomplete]}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      isActive && styles.tabTextActive,
+                      incomplete && styles.tabTextIncomplete,
+                    ]}
+                  >
+                    {g.label}
+                  </Text>
                 </Pressable>
               );
             })}
-        </View>
-      )}
-      <Modal visible={!!openGroup} animationType="slide" onRequestClose={() => setOpenLetter(null)}>
-        <SafeAreaView style={styles.categoryModalRoot} edges={['top', 'bottom']}>
-          <View style={styles.categoryModalHeader}>
-            <Pressable onPress={() => setOpenLetter(null)} hitSlop={8} style={styles.categoryModalBack}>
-              <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
-              <Text style={styles.categoryModalBackText}>Back</Text>
-            </Pressable>
-            <Text style={styles.categoryModalTitle} numberOfLines={1}>{openGroup?.label}</Text>
-            <View style={styles.categoryModalBack} />
-          </View>
-          <ScrollView style={styles.categoryModalBody} contentContainerStyle={styles.categoryModalBodyContent}>
-            {openGroup && (
+          </ScrollView>
+          {active && (
+            <View style={styles.instanceCard}>
               <FieldListRenderer
-                fields={openGroup.fields}
+                fields={active.fields}
                 scope={scope}
                 onChange={onChange}
-                path={[...path, openGroup.letter]}
+                path={[...path, active.letter]}
                 showMissing={showMissing}
               />
-            )}
-          </ScrollView>
-          <View style={styles.categoryModalFooter}>
-            <Button label="Back" variant="outline" leftIcon="chevron-back" fitContent onPress={() => setOpenLetter(null)} />
-            <Button
-              label="Next"
-              variant="primaryGradient"
-              rightIcon="checkmark"
-              style={styles.categoryModalFooterNext}
-              onPress={() => setOpenLetter(null)}
-            />
-          </View>
-        </SafeAreaView>
-      </Modal>
+            </View>
+          )}
+        </View>
+      )}
     </>
   );
 }
@@ -834,6 +824,10 @@ const styles = StyleSheet.create({
   tabActive: { borderColor: colors.barBlue, backgroundColor: colors.accentBlue },
   tabText: { ...typography.bodySm, color: colors.textSecondary },
   tabTextActive: { color: colors.barBlue, fontWeight: '700' },
+  // Stays visible even on the active tab, so switching to an incomplete
+  // category doesn't make its incompleteness disappear.
+  tabIncomplete: { borderColor: colors.danger },
+  tabTextIncomplete: { color: colors.danger },
   instanceCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
