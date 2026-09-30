@@ -241,7 +241,7 @@ export function AdminInspections() {
                   borderBottom: isLast ? "none" : "1px solid #f1f5f9",
                   cursor: "pointer",
                 }}
-                onClick={() => navigate(`/reviewer/review/${ins.id}`)}
+                onClick={() => navigate(`/admin/inspections/${ins.id}`)}
                 onMouseEnter={(e) =>
                   (e.currentTarget.style.background = "#f8fafc")
                 }
@@ -416,7 +416,7 @@ export function AdminInspections() {
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     {/* View button */}
                     <button
-                      onClick={() => navigate(`/reviewer/review/${ins.id}`)}
+                      onClick={() => navigate(`/admin/inspections/${ins.id}`)}
                       title="View"
                       style={{
                         display: "inline-flex",
