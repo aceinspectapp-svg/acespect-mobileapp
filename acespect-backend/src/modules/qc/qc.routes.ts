@@ -73,7 +73,11 @@ router.post('/users', requireAuth, admin, validate(createFieldUserSchema), qcCon
 // ─── Defects ────────────────────────────────────────────────────────────────
 router.get('/defects', requireAuth, admin, qcController.listDefects);
 router.post('/defects', requireAuth, admin, validate(createDefectSchema), qcController.createDefect);
-router.patch('/defects/:id', requireAuth, admin, validate(updateDefectSchema), qcController.updateDefect);
+// Not admin-only anymore -- the field user a defect is assigned to can also
+// fill in location/summary/severity from mobile; qc.service's updateDefect
+// enforces that (admin, or assignedToId === caller) and that only an admin
+// can reassign.
+router.patch('/defects/:id', requireAuth, validate(updateDefectSchema), qcController.updateDefect);
 // Read-only single-defect lookup: any authenticated caller (mobile's "Defect" link from a task).
 router.get('/defects/:id', requireAuth, qcController.getDefect);
 

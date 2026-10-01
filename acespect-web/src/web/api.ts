@@ -286,15 +286,10 @@ export const api = {
   qc: {
     getConfig: () => req<QcConfigBundle>("/qc/config"),
     getDefects: () => req<{ defects: QcDefect[] }>("/qc/defects").then((d) => d.defects),
-    createDefect: (input: {
-      propertyId: string;
-      location: string;
-      locationDetails?: string;
-      summary: string;
-      severityId: string;
-      assignedToId: string;
-      dueDate?: string;
-    }) => req<{ defect: QcDefect }>("/qc/defects", { method: "POST", body: JSON.stringify(input) }).then((d) => d.defect),
+    // Admin only picks property + assignee now -- location/summary/severity
+    // are filled in later by whoever it's assigned to, from mobile.
+    createDefect: (input: { propertyId: string; assignedToId: string }) =>
+      req<{ defect: QcDefect }>("/qc/defects", { method: "POST", body: JSON.stringify(input) }).then((d) => d.defect),
     updateDefect: (
       id: string,
       patch: Partial<{
@@ -323,12 +318,6 @@ export const api = {
     createPropertyType: (input: { key: string; label: string; icon?: string }) =>
       req("/qc/property-types", { method: "POST", body: JSON.stringify(input) }),
     deletePropertyType: (id: string) => req(`/qc/property-types/${id}`, { method: "DELETE" }),
-    createSeverity: (input: { key: string; label: string; color: string }) =>
-      req("/qc/severities", { method: "POST", body: JSON.stringify(input) }),
-    deleteSeverity: (id: string) => req(`/qc/severities/${id}`, { method: "DELETE" }),
-    createStatus: (input: { key: string; label: string; color: string; meaning?: string }) =>
-      req("/qc/statuses", { method: "POST", body: JSON.stringify(input) }),
-    deleteStatus: (id: string) => req(`/qc/statuses/${id}`, { method: "DELETE" }),
   },
 
   /** Admin-only troubleshooting feed: the mobile submit/update/finalize/photo pipeline's own trail. See acespect-backend's SubmissionLogEntry. */

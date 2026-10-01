@@ -71,13 +71,16 @@ export const SEVERITY_KEY_TO_PRIORITY: Record<string, QcTaskPriorityValue> = {
   observation: 'LOW',
 };
 
+// Admin creates with just property + assignee -- location/summary/severity
+// are filled in later by the assigned field user from mobile (see
+// updateDefectSchema, now reachable by them too, not just admin).
 export const createDefectSchema = z.object({
   propertyId: z.string().uuid(),
-  location: z.string().min(1).max(200),
-  locationDetails: z.string().max(1000).optional(),
-  summary: z.string().min(1).max(2000),
-  severityId: z.string().uuid(),
   assignedToId: z.string().uuid(),
+  location: z.string().min(1).max(200).optional(),
+  locationDetails: z.string().max(1000).optional(),
+  summary: z.string().min(1).max(2000).optional(),
+  severityId: z.string().uuid().optional(),
   dueDate: z.string().datetime().optional(),
 });
 

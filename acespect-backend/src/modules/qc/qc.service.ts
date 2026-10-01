@@ -170,11 +170,15 @@ async function getDefaultOpenStatus() {
 
 async function createDefect(createdById: string, input: CreateDefectInput) {
   await requireExists('qcProperty', input.propertyId, 'Property');
-  const severity = await requireExists('qcSeverity', input.severityId, 'Severity');
+  const severity = input.severityId ? await requireExists('qcSeverity', input.severityId, 'Severity') : null;
   await requireExists('user', input.assignedToId, 'Assignee');
   const openStatus = await getDefaultOpenStatus();
 
-  const priority = SEVERITY_KEY_TO_PRIORITY[severity.key] ?? 'LOW';
+  // Severity is usually unset at creation now (admin only assigns; the field
+  // user classifies it on-site) -- defaults to LOW same as an unrecognized
+  // key always has, re-computed to the real value once they set it (see
+  // updateDefect below).
+  const priority = severity ? SEVERITY_KEY_TO_PRIORITY[severity.key] ?? 'LOW' : 'LOW';
 
   return prisma.$transaction(async (tx) => {
     const defect = await tx.qcDefect.create({
@@ -203,11 +207,25 @@ async function createDefect(createdById: string, input: CreateDefectInput) {
   });
 }
 
-async function updateDefect(id: string, input: UpdateDefectInput) {
+/**
+ * Admin can edit anything, including reassigning. The field user it's
+ * assigned to can edit everything EXCEPT assignedToId -- reassignment stays
+ * an admin-only "who does this" decision; filling in what/where/how-bad is
+ * the on-site job. `requireRole('ADMIN')` used to be the whole check,
+ * enforced on the route; now it's just one half of this function's own.
+ */
+async function updateDefect(id: string, input: UpdateDefectInput, requesterId: string, requesterRole: string) {
   const defect = await requireExists('qcDefect', id, 'Defect');
-  if (input.severityId) await requireExists('qcSeverity', input.severityId, 'Severity');
+  const isAdmin = requesterRole === 'ADMIN';
+  if (!isAdmin && defect.assignedToId !== requesterId) {
+    throw ApiError.forbidden('This defect is not assigned to you');
+  }
+  const assignedToId = isAdmin ? input.assignedToId : undefined;
+
+  let severity = null;
+  if (input.severityId) severity = await requireExists('qcSeverity', input.severityId, 'Severity');
   if (input.statusId) await requireExists('qcStatus', input.statusId, 'Status');
-  if (input.assignedToId) await requireExists('user', input.assignedToId, 'Assignee');
+  if (assignedToId) await requireExists('user', assignedToId, 'Assignee');
 
   return prisma.$transaction(async (tx) => {
     const updated = await tx.qcDefect.update({
@@ -218,14 +236,21 @@ async function updateDefect(id: string, input: UpdateDefectInput) {
         summary: input.summary,
         severityId: input.severityId,
         statusId: input.statusId,
-        assignedToId: input.assignedToId === undefined ? undefined : input.assignedToId,
+        assignedToId: assignedToId === undefined ? undefined : assignedToId,
         dueDate: input.dueDate === undefined ? undefined : input.dueDate ? new Date(input.dueDate) : null,
       },
       include: defectInclude,
     });
     // Reassigning the defect reassigns its task(s) too — v1 keeps one task per defect.
-    if (input.assignedToId && input.assignedToId !== defect.assignedToId) {
-      await tx.qcTask.updateMany({ where: { defectId: id }, data: { assignedToId: input.assignedToId } });
+    if (assignedToId && assignedToId !== defect.assignedToId) {
+      await tx.qcTask.updateMany({ where: { defectId: id }, data: { assignedToId } });
+    }
+    // Severity usually arrives here, not at creation -- (re)computing the
+    // task's priority is what createDefect would have done had it known the
+    // severity up front.
+    if (severity) {
+      const priority = SEVERITY_KEY_TO_PRIORITY[severity.key] ?? 'LOW';
+      await tx.qcTask.updateMany({ where: { defectId: id }, data: { priority } });
     }
     return updated;
   });

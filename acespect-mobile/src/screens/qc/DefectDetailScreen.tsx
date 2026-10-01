@@ -1,33 +1,98 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../theme';
 import { InspectionHeader } from '../../components/inspection/InspectionHeader';
+import { FieldLabel, PlainTextInput } from '../../components/inspection/fieldKit';
+import { DateField } from '../../components/ui';
+import { PickerSheet } from '../../components/qc/PickerSheet';
 import { SeverityPill } from '../../components/qc/SeverityPill';
 import { StatusBadge } from '../../components/qc/StatusBadge';
 import { AppScreenProps } from '../../navigation/types';
 import { useQcData } from '../../context/QcDataContext';
-import { QcDefect } from '../../types/qc';
+import { QcDefect, QcSeverity } from '../../types/qc';
 
 /**
- * Read-only — editing/reassigning/reclassifying a defect is an admin
- * operation now (acespect-web's QC section). This screen exists purely so
- * the "Defect" link on Task Detail has somewhere useful to go.
+ * Editable by whoever it's assigned to -- the admin now only picks the
+ * client/project/property and assigns a person (acespect-web's QC section);
+ * location/location details/summary/severity/due date are deliberately left
+ * for the field user to fill in on-site, here. Reassigning stays an
+ * admin-only action, so there's no "assigned to" picker on this screen.
  */
 export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDefectDetail'>) {
   const { defectId } = route.params;
-  const { getDefect } = useQcData();
+  const { getDefect, updateDefect, getSeverities } = useQcData();
   const [defect, setDefect] = useState<QcDefect | null>(null);
+  const [severities, setSeverities] = useState<QcSeverity[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [severitySheetOpen, setSeveritySheetOpen] = useState(false);
+
+  // Local draft -- only sent to the server on Save, so navigating away
+  // without saving never half-applies an edit.
+  const [location, setLocation] = useState('');
+  const [locationDetails, setLocationDetails] = useState('');
+  const [summary, setSummary] = useState('');
+  const [severityId, setSeverityId] = useState<string | null>(null);
+  const [dueDate, setDueDate] = useState(''); // YYYY-MM-DD, DateField's own format
 
   useEffect(() => {
     getDefect(defectId)
-      .then(setDefect)
+      .then((d) => {
+        setDefect(d);
+        setLocation(d.location ?? '');
+        setLocationDetails(d.locationDetails ?? '');
+        setSummary(d.summary ?? '');
+        setSeverityId(d.severity?.id ?? null);
+        setDueDate(d.dueDate ? d.dueDate.slice(0, 10) : '');
+      })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load defect'));
-  }, [defectId, getDefect]);
+    getSeverities()
+      .then(setSeverities)
+      .catch(() => {}); // non-fatal -- the picker just shows nothing to choose if this fails
+  }, [defectId, getDefect, getSeverities]);
+
+  const dirty =
+    !!defect &&
+    (location !== (defect.location ?? '') ||
+      locationDetails !== (defect.locationDetails ?? '') ||
+      summary !== (defect.summary ?? '') ||
+      severityId !== (defect.severity?.id ?? null) ||
+      dueDate !== (defect.dueDate ? defect.dueDate.slice(0, 10) : ''));
+
+  async function save() {
+    if (!defect || saving) return;
+    setSaving(true);
+    try {
+      const updated = await updateDefect(defect.id, {
+        location: location.trim() || undefined,
+        locationDetails: locationDetails.trim(),
+        summary: summary.trim() || undefined,
+        severityId: severityId ?? undefined,
+        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+      });
+      setDefect(updated);
+    } catch (e) {
+      Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const selectedSeverity = severities.find((s) => s.id === severityId) ?? null;
 
   return (
     <View style={styles.root}>
-      <InspectionHeader title={defect?.summary ?? 'Defect'} subtitle={defect?.property.name} onBack={() => navigation.goBack()} />
+      <InspectionHeader
+        title={defect?.summary || 'Defect'}
+        subtitle={defect?.property.name}
+        onBack={() => navigation.goBack()}
+        actions={
+          dirty
+            ? [{ icon: 'checkmark-circle', accessibilityLabel: 'Save', onPress: () => void save() }]
+            : []
+        }
+      />
 
       {!defect && !error && (
         <View style={styles.centered}>
@@ -43,36 +108,42 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
       {defect && (
         <ScrollView contentContainerStyle={styles.body}>
           <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Status</Text>
-            <StatusBadge status={defect.status} />
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Location</Text>
+            <Text style={styles.fieldLabel}>Property</Text>
             <Text style={styles.fieldValue}>
-              {defect.client.name} › {defect.project.name} › {defect.property.name} › {defect.location}
+              {defect.client.name} › {defect.project.name} › {defect.property.name}
             </Text>
-            {!!defect.locationDetails && <Text style={styles.fieldSub}>{defect.locationDetails}</Text>}
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Description</Text>
-            <Text style={styles.fieldValue}>{defect.summary}</Text>
+            <FieldLabel required>Location</FieldLabel>
+            <PlainTextInput value={location} onChangeText={setLocation} placeholder="e.g. Kitchen / Dining, Balcony…" />
+          </View>
+
+          <View style={styles.field}>
+            <FieldLabel>Location details (optional)</FieldLabel>
+            <PlainTextInput value={locationDetails} onChangeText={setLocationDetails} placeholder="e.g. north-facing wall, bottom hinge" />
+          </View>
+
+          <View style={styles.field}>
+            <FieldLabel required>Summary</FieldLabel>
+            <PlainTextInput value={summary} onChangeText={setSummary} placeholder="Describe the defect…" multiline />
           </View>
 
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>Severity</Text>
-            <SeverityPill severity={defect.severity} />
+            <Pressable style={styles.severityRow} onPress={() => setSeveritySheetOpen(true)}>
+              <SeverityPill severity={selectedSeverity} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </Pressable>
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Assigned to</Text>
-            <Text style={styles.fieldValue}>{defect.assignedTo?.name ?? defect.assignedTo?.email ?? 'Unassigned'}</Text>
+            <DateField label="Due date (optional)" value={dueDate} onChange={setDueDate} placeholder="Select a date" />
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Due date</Text>
-            <Text style={styles.fieldValue}>{defect.dueDate ? new Date(defect.dueDate).toLocaleDateString() : 'Not set'}</Text>
+            <Text style={styles.fieldLabel}>Status</Text>
+            <StatusBadge status={defect.status} />
           </View>
 
           <View style={styles.field}>
@@ -81,6 +152,22 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
           </View>
         </ScrollView>
       )}
+
+      <PickerSheet visible={severitySheetOpen} title="Severity" onClose={() => setSeveritySheetOpen(false)}>
+        {severities.map((s) => (
+          <Pressable
+            key={s.id}
+            style={styles.severityOption}
+            onPress={() => {
+              setSeverityId(s.id);
+              setSeveritySheetOpen(false);
+            }}
+          >
+            <SeverityPill severity={s} />
+            {s.id === severityId && <Ionicons name="checkmark" size={18} color={colors.barBlue} />}
+          </Pressable>
+        ))}
+      </PickerSheet>
     </View>
   );
 }
@@ -99,5 +186,12 @@ const styles = StyleSheet.create({
   },
   fieldLabel: { ...typography.label, color: colors.textMuted, marginBottom: spacing.sm },
   fieldValue: { ...typography.body, color: colors.textPrimary, fontWeight: '600' },
-  fieldSub: { ...typography.caption, color: colors.textMuted, marginTop: 4 },
+  severityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  severityOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
 });

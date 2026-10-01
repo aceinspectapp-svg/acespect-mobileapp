@@ -1,5 +1,5 @@
 import { api } from './apiClient';
-import { QcDefect, QcTask, TaskUpdate } from '../types/qc';
+import { QcDefect, QcSeverity, QcTask, TaskUpdate } from '../types/qc';
 
 /** Tasks assigned to the signed-in user — the mobile app's entire QC surface. */
 export async function getMyTasks(): Promise<QcTask[]> {
@@ -13,10 +13,37 @@ export async function getTask(id: string): Promise<QcTask> {
   return data.task;
 }
 
-/** Read-only defect lookup — the "Defect" link on Task Detail. */
+/** Defect lookup — the "Defect" link on Task Detail. */
 export async function getDefect(id: string): Promise<QcDefect> {
   const { data } = await api.get<{ defect: QcDefect }>(`/qc/defects/${id}`);
   return data.defect;
+}
+
+/**
+ * Fills in what the admin didn't set at creation (location/summary/severity/
+ * due date) -- allowed because the server checks this defect is actually
+ * assigned to the caller (see acespect-backend's qc.service updateDefect).
+ * `assignedToId` isn't accepted here on purpose: reassigning stays an
+ * admin-only action done from acespect-web.
+ */
+export async function updateDefect(
+  id: string,
+  patch: Partial<{
+    location: string;
+    locationDetails: string;
+    summary: string;
+    severityId: string;
+    dueDate: string | null;
+  }>,
+): Promise<QcDefect> {
+  const { data } = await api.patch<{ defect: QcDefect }>(`/qc/defects/${id}`, patch);
+  return data.defect;
+}
+
+/** The severity list for the Defect screen's picker -- same config bundle acespect-web's admin pages read, just the one piece mobile needs. */
+export async function getSeverities(): Promise<QcSeverity[]> {
+  const { data } = await api.get<{ severities: QcSeverity[] }>('/qc/config');
+  return data.severities;
 }
 
 /**

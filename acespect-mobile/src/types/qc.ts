@@ -36,15 +36,17 @@ export interface QcPerson {
 
 export interface QcDefect {
   id: string;
-  location: string;
+  // Admin creates a defect with just a property + assignee now -- these are
+  // filled in later by whoever it's assigned to, from the Defect screen.
+  location: string | null;
   locationDetails: string | null;
-  summary: string;
+  summary: string | null;
   dueDate: string | null;
   createdAt: string;
   property: { id: string; name: string; propertyType: QcPropertyType };
   project: { id: string; name: string };
   client: { id: string; name: string };
-  severity: QcSeverity;
+  severity: QcSeverity | null;
   status: QcStatus;
   assignedTo: QcPerson | null;
   createdBy: QcPerson;

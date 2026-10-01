@@ -44,8 +44,6 @@ export function AdminQcConfig() {
         <ProjectsSection projects={allProjects} clients={config.clients} onChange={reload} />
         <PropertiesSection properties={allProperties} projects={allProjects} propertyTypes={config.propertyTypes} onChange={reload} />
         <PropertyTypesSection propertyTypes={config.propertyTypes} onChange={reload} />
-        <SeveritiesSection severities={config.severities} onChange={reload} />
-        <StatusesSection statuses={config.statuses} onChange={reload} />
       </div>
     </PageShell>
   );
@@ -243,88 +241,3 @@ function PropertyTypesSection({ propertyTypes, onChange }: { propertyTypes: QcCo
   );
 }
 
-function SeveritiesSection({ severities, onChange }: { severities: QcConfigBundle["severities"]; onChange: () => void }) {
-  const [key, setKey] = useState("");
-  const [label, setLabel] = useState("");
-  const [color, setColor] = useState("#DC2626");
-  const [busy, setBusy] = useState(false);
-
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
-    if (!key.trim() || !label.trim()) return;
-    setBusy(true);
-    try {
-      await api.qc.createSeverity({ key: key.trim(), label: label.trim(), color });
-      setKey("");
-      setLabel("");
-      onChange();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <SectionCard title="Severities" sub="Major / Moderate / Minor / Observation — also drives a task's auto-assigned priority.">
-      {severities.map((s) => (
-        <div key={s.id} style={rowStyle}>
-          <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: `${s.color}18`, color: s.color }}>{s.label}</span>
-          <button style={deleteBtnStyle} onClick={() => confirmDelete("severity", () => api.qc.deleteSeverity(s.id), onChange)}>Delete</button>
-        </div>
-      ))}
-      <form onSubmit={create} style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <input style={{ ...fieldStyle, flex: 1 }} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label" />
-        <input style={{ ...fieldStyle, flex: "0 0 120px" }} value={key} onChange={(e) => setKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"))} placeholder="key" />
-        <input type="color" style={{ flex: "0 0 44px", padding: 2, border: "1.5px solid #e5e7eb", borderRadius: 8 }} value={color} onChange={(e) => setColor(e.target.value)} />
-        <button style={addBtnStyle} disabled={busy}>Add</button>
-      </form>
-    </SectionCard>
-  );
-}
-
-function StatusesSection({ statuses, onChange }: { statuses: QcConfigBundle["statuses"]; onChange: () => void }) {
-  const [key, setKey] = useState("");
-  const [label, setLabel] = useState("");
-  const [color, setColor] = useState("#2563EB");
-  const [meaning, setMeaning] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
-    if (!key.trim() || !label.trim()) return;
-    setBusy(true);
-    try {
-      await api.qc.createStatus({ key: key.trim(), label: label.trim(), color, meaning: meaning.trim() || undefined });
-      setKey("");
-      setLabel("");
-      setMeaning("");
-      onChange();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <SectionCard title="Defect Statuses" sub="The lifecycle stages a defect moves through, in order — Open through Verified/Closed.">
-      {statuses.map((s) => (
-        <div key={s.id} style={rowStyle}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: `${s.color}18`, color: s.color, whiteSpace: "nowrap" }}>{s.label}</span>
-            <span style={{ fontSize: 11, color: "#94a3b8" }}>{s.meaning}</span>
-          </div>
-          <button style={deleteBtnStyle} onClick={() => confirmDelete("status", () => api.qc.deleteStatus(s.id), onChange)}>Delete</button>
-        </div>
-      ))}
-      <form onSubmit={create} style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input style={{ ...fieldStyle, flex: 1 }} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label" />
-          <input style={{ ...fieldStyle, flex: "0 0 120px" }} value={key} onChange={(e) => setKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"))} placeholder="key" />
-          <input type="color" style={{ flex: "0 0 44px", padding: 2, border: "1.5px solid #e5e7eb", borderRadius: 8 }} value={color} onChange={(e) => setColor(e.target.value)} />
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input style={{ ...fieldStyle, flex: 1 }} value={meaning} onChange={(e) => setMeaning(e.target.value)} placeholder="Meaning (shown in the status-change sheet)" />
-          <button style={addBtnStyle} disabled={busy}>Add</button>
-        </div>
-      </form>
-    </SectionCard>
-  );
-}

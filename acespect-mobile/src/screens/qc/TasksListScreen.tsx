@@ -111,9 +111,10 @@ export function QcTasksListScreen({ navigation }: AppScreenProps<'QcTasksList'>)
                   <Text style={[styles.pillText, { color: statusStyle.color }]}>{formatTaskStatus(item.status)}</Text>
                 </View>
               </View>
-              <Text style={styles.summary}>{item.defect.summary}</Text>
+              <Text style={styles.summary}>{item.defect.summary ?? 'Add defect details →'}</Text>
               <Text style={styles.location}>
-                {item.defect.property.name} · {item.defect.location}
+                {item.defect.property.name}
+                {item.defect.location ? ` · ${item.defect.location}` : ''}
               </Text>
               <View style={styles.cardFooter}>
                 <View style={styles.assignee}>

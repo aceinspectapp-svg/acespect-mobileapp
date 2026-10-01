@@ -136,7 +136,8 @@ export const qcController = {
     res.status(201).json({ defect: serializeDefect(defect) });
   }),
   updateDefect: asyncHandler(async (req, res) => {
-    const defect = await qcService.updateDefect(requireId(req), req.body);
+    const user = requireUser(req);
+    const defect = await qcService.updateDefect(requireId(req), req.body, user.id, user.role);
     res.status(200).json({ defect: serializeDefect(defect) });
   }),
 

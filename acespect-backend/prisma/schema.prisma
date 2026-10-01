@@ -488,18 +488,21 @@ model QcStatus {
   @@map("qc_statuses")
 }
 
-/// A logged defect. Only an ADMIN creates/edits/reassigns/reclassifies one --
-/// enforced at the API layer (requireRole('ADMIN')), not by this table shape.
+/// A logged defect. An ADMIN creates it with just property + assignee --
+/// location/summary/severity are deliberately nullable, filled in later by
+/// whoever it's assigned to from the mobile app's Defect screen (enforced at
+/// the API layer: PATCH /qc/defects/:id now checks assignedToId against the
+/// caller, not just requireRole('ADMIN')). Reassigning stays admin-only.
 model QcDefect {
-  id              String     @id @default(uuid())
-  property        QcProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id              String      @id @default(uuid())
+  property        QcProperty  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   propertyId      String
-  location        String
+  location        String?
   locationDetails String?
-  summary         String
-  severity        QcSeverity @relation(fields: [severityId], references: [id])
-  severityId      String
-  status          QcStatus   @relation(fields: [statusId], references: [id])
+  summary         String?
+  severity        QcSeverity? @relation(fields: [severityId], references: [id])
+  severityId      String?
+  status          QcStatus    @relation(fields: [statusId], references: [id])
   statusId        String
   assignedTo      User?      @relation("QcDefectAssignedTo", fields: [assignedToId], references: [id])
   assignedToId    String?

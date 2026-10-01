@@ -117,7 +117,7 @@ export function QcTaskDetailScreen({ navigation, route }: AppScreenProps<'QcTask
 
   return (
     <View style={styles.root}>
-      <InspectionHeader title={task.defect.summary} subtitle={task.defect.property.name} onBack={() => navigation.goBack()} />
+      <InspectionHeader title={task.defect.summary ?? 'Untitled defect'} subtitle={task.defect.property.name} onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>Status</Text>
@@ -129,7 +129,7 @@ export function QcTaskDetailScreen({ navigation, route }: AppScreenProps<'QcTask
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>Defect</Text>
           <Pressable onPress={() => navigation.navigate('QcDefectDetail', { defectId: task.defect.id })}>
-            <Text style={styles.link}>{task.defect.summary}</Text>
+            <Text style={styles.link}>{task.defect.summary ?? 'Add defect details →'}</Text>
           </Pressable>
         </View>
 

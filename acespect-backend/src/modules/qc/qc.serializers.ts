@@ -28,7 +28,9 @@ export function serializeDefect(defect: any) {
     },
     project: { id: defect.property.project.id, name: defect.property.project.name },
     client: { id: defect.property.project.client.id, name: defect.property.project.client.name },
-    severity: { id: defect.severity.id, key: defect.severity.key, label: defect.severity.label, color: defect.severity.color },
+    severity: defect.severity
+      ? { id: defect.severity.id, key: defect.severity.key, label: defect.severity.label, color: defect.severity.color }
+      : null,
     status: {
       id: defect.status.id,
       key: defect.status.key,
