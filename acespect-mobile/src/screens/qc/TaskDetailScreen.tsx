@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../theme';
@@ -32,14 +32,18 @@ function initials(name: string): string {
   return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
 }
 
+const ALL_TASK_STATUSES: TaskStatus[] = ['PENDING', 'IN_PROGRESS', 'COMPLETED'];
+
 export function QcTaskDetailScreen({ navigation, route }: AppScreenProps<'QcTaskDetail'>) {
   const { taskId } = route.params;
-  const { getTask, postTaskUpdate } = useQcData();
+  const { getTask, postTaskUpdate, updateTaskStatus } = useQcData();
   const { takePhoto, pickFromLibrary } = useQcPhotoCapture();
 
   const [task, setTask] = useState<QcTask | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
+  const [statusSheetOpen, setStatusSheetOpen] = useState(false);
+  const [changingStatus, setChangingStatus] = useState(false);
   const [comment, setComment] = useState('');
   const [markCompleted, setMarkCompleted] = useState(false);
   const [photos, setPhotos] = useState<QcPhoto[]>([]);
@@ -71,6 +75,20 @@ export function QcTaskDetailScreen({ navigation, route }: AppScreenProps<'QcTask
   }
   function onRemovePhoto(id: string) {
     setPhotos((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  async function onPickStatus(status: TaskStatus) {
+    if (changingStatus) return;
+    setStatusSheetOpen(false);
+    setChangingStatus(true);
+    try {
+      await updateTaskStatus(taskId, status);
+      load();
+    } catch (e) {
+      Alert.alert('Could not update status', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setChangingStatus(false);
+    }
   }
 
   const canPost = !!comment.trim() || photos.length > 0;
@@ -121,9 +139,22 @@ export function QcTaskDetailScreen({ navigation, route }: AppScreenProps<'QcTask
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>Status</Text>
-          <View style={[styles.statusPill, { backgroundColor: s.bg }]}>
-            <Text style={[styles.statusPillText, { color: s.color }]}>{formatTaskStatus(task.status)}</Text>
-          </View>
+          <Pressable
+            style={styles.statusRow}
+            onPress={() => setStatusSheetOpen(true)}
+            disabled={changingStatus}
+            accessibilityRole="button"
+            accessibilityLabel={`Status: ${formatTaskStatus(task.status)}`}
+          >
+            <View style={[styles.statusPill, { backgroundColor: s.bg }]}>
+              <Text style={[styles.statusPillText, { color: s.color }]}>{formatTaskStatus(task.status)}</Text>
+            </View>
+            {changingStatus ? (
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            ) : (
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            )}
+          </Pressable>
         </View>
 
         <View style={styles.field}>
@@ -245,6 +276,20 @@ export function QcTaskDetailScreen({ navigation, route }: AppScreenProps<'QcTask
           <Button label={posting ? 'Posting…' : 'Post Update'} disabled={!canPost || posting} onPress={onPostUpdate} style={styles.updateSubmit} />
         </View>
       </PickerSheet>
+
+      <PickerSheet visible={statusSheetOpen} title="Status" onClose={() => setStatusSheetOpen(false)}>
+        {ALL_TASK_STATUSES.map((st) => {
+          const style = TASK_STATUS_STYLE[st];
+          return (
+            <Pressable key={st} style={styles.statusOption} onPress={() => onPickStatus(st)}>
+              <View style={[styles.statusPill, { backgroundColor: style.bg }]}>
+                <Text style={[styles.statusPillText, { color: style.color }]}>{formatTaskStatus(st)}</Text>
+              </View>
+              {st === task.status && <Ionicons name="checkmark" size={18} color={colors.barBlue} />}
+            </Pressable>
+          );
+        })}
+      </PickerSheet>
     </View>
   );
 }
@@ -278,6 +323,14 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   statusPillText: { fontSize: 12, fontWeight: '700' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  statusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
   activitySection: { marginTop: spacing.sm },
   activityHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md, marginLeft: spacing.xs },
   activityTitle: { ...typography.sectionTitle, color: colors.textMuted },

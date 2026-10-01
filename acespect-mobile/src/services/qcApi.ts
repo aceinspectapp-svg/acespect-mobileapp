@@ -1,5 +1,5 @@
 import { api } from './apiClient';
-import { QcDefect, QcSeverity, QcStatus, QcTask, TaskUpdate } from '../types/qc';
+import { QcDefect, QcSeverity, QcStatus, QcTask, TaskStatus, TaskUpdate } from '../types/qc';
 
 /** Tasks assigned to the signed-in user — the mobile app's entire QC surface. */
 export async function getMyTasks(): Promise<QcTask[]> {
@@ -81,4 +81,10 @@ export async function postTaskUpdate(
     timeout: 120000,
   });
   return data.update;
+}
+
+/** Direct, free status change -- the Tasks list's inline status pill, as opposed to postTaskUpdate's automatic bump. */
+export async function updateTaskStatus(taskId: string, status: TaskStatus): Promise<QcTask> {
+  const { data } = await api.patch<{ task: QcTask }>(`/qc/tasks/${taskId}/status`, { status });
+  return data.task;
 }

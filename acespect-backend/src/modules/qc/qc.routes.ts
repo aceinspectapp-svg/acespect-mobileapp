@@ -20,6 +20,7 @@ import {
   updatePropertyTypeSchema,
   updateSeveritySchema,
   updateStatusSchema,
+  updateTaskStatusSchema,
 } from './qc.schemas';
 
 const router = Router();
@@ -92,5 +93,7 @@ router.post(
   validate(postTaskUpdateSchema),
   qcController.postTaskUpdate,
 );
+// Direct, free status change -- the Tasks list's inline status pill (self-scoped in qc.service, same as postTaskUpdate).
+router.patch('/tasks/:id/status', requireAuth, validate(updateTaskStatusSchema), qcController.updateTaskStatus);
 
 export const qcRouter = router;

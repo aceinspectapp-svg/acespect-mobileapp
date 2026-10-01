@@ -4,11 +4,15 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, shadows, spacing, typography } from '../../theme';
 import { InspectionHeader } from '../../components/inspection/InspectionHeader';
+import { PickerSheet } from '../../components/qc/PickerSheet';
+import { QcNavBar } from '../../components/qc/QcNavBar';
 import { SeverityPill } from '../../components/qc/SeverityPill';
 import { AppScreenProps } from '../../navigation/types';
 import { useQcData } from '../../context/QcDataContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatTaskPriority, formatTaskStatus, QcTask, TaskStatus } from '../../types/qc';
+
+const ALL_TASK_STATUSES: TaskStatus[] = ['PENDING', 'IN_PROGRESS', 'COMPLETED'];
 
 const TASK_STATUS_STYLE: Record<TaskStatus, { color: string; bg: string }> = {
   PENDING: { color: '#D97706', bg: '#FFFBEB' },
@@ -28,10 +32,13 @@ function initials(name: string): string {
   return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
 }
 
-export function QcTasksListScreen({ navigation }: AppScreenProps<'QcTasksList'>) {
-  const { tasks, loading, error, refreshTasks } = useQcData();
+export function QcTasksListScreen({ navigation, route }: AppScreenProps<'QcTasksList'>) {
+  const { propertyId } = route.params;
+  const { tasks, loading, error, refreshTasks, updateTaskStatus } = useQcData();
   const { signOut } = useAuth();
   const [filter, setFilter] = useState<TaskStatus | 'All'>('All');
+  const [statusSheetTaskId, setStatusSheetTaskId] = useState<string | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -40,10 +47,12 @@ export function QcTasksListScreen({ navigation }: AppScreenProps<'QcTasksList'>)
     }, []),
   );
 
+  const propertyTasks = useMemo(() => tasks.filter((t) => t.defect.property.id === propertyId), [tasks, propertyId]);
   const filtered = useMemo(
-    () => (filter === 'All' ? tasks : tasks.filter((t) => t.status === filter)),
-    [tasks, filter],
+    () => (filter === 'All' ? propertyTasks : propertyTasks.filter((t) => t.status === filter)),
+    [propertyTasks, filter],
   );
+  const first = propertyTasks[0]?.defect;
 
   const onSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -52,11 +61,26 @@ export function QcTasksListScreen({ navigation }: AppScreenProps<'QcTasksList'>)
     ]);
   };
 
+  async function onPickStatus(status: TaskStatus) {
+    if (!statusSheetTaskId || updatingStatus) return;
+    const taskId = statusSheetTaskId;
+    setStatusSheetTaskId(null);
+    setUpdatingStatus(true);
+    try {
+      await updateTaskStatus(taskId, status);
+    } catch (e) {
+      Alert.alert('Could not update status', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  }
+
   return (
     <View style={styles.root}>
       <InspectionHeader
-        title="My Tasks"
-        subtitle="Jobs assigned to you"
+        title="Tasks"
+        subtitle={first ? `${first.property.name} · ${first.project.name}` : undefined}
+        onBack={() => navigation.goBack()}
         actions={[{ icon: 'log-out-outline', onPress: onSignOut, accessibilityLabel: 'Sign out' }]}
       />
 
@@ -75,12 +99,12 @@ export function QcTasksListScreen({ navigation }: AppScreenProps<'QcTasksList'>)
         </ScrollView>
       </View>
 
-      {loading && tasks.length === 0 && (
+      {loading && propertyTasks.length === 0 && (
         <View style={styles.centered}>
           <ActivityIndicator color={colors.accentBlueFg} />
         </View>
       )}
-      {error && tasks.length === 0 && (
+      {error && propertyTasks.length === 0 && (
         <View style={styles.centered}>
           <Text style={styles.errorText}>{error}</Text>
           <Pressable onPress={() => refreshTasks()} style={styles.retryBtn}>
@@ -107,9 +131,16 @@ export function QcTasksListScreen({ navigation }: AppScreenProps<'QcTasksList'>)
                     <Text style={[styles.pillText, { color: priorityStyle.color }]}>{formatTaskPriority(item.priority)}</Text>
                   </View>
                 </View>
-                <View style={[styles.pill, { backgroundColor: statusStyle.bg }]}>
+                <Pressable
+                  onPress={() => setStatusSheetTaskId(item.id)}
+                  style={[styles.pill, styles.statusPillBtn, { backgroundColor: statusStyle.bg }]}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Status: ${formatTaskStatus(item.status)}`}
+                >
                   <Text style={[styles.pillText, { color: statusStyle.color }]}>{formatTaskStatus(item.status)}</Text>
-                </View>
+                  <Ionicons name="chevron-down" size={12} color={statusStyle.color} />
+                </Pressable>
               </View>
               <Text style={styles.summary}>{item.defect.summary ?? 'Add defect details →'}</Text>
               <Text style={styles.location}>
@@ -131,6 +162,29 @@ export function QcTasksListScreen({ navigation }: AppScreenProps<'QcTasksList'>)
         ListEmptyComponent={
           !loading && !error ? <Text style={styles.empty}>No tasks in this filter.</Text> : null
         }
+      />
+
+      <PickerSheet visible={!!statusSheetTaskId} title="Status" onClose={() => setStatusSheetTaskId(null)}>
+        {ALL_TASK_STATUSES.map((s) => {
+          const style = TASK_STATUS_STYLE[s];
+          const current = propertyTasks.find((t) => t.id === statusSheetTaskId)?.status === s;
+          return (
+            <Pressable key={s} style={styles.statusOption} onPress={() => onPickStatus(s)}>
+              <View style={[styles.pill, { backgroundColor: style.bg }]}>
+                <Text style={[styles.pillText, { color: style.color }]}>{formatTaskStatus(s)}</Text>
+              </View>
+              {current && <Ionicons name="checkmark" size={18} color={colors.barBlue} />}
+            </Pressable>
+          );
+        })}
+      </PickerSheet>
+
+      <QcNavBar
+        active="tasks"
+        onTab={(tab) => {
+          if (tab === 'home') navigation.navigate('QcPropertyHome', { propertyId });
+          else if (tab === 'profile') Alert.alert('Profile', "Profile isn't wired up yet — coming in a later update.");
+        }}
       />
     </View>
   );
@@ -169,6 +223,14 @@ const styles = StyleSheet.create({
   cardTopLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
   pill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill },
   pillText: { fontSize: 11, fontWeight: '700' },
+  statusPillBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  statusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
   summary: { ...typography.bodySm, fontWeight: '700', color: colors.textPrimary },
   location: { ...typography.caption, color: colors.textMuted, marginTop: 2, marginBottom: spacing.sm },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

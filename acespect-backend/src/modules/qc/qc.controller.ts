@@ -165,6 +165,11 @@ export const qcController = {
     const update = await qcService.postTaskUpdate(requireId(req, 'Task id'), user.id, user.role, req.body, photoUrls);
     res.status(201).json({ update });
   }),
+  updateTaskStatus: asyncHandler(async (req, res) => {
+    const user = requireUser(req);
+    const task = await qcService.updateTaskStatus(requireId(req, 'Task id'), req.body.status, user.id, user.role);
+    res.status(200).json({ task: serializeTask(task) });
+  }),
 
   // ─── Config bundle ─────────────────────────────────────────────────────
   getConfig: asyncHandler(async (_req, res) => {

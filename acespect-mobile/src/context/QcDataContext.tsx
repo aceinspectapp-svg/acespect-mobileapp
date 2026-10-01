@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { QcDefect, QcSeverity, QcStatus, QcTask } from '../types/qc';
+import { QcDefect, QcSeverity, QcStatus, QcTask, TaskStatus } from '../types/qc';
 import * as qcApi from '../services/qcApi';
 
 /**
@@ -36,6 +36,8 @@ interface QcDataState {
   /** The full status lifecycle for the Defect screen's free status picker. */
   getStatuses: () => Promise<QcStatus[]>;
   postTaskUpdate: (taskId: string, comment: string, markCompleted: boolean, photoUris: string[]) => Promise<void>;
+  /** Direct, free status change -- the Tasks list's inline status pill. */
+  updateTaskStatus: (taskId: string, status: TaskStatus) => Promise<void>;
 }
 
 const QcDataContext = createContext<QcDataState | undefined>(undefined);
@@ -83,9 +85,17 @@ export function QcDataProvider({ children }: { children: React.ReactNode }) {
     [getTask],
   );
 
+  const updateTaskStatus = useCallback(
+    async (taskId: string, status: TaskStatus) => {
+      await qcApi.updateTaskStatus(taskId, status);
+      await getTask(taskId); // refetch so the activity feed's logged status change lands in the cache
+    },
+    [getTask],
+  );
+
   const value = useMemo<QcDataState>(
-    () => ({ tasks, loading, error, refreshTasks, getTask, getDefect, updateDefect, getSeverities, getStatuses, postTaskUpdate }),
-    [tasks, loading, error, refreshTasks, getTask, getDefect, updateDefect, getSeverities, getStatuses, postTaskUpdate],
+    () => ({ tasks, loading, error, refreshTasks, getTask, getDefect, updateDefect, getSeverities, getStatuses, postTaskUpdate, updateTaskStatus }),
+    [tasks, loading, error, refreshTasks, getTask, getDefect, updateDefect, getSeverities, getStatuses, postTaskUpdate, updateTaskStatus],
   );
 
   return <QcDataContext.Provider value={value}>{children}</QcDataContext.Provider>;

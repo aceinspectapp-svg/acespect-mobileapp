@@ -7,7 +7,7 @@ import { FieldLabel, PlainTextInput } from '../../components/inspection/fieldKit
 import { DateField } from '../../components/ui';
 import { PickerSheet } from '../../components/qc/PickerSheet';
 import { SeverityPill } from '../../components/qc/SeverityPill';
-import { StatusBadge } from '../../components/qc/StatusBadge';
+import { StatusPicker } from '../../components/qc/StatusPicker';
 import { AppScreenProps } from '../../navigation/types';
 import { useQcData } from '../../context/QcDataContext';
 import { QcDefect, QcSeverity, QcStatus } from '../../types/qc';
@@ -30,7 +30,6 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [severitySheetOpen, setSeveritySheetOpen] = useState(false);
-  const [statusSheetOpen, setStatusSheetOpen] = useState(false);
 
   // Local draft -- only sent to the server on Save, so navigating away
   // without saving never half-applies an edit.
@@ -91,7 +90,7 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
   }
 
   const selectedSeverity = severities.find((s) => s.id === severityId) ?? null;
-  const selectedStatus = statuses.find((s) => s.id === statusId) ?? defect?.status ?? null;
+  const selectedStatus = statuses.find((s) => s.id === statusId) ?? defect?.status;
 
   return (
     <View style={styles.root}>
@@ -155,10 +154,9 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
 
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>Status</Text>
-            <Pressable style={styles.severityRow} onPress={() => setStatusSheetOpen(true)}>
-              {selectedStatus && <StatusBadge status={selectedStatus} />}
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-            </Pressable>
+            {selectedStatus && (
+              <StatusPicker status={selectedStatus} statuses={statuses} onChange={(s) => setStatusId(s.id)} />
+            )}
           </View>
 
           <View style={styles.field}>
@@ -180,25 +178,6 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
           >
             <SeverityPill severity={s} />
             {s.id === severityId && <Ionicons name="checkmark" size={18} color={colors.barBlue} />}
-          </Pressable>
-        ))}
-      </PickerSheet>
-
-      <PickerSheet visible={statusSheetOpen} title="Status" onClose={() => setStatusSheetOpen(false)}>
-        {statuses.map((s) => (
-          <Pressable
-            key={s.id}
-            style={styles.statusOption}
-            onPress={() => {
-              setStatusId(s.id);
-              setStatusSheetOpen(false);
-            }}
-          >
-            <View style={styles.statusOptionText}>
-              <StatusBadge status={s} />
-              <Text style={styles.statusMeaning}>{s.meaning}</Text>
-            </View>
-            {s.id === statusId && <Ionicons name="checkmark" size={18} color={colors.barBlue} />}
           </Pressable>
         ))}
       </PickerSheet>
@@ -228,14 +207,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
   },
-  statusOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-  },
-  statusOptionText: { flex: 1, gap: spacing.xs, alignItems: 'flex-start' },
-  statusMeaning: { ...typography.caption, color: colors.textMuted },
 });

@@ -103,6 +103,11 @@ export const postTaskUpdateSchema = z.object({
   markCompleted: z.coerce.boolean().default(false),
 });
 
+/** Direct, free status change for a task -- separate from postTaskUpdate's automatic PENDING->IN_PROGRESS/COMPLETED bump. */
+export const updateTaskStatusSchema = z.object({
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED']),
+});
+
 export type CreateClientInput = z.infer<typeof createClientSchema>;
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type CreatePropertyInput = z.infer<typeof createPropertySchema>;
@@ -113,3 +118,4 @@ export type CreateFieldUserInput = z.infer<typeof createFieldUserSchema>;
 export type CreateDefectInput = z.infer<typeof createDefectSchema>;
 export type UpdateDefectInput = z.infer<typeof updateDefectSchema>;
 export type PostTaskUpdateInput = z.infer<typeof postTaskUpdateSchema>;
+export type UpdateTaskStatusInput = z.infer<typeof updateTaskStatusSchema>;

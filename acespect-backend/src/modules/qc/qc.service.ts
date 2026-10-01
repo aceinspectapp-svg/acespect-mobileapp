@@ -13,6 +13,7 @@ import {
   PostTaskUpdateInput,
   SEVERITY_KEY_TO_PRIORITY,
   UpdateDefectInput,
+  UpdateTaskStatusInput,
 } from './qc.schemas';
 
 /** The QcStatus.key a defect moves to when its task is marked Completed — see the shared Defect Lifecycle Workflow doc. */
@@ -355,6 +356,38 @@ async function postTaskUpdate(
   });
 }
 
+/**
+ * Direct, free status change -- the mobile Tasks list's inline status pill,
+ * as opposed to postTaskUpdate's automatic PENDING->IN_PROGRESS/COMPLETED
+ * bump. Still logs a (comment-less) activity entry so the status change
+ * shows up in the task's feed, and still cascades the defect to "Pending
+ * Re-inspection" when the new status is COMPLETED, same as markCompleted.
+ */
+async function updateTaskStatus(taskId: string, status: UpdateTaskStatusInput['status'], requesterId: string, requesterRole: string) {
+  const task = await prisma.qcTask.findUnique({ where: { id: taskId } });
+  if (!task) throw ApiError.notFound('Task not found');
+  if (requesterRole !== 'ADMIN' && task.assignedToId !== requesterId) {
+    throw ApiError.forbidden('This task is not assigned to you');
+  }
+  if (status === task.status) {
+    return prisma.qcTask.findUniqueOrThrow({ where: { id: taskId }, include: taskInclude });
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await tx.qcTaskUpdate.create({
+      data: { taskId, authorId: requesterId, comment: '', photoUrls: [], statusAfter: status, statusChanged: true },
+    });
+    const updated = await tx.qcTask.update({ where: { id: taskId }, data: { status }, include: taskInclude });
+    if (status === 'COMPLETED') {
+      const reinspection = await tx.qcStatus.findUnique({ where: { key: PENDING_REINSPECTION_KEY } });
+      if (reinspection) {
+        await tx.qcDefect.update({ where: { id: task.defectId }, data: { statusId: reinspection.id } });
+      }
+    }
+    return updated;
+  });
+}
+
 // ─── Config bundle (one round-trip for mobile/dashboard on load) ────────────
 
 async function getConfig() {
@@ -429,5 +462,6 @@ export const qcService = {
   listMyTasks,
   getTaskById,
   postTaskUpdate,
+  updateTaskStatus,
   getConfig,
 };
