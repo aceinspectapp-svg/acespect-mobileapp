@@ -162,8 +162,11 @@ const defectInclude = {
   createdBy: { select: { id: true, name: true, email: true } },
 } as const;
 
+/** The QcStatus.key a brand-new defect starts in — see the shared Defect Lifecycle Workflow doc. */
+const OPEN_KEY = 'open';
+
 async function getDefaultOpenStatus() {
-  const status = await prisma.qcStatus.findFirst({ orderBy: { order: 'asc' } });
+  const status = await prisma.qcStatus.findUnique({ where: { key: OPEN_KEY } });
   if (!status) throw ApiError.badRequest('No QC statuses configured yet — an admin must configure them first');
   return status;
 }
