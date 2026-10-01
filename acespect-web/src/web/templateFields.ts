@@ -1,5 +1,5 @@
 import { API_BASE, getToken } from "./api";
-import { composeSectionSentence } from "./reportSentences";
+import { absenceSentence, composeSectionSentence } from "./reportSentences";
 
 /**
  * Template/answer-tree types + pure logic, ported from the mobile app
@@ -396,8 +396,28 @@ function walk(
           }
         }
         const composedSentence = composed ? composeSectionSentence(composed, inst, field.itemFields ?? [], label) : undefined;
-        if (composedSentence) textParts.push(composedSentence);
-        else if (sub.reportText) textParts.push(`${label}: ${sub.reportText}`.trim());
+        // `undefined` means "no composer registered for this section" (fall
+        // back to the generic label/value text); an empty string means "a
+        // composer ran and deliberately has nothing to say" (e.g. the
+        // `notes` composer suppressing a checklist item answered "No") --
+        // these must NOT be treated the same, or a composer's silence gets
+        // overwritten by the exact boilerplate line it was trying to avoid.
+        if (composedSentence !== undefined) {
+          if (composedSentence) textParts.push(composedSentence);
+        } else if (sub.reportText) {
+          textParts.push(`${label}: ${sub.reportText}`.trim());
+        }
+      }
+      // No instances recorded for a composed section (e.g. the property has
+      // no driveway) used to leave this section's reportText empty --
+      // ReportSection.tsx would then fall back to its generic "No content
+      // recorded for this category" placeholder, which reads like the
+      // inspection was left incomplete rather than reporting the fact that
+      // the feature doesn't exist. State it properly instead, matching the
+      // reference report's own "There is no driveway." convention.
+      if (composed && instances.length === 0) {
+        const absence = absenceSentence(composed);
+        if (absence) textParts.push(absence);
       }
       fields[field.key] = labels.join(", ");
       continue;
@@ -418,10 +438,16 @@ function walk(
       ? value.filter((v) => typeof v === "string").map(toLabel).join(", ")
       : toLabel(String(value));
     fields[field.key] = strValue;
+    // Notes & Post Project's own classification fields (not a finding, just
+    // metadata) -- printing "Additional Damage Present?: No." etc. as a
+    // bullet line would defeat the point of hiding the whole section when
+    // there's nothing notable (see the `notes` composer and ReportView.tsx).
+    // Still recorded in `fields` above for the reviewer's editing view.
+    const isNotesMetadata = sectionKey === "notes" && (field.key === "postProject" || field.key === "hasDamage");
     // Still recorded in `fields` above (so the reviewer's Field Data view
     // keeps every answer editable) -- just not echoed as its own bullet line
     // when a whole-section composer is about to produce real prose instead.
-    if (!isFlatComposedSection) textParts.push(`${field.label}: ${strValue}.`);
+    if (!isFlatComposedSection && !isNotesMetadata) textParts.push(`${field.label}: ${strValue}.`);
   }
 
   if (isFlatComposedSection) {

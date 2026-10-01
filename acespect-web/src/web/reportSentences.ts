@@ -27,6 +27,27 @@ function optionLabel(itemFields: TemplateField[], key: string, raw: string): str
   return field?.options?.find((o) => o.value === raw)?.label ?? raw;
 }
 
+/**
+ * A bolded, colour-coded "Condition: Fair" tag for a `color-select` field,
+ * reusing the exact colour already defined on that option in the template
+ * (see SectionFieldEditor's ToggleField, which reads the same `o.color`) --
+ * no separate colour scale to invent or keep in sync. Encoded as its own
+ * plain-text paragraph (`COND::#hex::Label`) because `reportText` is stored
+ * as flat text, not structured data; ReportSection.tsx recognises this exact
+ * prefix and renders it as a tag instead of an ordinary paragraph. Neither
+ * reference report actually applies its own New/Satisfactory/Fair/
+ * Average/Poor scale inline -- it's defined in the SCOPE appendix and never
+ * used again -- so this is a deliberate improvement on both, not something
+ * being copied from either.
+ */
+function conditionTag(itemFields: TemplateField[], key: string, raw: string): string | undefined {
+  if (!raw) return undefined;
+  const field = itemFields.find((f) => f.key === key);
+  const option = field?.options?.find((o) => o.value === raw);
+  if (!option?.color) return undefined;
+  return `COND::${option.color}::${option.label}`;
+}
+
 function optionLabels(itemFields: TemplateField[], key: string, raw: string[]): string[] {
   return raw.map((v) => optionLabel(itemFields, key, v));
 }
@@ -103,6 +124,8 @@ const driveway: Composer = (inst, itemFields) => {
   if (!inst.location && !inst.material) {
     parts.push("There is no driveway.");
   } else {
+    const tag = conditionTag(itemFields, "condition", asString(inst.condition));
+    if (tag) parts.push(tag);
     parts.push(
       `The driveway is to the ${lower(location)} of the block and is constructed of ${lower(material)}. It is in ${lower(condition)} condition with typical wear and tear.${obstructionsSentence(itemFields, inst, "driveway")}`,
     );
@@ -119,9 +142,12 @@ const pavingPaths: Composer = (inst, itemFields) => {
   const pathType = optionLabel(itemFields, "pathType", asString(inst.pathType));
   const condition = optionLabel(itemFields, "condition", asString(inst.condition));
   const where = name ? `to the ${lower(name)}` : "to the block";
-  const parts: string[] = [
+  const parts: string[] = [];
+  const pavingTag = conditionTag(itemFields, "condition", asString(inst.condition));
+  if (pavingTag) parts.push(pavingTag);
+  parts.push(
     `There is paving ${where}, constructed of ${lower(pathType)}. It is in ${lower(condition)} condition with typical wear and tear.${obstructionsSentence(itemFields, inst, "paving", "defects")}`,
-  ];
+  );
   const drainage = optionLabel(itemFields, "drainage", asString(inst.drainage));
   if (inst.drainage) {
     const drainageNote = asString(inst.drainageNote);
@@ -138,9 +164,12 @@ const fences: Composer = (inst, itemFields) => {
   const location = optionLabel(itemFields, "location", asString(inst.location));
   const structureType = optionLabel(itemFields, "structureType", asString(inst.structureType));
   const condition = optionLabel(itemFields, "condition", asString(inst.condition));
-  const parts: string[] = [
+  const parts: string[] = [];
+  const fenceTag = conditionTag(itemFields, "condition", asString(inst.condition));
+  if (fenceTag) parts.push(fenceTag);
+  parts.push(
     `The ${lower(location)} fence is constructed of ${lower(structureType)} and is in ${lower(condition)} condition with typical weathering.${obstructionsSentence(itemFields, inst, "fence")}`,
-  ];
+  );
   const cracks = damageSentences(inst, itemFields, "cracks");
   if (cracks) parts.push(cracks);
   const notes = asString(inst.notes);
@@ -152,9 +181,12 @@ const retainingWalls: Composer = (inst, itemFields) => {
   const location = optionLabel(itemFields, "location", asString(inst.location));
   const material = optionLabel(itemFields, "material", asString(inst.material));
   const condition = optionLabel(itemFields, "condition", asString(inst.condition));
-  const parts: string[] = [
+  const parts: string[] = [];
+  const wallTag = conditionTag(itemFields, "condition", asString(inst.condition));
+  if (wallTag) parts.push(wallTag);
+  parts.push(
     `There is a retaining wall to the ${lower(location)}, constructed of ${lower(material)}. It is in ${lower(condition)} condition with typical weathering.${obstructionsSentence(itemFields, inst, "wall")}`,
-  ];
+  );
   const cracks = damageSentences(inst, itemFields, "cracks");
   if (cracks) parts.push(cracks);
   const notes = asString(inst.notes);
@@ -172,9 +204,12 @@ const garageCarportSheds: Composer = (inst, itemFields) => {
   if (wall.length) constructionBits.push(joinList(wall));
   if (roof.length) constructionBits.push(`a ${joinList(roof)} roof`);
   const constructionText = constructionBits.length ? `, constructed of ${constructionBits.join(" with ")}` : "";
-  const parts: string[] = [
+  const parts: string[] = [];
+  const structureTag = conditionTag(itemFields, "condition", asString(inst.condition));
+  if (structureTag) parts.push(structureTag);
+  parts.push(
     `There is a ${lower(name)} to the house${position ? ` at the ${lower(position)}` : ""}${constructionText}, and is generally in ${lower(condition)} state of repair.${obstructionsSentence(itemFields, inst, "structure")}`,
-  ];
+  );
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
@@ -189,9 +224,12 @@ const poolSpa: Composer = (inst, itemFields) => {
   const condition = optionLabel(itemFields, "condition", asString(inst.condition));
   const fenceType = optionLabels(itemFields, "fenceType", asStringArray(inst.fenceType)).map(lower);
   const fenceSafety = optionLabel(itemFields, "fenceSafety", asString(inst.fenceSafety));
-  const parts: string[] = [
+  const parts: string[] = [];
+  const poolTag = conditionTag(itemFields, "condition", asString(inst.condition));
+  if (poolTag) parts.push(poolTag);
+  parts.push(
     `There is a ${lower(name)} located at the property${poolType ? `, a ${lower(poolType)}` : ""}${construction.length ? `, constructed of ${joinList(construction)}` : ""}, which is generally in ${lower(condition)} state of repair.${obstructionsSentence(itemFields, inst, "pool/spa area")}`,
-  ];
+  );
   if (fenceType.length || inst.fenceSafety) {
     parts.push(
       `The pool fence is constructed of ${fenceType.length ? joinList(fenceType) : "the surrounding boundary"} and appears to be ${lower(fenceSafety || "not observed")}.`,
@@ -210,11 +248,14 @@ const elevations: Composer = (inst, itemFields, label) => {
   const hasDamage = yesNo(itemFields, inst, "hasDamage");
   const claddingObs = optionLabels(itemFields, "claddingObs", asStringArray(inst.claddingObs)).map(lower);
   const windowDoorObs = optionLabels(itemFields, "windowDoorObs", asStringArray(inst.windowDoorObs)).map(lower);
-  const parts: string[] = [
+  const parts: string[] = [];
+  const elevationTag = conditionTag(itemFields, "condition", asString(inst.condition));
+  if (elevationTag) parts.push(elevationTag);
+  parts.push(
     `The ${lower(label)} elevation${orientation ? ` generally faces ${lower(orientation)}` : ""}. It is in ${lower(condition)} condition. There ${hasDamage ? "were" : "were no"} signs of notable damage.${
       claddingObs.length ? ` ${joinList(claddingObs)} noted to the cladding.` : ""
     }${windowDoorObs.length ? ` ${joinList(windowDoorObs)} noted to windows/doors.` : ""}`,
-  ];
+  );
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
@@ -227,11 +268,14 @@ const roofChimneys: Composer = (inst, itemFields, label) => {
   const coveringType = optionLabels(itemFields, "coveringType", asStringArray(inst.coveringType)).map(lower);
   const condition = optionLabel(itemFields, "generalCondition", asString(inst.generalCondition));
   const observations = optionLabels(itemFields, "generalObservations", asStringArray(inst.generalObservations)).map(lower);
-  const parts: string[] = [
+  const parts: string[] = [];
+  const roofTag = conditionTag(itemFields, "generalCondition", asString(inst.generalCondition));
+  if (roofTag) parts.push(roofTag);
+  parts.push(
     `The ${lower(label)} appears to be in ${lower(condition)} condition${coveringType.length ? `, constructed of ${joinList(coveringType)}` : ""}.${
       accessibility.length ? ` Comments are based on ${joinList(accessibility)}.` : ""
     }${observations.length ? ` ${joinList(observations)} noted.` : ""}`,
-  ];
+  );
   const notes = asString(inst.notes);
   if (notes) parts.push(notes);
   return parts.join("\n\n");
@@ -241,11 +285,14 @@ const internalAreas: Composer = (inst, itemFields, label) => {
   const condition = optionLabel(itemFields, "generalCondition", asString(inst.generalCondition));
   const hasDamage = yesNo(itemFields, inst, "hasDamage");
   const moisture = optionLabels(itemFields, "moistureObservations", asStringArray(inst.moistureObservations)).map(lower);
-  const parts: string[] = [
+  const parts: string[] = [];
+  const roomTag = conditionTag(itemFields, "generalCondition", asString(inst.generalCondition));
+  if (roomTag) parts.push(roomTag);
+  parts.push(
     `${label} is in ${lower(condition)} condition. There ${hasDamage ? "were" : "were no"} signs of notable damage.${obstructionsSentence(itemFields, inst, "room", "obstruction")}${
       moisture.length ? ` ${joinList(moisture)} noted.` : ""
     }`,
-  ];
+  );
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
@@ -312,9 +359,41 @@ const description: Composer = (inst, itemFields) => {
   return parts.join(" ");
 };
 
+/**
+ * Notes & Post Project's two checklist-style repeating-groups ("Movement /
+ * Safety Checklist" -- 6 fixed yes/no items with a gated detail box -- and
+ * user-addable "No Access Areas"). Both route through this one composer
+ * (templateFields.ts keys every repeating-group inside a section by that
+ * section's key, not the field's own key), disambiguated by which fields
+ * `itemFields` actually has. Unlike every other section, a checklist item
+ * answered "No" -- the common case -- produces NOTHING here instead of a
+ * "Bouncy / Squeaking Floors: Observed?: No." line, so an inspection with
+ * nothing notable ends up with a genuinely empty reportText. That emptiness
+ * is what lets ReportView.tsx hide the whole "NOTES" heading/list, matching
+ * the reference report, which omits this section entirely rather than
+ * printing a wall of "nothing to report" boilerplate.
+ */
+const notes: Composer = (inst, itemFields, label) => {
+  const isChecklistItem = itemFields.some((f) => f.key === "value") && itemFields.some((f) => f.key === "note");
+  if (isChecklistItem) {
+    if (asString(inst.value) !== "yes") return "";
+    const note = asString(inst.note);
+    return `${label} observed.${note ? ` ${note}` : ""}`;
+  }
+  const isNoAccessItem = itemFields.some((f) => f.key === "area") && itemFields.some((f) => f.key === "reason");
+  if (isNoAccessItem) {
+    const area = asString(inst.area);
+    const reason = asString(inst.reason);
+    if (!area && !reason) return "";
+    return `No access was available to ${area || "an area of the property"}${reason ? `: ${reason}` : ""}.`;
+  }
+  return "";
+};
+
 /** Section key -> its composer. Sections not listed here keep the generic "Label: value." fallback. */
 export const SECTION_SENTENCE_COMPOSERS: Record<string, Composer> = {
   description,
+  notes,
   driveway,
   paving_paths: pavingPaths,
   fences,
@@ -335,6 +414,29 @@ export function composeSectionSentence(
   const composer = SECTION_SENTENCE_COMPOSERS[sectionKey];
   if (!composer) return undefined;
   return composer(inst, itemFields, label);
+}
+
+/**
+ * What to say when a section that CAN legitimately not exist at a property
+ * (no driveway, no pool, ...) has zero recorded instances -- matching the
+ * reference template's own "There is no driveway." convention instead of
+ * leaving the section blank (which otherwise reads as an incomplete
+ * inspection rather than a reported fact). Only sections backed by a plain
+ * user-addable list (not elevations/roof/internal-areas, whose fixed
+ * instances always exist -- see templateFields.ts's resolveInstances) ever
+ * hit zero instances, so this only needs to cover those.
+ */
+const ABSENCE_SENTENCES: Record<string, string> = {
+  driveway: "There is no driveway to the property.",
+  paving_paths: "There is no paving to the property.",
+  fences: "There are no fences to the property.",
+  retaining_walls: "There are no retaining walls to the property.",
+  garage_carport_sheds: "There is no garage, carport or shed to the property.",
+  pool_spa: "There is no pool or spa to the property.",
+};
+
+export function absenceSentence(sectionKey: string): string | undefined {
+  return ABSENCE_SENTENCES[sectionKey];
 }
 
 // Re-exported only so callers don't need a second import from templateFields

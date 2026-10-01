@@ -4,6 +4,11 @@ import { getReportSigner } from "./mockData";
 /** The front-matter of a Dilapidation Report, derived from Job Information. */
 export interface ReportHeader {
   reportTitle: string;
+  /** The day this report document was generated/issued -- distinct from
+   *  `inspectionDate` (the site-visit date), matching the reference
+   *  report's own cover, which shows both. Same generation-date semantics
+   *  as the PDF footer's own "Date:" line (see reportPdf.ts). */
+  reportDate: string;
   clientName: string;
   clientAttn?: string;
   clientEmail?: string;
@@ -44,17 +49,6 @@ export const PHOTOGRAPHS_NOTE =
   "downloads temporarily from this site. If a window does not then appear asking where you would like " +
   "the download saved, simply click on the Download All button again to commence the download.";
 
-export const SCOPE_BOILERPLATE =
-  "The scope for inspection is external and internal to all structures / external and internal to part " +
-  "of the property at / internal only to all areas / external only to all areas. OR insert description of scope.";
-
-export const SCOPE_PHOTOS_REF =
-  "Selected photographs are displayed in this report. For a full download of photographs provided by " +
-  "the Houspect survey please go to the link in the Photographs heading on page 2 of the report.";
-
-export const SITE_IMAGE_NOTE =
-  "Please do not anchor images. Just insert them the same way as a photograph so they can be easily " +
-  "sized and moved. (Admin: adjust photo size to 5.9cm for landscape & 5.2cm for portrait.)";
 
 /* ── Scope page: Condition Definitions + Dilapidation Report Information ── */
 
@@ -169,6 +163,7 @@ export function buildReportHeader(inspection: Inspection, inspector?: Pick<User,
 
   return {
     reportTitle,
+    reportDate: formatLongDate(new Date().toISOString()),
     clientName: str(f.clientName, inspection.client),
     clientAttn: str(f.clientAttn) || undefined,
     clientEmail: str(f.clientEmail) || undefined,

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { createContext, useContext, useRef, type ReactNode } from "react";
 import { resolveMediaUrl } from "../api";
 
 /**
@@ -266,34 +266,94 @@ export function MetaRow({
  * real PDF link, not just a picture). Plain thin border only -- no rounded
  * corners or shadow, which the reference doesn't use either.
  */
-export function PhotoGrid({ photos, compact }: { photos: string[]; compact: boolean }) {
+export function PhotoGrid({
+  photos,
+  compact,
+  startNumber,
+  layout = "grid",
+}: {
+  photos: string[];
+  compact: boolean;
+  /** First number in this batch's sequential "Photo N" captions (see PhotoNumberContext) -- omitted outside the real printed report (e.g. the reviewer's isolated section preview), where a running count across the whole document doesn't make sense. */
+  startNumber?: number;
+  /**
+   * "grid" (default, used everywhere in the report): a 2-column layout --
+   * every photo group (a category's general photos, and each crack/damage's
+   * own photos) renders this way, each photo noticeably larger than the old
+   * always-one-per-row layout since it fills half the page width instead of
+   * a fixed 5.9cm. "stack" (one large photo per row, full page width) is
+   * kept as an option for a case that genuinely needs a single oversized
+   * photo, but nothing currently uses it.
+   */
+  layout?: "stack" | "grid";
+}) {
   if (photos.length === 0) return null;
-  const widthCm = compact ? 4 : 5.9;
+  const widthCm = compact ? 4.6 : 7;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "8px", margin: "6px 0 12px" }}>
+    <div
+      style={
+        layout === "grid"
+          ? { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px", margin: "6px 0 12px" }
+          : { display: "flex", flexDirection: "column", gap: "8px", margin: "6px 0 12px" }
+      }
+    >
       {photos.map((url, i) => (
-        <a
-          key={i}
-          href={resolveMediaUrl(url)}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ display: "block", width: `${widthCm}cm` }}
-        >
-          <img
-            src={resolveMediaUrl(url)}
-            alt=""
-            style={{
-              width: "100%",
-              aspectRatio: "4 / 3",
-              objectFit: "cover",
-              border: `1px solid ${reportTokens.border}`,
-              display: "block",
-            }}
-          />
-        </a>
+        <div key={i} style={layout === "grid" ? undefined : { width: `${widthCm}cm` }}>
+          <a href={resolveMediaUrl(url)} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+            <img
+              src={resolveMediaUrl(url)}
+              alt=""
+              style={{
+                width: "100%",
+                aspectRatio: "4 / 3",
+                objectFit: "cover",
+                border: `1px solid ${reportTokens.border}`,
+                display: "block",
+              }}
+            />
+          </a>
+          {startNumber !== undefined && (
+            <span style={{ display: "block", marginTop: "2px", fontSize: "0.82em", color: reportTokens.inkMuted }}>
+              Photo {startNumber + i}
+            </span>
+          )}
+        </div>
       ))}
     </div>
   );
+}
+
+/**
+ * Assigns sequential "Photo N" numbers to every photo in the printed report,
+ * in document order, so a section's prose can say "Please refer to
+ * Photographs 9 to 12" instead of a generic "Please refer to Photographs:" --
+ * matching the reference report's own per-item photo cross-referencing.
+ * `next(count)` claims a contiguous block and returns its first number; it
+ * must be called in render order (top to bottom) for the numbers to line up
+ * with where each photo actually appears, which holds for this report's
+ * single synchronous top-down render (both the live page and the Puppeteer
+ * PDF render the same component tree once, not interactively).
+ */
+export const PhotoNumberContext = createContext<{ next: (count: number) => number } | null>(null);
+
+export function PhotoNumberProvider({ children }: { children: ReactNode }) {
+  const counter = useRef(1);
+  const next = (count: number) => {
+    const start = counter.current;
+    counter.current += count;
+    return start;
+  };
+  return <PhotoNumberContext.Provider value={{ next }}>{children}</PhotoNumberContext.Provider>;
+}
+
+/** "Please refer to Photographs 9 to 12:" / "Please refer to Photograph 9:" / falls back to the old generic line when no PhotoNumberProvider is in scope (e.g. the reviewer's isolated single-section preview, which doesn't represent the whole document's running order). */
+export function usePhotoNumbering(count: number): { start?: number; label: string } {
+  const ctx = useContext(PhotoNumberContext);
+  if (!ctx || count === 0) return { label: "Please refer to Photographs:" };
+  const start = ctx.next(count);
+  const end = start + count - 1;
+  const label = count === 1 ? `Please refer to Photograph ${start}:` : `Please refer to Photographs ${start} to ${end}:`;
+  return { start, label };
 }
 
 /** A simple bordered data table (e.g. the Crack Categorisation Table) — nothing else in this report needs a real `<table>` yet. */
