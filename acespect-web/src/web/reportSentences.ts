@@ -286,10 +286,18 @@ const internalAreas: Composer = (inst, itemFields, label) => {
   const hasDamage = yesNo(itemFields, inst, "hasDamage");
   const moisture = optionLabels(itemFields, "moistureObservations", asStringArray(inst.moistureObservations)).map(lower);
   const parts: string[] = [];
+  // Room name as its own bold heading (see ReportSection.tsx's "ROOMHEAD::"
+  // handling), matching the reference report's "Bedroom 4" / "Bathroom"
+  // style -- rather than folding the name into the sentence itself
+  // ("Bedroom 4 is in..."), which is what every other section here still
+  // does (there, the category heading above already names the item, so
+  // there's no redundant second name needed the way there is for a whole
+  // floor of differently-named rooms).
+  parts.push(`ROOMHEAD::${label}`);
   const roomTag = conditionTag(itemFields, "generalCondition", asString(inst.generalCondition));
   if (roomTag) parts.push(roomTag);
   parts.push(
-    `${label} is in ${lower(condition)} condition. There ${hasDamage ? "were" : "were no"} signs of notable damage.${obstructionsSentence(itemFields, inst, "room", "obstruction")}${
+    `It is in ${lower(condition)} condition. There ${hasDamage ? "were" : "were no"} signs of notable damage.${obstructionsSentence(itemFields, inst, "room", "obstruction")}${
       moisture.length ? ` ${joinList(moisture)} noted.` : ""
     }`,
   );
