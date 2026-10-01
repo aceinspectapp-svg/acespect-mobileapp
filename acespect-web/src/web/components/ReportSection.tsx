@@ -16,6 +16,12 @@ const FLOOR_HEADINGS = ["GROUND FLOOR", "FIRST FLOOR", "SECOND FLOOR", "BASEMENT
 // reference report actually does either -- this is a deliberate improvement.
 const CONDITION_TAG_RE = /^COND::(#[0-9a-fA-F]{6})::(.+)$/;
 
+// Matches reportSentences.ts's internal_areas composer -- each room's name
+// comes through as its own "ROOMHEAD::Bedroom 4" paragraph so it can render
+// as a bold heading (matching the reference report's own per-room style)
+// instead of being folded into the sentence itself ("Bedroom 4 is in...").
+const ROOM_HEADING_RE = /^ROOMHEAD::(.+)$/;
+
 function ConditionTag({ color, label }: { color: string; label: string }) {
   return (
     <div
@@ -118,6 +124,8 @@ export function ReportSection({
       {paras.map((p, i) => {
         const condMatch = p.match(CONDITION_TAG_RE);
         if (condMatch) return <ConditionTag key={i} color={condMatch[1]} label={condMatch[2]} />;
+        const roomMatch = p.match(ROOM_HEADING_RE);
+        if (roomMatch) return <Heading key={i} compact={compact} level={3}>{roomMatch[1]}</Heading>;
         if (FLOOR_HEADINGS.includes(p)) {
           return (
             <SectionBand key={i} tone="khaki" compact={compact}>

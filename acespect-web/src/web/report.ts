@@ -121,19 +121,16 @@ export const POOL_SPA_DISCLAIMER: string[] = [
 export const POOL_SAFETY_NOTE =
   "Pool safety is important and requirements vary. Please seek advice from your local council.";
 
-/** "Residential House" → "House", a short cover-title form matching the industry-standard report layout this app follows. */
-function shortPropertyTypeLabel(propertyType: string): string {
-  const words = propertyType.trim().split(/\s+/);
-  return words[words.length - 1] || propertyType;
-}
-
-/** "2024-06-15" → "Thursday, 18 June, 2026" (en-AU style with comma before year). */
+/** "2024-06-15" → "Thursday, 18 June 2026" (en-AU style, no comma before the year). */
 export function formatLongDate(value: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   const weekday = d.toLocaleDateString("en-GB", { weekday: "long" });
   const month = d.toLocaleDateString("en-GB", { month: "long" });
-  return `${weekday}, ${d.getDate()} ${month}, ${d.getFullYear()}`;
+  // No comma before the year -- matches the reference report's own date
+  // style ("Wednesday, 5 August 2026"), which this previously had wrong
+  // ("Wednesday, 5 August, 2026").
+  return `${weekday}, ${d.getDate()} ${month} ${d.getFullYear()}`;
 }
 
 function str(v: unknown, fallback = ""): string {
@@ -158,8 +155,10 @@ export function buildReportHeader(inspection: Inspection, inspector?: Pick<User,
   const f = jobInfo?.fields ?? {};
   const signer = getReportSigner();
 
-  const baseTitle = inspection.type === "Dilapidation" ? "Dilapidation Report" : `${inspection.type} Report`;
-  const reportTitle = `${baseTitle} - ${shortPropertyTypeLabel(inspection.propertyType)}`;
+  // No property-type suffix ("- House") -- the reference report's own title
+  // box just says "Dilapidation Report" with nothing appended for a
+  // standard house. Previously this always appended one, which didn't match.
+  const reportTitle = inspection.type === "Dilapidation" ? "Dilapidation Report" : `${inspection.type} Report`;
 
   return {
     reportTitle,
