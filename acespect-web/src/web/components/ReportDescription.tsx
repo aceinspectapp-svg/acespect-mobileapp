@@ -1,13 +1,22 @@
 import type { Inspection } from "../mockData";
-import {
-  DESCRIPTION_PHOTO_PLACEHOLDER,
-  PHOTOGRAPHS_NOTE,
-  SCOPE_BOILERPLATE,
-  SCOPE_PHOTOS_REF,
-  SITE_IMAGE_NOTE,
-} from "../report";
-import { Note, Para, Placeholder, reportTextStyle, reportTokens, SectionBand } from "./reportKit";
+import { DESCRIPTION_PHOTO_PLACEHOLDER, PHOTOGRAPHS_NOTE } from "../report";
+import { Note, Para, Placeholder, reportTextStyle, reportTokens, SectionBand, usePhotoNumbering } from "./reportKit";
 import { resolveMediaUrl } from "../api";
+
+/** Every photo that actually appears in the printed report -- general section photos plus each damage/crack's own -- matching what the reader can actually count, for the "full download of N photographs" disclosure. */
+function countReportPhotos(inspection: Inspection): number {
+  return inspection.sections.reduce(
+    (total, s) => total + s.photos.length + s.damages.reduce((dt, d) => dt + d.photos.length, 0),
+    0,
+  );
+}
+
+function str(v: unknown): string {
+  return typeof v === "string" ? v.trim() : "";
+}
+function lower(s: string): string {
+  return s.toLowerCase();
+}
 
 /**
  * The Description & Overview report section, in the standard Houspect layout:
@@ -36,6 +45,29 @@ export function ReportDescription({
   const description = inspection.sections.find((s) => (s.key ?? s.id).startsWith("description"));
   const frontElevation = (description?.answers as Record<string, unknown> | null | undefined)?.front_elevation;
   const photoUrl = Array.isArray(frontElevation) && typeof frontElevation[0] === "string" ? frontElevation[0] : undefined;
+  const frontPhotoNumbering = usePhotoNumbering(photoUrl ? 1 : 0);
+  const totalPhotos = countReportPhotos(inspection);
+
+  // Scope, Safety and Limitations fields (projectSiteAddress, siteSide,
+  // siteDirection, scopeForInspection, ...) live in this section's own
+  // `fields` -- populated by the generic per-field fallback in
+  // templateFields.ts since they're deliberately excluded from the
+  // composed property-description paragraph (see reportSentences.ts's
+  // `description` composer). Reading them here lets this block show the
+  // reference report's actual filled-in sentence instead of an unfilled
+  // "[direction] / [compass point]" placeholder whenever the inspector has
+  // answered them.
+  const f = (description?.fields as Record<string, unknown> | null | undefined) ?? {};
+  const projectSiteAddress = str(f.projectSiteAddress);
+  const siteSide = str(f.siteSide);
+  const siteDirection = str(f.siteDirection);
+  const hasProjectWorksInfo = !!(projectSiteAddress && siteSide && siteDirection);
+
+  const scopeForInspection = str(f.scopeForInspection);
+  const scopeDetail = str(f.scopeDetail) || str(f.scopePartDetail);
+  const scopeSentence = scopeForInspection
+    ? `The scope for inspection is ${lower(scopeForInspection)}${scopeDetail ? ` ${scopeDetail}` : ""}.`
+    : undefined;
 
   return (
     <div style={reportTextStyle(compact)}>
@@ -46,20 +78,28 @@ export function ReportDescription({
         <Placeholder>Insert property description (storeys, orientation, construction, roof, windows).</Placeholder>
       )}
       {photoUrl ? (
-        <a href={resolveMediaUrl(photoUrl)} target="_blank" rel="noopener noreferrer" style={{ display: "block", margin: "6px 0 12px" }}>
-          <img
-            src={resolveMediaUrl(photoUrl)}
-            alt="Front of property"
-            style={{ width: "5.9cm", aspectRatio: "4 / 3", objectFit: "cover", border: `1px solid ${reportTokens.border}`, display: "block" }}
-          />
-        </a>
+        <div style={{ width: "5.9cm", margin: "6px 0 12px" }}>
+          <a href={resolveMediaUrl(photoUrl)} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+            <img
+              src={resolveMediaUrl(photoUrl)}
+              alt="Front of property"
+              style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", border: `1px solid ${reportTokens.border}`, display: "block" }}
+            />
+          </a>
+          {frontPhotoNumbering.start !== undefined && (
+            <span style={{ display: "block", marginTop: "2px", fontSize: "0.82em", color: reportTokens.inkMuted }}>
+              Photo {frontPhotoNumbering.start}
+            </span>
+          )}
+        </div>
       ) : (
         <Placeholder>{DESCRIPTION_PHOTO_PLACEHOLDER}</Placeholder>
       )}
 
       <SectionBand compact={compact}>Photographs</SectionBand>
       <Para>
-        Selected photographs are included in the body of this report. For a full download please{" "}
+        Selected photographs are included in the body of this report. For a full download
+        {totalPhotos > 0 ? ` of ${totalPhotos} photographs` : ""} please{" "}
         <a style={{ color: "#2563eb", textDecoration: "underline" }} href="#photos" onClick={(e) => e.preventDefault()}>
           Click here
         </a>{" "}
@@ -69,17 +109,40 @@ export function ReportDescription({
       <Note>{PHOTOGRAPHS_NOTE}</Note>
 
       <SectionBand compact={compact}>Scope of Inspection and Comments</SectionBand>
-      <Placeholder>
-        The project works are to the property at {property}, which is at the [direction] – approximately
-        [compass point] – of the site of this inspection.
-      </Placeholder>
-      <Para>{SCOPE_BOILERPLATE}</Para>
-      <Para>{SCOPE_PHOTOS_REF}</Para>
+      {hasProjectWorksInfo ? (
+        <Para>
+          The project works are to the property at {projectSiteAddress}, which is at the {lower(siteSide)} -
+          approximately {lower(siteDirection)} - of the site of this inspection.
+        </Para>
+      ) : (
+        <Placeholder>
+          The project works are to the property at {property}, which is at the [direction] – approximately
+          [compass point] – of the site of this inspection.
+        </Placeholder>
+      )}
+      {scopeSentence ? (
+        <Para>{scopeSentence}</Para>
+      ) : (
+        <Placeholder>
+          The scope for inspection is external and internal to all structures / external and internal to part of
+          the property at / internal only to all areas / external only to all areas. OR insert description of
+          scope.
+        </Placeholder>
+      )}
+      <Para>
+        Selected photographs are displayed in this report. For a full download
+        {totalPhotos > 0 ? ` of ${totalPhotos} photographs` : ""} provided by the Houspect survey please go to the
+        link in the Photographs heading on page 2 of the report.
+      </Para>
 
-      <SectionBand compact={compact} tone="neutral">Site Image</SectionBand>
-      <Placeholder>Mark-up by inspector indicating areas surveyed.</Placeholder>
-      <Para justify={false}>North is approximately to the top of the image.</Para>
-      <Note>{SITE_IMAGE_NOTE}</Note>
+      {/* No "Site Image" section here: the reference report only includes
+          one when there's a real aerial/mark-up image to show, and omits it
+          entirely otherwise (confirmed directly against the reference's own
+          57-page sample, which never shows this section at all). There's no
+          backing template field for an uploaded site-image/markup photo yet,
+          so unlike the front-of-property photo above, this can't be real
+          data -- showing a permanent placeholder here was pure unfilled
+          boilerplate. Revisit once a real site-image field exists. */}
     </div>
   );
 }

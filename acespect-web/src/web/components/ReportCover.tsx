@@ -37,6 +37,7 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
 
       {/* Client + references */}
       <div>
+        <MetaRow label="Report Date" labelWidth={labelW} compact={compact}>{r.reportDate}</MetaRow>
         <MetaRow label="Client" labelWidth={labelW} compact={compact}>
           <div>{r.clientName}</div>
           {r.clientAttn && <div style={{ color: reportTokens.inkMuted, fontSize: "0.92em" }}>Attn: {r.clientAttn}</div>}

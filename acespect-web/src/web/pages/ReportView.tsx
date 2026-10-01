@@ -12,7 +12,7 @@ import { ReportConditions } from "../components/ReportConditions";
 import { ReportSection } from "../components/ReportSection";
 import { ReportPoolSpaDisclaimer } from "../components/ReportPoolSpaDisclaimer";
 import { SECTION_SENTENCE_COMPOSERS } from "../reportSentences";
-import { reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
+import { PhotoNumberProvider, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
 const slug = (s: Pick<FormSection, "id" | "key">): string => s.key ?? s.id;
@@ -191,28 +191,50 @@ export function ReportView() {
         {/* Cover / front matter, generated from Job Information */}
         <ReportCover header={r} />
 
-        {/* Report body — approved section report text, written on approval */}
-        {renderList.length > 0 ? (
-          <div className="report-page-break" style={{ marginTop: "40px" }}>
-            {renderList.map((item, i) =>
-              item.type === "banner" ? (
-                <SectionBand key={item.label} tone="peach" compact={false}>
-                  {item.label}
-                </SectionBand>
-              ) : (
-                renderSection(item.section, i)
-              ),
-            )}
+        {/* Report body — approved section report text, written on approval.
+            Wrapped in PhotoNumberProvider so every photo across the whole
+            document gets one running "Photo N" count in render order,
+            letting each section's "Please refer to Photographs X to Y:"
+            cite exactly the photos that follow it -- matching the reference
+            report's per-item photo cross-referencing instead of one vague
+            "Please refer to Photographs:" line repeated everywhere. */}
+        <PhotoNumberProvider>
+          {renderList.length > 0 ? (
+            <div className="report-page-break" style={{ marginTop: "40px" }}>
+              {renderList.map((item, i) =>
+                item.type === "banner" ? (
+                  <SectionBand key={item.label} tone="peach" compact={false}>
+                    {item.label}
+                  </SectionBand>
+                ) : (
+                  renderSection(item.section, i)
+                ),
+              )}
+            </div>
+          ) : (
+            <p
+              className="screen-only"
+              style={{ marginTop: "32px", fontStyle: "italic", color: reportTokens.inkFaint, fontSize: "13px" }}
+            >
+              No section report text has been approved yet — once the reviewer approves a section, its
+              report text appears here on the official report.
+            </p>
+          )}
+
+          {/* SCOPE / Conditions always print, on their own fresh page,
+              independent of whether Notes (or anything else) has content --
+              previously these only rendered as a side effect of iterating
+              into the "notes" section inside renderList, so a genuinely
+              empty Notes section (the `notes` composer now produces no text
+              at all when nothing was notable -- see reportSentences.ts) would
+              have silently dropped this entire legal appendix along with it. */}
+          <div className="report-page-break">
+            <ReportScope />
+            <div style={{ marginTop: "20px" }}>
+              <ReportConditions />
+            </div>
           </div>
-        ) : (
-          <p
-            className="screen-only"
-            style={{ marginTop: "32px", fontStyle: "italic", color: reportTokens.inkFaint, fontSize: "13px" }}
-          >
-            No section report text has been approved yet — once the reviewer approves a section, its
-            report text appears here on the official report.
-          </p>
-        )}
+        </PhotoNumberProvider>
       </div>
     </div>
   );
@@ -226,8 +248,17 @@ export function ReportView() {
         ) : slug(s).startsWith("notes") ? (
           /* Notes & Post Project: a bold "NOTES" heading + numbered list
              (matching the reference exactly, rather than this section's own
-             name and plain paragraphs), then SCOPE / Conditions -- SCOPE
-             always starts on its own fresh page, matching the reference. */
+             name and plain paragraphs). SCOPE/Conditions are NOT rendered
+             here -- they always print unconditionally further down in this
+             file, regardless of whether this section exists or has content.
+             The `notes` composer (reportSentences.ts) only produces text for
+             genuinely notable findings -- a checklist item answered "No"
+             contributes nothing -- so an inspection with nothing notable
+             ends up with empty reportText, and `bodySections`' own filter
+             (reportText.trim().length > 0) keeps this branch from ever
+             rendering at all, matching the reference report (which omits
+             this section entirely rather than printing a page of "Observed?
+             No" boilerplate). */
           <>
             <p style={{ fontWeight: 700, margin: "0 0 10px", color: reportTokens.ink }}>NOTES</p>
             <ol style={{ margin: "0 0 10px", paddingLeft: "20px" }}>
@@ -241,12 +272,6 @@ export function ReportView() {
                   </li>
                 ))}
             </ol>
-            <div className="report-page-break">
-              <ReportScope />
-              <div style={{ marginTop: "20px" }}>
-                <ReportConditions />
-              </div>
-            </div>
           </>
         ) : (
           /* Every inspection category: description → photographs → cracks (described + imaged).
