@@ -4,10 +4,9 @@ import { radius, spacing } from '../../theme';
 import { QcStatus } from '../../types/qc';
 
 /**
- * Read-only defect-status badge — label/color/meaning come from the server
- * (admin-configurable). Defect status only changes via the lifecycle itself
- * (e.g. a task marked Completed advances it) — a field user never sets it
- * directly, so this is display-only, unlike the old free-change dropdown.
+ * Defect-status pill — label/color come from the server (admin-configurable
+ * across the 11-stage lifecycle). Purely presentational; DefectDetailScreen
+ * wraps it in a Pressable to make it the free status dropdown.
  */
 export function StatusBadge({ status }: { status: QcStatus }) {
   return (

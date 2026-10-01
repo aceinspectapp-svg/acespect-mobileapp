@@ -57,7 +57,11 @@ export type AppStackParamList = {
   // ─── QC flow — separate from the Houspect screens above, entered via
   // SelectPurpose. See src/screens/qc/*. Client/project/property config and
   // defect creation/assignment are admin-only now (acespect-web's QC
-  // section) — mobile is just "my assigned tasks" + posting updates.
+  // section) — mobile is "my assigned defects/tasks": QcHome branches into
+  // the Defects list (view/edit a defect's own details) and the Tasks list
+  // (site-visit activity log, comments + photos).
+  QcHome: undefined;
+  QcDefectsList: undefined;
   QcTasksList: undefined;
   QcTaskDetail: { taskId: string };
   QcDefectDetail: { defectId: string };

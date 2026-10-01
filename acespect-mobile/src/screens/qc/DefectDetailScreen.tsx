@@ -10,23 +10,27 @@ import { SeverityPill } from '../../components/qc/SeverityPill';
 import { StatusBadge } from '../../components/qc/StatusBadge';
 import { AppScreenProps } from '../../navigation/types';
 import { useQcData } from '../../context/QcDataContext';
-import { QcDefect, QcSeverity } from '../../types/qc';
+import { QcDefect, QcSeverity, QcStatus } from '../../types/qc';
 
 /**
  * Editable by whoever it's assigned to -- the admin now only picks the
  * client/project/property and assigns a person (acespect-web's QC section);
- * location/location details/summary/severity/due date are deliberately left
- * for the field user to fill in on-site, here. Reassigning stays an
- * admin-only action, so there's no "assigned to" picker on this screen.
+ * location/location details/summary/severity/status/due date are
+ * deliberately left for the field user to fill in on-site, here. Status is a
+ * free pick across the whole lifecycle, same as the Severity picker below --
+ * reassigning is the one thing that stays admin-only, so there's no
+ * "assigned to" picker on this screen.
  */
 export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDefectDetail'>) {
   const { defectId } = route.params;
-  const { getDefect, updateDefect, getSeverities } = useQcData();
+  const { getDefect, updateDefect, getSeverities, getStatuses } = useQcData();
   const [defect, setDefect] = useState<QcDefect | null>(null);
   const [severities, setSeverities] = useState<QcSeverity[]>([]);
+  const [statuses, setStatuses] = useState<QcStatus[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [severitySheetOpen, setSeveritySheetOpen] = useState(false);
+  const [statusSheetOpen, setStatusSheetOpen] = useState(false);
 
   // Local draft -- only sent to the server on Save, so navigating away
   // without saving never half-applies an edit.
@@ -34,6 +38,7 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
   const [locationDetails, setLocationDetails] = useState('');
   const [summary, setSummary] = useState('');
   const [severityId, setSeverityId] = useState<string | null>(null);
+  const [statusId, setStatusId] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState(''); // YYYY-MM-DD, DateField's own format
 
   useEffect(() => {
@@ -44,13 +49,17 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
         setLocationDetails(d.locationDetails ?? '');
         setSummary(d.summary ?? '');
         setSeverityId(d.severity?.id ?? null);
+        setStatusId(d.status.id);
         setDueDate(d.dueDate ? d.dueDate.slice(0, 10) : '');
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load defect'));
     getSeverities()
       .then(setSeverities)
       .catch(() => {}); // non-fatal -- the picker just shows nothing to choose if this fails
-  }, [defectId, getDefect, getSeverities]);
+    getStatuses()
+      .then(setStatuses)
+      .catch(() => {});
+  }, [defectId, getDefect, getSeverities, getStatuses]);
 
   const dirty =
     !!defect &&
@@ -58,6 +67,7 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
       locationDetails !== (defect.locationDetails ?? '') ||
       summary !== (defect.summary ?? '') ||
       severityId !== (defect.severity?.id ?? null) ||
+      statusId !== defect.status.id ||
       dueDate !== (defect.dueDate ? defect.dueDate.slice(0, 10) : ''));
 
   async function save() {
@@ -69,6 +79,7 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
         locationDetails: locationDetails.trim(),
         summary: summary.trim() || undefined,
         severityId: severityId ?? undefined,
+        statusId: statusId ?? undefined,
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
       });
       setDefect(updated);
@@ -80,6 +91,7 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
   }
 
   const selectedSeverity = severities.find((s) => s.id === severityId) ?? null;
+  const selectedStatus = statuses.find((s) => s.id === statusId) ?? defect?.status ?? null;
 
   return (
     <View style={styles.root}>
@@ -143,7 +155,10 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
 
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>Status</Text>
-            <StatusBadge status={defect.status} />
+            <Pressable style={styles.severityRow} onPress={() => setStatusSheetOpen(true)}>
+              {selectedStatus && <StatusBadge status={selectedStatus} />}
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </Pressable>
           </View>
 
           <View style={styles.field}>
@@ -165,6 +180,25 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
           >
             <SeverityPill severity={s} />
             {s.id === severityId && <Ionicons name="checkmark" size={18} color={colors.barBlue} />}
+          </Pressable>
+        ))}
+      </PickerSheet>
+
+      <PickerSheet visible={statusSheetOpen} title="Status" onClose={() => setStatusSheetOpen(false)}>
+        {statuses.map((s) => (
+          <Pressable
+            key={s.id}
+            style={styles.statusOption}
+            onPress={() => {
+              setStatusId(s.id);
+              setStatusSheetOpen(false);
+            }}
+          >
+            <View style={styles.statusOptionText}>
+              <StatusBadge status={s} />
+              <Text style={styles.statusMeaning}>{s.meaning}</Text>
+            </View>
+            {s.id === statusId && <Ionicons name="checkmark" size={18} color={colors.barBlue} />}
           </Pressable>
         ))}
       </PickerSheet>
@@ -194,4 +228,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
   },
+  statusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  statusOptionText: { flex: 1, gap: spacing.xs, alignItems: 'flex-start' },
+  statusMeaning: { ...typography.caption, color: colors.textMuted },
 });

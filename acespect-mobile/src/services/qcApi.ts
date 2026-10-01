@@ -1,5 +1,5 @@
 import { api } from './apiClient';
-import { QcDefect, QcSeverity, QcTask, TaskUpdate } from '../types/qc';
+import { QcDefect, QcSeverity, QcStatus, QcTask, TaskUpdate } from '../types/qc';
 
 /** Tasks assigned to the signed-in user — the mobile app's entire QC surface. */
 export async function getMyTasks(): Promise<QcTask[]> {
@@ -33,6 +33,7 @@ export async function updateDefect(
     locationDetails: string;
     summary: string;
     severityId: string;
+    statusId: string;
     dueDate: string | null;
   }>,
 ): Promise<QcDefect> {
@@ -44,6 +45,12 @@ export async function updateDefect(
 export async function getSeverities(): Promise<QcSeverity[]> {
   const { data } = await api.get<{ severities: QcSeverity[] }>('/qc/config');
   return data.severities;
+}
+
+/** The full 11-stage status lifecycle, for the Defect screen's free status picker -- same /qc/config bundle, just the statuses piece. */
+export async function getStatuses(): Promise<QcStatus[]> {
+  const { data } = await api.get<{ statuses: QcStatus[] }>('/qc/config');
+  return data.statuses;
 }
 
 /**

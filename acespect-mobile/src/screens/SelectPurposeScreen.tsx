@@ -57,7 +57,7 @@ export function SelectPurposeScreen({ navigation }: AppScreenProps<'SelectPurpos
         </Pressable>
 
         <Pressable
-          onPress={() => navigation.navigate('QcTasksList')}
+          onPress={() => navigation.navigate('QcHome')}
           style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
           accessibilityRole="button"
           accessibilityLabel="QC"

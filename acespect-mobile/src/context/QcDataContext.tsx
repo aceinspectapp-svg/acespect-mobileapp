@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { QcDefect, QcSeverity, QcTask } from '../types/qc';
+import { QcDefect, QcSeverity, QcStatus, QcTask } from '../types/qc';
 import * as qcApi from '../services/qcApi';
 
 /**
@@ -11,10 +11,10 @@ import * as qcApi from '../services/qcApi';
  *
  * Config (clients/projects/properties) and defect creation/assignment stay
  * admin-only, done from acespect-web's QC section. Filling in a defect's own
- * location/summary/severity/due date, though, is the assigned field user's
- * job now — done right here via `updateDefect` (the server checks this
- * defect is actually assigned to the caller; reassigning isn't exposed here
- * on purpose, that stays admin-only).
+ * location/summary/severity/status/due date, though, is the assigned field
+ * user's job now — done right here via `updateDefect` (the server checks
+ * this defect is actually assigned to the caller; reassigning isn't exposed
+ * here on purpose, that stays admin-only).
  */
 
 interface QcDataState {
@@ -26,13 +26,15 @@ interface QcDataState {
   getTask: (id: string) => Promise<QcTask>;
   /** Defect lookup for the "Defect" link on Task Detail. */
   getDefect: (id: string) => Promise<QcDefect>;
-  /** Fills in what the admin didn't set at creation — see qcApi.updateDefect. */
+  /** Fills in what the admin didn't set at creation, plus the status dropdown — see qcApi.updateDefect. */
   updateDefect: (
     id: string,
-    patch: Partial<{ location: string; locationDetails: string; summary: string; severityId: string; dueDate: string | null }>,
+    patch: Partial<{ location: string; locationDetails: string; summary: string; severityId: string; statusId: string; dueDate: string | null }>,
   ) => Promise<QcDefect>;
   /** Severity options for the Defect screen's picker. */
   getSeverities: () => Promise<QcSeverity[]>;
+  /** The full status lifecycle for the Defect screen's free status picker. */
+  getStatuses: () => Promise<QcStatus[]>;
   postTaskUpdate: (taskId: string, comment: string, markCompleted: boolean, photoUris: string[]) => Promise<void>;
 }
 
@@ -71,6 +73,7 @@ export function QcDataProvider({ children }: { children: React.ReactNode }) {
     [],
   );
   const getSeverities = useCallback(() => qcApi.getSeverities(), []);
+  const getStatuses = useCallback(() => qcApi.getStatuses(), []);
 
   const postTaskUpdate = useCallback(
     async (taskId: string, comment: string, markCompleted: boolean, photoUris: string[]) => {
@@ -81,8 +84,8 @@ export function QcDataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<QcDataState>(
-    () => ({ tasks, loading, error, refreshTasks, getTask, getDefect, updateDefect, getSeverities, postTaskUpdate }),
-    [tasks, loading, error, refreshTasks, getTask, getDefect, updateDefect, getSeverities, postTaskUpdate],
+    () => ({ tasks, loading, error, refreshTasks, getTask, getDefect, updateDefect, getSeverities, getStatuses, postTaskUpdate }),
+    [tasks, loading, error, refreshTasks, getTask, getDefect, updateDefect, getSeverities, getStatuses, postTaskUpdate],
   );
 
   return <QcDataContext.Provider value={value}>{children}</QcDataContext.Provider>;

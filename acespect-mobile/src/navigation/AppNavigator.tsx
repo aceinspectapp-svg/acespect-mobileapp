@@ -12,6 +12,8 @@ import { AssignedJobsScreen } from '../screens/inspection/AssignedJobsScreen';
 import { SettingsScreen } from '../screens/inspection/SettingsScreen';
 import { TemplateUpdatesScreen } from '../screens/inspection/TemplateUpdatesScreen';
 import { SelectPurposeScreen } from '../screens/SelectPurposeScreen';
+import { QcHomeScreen } from '../screens/qc/QcHomeScreen';
+import { QcDefectsListScreen } from '../screens/qc/DefectsListScreen';
 import { QcDefectDetailScreen } from '../screens/qc/DefectDetailScreen';
 import { QcTasksListScreen } from '../screens/qc/TasksListScreen';
 import { QcTaskDetailScreen } from '../screens/qc/TaskDetailScreen';
@@ -215,6 +217,8 @@ export function AppNavigator() {
 
       {/* ─── QC flow — "my tasks" only; config/creation/assignment live in
           acespect-web's admin QC section now. ─────────────────────────── */}
+      <Stack.Screen name="QcHome" component={QcHomeScreen} />
+      <Stack.Screen name="QcDefectsList" component={QcDefectsListScreen} />
       <Stack.Screen name="QcTasksList" component={QcTasksListScreen} />
       <Stack.Screen name="QcTaskDetail" component={QcTaskDetailScreen} />
       <Stack.Screen name="QcDefectDetail" component={QcDefectDetailScreen} />
