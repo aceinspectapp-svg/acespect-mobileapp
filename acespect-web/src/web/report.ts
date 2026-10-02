@@ -4,6 +4,11 @@ import { getReportSigner } from "./mockData";
 /** The front-matter of a Dilapidation Report, derived from Job Information. */
 export interface ReportHeader {
   reportTitle: string;
+  /** The day this report document was generated/issued -- distinct from
+   *  `inspectionDate` (the site-visit date), matching the reference
+   *  report's own cover, which shows both. Same generation-date semantics
+   *  as the PDF footer's own "Date:" line (see reportPdf.ts). */
+  reportDate: string;
   clientName: string;
   clientAttn?: string;
   clientEmail?: string;
@@ -44,17 +49,6 @@ export const PHOTOGRAPHS_NOTE =
   "downloads temporarily from this site. If a window does not then appear asking where you would like " +
   "the download saved, simply click on the Download All button again to commence the download.";
 
-export const SCOPE_BOILERPLATE =
-  "The scope for inspection is external and internal to all structures / external and internal to part " +
-  "of the property at / internal only to all areas / external only to all areas. OR insert description of scope.";
-
-export const SCOPE_PHOTOS_REF =
-  "Selected photographs are displayed in this report. For a full download of photographs provided by " +
-  "the Houspect survey please go to the link in the Photographs heading on page 2 of the report.";
-
-export const SITE_IMAGE_NOTE =
-  "Please do not anchor images. Just insert them the same way as a photograph so they can be easily " +
-  "sized and moved. (Admin: adjust photo size to 5.9cm for landscape & 5.2cm for portrait.)";
 
 /* ── Scope page: Condition Definitions + Dilapidation Report Information ── */
 
@@ -127,19 +121,16 @@ export const POOL_SPA_DISCLAIMER: string[] = [
 export const POOL_SAFETY_NOTE =
   "Pool safety is important and requirements vary. Please seek advice from your local council.";
 
-/** "Residential House" → "House", a short cover-title form matching the industry-standard report layout this app follows. */
-function shortPropertyTypeLabel(propertyType: string): string {
-  const words = propertyType.trim().split(/\s+/);
-  return words[words.length - 1] || propertyType;
-}
-
-/** "2024-06-15" → "Thursday, 18 June, 2026" (en-AU style with comma before year). */
+/** "2024-06-15" → "Thursday, 18 June 2026" (en-AU style, no comma before the year). */
 export function formatLongDate(value: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   const weekday = d.toLocaleDateString("en-GB", { weekday: "long" });
   const month = d.toLocaleDateString("en-GB", { month: "long" });
-  return `${weekday}, ${d.getDate()} ${month}, ${d.getFullYear()}`;
+  // No comma before the year -- matches the reference report's own date
+  // style ("Wednesday, 5 August 2026"), which this previously had wrong
+  // ("Wednesday, 5 August, 2026").
+  return `${weekday}, ${d.getDate()} ${month} ${d.getFullYear()}`;
 }
 
 function str(v: unknown, fallback = ""): string {
@@ -164,11 +155,14 @@ export function buildReportHeader(inspection: Inspection, inspector?: Pick<User,
   const f = jobInfo?.fields ?? {};
   const signer = getReportSigner();
 
-  const baseTitle = inspection.type === "Dilapidation" ? "Dilapidation Report" : `${inspection.type} Report`;
-  const reportTitle = `${baseTitle} - ${shortPropertyTypeLabel(inspection.propertyType)}`;
+  // No property-type suffix ("- House") -- the reference report's own title
+  // box just says "Dilapidation Report" with nothing appended for a
+  // standard house. Previously this always appended one, which didn't match.
+  const reportTitle = inspection.type === "Dilapidation" ? "Dilapidation Report" : `${inspection.type} Report`;
 
   return {
     reportTitle,
+    reportDate: formatLongDate(new Date().toISOString()),
     clientName: str(f.clientName, inspection.client),
     clientAttn: str(f.clientAttn) || undefined,
     clientEmail: str(f.clientEmail) || undefined,

@@ -763,6 +763,21 @@ export function ReviewerFormView() {
     }
   }
 
+  /** The external photo-archive link (e.g. a Dropbox/Drive folder) -- stored
+   *  as an ordinary field on the Description & Overview section itself (see
+   *  seed-description-photo-archive-url.ts), not a separate database
+   *  column, so it's just another entry in that section's existing `fields`
+   *  JSON and goes through the same `patchSection` save path as every other
+   *  Field Data edit on this screen. Printed as a real clickable link in the
+   *  report's Description section when set. */
+  async function updatePhotoArchiveUrl(descriptionSection: FormSection) {
+    const currentFields = (descriptionSection.fields as Record<string, unknown> | null | undefined) ?? {};
+    const current = typeof currentFields.photoArchiveUrl === "string" ? currentFields.photoArchiveUrl : "";
+    const next = prompt("Paste the full photo archive link (e.g. a Dropbox or Google Drive folder URL):", current);
+    if (next === null) return;
+    await updateSectionFields(descriptionSection.id, { ...currentFields, photoArchiveUrl: next.trim() });
+  }
+
   async function setReviewStatus(sectionId: string, status: SectionReviewStatus) {
     setBusy(true);
     try {
@@ -1324,15 +1339,28 @@ export function ReviewerFormView() {
                       borderLeft: "3px solid #2563eb",
                     }}>
                       <ReportDescription inspection={inspection} reportText={selectedSection.reportText} compact />
-                      <button
-                        onClick={() => {
-                          const newText = prompt("Edit the property description paragraph:", selectedSection.reportText);
-                          if (newText !== null) updateSectionReportText(selectedSection.id, newText);
-                        }}
-                        style={{ marginTop: "12px", fontSize: "11px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}
-                      >
-                        ✏ Edit description text
-                      </button>
+                      <div style={{ display: "flex", gap: "16px", marginTop: "12px" }}>
+                        <button
+                          onClick={() => {
+                            const newText = prompt("Edit the property description paragraph:", selectedSection.reportText);
+                            if (newText !== null) updateSectionReportText(selectedSection.id, newText);
+                          }}
+                          style={{ fontSize: "11px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}
+                        >
+                          ✏ Edit description text
+                        </button>
+                        <button
+                          onClick={() => updatePhotoArchiveUrl(selectedSection)}
+                          title="The link printed as 'Click here' for the full photo download, in the Photographs section of the report"
+                          style={{ fontSize: "11px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}
+                        >
+                          📎{" "}
+                          {typeof (selectedSection.fields as Record<string, unknown> | null | undefined)?.photoArchiveUrl === "string" &&
+                          (selectedSection.fields as Record<string, unknown>).photoArchiveUrl
+                            ? "Edit photo archive link"
+                            : "Add photo archive link"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (selectedSection.key ?? selectedSection.id).startsWith("notes") ? (

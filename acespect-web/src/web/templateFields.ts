@@ -1,5 +1,5 @@
 import { API_BASE, getToken } from "./api";
-import { composeSectionSentence } from "./reportSentences";
+import { absenceSentence, composeSectionSentence } from "./reportSentences";
 
 /**
  * Template/answer-tree types + pure logic, ported from the mobile app
@@ -241,6 +241,14 @@ export function asString(v: AnswerValue): string {
   return typeof v === "string" ? v : "";
 }
 
+/** Appends "." unless `s` already ends with sentence-ending punctuation --
+ *  a free-text answer (e.g. a Notes textarea) is just as often typed with
+ *  its own trailing period as without one, and blindly appending "." to
+ *  build a report line produced visible ".." for the former. */
+export function withPeriod(s: string): string {
+  return /[.!?]$/.test(s) ? s : `${s}.`;
+}
+
 export function resolveInstances(
   field: TemplateField,
   value: AnswerValue,
@@ -370,7 +378,7 @@ function walk(
     }
 
     if (field.type === "repeating-group") {
-      const instances = resolveInstances(field, value);
+      let instances = resolveInstances(field, value);
       const labels: string[] = [];
       // Only the section's own top-level repeating field (not one nested
       // inside another repeating-group) stands for "this whole section is
@@ -379,10 +387,33 @@ function walk(
       const composed = ancestorLabels.length === 0 ? sectionKey : undefined;
       // Houspect Victoria's template groups Internal Areas rooms under a
       // floor heading (Ground Floor / First Floor / ...) rather than
-      // mentioning the floor in each room's own sentence -- track the
-      // floor across instances (in the order they were added) and inject a
-      // heading line whenever it changes.
+      // mentioning the floor in each room's own sentence -- inject a
+      // heading line whenever the floor changes as instances are walked.
       const floorLevelField = (field.itemFields ?? []).find((f) => f.key === "floorLevel");
+      if (composed === "internal_areas" && floorLevelField) {
+        // Room order is fixed by the template (Front Entry, Living Room,
+        // Dining, Kitchen, Bedroom, Bathroom, Laundry, Toilet, Stairwell,
+        // Other) -- it has nothing to do with which physical floor each
+        // room is actually on, that's a separate answer per room. Relying
+        // on rooms happening to be answered in floor-consecutive order
+        // (the previous behaviour) meant a real property whose rooms don't
+        // line up with that fixed order -- e.g. a ground-floor Stairwell
+        // coming after a first-floor Toilet in the list -- would print
+        // repeated/interleaved "GROUND FLOOR" / "FIRST FLOOR" bands instead
+        // of one clean group per floor. Sorting by the floor field's own
+        // defined option order first (stable, so rooms on the same floor
+        // keep their original relative order) guarantees each floor's rooms
+        // are grouped together exactly once, regardless of answer order.
+        const floorOrder = new Map((floorLevelField.options ?? []).map((o, i) => [o.value, i]));
+        instances = instances
+          .map((item, i) => ({
+            item,
+            i,
+            floorIdx: floorOrder.get(asString(item.scope.floorLevel)) ?? Number.MAX_SAFE_INTEGER,
+          }))
+          .sort((a, b) => a.floorIdx - b.floorIdx || a.i - b.i)
+          .map(({ item }) => item);
+      }
       let lastFloorLevel: string | undefined;
       for (const { label, scope: inst } of instances) {
         const sub = walk(field.itemFields ?? [], inst, [...ancestorLabels, label]);
@@ -396,8 +427,28 @@ function walk(
           }
         }
         const composedSentence = composed ? composeSectionSentence(composed, inst, field.itemFields ?? [], label) : undefined;
-        if (composedSentence) textParts.push(composedSentence);
-        else if (sub.reportText) textParts.push(`${label}: ${sub.reportText}`.trim());
+        // `undefined` means "no composer registered for this section" (fall
+        // back to the generic label/value text); an empty string means "a
+        // composer ran and deliberately has nothing to say" (e.g. the
+        // `notes` composer suppressing a checklist item answered "No") --
+        // these must NOT be treated the same, or a composer's silence gets
+        // overwritten by the exact boilerplate line it was trying to avoid.
+        if (composedSentence !== undefined) {
+          if (composedSentence) textParts.push(composedSentence);
+        } else if (sub.reportText) {
+          textParts.push(`${label}: ${sub.reportText}`.trim());
+        }
+      }
+      // No instances recorded for a composed section (e.g. the property has
+      // no driveway) used to leave this section's reportText empty --
+      // ReportSection.tsx would then fall back to its generic "No content
+      // recorded for this category" placeholder, which reads like the
+      // inspection was left incomplete rather than reporting the fact that
+      // the feature doesn't exist. State it properly instead, matching the
+      // reference report's own "There is no driveway." convention.
+      if (composed && instances.length === 0) {
+        const absence = absenceSentence(composed);
+        if (absence) textParts.push(absence);
       }
       fields[field.key] = labels.join(", ");
       continue;
@@ -418,10 +469,16 @@ function walk(
       ? value.filter((v) => typeof v === "string").map(toLabel).join(", ")
       : toLabel(String(value));
     fields[field.key] = strValue;
+    // Notes & Post Project's own classification fields (not a finding, just
+    // metadata) -- printing "Additional Damage Present?: No." etc. as a
+    // bullet line would defeat the point of hiding the whole section when
+    // there's nothing notable (see the `notes` composer and ReportView.tsx).
+    // Still recorded in `fields` above for the reviewer's editing view.
+    const isNotesMetadata = sectionKey === "notes" && (field.key === "postProject" || field.key === "hasDamage");
     // Still recorded in `fields` above (so the reviewer's Field Data view
     // keeps every answer editable) -- just not echoed as its own bullet line
     // when a whole-section composer is about to produce real prose instead.
-    if (!isFlatComposedSection) textParts.push(`${field.label}: ${strValue}.`);
+    if (!isFlatComposedSection && !isNotesMetadata) textParts.push(`${field.label}: ${withPeriod(strValue)}`);
   }
 
   if (isFlatComposedSection) {
