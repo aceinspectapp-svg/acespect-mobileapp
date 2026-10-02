@@ -314,6 +314,70 @@ export interface FlattenedSection {
 }
 
 /**
+ * One row of the report's Condition Summary page (see ReportConditionSummary.tsx)
+ * -- stored per section as `fields.conditionSummary` (a plain JSON array,
+ * same "no schema change" pattern as every other derived field) so the
+ * report view can read it straight off each section without re-fetching
+ * that section's template. `subLabel` is only set when the section has more
+ * than one instance (e.g. each Elevations side, each Internal Areas room);
+ * for a single-instance section (e.g. a single Driveway) the section's own
+ * name is the whole label, so there's nothing to add here.
+ */
+export interface ConditionSummaryRow {
+  subLabel?: string;
+  conditionLabel: string;
+  conditionColor: string;
+  defectNote?: string;
+}
+
+/**
+ * A human-friendly per-instance label for the Condition Summary's `subLabel`
+ * -- `resolveInstances`' own fallback label (used for e.g. the ROOMHEAD
+ * markers and the "{label}: ..." generic text fallback elsewhere in this
+ * function) is a fine, stable per-instance *identity* ("Items 1", "Items
+ * 2"), but reads poorly as a summary-table row name when the section has no
+ * `titleFieldKey` configured (true of every "strip" section at the time of
+ * writing: Driveway, Paving & Paths, Fences, Retaining Walls, Garage /
+ * Carport / Sheds, Pool / Spa). Those sections identify an instance to the
+ * *reader* via one of two fields instead -- a `location` pill-select
+ * (Front/Left/Right/Rear, used by Fences/Retaining Walls/Driveway) or a
+ * free-text `name` the inspector typed (used by Paving & Paths/Garage &
+ * Carport/Pool & Spa) -- so this prefers whichever of those actually has an
+ * answer, falling back to the generic label only when neither does.
+ */
+function niceInstanceLabel(itemFields: TemplateField[], inst: AnswerTree, fallbackLabel: string): string {
+  const locationField = itemFields.find((f) => f.key === "location");
+  if (locationField) {
+    const resolved = locationField.options?.find((o) => o.value === asString(inst.location))?.label;
+    if (resolved) return resolved;
+  }
+  const name = asString(inst.name).trim();
+  if (name) return name;
+  return fallbackLabel;
+}
+
+/**
+ * One line per damage/defect recorded against this instance (e.g. "Crack at
+ * ceiling cornice, northeast corner"), joined for the Condition Summary's
+ * one-line notes column. Mirrors reportSentences.ts's damageSentences()
+ * "no damageType field -> default to Crack" fallback for the sections
+ * (Paving & Paths, Fences, Retaining Walls) that only ever track cracks.
+ */
+function buildDefectNote(damageField: TemplateField, inst: AnswerTree): string | undefined {
+  const list = resolveInstances(damageField, inst[damageField.key]);
+  if (list.length === 0) return undefined;
+  const damageTypeField = (damageField.itemFields ?? []).find((f) => f.key === "damageType");
+  const parts = list.map(({ scope: d }) => {
+    const rawType = asString(d.damageType);
+    const typeLabel =
+      damageTypeField && rawType ? damageTypeField.options?.find((o) => o.value === rawType)?.label ?? rawType : "Crack";
+    const location = asString(d.location);
+    return location ? `${typeLabel} at ${location}` : typeLabel;
+  });
+  return parts.join("; ");
+}
+
+/**
  * Derives the flattened report `fields`, the flat `damages[]` array, and a
  * summary `reportText` from a raw answer tree -- the same walk
  * acespect-mobile's flattenSectionToDraft does, except that when `sectionKey`
@@ -414,11 +478,45 @@ function walk(
           .sort((a, b) => a.floorIdx - b.floorIdx || a.i - b.i)
           .map(({ item }) => item);
       }
+      // Condition Summary data (see ConditionSummaryRow above). Every
+      // composer in reportSentences.ts reads its condition grade from a
+      // field keyed either "condition" (most sections) or "generalCondition"
+      // (Roof & Chimneys, Internal Areas) -- checking those two exact names
+      // first, rather than just "the first color-select field", matters
+      // because at least one section (Pool/Spa) has a *second*,
+      // unrelated color-select field ("fenceSafety", for the fence-compliance
+      // pill) that happens to appear earlier in itemFields than "condition"
+      // itself; a bare type-only search would grab that one instead. The
+      // generic color-select fallback stays as a safety net for any future
+      // section that doesn't follow either naming convention.
+      const conditionSummaryRows: ConditionSummaryRow[] = [];
+      const itemFieldsForSummary = field.itemFields ?? [];
+      const summaryConditionField = composed
+        ? itemFieldsForSummary.find((f) => f.key === "condition" && f.type === "color-select") ??
+          itemFieldsForSummary.find((f) => f.key === "generalCondition" && f.type === "color-select") ??
+          itemFieldsForSummary.find((f) => f.type === "color-select")
+        : undefined;
+      const summaryDamageField = composed ? itemFieldsForSummary.find((f) => f.type === "damage-list") : undefined;
       let lastFloorLevel: string | undefined;
       for (const { label, scope: inst } of instances) {
         const sub = walk(field.itemFields ?? [], inst, [...ancestorLabels, label]);
         damages.push(...sub.damages);
         labels.push(label);
+        if (summaryConditionField) {
+          const rawCond = asString(inst[summaryConditionField.key]);
+          const option = summaryConditionField.options?.find((o) => o.value === rawCond);
+          // Skip instances with no condition answered yet -- a fixed slot
+          // (e.g. an Internal Areas room never visited) shouldn't claim a
+          // row on an executive summary with nothing to summarise.
+          if (option?.color) {
+            conditionSummaryRows.push({
+              subLabel: instances.length > 1 ? niceInstanceLabel(field.itemFields ?? [], inst, label) : undefined,
+              conditionLabel: option.label,
+              conditionColor: option.color,
+              defectNote: summaryDamageField ? buildDefectNote(summaryDamageField, inst) : undefined,
+            });
+          }
+        }
         if (composed === "internal_areas" && floorLevelField) {
           const floorRaw = asString(inst.floorLevel);
           if (floorRaw && floorRaw !== lastFloorLevel) {
@@ -451,6 +549,7 @@ function walk(
         if (absence) textParts.push(absence);
       }
       fields[field.key] = labels.join(", ");
+      if (conditionSummaryRows.length > 0) fields.conditionSummary = conditionSummaryRows;
       continue;
     }
 
