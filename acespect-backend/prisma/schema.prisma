@@ -24,39 +24,50 @@ enum Role {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id              String   @id @default(uuid())
+  email           String   @unique
   // Nullable: Google-only accounts have no local password.
-  passwordHash String?
-  name         String?
-  phone        String?
+  passwordHash    String?
+  name            String?
+  phone           String?
   // Set when the account is linked to a Google identity (the Google "sub").
-  googleId     String?  @unique
-  avatarUrl    String?
-  avatar       String? // short initials shown in the web UI, e.g. "JT"
-  region       String?
+  googleId        String?  @unique
+  avatarUrl       String?
+  avatar          String? // short initials shown in the web UI, e.g. "JT"
+  region          String?
   // Inspector's building-inspector license/registration number (e.g. DBU
   // license). Shown alongside their name in the reviewer pane and used as
   // the report cover's "Inspector DBU License" fallback when the inspection
   // itself doesn't override it. Meaningful for INSPECTOR accounts; left
   // null for other roles.
-  licenseNumber String?
-  role         Role     @default(INSPECTOR)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  licenseNumber   String?
+  // QC requirements spec (E04): needed to attend a construction site.
+  whiteCardNumber String?
+  whiteCardState  String?
+  position        String?
+  role            Role     @default(INSPECTOR)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  refreshTokens       RefreshToken[]
-  inspections         Inspection[]         @relation("InspectorInspections")
-  assignedReviews     Inspection[]         @relation("ReviewerInspections")
-  reviewDecisions     ReviewDecision[]     @relation("ReviewerDecisions")
-  createdTemplates    InspectionTemplate[]
-  templateAcceptances TemplateAcceptance[]
-  createdQcDefects    QcDefect[]           @relation("QcDefectCreatedBy")
-  assignedQcDefects   QcDefect[]           @relation("QcDefectAssignedTo")
-  assignedQcTasks     QcTask[]             @relation("QcTaskAssignedTo")
-  qcTaskUpdates       QcTaskUpdate[]
-  submissionLogEntries SubmissionLogEntry[]
+  refreshTokens         RefreshToken[]
+  inspections           Inspection[]           @relation("InspectorInspections")
+  assignedReviews       Inspection[]           @relation("ReviewerInspections")
+  reviewDecisions       ReviewDecision[]       @relation("ReviewerDecisions")
+  createdTemplates      InspectionTemplate[]
+  templateAcceptances   TemplateAcceptance[]
+  createdQcDefects      QcDefect[]             @relation("QcDefectCreatedBy")
+  assignedQcDefects     QcDefect[]             @relation("QcDefectAssignedTo")
+  assignedQcTasks       QcTask[]               @relation("QcTaskAssignedTo")
+  qcTaskUpdates         QcTaskUpdate[]
+  submissionLogEntries  SubmissionLogEntry[]
+  qcMemberships         QcMembership[]
+  qcInspectorCredential QcInspectorCredential?
+  qcDefectEvents        QcDefectEvent[]        @relation("QcDefectEventActor")
+  qcDefectComments      QcDefectComment[]
+  qcBuilderContactFor   QcDefect[]             @relation("QcDefectBuilderContact")
+  qcAllocatedDefects    QcDefect[]             @relation("QcDefectAllocatedUser")
+  qcClosedDefects       QcDefect[]             @relation("QcDefectClosedBy")
 
   @@map("users")
 }
@@ -183,31 +194,31 @@ model Inspection {
 /// One section of an inspection form (Job Info, Driveway, …). Holds the
 /// inspector's field data + photos + damages, and the reviewer's verdict.
 model Section {
-  id            String              @id @default(uuid())
-  inspection    Inspection          @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
-  inspectionId  String
-  key           String // stable slug e.g. "driveway"
-  name          String
-  icon          String              @default("")
-  order         Int                 @default(0)
-  status        SectionStatus       @default(PENDING)
-  reviewStatus  SectionReviewStatus @default(PENDING)
-  reviewComment String              @default("")
-  reportText    String              @default("")
-  fields        Json                @default("{}")
+  id                String              @id @default(uuid())
+  inspection        Inspection          @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  inspectionId      String
+  key               String // stable slug e.g. "driveway"
+  name              String
+  icon              String              @default("")
+  order             Int                 @default(0)
+  status            SectionStatus       @default(PENDING)
+  reviewStatus      SectionReviewStatus @default(PENDING)
+  reviewComment     String              @default("")
+  reportText        String              @default("")
+  fields            Json                @default("{}")
   /// The inspector's raw, un-flattened answer tree for this section, exactly as
   /// the mobile form held it. `fields` above is the flattened report view, which
   /// collapses repeating-group instances into a joined label string and so
   /// cannot be turned back into an editable form -- this is what makes
   /// "edit a submitted inspection" possible without losing per-instance detail.
-  answers       Json?
-  photos        Json                @default("[]")
+  answers           Json?
+  photos            Json                @default("[]")
   /// URLs from `photos` a reviewer has chosen to leave out of the generated
   /// report -- everything defaults to included, so existing inspections are
   /// unaffected until a reviewer actually excludes something.
-  excludedPhotoUrls Json            @default("[]")
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  excludedPhotoUrls Json                @default("[]")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   damages Damage[]
 
@@ -217,19 +228,19 @@ model Section {
 
 /// A defect record within a section (crack, leaning post, …).
 model Damage {
-  id        String  @id @default(uuid())
-  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  sectionId String
-  type      String
-  location  String  @default("")
-  direction String  @default("")
-  widthMm   Float   @default(0)
-  lengthMm  Float   @default(0)
-  notes     String  @default("")
-  photos    Json    @default("[]")
+  id                String  @id @default(uuid())
+  section           Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId         String
+  type              String
+  location          String  @default("")
+  direction         String  @default("")
+  widthMm           Float   @default(0)
+  lengthMm          Float   @default(0)
+  notes             String  @default("")
+  photos            Json    @default("[]")
   /// Same as Section.excludedPhotoUrls, scoped to this damage record's own photos.
-  excludedPhotoUrls Json @default("[]")
-  order     Int     @default(0)
+  excludedPhotoUrls Json    @default("[]")
+  order             Int     @default(0)
 
   @@index([sectionId])
   @@map("damages")
@@ -288,20 +299,20 @@ model InspectionTemplate {
 /// ever fetches a lineage with no row here, one is auto-created pointing at
 /// whatever's currently published (nothing to migrate away from).
 model TemplateAcceptance {
-  id                 String              @id @default(uuid())
-  inspector          User                @relation(fields: [inspectorId], references: [id], onDelete: Cascade)
+  id                 String             @id @default(uuid())
+  inspector          User               @relation(fields: [inspectorId], references: [id], onDelete: Cascade)
   inspectorId        String
   inspectionType     String
   propertyType       String
   sectionKey         String
-  acceptedTemplate   InspectionTemplate  @relation(fields: [acceptedTemplateId], references: [id])
+  acceptedTemplate   InspectionTemplate @relation(fields: [acceptedTemplateId], references: [id])
   acceptedTemplateId String
   /// First time `GET /templates/updates` surfaced this as pending -- an
   /// in-app "have they even seen it" signal for the admin adoption view,
   /// distinct from `acceptedAt`.
   notifiedAt         DateTime?
-  acceptedAt         DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  acceptedAt         DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   @@unique([inspectorId, inspectionType, propertyType, sectionKey])
   @@index([inspectorId])
@@ -405,29 +416,200 @@ model Photo {
 // Ported from the mobile-only prototype in acespect-mobile's QcDataContext
 // and constants/qcData.ts -- same business rules, now shared/persisted.
 
+/// E01 Client organisation (tenant). `name` is the legal entity name; the
+/// remaining spec fields (ABN, addresses, contacts, ...) live in `data`,
+/// validated against src/modules/qc/spec/qcSpec.json.
 model QcClient {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  name       String
+  clientCode String?  @unique
+  status     String   @default("ACTIVE")
+  data       Json     @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  projects QcProject[]
+  projects           QcProject[]
+  masterContractors  QcMasterContractor[]
+  memberships        QcMembership[]
+  approvedInspectors QcInspectorCredential[]
 
   @@map("qc_clients")
 }
 
-model QcProject {
+/// E02 Master Contractor (builder) -- sits inside one client's tenant.
+model QcMasterContractor {
   id        String   @id @default(uuid())
-  name      String
   client    QcClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   clientId  String
+  name      String
+  abn       String?
+  status    String   @default("ACTIVE")
+  data      Json     @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  properties QcProperty[]
+  tradeCompanies QcTradeCompany[]
+  projects       QcProject[]
+  memberships    QcMembership[]
 
   @@index([clientId])
+  @@map("qc_master_contractors")
+}
+
+/// E19 Trade category (Plumber, Electrician, ...). Retired, never deleted.
+model QcTradeCategory {
+  id              String  @id @default(uuid())
+  name            String
+  code            String  @unique
+  licenceRequired Boolean @default(false)
+  licenceHint     String?
+  active          Boolean @default(true)
+
+  tradeCompanies QcTradeCompany[]
+  memberships    QcMembership[]
+  defects        QcDefect[]
+
+  @@map("qc_trade_categories")
+}
+
+/// E03 Trade company (subcontractor).
+model QcTradeCompany {
+  id        String   @id @default(uuid())
+  name      String
+  abn       String?
+  status    String   @default("ACTIVE")
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  masterContractors QcMasterContractor[]
+  categories        QcTradeCategory[]
+  memberships       QcMembership[]
+  projectMembers    QcProjectMember[]
+  defects           QcDefect[]
+
+  @@map("qc_trade_companies")
+}
+
+enum QcMemberRole {
+  CLIENT_ADMIN
+  CLIENT_USER
+  MC_MANAGER
+  MC_SITE_SUPERVISOR
+  MC_PROJECT_MANAGER
+  TRADE_USER
+  PRIVATE_INSPECTOR
+}
+
+/// E05 Membership -- a user's role inside one client tenant. Roles and
+/// project access belong to the membership, not the user. (Super Admin is
+/// platform level: User.role === ADMIN, no membership.)
+model QcMembership {
+  id                  String              @id @default(uuid())
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              String
+  client              QcClient            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId            String
+  role                QcMemberRole
+  masterContractor    QcMasterContractor? @relation(fields: [masterContractorId], references: [id])
+  masterContractorId  String?
+  tradeCompany        QcTradeCompany?     @relation(fields: [tradeCompanyId], references: [id])
+  tradeCompanyId      String?
+  optionalPermissions String[]            @default([])
+  status              String              @default("ACTIVE")
+  deactivationReason  String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  tradeCategories QcTradeCategory[]
+  projects        QcProject[]
+
+  @@unique([userId, clientId])
+  @@index([clientId])
+  @@map("qc_memberships")
+}
+
+/// E06 Private Inspector credentials -- Super Admin managed.
+model QcInspectorCredential {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String   @unique
+  status    String   @default("PENDING")
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  approvedClients QcClient[]
+
+  @@map("qc_inspector_credentials")
+}
+
+/// E07 Project. Spec fields beyond the columns below live in `data`.
+/// Defect policy flags are real columns because the lifecycle engine reads
+/// them (closure policy, desk-review allowance, Safety Hazard auto-release).
+model QcProject {
+  id                String              @id @default(uuid())
+  name              String
+  client            QcClient            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId          String
+  projectRef        String?
+  jobNumber         String?
+  builder           QcMasterContractor? @relation(fields: [builderId], references: [id])
+  builderId         String?
+  state             String?
+  status            String              @default("SETUP")
+  closurePolicy     String              @default("DEVELOPER_SIGNOFF")
+  deskReviewAllowed Boolean             @default(false)
+  safetyAutoRelease Boolean             @default(true)
+  defectSeq         Int                 @default(0)
+  data              Json                @default("{}")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  properties  QcProperty[]
+  sites       QcSite[]
+  team        QcProjectMember[]
+  memberships QcMembership[]
+
+  @@unique([clientId, jobNumber])
+  @@index([clientId])
   @@map("qc_projects")
+}
+
+/// E08 Site -- a physical development site under a project.
+model QcSite {
+  id        String    @id @default(uuid())
+  project   QcProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  name      String
+  status    String    @default("ACTIVE")
+  data      Json      @default("{}")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  lots QcProperty[]
+
+  @@index([projectId])
+  @@map("qc_sites")
+}
+
+/// E10 Project team member: a person, trade company or master contractor
+/// assigned to a project in a given capacity.
+model QcProjectMember {
+  id                 String          @id @default(uuid())
+  project            QcProject       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId          String
+  assigneeType       String
+  userId             String?
+  tradeCompany       QcTradeCompany? @relation(fields: [tradeCompanyId], references: [id])
+  tradeCompanyId     String?
+  masterContractorId String?
+  projectRole        String
+  data               Json            @default("{}")
+  createdAt          DateTime        @default(now())
+
+  @@index([projectId])
+  @@map("qc_project_members")
 }
 
 /// House / Apartment / Townhouse / Duplex, admin-editable (label/icon/order).
@@ -443,81 +625,184 @@ model QcPropertyType {
   @@map("qc_property_types")
 }
 
+/// E09 Lot, dwelling or unit (the unit of inspection). Named "property" in
+/// the mobile app and API for historical reasons. Spec fields beyond the
+/// columns live in `data`.
 model QcProperty {
   id             String         @id @default(uuid())
   name           String
   project        QcProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId      String
+  site           QcSite?        @relation(fields: [siteId], references: [id])
+  siteId         String?
   propertyType   QcPropertyType @relation(fields: [propertyTypeId], references: [id])
   propertyTypeId String
+  lotStatus      String         @default("NOT_STARTED")
+  data           Json           @default("{}")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
   defects QcDefect[]
 
   @@index([projectId])
+  @@index([siteId])
   @@map("qc_properties")
 }
 
 /// Major / Moderate / Minor / Observation, admin-editable.
 model QcSeverity {
-  id    String @id @default(uuid())
-  key   String @unique
-  label String
-  color String
-  order Int    @default(0)
+  id     String  @id @default(uuid())
+  key    String  @unique
+  label  String
+  color  String
+  order  Int     @default(0)
+  active Boolean @default(true)
 
   defects QcDefect[]
 
   @@map("qc_severities")
 }
 
-/// The 11-stage defect lifecycle (Open -> ... -> Verified/Closed -> ...),
-/// admin-editable. `meaning` is the human-readable explanation shown in the
+/// The 14-status defect lifecycle from the requirements spec (E24). Which
+/// transitions are legal, and for whom, lives in qc.lifecycle.ts -- not here.
+/// Retired statuses keep `active = false` so old defects still resolve. `meaning` is the human-readable explanation shown in the
 /// status-change sheet.
 model QcStatus {
-  id      String @id @default(uuid())
-  key     String @unique
-  label   String
-  color   String
-  meaning String @default("")
-  order   Int    @default(0)
+  id       String  @id @default(uuid())
+  key      String  @unique
+  label    String
+  color    String
+  meaning  String  @default("")
+  order    Int     @default(0)
+  active   Boolean @default(true)
+  terminal Boolean @default(false)
 
   defects QcDefect[]
 
   @@map("qc_statuses")
 }
 
-/// A logged defect. An ADMIN creates it with just property + assignee --
-/// location/summary/severity are deliberately nullable, filled in later by
-/// whoever it's assigned to from the mobile app's Defect screen (enforced at
-/// the API layer: PATCH /qc/defects/:id now checks assignedToId against the
-/// caller, not just requireRole('ADMIN')). Reassigning stays admin-only.
+/// E24 Defect. Created by a Super Admin (assigning a lot + a person) or a
+/// Private Inspector; the descriptive fields are nullable because a defect
+/// starts as a draft until its mandatory fields are filled and it is
+/// confirmed as Open (F16). After that `statusId` only changes through
+/// lifecycle actions (qc.lifecycle.ts) -- never by a plain PATCH -- and every
+/// change appends a QcDefectEvent.
 model QcDefect {
-  id              String      @id @default(uuid())
-  property        QcProperty  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id              String           @id @default(uuid())
+  defectRef       String?          @unique
+  property        QcProperty       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   propertyId      String
+  title           String?
+  summary         String?
   location        String?
   locationDetails String?
-  summary         String?
-  severity        QcSeverity? @relation(fields: [severityId], references: [id])
+  roomArea        String?
+  element         String?
+  nature          String?
+  codeRef         String?
+  guideValue      String?
+  measuredValue   String?
+  tradeCategory   QcTradeCategory? @relation(fields: [tradeCategoryId], references: [id])
+  tradeCategoryId String?
+  severity        QcSeverity?      @relation(fields: [severityId], references: [id])
   severityId      String?
-  status          QcStatus    @relation(fields: [statusId], references: [id])
+  status          QcStatus         @relation(fields: [statusId], references: [id])
   statusId        String
-  assignedTo      User?      @relation("QcDefectAssignedTo", fields: [assignedToId], references: [id])
-  assignedToId    String?
-  dueDate         DateTime?
-  createdBy       User       @relation("QcDefectCreatedBy", fields: [createdById], references: [id])
-  createdById     String
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  isDraft         Boolean          @default(false)
+  flags           String[]         @default([])
+  escalationLevel Int              @default(0)
+  reworkCount     Int              @default(0)
+  photoUrls       Json             @default("[]")
+  linkedDefectId  String?
 
-  tasks QcTask[]
+  // Who is on the hook right now.
+  assignedTo              User?           @relation("QcDefectAssignedTo", fields: [assignedToId], references: [id])
+  assignedToId            String?
+  builderContact          User?           @relation("QcDefectBuilderContact", fields: [builderContactId], references: [id])
+  builderContactId        String?
+  allocatedTradeCompany   QcTradeCompany? @relation(fields: [allocatedTradeCompanyId], references: [id])
+  allocatedTradeCompanyId String?
+  allocatedTradeUser      User?           @relation("QcDefectAllocatedUser", fields: [allocatedTradeUserId], references: [id])
+  allocatedTradeUserId    String?
+
+  // Dates.
+  dueDate                 DateTime?
+  releasedAt              DateTime?
+  targetRectificationDate DateTime?
+  scheduledAttendanceDate DateTime?
+
+  // Branch bookkeeping the lifecycle needs to return to where it came from.
+  holdReason             String?
+  holdReviewDate         DateTime?
+  holdPrevStatusId       String?
+  disputePrevStatusId    String?
+  disputeBy              String?
+  disputeReviewRequested Boolean   @default(false)
+  withdrawnReason        String?
+  exceptionReason        String?
+  closedBy               User?     @relation("QcDefectClosedBy", fields: [closedById], references: [id])
+  closedById             String?
+  closedAt               DateTime?
+
+  createdBy   User     @relation("QcDefectCreatedBy", fields: [createdById], references: [id])
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks    QcTask[]
+  events   QcDefectEvent[]
+  comments QcDefectComment[]
 
   @@index([propertyId])
   @@index([assignedToId])
   @@index([statusId])
+  @@index([tradeCategoryId])
   @@map("qc_defects")
+}
+
+/// E25 Defect event -- append-only lifecycle history. Each row stores the
+/// hash of the previous event for the same defect, so tampering with history
+/// is detectable.
+model QcDefectEvent {
+  id           String   @id @default(uuid())
+  defect       QcDefect @relation(fields: [defectId], references: [id], onDelete: Cascade)
+  defectId     String
+  type         String
+  fromStatusId String?
+  toStatusId   String?
+  actor        User     @relation("QcDefectEventActor", fields: [actorId], references: [id])
+  actorId      String
+  actorRole    String
+  onBehalf     Boolean  @default(false)
+  note         String?
+  changes      Json     @default("{}")
+  attachments  Json     @default("[]")
+  reworkCount  Int      @default(0)
+  prevHash     String?
+  hash         String
+  createdAt    DateTime @default(now())
+
+  @@index([defectId, createdAt])
+  @@map("qc_defect_events")
+}
+
+/// E26 Defect comment -- append-only conversation; corrections are new rows.
+model QcDefectComment {
+  id             String   @id @default(uuid())
+  defect         QcDefect @relation(fields: [defectId], references: [id], onDelete: Cascade)
+  defectId       String
+  author         User     @relation(fields: [authorId], references: [id])
+  authorId       String
+  authorRole     String
+  text           String
+  visibleTo      String   @default("ALL")
+  attachments    Json     @default("[]")
+  correctionOfId String?
+  createdAt      DateTime @default(now())
+
+  @@index([defectId, createdAt])
+  @@map("qc_defect_comments")
 }
 
 /// Simple 3-stage assignment-progress flag -- distinct from QcStatus's rich,

@@ -1,19 +1,38 @@
 /**
- * Flattens the nested Prisma `include` shapes into the same field names the
- * mobile prototype's `Defect`/`QcTask` types already use (client/project/
- * property as plain strings alongside their ids, severity/status as
- * key+label+color) — so wiring the real API into the mobile app in Phase 3
- * is a data-source swap, not a shape rewrite.
+ * Flattens the nested Prisma `include` shapes into the field names the mobile
+ * app's `QcDefect`/`QcTask` types use (client/project/property as plain
+ * objects, severity/status as key+label+color). New spec fields are added
+ * alongside the originals so older mobile builds keep working.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function serializeDefect(defect: any) {
+export function serializeDefect(defect: any, extras?: { allowedActions?: unknown }) {
+  const project = defect.property.project;
   return {
     id: defect.id,
+    defectRef: defect.defectRef,
+    title: defect.title,
     location: defect.location,
     locationDetails: defect.locationDetails,
     summary: defect.summary,
+    roomArea: defect.roomArea,
+    element: defect.element,
+    nature: defect.nature,
+    codeRef: defect.codeRef,
+    isDraft: defect.isDraft,
+    flags: defect.flags ?? [],
+    escalationLevel: defect.escalationLevel,
+    reworkCount: defect.reworkCount,
+    photoUrls: defect.photoUrls ?? [],
     dueDate: defect.dueDate,
+    targetRectificationDate: defect.targetRectificationDate,
+    scheduledAttendanceDate: defect.scheduledAttendanceDate,
+    holdReason: defect.holdReason,
+    holdReviewDate: defect.holdReviewDate,
+    withdrawnReason: defect.withdrawnReason,
+    exceptionReason: defect.exceptionReason,
+    disputeBy: defect.disputeBy,
+    closedAt: defect.closedAt,
     createdAt: defect.createdAt,
     updatedAt: defect.updatedAt,
     property: {
@@ -26,8 +45,17 @@ export function serializeDefect(defect: any) {
         icon: defect.property.propertyType.icon,
       },
     },
-    project: { id: defect.property.project.id, name: defect.property.project.name },
-    client: { id: defect.property.project.client.id, name: defect.property.project.client.name },
+    site: defect.property.site ? { id: defect.property.site.id, name: defect.property.site.name } : null,
+    project: {
+      id: project.id,
+      name: project.name,
+      jobNumber: project.jobNumber,
+      closurePolicy: project.closurePolicy,
+      deskReviewAllowed: project.deskReviewAllowed,
+    },
+    client: { id: project.client.id, name: project.client.name },
+    builder: project.builder ? { id: project.builder.id, name: project.builder.name } : null,
+    tradeCategory: defect.tradeCategory ?? null,
     severity: defect.severity
       ? { id: defect.severity.id, key: defect.severity.key, label: defect.severity.label, color: defect.severity.color }
       : null,
@@ -40,11 +68,16 @@ export function serializeDefect(defect: any) {
     },
     assignedTo: defect.assignedTo,
     createdBy: defect.createdBy,
+    builderContact: defect.builderContact ?? null,
+    allocatedTradeCompany: defect.allocatedTradeCompany ?? null,
+    allocatedTradeUser: defect.allocatedTradeUser ?? null,
+    closedBy: defect.closedBy ?? null,
+    ...(extras?.allowedActions !== undefined ? { allowedActions: extras.allowedActions } : {}),
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function serializeTask(task: any) {
+export function serializeTask(task: any, allowedActions?: unknown) {
   return {
     id: task.id,
     priority: task.priority,
@@ -52,7 +85,7 @@ export function serializeTask(task: any) {
     dueDate: task.dueDate,
     createdAt: task.createdAt,
     assignedTo: task.assignedTo,
-    defect: serializeDefect(task.defect),
+    defect: serializeDefect(task.defect, allowedActions !== undefined ? { allowedActions } : undefined),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     updates: task.updates?.map((u: any) => ({
       id: u.id,
@@ -63,5 +96,24 @@ export function serializeTask(task: any) {
       statusChanged: u.statusChanged,
       createdAt: u.createdAt,
     })),
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function serializeEvent(e: any, statusById: Map<string, { key: string; label: string }>) {
+  return {
+    id: e.id,
+    type: e.type,
+    from: e.fromStatusId ? statusById.get(e.fromStatusId) ?? null : null,
+    to: e.toStatusId ? statusById.get(e.toStatusId) ?? null : null,
+    actor: e.actor,
+    actorRole: e.actorRole,
+    onBehalf: e.onBehalf,
+    note: e.note,
+    changes: e.changes,
+    attachments: e.attachments,
+    reworkCount: e.reworkCount,
+    hash: e.hash,
+    createdAt: e.createdAt,
   };
 }

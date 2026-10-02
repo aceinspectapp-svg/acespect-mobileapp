@@ -1,78 +1,13 @@
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
-import { hashPassword } from '../../utils/password';
+import { requireExists, taskInclude } from './qc.shared';
 import {
-  CreateClientInput,
-  CreateDefectInput,
-  CreateFieldUserInput,
-  CreatePropertyInput,
   CreatePropertyTypeInput,
-  CreateProjectInput,
-  CreateSeverityInput,
-  CreateStatusInput,
   PostTaskUpdateInput,
-  SEVERITY_KEY_TO_PRIORITY,
-  UpdateDefectInput,
   UpdateTaskStatusInput,
 } from './qc.schemas';
 
-/** The QcStatus.key a defect moves to when its task is marked Completed — see the shared Defect Lifecycle Workflow doc. */
-const PENDING_REINSPECTION_KEY = 'pending_re_inspection';
-
-// ─── Config: Clients / Projects / Properties / Property Types ──────────────
-
-async function listClients() {
-  return prisma.qcClient.findMany({ orderBy: { name: 'asc' } });
-}
-async function createClient(input: CreateClientInput) {
-  return prisma.qcClient.create({ data: input });
-}
-async function updateClient(id: string, input: Partial<CreateClientInput>) {
-  await requireExists('qcClient', id, 'Client');
-  return prisma.qcClient.update({ where: { id }, data: input });
-}
-async function deleteClient(id: string) {
-  await requireExists('qcClient', id, 'Client');
-  await prisma.qcClient.delete({ where: { id } });
-}
-
-async function listProjects(clientId?: string) {
-  return prisma.qcProject.findMany({ where: clientId ? { clientId } : undefined, orderBy: { name: 'asc' } });
-}
-async function createProject(input: CreateProjectInput) {
-  await requireExists('qcClient', input.clientId, 'Client');
-  return prisma.qcProject.create({ data: input });
-}
-async function updateProject(id: string, input: { name?: string }) {
-  await requireExists('qcProject', id, 'Project');
-  return prisma.qcProject.update({ where: { id }, data: input });
-}
-async function deleteProject(id: string) {
-  await requireExists('qcProject', id, 'Project');
-  await prisma.qcProject.delete({ where: { id } });
-}
-
-async function listProperties(projectId?: string) {
-  return prisma.qcProperty.findMany({
-    where: projectId ? { projectId } : undefined,
-    include: { propertyType: true },
-    orderBy: { name: 'asc' },
-  });
-}
-async function createProperty(input: CreatePropertyInput) {
-  await requireExists('qcProject', input.projectId, 'Project');
-  await requireExists('qcPropertyType', input.propertyTypeId, 'Property type');
-  return prisma.qcProperty.create({ data: input });
-}
-async function updateProperty(id: string, input: { name?: string; propertyTypeId?: string }) {
-  await requireExists('qcProperty', id, 'Property');
-  if (input.propertyTypeId) await requireExists('qcPropertyType', input.propertyTypeId, 'Property type');
-  return prisma.qcProperty.update({ where: { id }, data: input });
-}
-async function deleteProperty(id: string) {
-  await requireExists('qcProperty', id, 'Property');
-  await prisma.qcProperty.delete({ where: { id } });
-}
+// ─── Config: Property types ─────────────────────────────────────────────────
 
 async function listPropertyTypes() {
   return prisma.qcPropertyType.findMany({ orderBy: { order: 'asc' } });
@@ -91,199 +26,26 @@ async function deletePropertyType(id: string) {
   await prisma.qcPropertyType.delete({ where: { id } });
 }
 
-// ─── Config: Severities / Statuses ──────────────────────────────────────────
-
-async function listSeverities() {
-  return prisma.qcSeverity.findMany({ orderBy: { order: 'asc' } });
-}
-async function createSeverity(input: CreateSeverityInput) {
-  await ensureKeyFree('qcSeverity', input.key);
-  return prisma.qcSeverity.create({ data: input });
-}
-async function updateSeverity(id: string, input: Partial<CreateSeverityInput>) {
-  await requireExists('qcSeverity', id, 'Severity');
-  if (input.key) await ensureKeyFree('qcSeverity', input.key, id);
-  return prisma.qcSeverity.update({ where: { id }, data: input });
-}
-async function deleteSeverity(id: string) {
-  await requireExists('qcSeverity', id, 'Severity');
-  await prisma.qcSeverity.delete({ where: { id } });
-}
-
-async function listStatuses() {
-  return prisma.qcStatus.findMany({ orderBy: { order: 'asc' } });
-}
-async function createStatus(input: CreateStatusInput) {
-  await ensureKeyFree('qcStatus', input.key);
-  return prisma.qcStatus.create({ data: input });
-}
-async function updateStatus(id: string, input: Partial<CreateStatusInput>) {
-  await requireExists('qcStatus', id, 'Status');
-  if (input.key) await ensureKeyFree('qcStatus', input.key, id);
-  return prisma.qcStatus.update({ where: { id }, data: input });
-}
-async function deleteStatus(id: string) {
-  await requireExists('qcStatus', id, 'Status');
-  await prisma.qcStatus.delete({ where: { id } });
-}
-
 // ─── Assignee roster ─────────────────────────────────────────────────────────
 
-/** Every account that can be assigned QC work — existing INSPECTOR accounts plus dedicated FIELD_USER ones. */
+/** Every account a defect can be assigned to. */
 async function listAssignableUsers() {
   return prisma.user.findMany({
-    where: { role: { in: ['INSPECTOR', 'FIELD_USER'] }, isActive: true },
-    select: { id: true, name: true, email: true, role: true },
+    where: {
+      role: { in: ['INSPECTOR', 'FIELD_USER'] },
+      isActive: true,
+      // Only people who can take defects: Private Inspectors, or legacy accounts with no QC role.
+      OR: [{ qcMemberships: { none: {} } }, { qcMemberships: { some: { role: 'PRIVATE_INSPECTOR', status: 'ACTIVE' } } }],
+    },
+    select: {
+      id: true, name: true, email: true, role: true,
+      qcMemberships: { where: { status: 'ACTIVE' }, select: { role: true, client: { select: { id: true, name: true } } } },
+    },
     orderBy: { name: 'asc' },
   });
 }
 
-async function createFieldUser(input: CreateFieldUserInput) {
-  const existing = await prisma.user.findUnique({ where: { email: input.email } });
-  if (existing) throw ApiError.conflict('An account with this email already exists', 'EMAIL_TAKEN');
-  const user = await prisma.user.create({
-    data: {
-      email: input.email,
-      name: input.name,
-      passwordHash: await hashPassword(input.password),
-      role: 'FIELD_USER',
-    },
-    select: { id: true, name: true, email: true, role: true, createdAt: true },
-  });
-  return user;
-}
-
-// ─── Defects ────────────────────────────────────────────────────────────────
-
-const defectInclude = {
-  property: { include: { project: { include: { client: true } }, propertyType: true } },
-  severity: true,
-  status: true,
-  assignedTo: { select: { id: true, name: true, email: true } },
-  createdBy: { select: { id: true, name: true, email: true } },
-} as const;
-
-/** The QcStatus.key a brand-new defect starts in — see the shared Defect Lifecycle Workflow doc. */
-const OPEN_KEY = 'open';
-
-async function getDefaultOpenStatus() {
-  const status = await prisma.qcStatus.findUnique({ where: { key: OPEN_KEY } });
-  if (!status) throw ApiError.badRequest('No QC statuses configured yet — an admin must configure them first');
-  return status;
-}
-
-async function createDefect(createdById: string, input: CreateDefectInput) {
-  await requireExists('qcProperty', input.propertyId, 'Property');
-  const severity = input.severityId ? await requireExists('qcSeverity', input.severityId, 'Severity') : null;
-  await requireExists('user', input.assignedToId, 'Assignee');
-  const openStatus = await getDefaultOpenStatus();
-
-  // Severity is usually unset at creation now (admin only assigns; the field
-  // user classifies it on-site) -- defaults to LOW same as an unrecognized
-  // key always has, re-computed to the real value once they set it (see
-  // updateDefect below).
-  const priority = severity ? SEVERITY_KEY_TO_PRIORITY[severity.key] ?? 'LOW' : 'LOW';
-
-  return prisma.$transaction(async (tx) => {
-    const defect = await tx.qcDefect.create({
-      data: {
-        propertyId: input.propertyId,
-        location: input.location,
-        locationDetails: input.locationDetails,
-        summary: input.summary,
-        severityId: input.severityId,
-        statusId: openStatus.id,
-        assignedToId: input.assignedToId,
-        dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
-        createdById,
-      },
-      include: defectInclude,
-    });
-    await tx.qcTask.create({
-      data: {
-        defectId: defect.id,
-        assignedToId: input.assignedToId,
-        priority,
-        dueDate: defect.dueDate,
-      },
-    });
-    return defect;
-  });
-}
-
-/**
- * Admin can edit anything, including reassigning. The field user it's
- * assigned to can edit everything EXCEPT assignedToId -- reassignment stays
- * an admin-only "who does this" decision; filling in what/where/how-bad is
- * the on-site job. `requireRole('ADMIN')` used to be the whole check,
- * enforced on the route; now it's just one half of this function's own.
- */
-async function updateDefect(id: string, input: UpdateDefectInput, requesterId: string, requesterRole: string) {
-  const defect = await requireExists('qcDefect', id, 'Defect');
-  const isAdmin = requesterRole === 'ADMIN';
-  if (!isAdmin && defect.assignedToId !== requesterId) {
-    throw ApiError.forbidden('This defect is not assigned to you');
-  }
-  const assignedToId = isAdmin ? input.assignedToId : undefined;
-
-  let severity = null;
-  if (input.severityId) severity = await requireExists('qcSeverity', input.severityId, 'Severity');
-  if (input.statusId) await requireExists('qcStatus', input.statusId, 'Status');
-  if (assignedToId) await requireExists('user', assignedToId, 'Assignee');
-
-  return prisma.$transaction(async (tx) => {
-    const updated = await tx.qcDefect.update({
-      where: { id },
-      data: {
-        location: input.location,
-        locationDetails: input.locationDetails,
-        summary: input.summary,
-        severityId: input.severityId,
-        statusId: input.statusId,
-        assignedToId: assignedToId === undefined ? undefined : assignedToId,
-        dueDate: input.dueDate === undefined ? undefined : input.dueDate ? new Date(input.dueDate) : null,
-      },
-      include: defectInclude,
-    });
-    // Reassigning the defect reassigns its task(s) too — v1 keeps one task per defect.
-    if (assignedToId && assignedToId !== defect.assignedToId) {
-      await tx.qcTask.updateMany({ where: { defectId: id }, data: { assignedToId } });
-    }
-    // Severity usually arrives here, not at creation -- (re)computing the
-    // task's priority is what createDefect would have done had it known the
-    // severity up front.
-    if (severity) {
-      const priority = SEVERITY_KEY_TO_PRIORITY[severity.key] ?? 'LOW';
-      await tx.qcTask.updateMany({ where: { defectId: id }, data: { priority } });
-    }
-    return updated;
-  });
-}
-
-async function listDefects(filters: { propertyId?: string; statusId?: string; assignedToId?: string }) {
-  return prisma.qcDefect.findMany({
-    where: {
-      propertyId: filters.propertyId,
-      statusId: filters.statusId,
-      assignedToId: filters.assignedToId,
-    },
-    include: defectInclude,
-    orderBy: { createdAt: 'desc' },
-  });
-}
-
-async function getDefectById(id: string) {
-  const defect = await prisma.qcDefect.findUnique({ where: { id }, include: defectInclude });
-  if (!defect) throw ApiError.notFound('Defect not found');
-  return defect;
-}
-
 // ─── Tasks (field-user facing) ───────────────────────────────────────────────
-
-const taskInclude = {
-  defect: { include: defectInclude },
-  assignedTo: { select: { id: true, name: true, email: true } },
-} as const;
 
 /** Tasks assigned to this user — the mobile app's "My Tasks" list. */
 async function listMyTasks(userId: string) {
@@ -309,9 +71,10 @@ async function getTaskById(id: string, requesterId: string, requesterRole: strin
 /**
  * Posts a site-visit update. A plain progress note nudges a still-PENDING
  * task to IN_PROGRESS (visiting implies work started); `markCompleted`
- * forces COMPLETED and advances the linked defect to "Pending Re-inspection"
- * — same cascade the mobile prototype's QcDataContext.addTaskUpdate did
- * client-side, now authoritative here.
+ * forces COMPLETED. A task is only the assignee's progress flag: it never
+ * moves the defect through its lifecycle -- that happens through the
+ * defect's own actions (qc.defects.service.ts), which enforce who may do
+ * what.
  */
 async function postTaskUpdate(
   taskId: string,
@@ -346,12 +109,6 @@ async function postTaskUpdate(
     });
     await tx.qcTask.update({ where: { id: taskId }, data: { status: nextStatus } });
 
-    if (input.markCompleted) {
-      const reinspection = await tx.qcStatus.findUnique({ where: { key: PENDING_REINSPECTION_KEY } });
-      if (reinspection) {
-        await tx.qcDefect.update({ where: { id: task.defectId }, data: { statusId: reinspection.id } });
-      }
-    }
     return update;
   });
 }
@@ -359,9 +116,8 @@ async function postTaskUpdate(
 /**
  * Direct, free status change -- the mobile Tasks list's inline status pill,
  * as opposed to postTaskUpdate's automatic PENDING->IN_PROGRESS/COMPLETED
- * bump. Still logs a (comment-less) activity entry so the status change
- * shows up in the task's feed, and still cascades the defect to "Pending
- * Re-inspection" when the new status is COMPLETED, same as markCompleted.
+ * bump. Logs a (comment-less) activity entry so the change shows up in the
+ * task's feed. Does not touch the defect's lifecycle status.
  */
 async function updateTaskStatus(taskId: string, status: UpdateTaskStatusInput['status'], requesterId: string, requesterRole: string) {
   const task = await prisma.qcTask.findUnique({ where: { id: taskId } });
@@ -378,12 +134,6 @@ async function updateTaskStatus(taskId: string, status: UpdateTaskStatusInput['s
       data: { taskId, authorId: requesterId, comment: '', photoUrls: [], statusAfter: status, statusChanged: true },
     });
     const updated = await tx.qcTask.update({ where: { id: taskId }, data: { status }, include: taskInclude });
-    if (status === 'COMPLETED') {
-      const reinspection = await tx.qcStatus.findUnique({ where: { key: PENDING_REINSPECTION_KEY } });
-      if (reinspection) {
-        await tx.qcDefect.update({ where: { id: task.defectId }, data: { statusId: reinspection.id } });
-      }
-    }
     return updated;
   });
 }
@@ -391,10 +141,13 @@ async function updateTaskStatus(taskId: string, status: UpdateTaskStatusInput['s
 // ─── Config bundle (one round-trip for mobile/dashboard on load) ────────────
 
 async function getConfig() {
-  const [propertyTypes, severities, statuses, clients] = await Promise.all([
+  const [propertyTypes, severities, statuses, tradeCategories, tradeCompanies, clients] = await Promise.all([
     listPropertyTypes(),
-    listSeverities(),
-    listStatuses(),
+    prisma.qcSeverity.findMany({ where: { active: true }, orderBy: { order: 'asc' } }),
+    prisma.qcStatus.findMany({ where: { active: true }, orderBy: { order: 'asc' } }),
+    prisma.qcTradeCategory.findMany({ where: { active: true }, orderBy: { name: 'asc' } }),
+    // Names only: mobile roles that allocate defects need something to pick from.
+    prisma.qcTradeCompany.findMany({ where: { status: 'ACTIVE' }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     prisma.qcClient.findMany({
       orderBy: { name: 'asc' },
       include: {
@@ -405,60 +158,23 @@ async function getConfig() {
       },
     }),
   ]);
-  return { propertyTypes, severities, statuses, clients };
+  return { propertyTypes, severities, statuses, tradeCategories, tradeCompanies, clients };
 }
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
-/** Fetches a row by id or throws 404 with a friendly label — used to validate every FK before writing. */
-async function requireExists<T extends 'qcClient' | 'qcProject' | 'qcProperty' | 'qcPropertyType' | 'qcSeverity' | 'qcStatus' | 'qcDefect' | 'user'>(
-  model: T,
-  id: string,
-  label: string,
-) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const row = await (prisma[model] as any).findUnique({ where: { id } });
-  if (!row) throw ApiError.notFound(`${label} not found`);
-  return row;
-}
-
-async function ensureKeyFree(model: 'qcPropertyType' | 'qcSeverity' | 'qcStatus', key: string, excludeId?: string) {
+async function ensureKeyFree(model: 'qcPropertyType', key: string, excludeId?: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const existing = await (prisma[model] as any).findUnique({ where: { key } });
   if (existing && existing.id !== excludeId) throw ApiError.conflict(`"${key}" is already in use`, 'KEY_TAKEN');
 }
 
 export const qcService = {
-  listClients,
-  createClient,
-  updateClient,
-  deleteClient,
-  listProjects,
-  createProject,
-  updateProject,
-  deleteProject,
-  listProperties,
-  createProperty,
-  updateProperty,
-  deleteProperty,
   listPropertyTypes,
   createPropertyType,
   updatePropertyType,
   deletePropertyType,
-  listSeverities,
-  createSeverity,
-  updateSeverity,
-  deleteSeverity,
-  listStatuses,
-  createStatus,
-  updateStatus,
-  deleteStatus,
   listAssignableUsers,
-  createFieldUser,
-  createDefect,
-  updateDefect,
-  listDefects,
-  getDefectById,
   listMyTasks,
   getTaskById,
   postTaskUpdate,
