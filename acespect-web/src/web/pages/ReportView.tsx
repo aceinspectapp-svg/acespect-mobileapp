@@ -230,9 +230,13 @@ export function ReportView() {
               have silently dropped this entire legal appendix along with it. */}
           <div className="report-page-break">
             <ReportScope />
-            <div style={{ marginTop: "20px" }}>
-              <ReportConditions />
-            </div>
+          </div>
+          {/* Conditions starts on its own fresh page too, separate from
+              Scope -- previously they shared one page-break (before Scope
+              only), so Conditions just ran on wherever Scope happened to
+              end. */}
+          <div className="report-page-break" style={{ marginTop: "20px" }}>
+            <ReportConditions />
           </div>
         </PhotoNumberProvider>
       </div>

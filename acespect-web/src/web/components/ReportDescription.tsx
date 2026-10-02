@@ -58,6 +58,15 @@ export function ReportDescription({
   // "[direction] / [compass point]" placeholder whenever the inspector has
   // answered them.
   const f = (description?.fields as Record<string, unknown> | null | undefined) ?? {};
+  // Reviewer-pasted link to the full external photo archive (e.g. a
+  // Dropbox/Drive folder) -- stored as an ordinary template field on this
+  // same section (see seed-description-photo-archive-url.ts), not a
+  // separate database column, so it flows through exactly like every other
+  // description field (`fields.photoArchiveUrl`, populated by the generic
+  // per-field fallback in templateFields.ts). When absent, "Click here"
+  // doesn't appear at all and both mentions reword to stay meaningful
+  // without a dead link.
+  const photoArchiveUrl = str(f.photoArchiveUrl);
   const projectSiteAddress = str(f.projectSiteAddress);
   const siteSide = str(f.siteSide);
   const siteDirection = str(f.siteDirection);
@@ -97,16 +106,26 @@ export function ReportDescription({
       )}
 
       <SectionBand compact={compact}>Photographs</SectionBand>
-      <Para>
-        Selected photographs are included in the body of this report. For a full download
-        {totalPhotos > 0 ? ` of ${totalPhotos} photographs` : ""} please{" "}
-        <a style={{ color: "#2563eb", textDecoration: "underline" }} href="#photos" onClick={(e) => e.preventDefault()}>
-          Click here
-        </a>{" "}
-        to access. We recommend that you download the digital photographs immediately and save in a secure
-        folder on your device, as the link will remain active for only a few months from the date of this report.
-      </Para>
-      <Note>{PHOTOGRAPHS_NOTE}</Note>
+      {photoArchiveUrl ? (
+        <Para>
+          Selected photographs are included in the body of this report. For a full download
+          {totalPhotos > 0 ? ` of ${totalPhotos} photographs` : ""} please{" "}
+          <a href={photoArchiveUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline" }}>
+            Click here
+          </a>{" "}
+          to access. We recommend that you download the digital photographs immediately and save in a secure
+          folder on your device, as the link will remain active for only a few months from the date of this report.
+        </Para>
+      ) : (
+        // No archive link on file -- no "Click here" at all (a dead link
+        // that goes nowhere is worse than no link), and the sentence
+        // reworded so it still reads as a complete, meaningful statement.
+        <Para>
+          Selected photographs are included in the body of this report
+          {totalPhotos > 0 ? `, totalling ${totalPhotos} photographs` : ""}.
+        </Para>
+      )}
+      {photoArchiveUrl && <Note>{PHOTOGRAPHS_NOTE}</Note>}
 
       <SectionBand compact={compact}>Scope of Inspection and Comments</SectionBand>
       {hasProjectWorksInfo ? (
@@ -129,11 +148,15 @@ export function ReportDescription({
           scope.
         </Placeholder>
       )}
-      <Para>
-        Selected photographs are displayed in this report. For a full download
-        {totalPhotos > 0 ? ` of ${totalPhotos} photographs` : ""} provided by the Houspect survey please go to the
-        link in the Photographs heading on page 2 of the report.
-      </Para>
+      {photoArchiveUrl ? (
+        <Para>
+          Selected photographs are displayed in this report. For a full download
+          {totalPhotos > 0 ? ` of ${totalPhotos} photographs` : ""} provided by the Houspect survey please go to the
+          link in the Photographs heading on page 2 of the report.
+        </Para>
+      ) : (
+        <Para>Selected photographs are displayed in this report.</Para>
+      )}
 
       {/* No "Site Image" section here: the reference report only includes
           one when there's a real aerial/mark-up image to show, and omits it

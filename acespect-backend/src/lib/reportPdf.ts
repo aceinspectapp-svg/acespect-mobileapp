@@ -154,6 +154,20 @@ export async function generateInspectionReportPdf(
     // document only exists once this class mounts.
     await page.waitForSelector('.report-page', { timeout: 15_000 });
 
+    // Switches the live page into print media before measuring/capturing it
+    // -- ReportCover's signature-overflow check (see ReportCover.tsx) reads
+    // the cover's print-width layout, which wraps its Purpose paragraph
+    // differently (narrower) than the on-screen preview, so it has to
+    // re-measure under the same media type page.pdf() itself will render
+    // with. The component sets `data-cover-measured-for="print"` on <body>
+    // once that re-measurement lands; a short timeout here just means that
+    // one edge-case check ran with stale (screen-width) numbers, not that
+    // PDF generation fails.
+    await page.emulateMediaType('print');
+    await page
+      .waitForFunction("document.body.dataset.coverMeasuredFor === 'print'", { timeout: 5_000 })
+      .catch(() => {});
+
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,

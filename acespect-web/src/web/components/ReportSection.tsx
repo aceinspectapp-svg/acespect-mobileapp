@@ -42,6 +42,91 @@ function ConditionTag({ color, label }: { color: string; label: string }) {
   );
 }
 
+/** One parsed line of `reportText`, tagged by what it renders as -- built up
+ *  before rendering so {@link groupForPagination} can see the whole sequence
+ *  and decide which runs of items need to stay together across a page break
+ *  (see that function for why). */
+type ParsedItem =
+  | { kind: "heading"; text: string }
+  | { kind: "roomhead"; text: string }
+  | { kind: "floorband"; text: string }
+  | { kind: "cond"; color: string; label: string }
+  | { kind: "para"; text: string };
+
+function renderParsedItem(item: ParsedItem, compact: boolean, key: number | string) {
+  switch (item.kind) {
+    case "heading":
+      return (
+        <Heading key={key} compact={compact}>
+          {item.text}
+        </Heading>
+      );
+    case "roomhead":
+      return (
+        <Heading key={key} compact={compact} level={3}>
+          {item.text}
+        </Heading>
+      );
+    case "floorband":
+      return (
+        <SectionBand key={key} tone="khaki" compact={compact}>
+          {item.text}
+        </SectionBand>
+      );
+    case "cond":
+      return <ConditionTag key={key} color={item.color} label={item.label} />;
+    case "para":
+      return <Para key={key}>{item.text}</Para>;
+  }
+}
+
+/**
+ * Chromium's print pagination (Puppeteer's page.pdf(), see reportPdf.ts)
+ * does not reliably honor `break-after: avoid` on a heading/condition-tag by
+ * itself -- a page can still end right on "Driveway" + its condition pill,
+ * with the actual description starting fresh on the next page. The
+ * technique that *is* reliably honored is `break-inside: avoid` on a
+ * wrapper spanning the whole unbreakable chunk (already used for the cover
+ * signature in ReportCover.tsx), so this groups each heading/room-head and
+ * its condition tag together with the first paragraph that follows them --
+ * short enough to never itself need to split, but long enough that a page
+ * break can no longer land between a heading and the text that explains it.
+ * Any further paragraphs/damages after that stay free to break normally,
+ * same as before.
+ */
+function groupForPagination(items: ParsedItem[]): ParsedItem[][] {
+  const groups: ParsedItem[][] = [];
+  let i = 0;
+  while (i < items.length) {
+    const item = items[i];
+    if (item.kind === "heading" || item.kind === "roomhead") {
+      const group: ParsedItem[] = [item];
+      i++;
+      if (i < items.length && items[i].kind === "cond") {
+        group.push(items[i]);
+        i++;
+      }
+      if (i < items.length && items[i].kind === "para") {
+        group.push(items[i]);
+        i++;
+      }
+      groups.push(group);
+    } else if (item.kind === "cond") {
+      const group: ParsedItem[] = [item];
+      i++;
+      if (i < items.length && items[i].kind === "para") {
+        group.push(items[i]);
+        i++;
+      }
+      groups.push(group);
+    } else {
+      groups.push([item]);
+      i++;
+    }
+  }
+  return groups;
+}
+
 /** Turn a damage record into a report sentence. */
 function describeDamage(d: DamageRecord): string {
   const descriptor = `${d.direction ? d.direction.toLowerCase() + " " : ""}${d.type.toLowerCase()}`;
@@ -109,31 +194,51 @@ export function ReportSection({
   // generic "Please refer to Photographs:" line per whole category.
   const sectionPhotoNumbering = usePhotoNumbering(section.photos.length);
 
+  // The section's own heading joins the same grouping pass as the parsed
+  // paragraphs below (see groupForPagination) so it, too, can't be
+  // stranded alone at the bottom of a page.
+  const items: ParsedItem[] = [
+    ...(showHeading ? [{ kind: "heading", text: section.name } as const] : []),
+    ...paras.map((p): ParsedItem => {
+      const condMatch = p.match(CONDITION_TAG_RE);
+      if (condMatch) return { kind: "cond", color: condMatch[1], label: condMatch[2] };
+      const roomMatch = p.match(ROOM_HEADING_RE);
+      if (roomMatch) return { kind: "roomhead", text: roomMatch[1] };
+      if (FLOOR_HEADINGS.includes(p)) return { kind: "floorband", text: p };
+      return { kind: "para", text: p };
+    }),
+  ];
+  const groups = groupForPagination(items);
+
   return (
     <div style={reportTextStyle(compact)}>
-      {showHeading && <Heading compact={compact}>{section.name}</Heading>}
-
       {/* Sits directly under the heading in the reference report, in body
           style (not a distinct grey label) -- matched here once per
           section's general photos (cracks/damages get their own reference
           below, next to their own photos) rather than repeated after every
-          paragraph the way the reference's own blank fill-in template does. */}
-      {section.photos.length > 0 && <Para>{sectionPhotoNumbering.label}</Para>}
+          paragraph the way the reference's own blank fill-in template does.
+          Rendered before the grouped heading/paragraphs below only when
+          there's no heading to sit under (showHeading false); otherwise it
+          has to come after the heading, so it's placed inline within the
+          first group instead -- see the render below. */}
+      {!showHeading && section.photos.length > 0 && <Para>{sectionPhotoNumbering.label}</Para>}
 
       {/* Description */}
-      {paras.map((p, i) => {
-        const condMatch = p.match(CONDITION_TAG_RE);
-        if (condMatch) return <ConditionTag key={i} color={condMatch[1]} label={condMatch[2]} />;
-        const roomMatch = p.match(ROOM_HEADING_RE);
-        if (roomMatch) return <Heading key={i} compact={compact} level={3}>{roomMatch[1]}</Heading>;
-        if (FLOOR_HEADINGS.includes(p)) {
-          return (
-            <SectionBand key={i} tone="khaki" compact={compact}>
-              {p}
-            </SectionBand>
-          );
+      {groups.map((group, gi) => {
+        const rendered = group.map((item, ii) => renderParsedItem(item, compact, `${section.id}-${gi}-${ii}`));
+        // The section's photo-reference line belongs directly under the
+        // heading (matching the reference report), which is now the first
+        // item of the first group -- splice it in right after that heading
+        // instead of hoisting the whole group out of its breakInside wrapper.
+        if (gi === 0 && showHeading && section.photos.length > 0) {
+          rendered.splice(1, 0, <Para key={`${section.id}-photo-ref`}>{sectionPhotoNumbering.label}</Para>);
         }
-        return <Para key={i}>{p}</Para>;
+        if (rendered.length === 1) return rendered[0];
+        return (
+          <div key={`${section.id}-${gi}`} style={{ breakInside: "avoid" }}>
+            {rendered}
+          </div>
+        );
       })}
 
       {/* Photographs for the category -- a 2-column grid, since these are

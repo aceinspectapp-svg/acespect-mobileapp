@@ -1,5 +1,5 @@
 import type { AnswerTree, AnswerValue, TemplateField } from "./templateFields";
-import { asString, asStringArray } from "./templateFields";
+import { asString, asStringArray, withPeriod } from "./templateFields";
 
 /**
  * Per-section sentence composers matching Houspect Victoria's own master
@@ -58,6 +58,23 @@ function lower(s: string): string {
   return s.toLowerCase();
 }
 
+/** "paint flaking" -> "Paint flaking" -- for an already-lowercased (mid-sentence-style) phrase that's actually being used to START a new sentence, so it needs its own capital letter back. */
+function capitalize(s: string): string {
+  return s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+/** "a" or "an", picked from `word`'s first letter -- a template option label
+ *  can start with a vowel (e.g. the pool type "In-Ground", or the
+ *  construction type "Apartment in a multi-level apartment complex"), and a
+ *  sentence built with a hardcoded "a" would then read "a in-ground" / "a
+ *  apartment...". This is a plain first-letter check (not true vowel-sound
+ *  detection, e.g. it would get "an hour" or "a university" wrong), which is
+ *  fine here since every word it actually sees comes from this app's own
+ *  template option labels, not free-form English text. */
+function article(word: string): string {
+  return /^[aeiou]/i.test(word) ? "an" : "a";
+}
+
 /** "a, b, c" with a trailing "and" before the last item, matching the template's list style. */
 function joinList(items: string[]): string {
   if (items.length === 0) return "";
@@ -78,32 +95,45 @@ function yesNo(itemFields: TemplateField[], inst: AnswerTree, key: string): bool
   return raw === "yes";
 }
 
-/** One sentence per damage/crack record, using only the fields the damage-list already has. */
+/**
+ * One sentence per damage/crack record. Sections whose damage-list has a
+ * `damageType` field (crack/spall/leaning/other -- Driveway, Garage/Carport/
+ * Sheds, Pool/Spa, Notes) describe each record as whatever type was actually
+ * recorded; this used to hardcode "crack" regardless, so a recorded spall or
+ * leaning defect was wrongly described as a crack. Sections whose damage-list
+ * has no `damageType` at all (Paving & Paths, Fences, Retaining Walls -- those
+ * only ever track cracks) correctly keep "crack" as a fixed default, since
+ * there's no other type that field could ever hold.
+ */
 function damageSentences(inst: AnswerTree, itemFields: TemplateField[], damageKey = "damages"): string {
   const damageField = itemFields.find((f) => f.key === damageKey);
   const list = Array.isArray(inst[damageKey]) ? (inst[damageKey] as AnswerTree[]) : [];
   if (!damageField || list.length === 0) return "";
   const subFields = damageField.itemFields ?? [];
+  const damageTypeField = subFields.find((f) => f.key === "damageType");
   return list
     .map((d) => {
       const location = asString(d.location);
       const width = Number(d.widthMm) || 0;
       const length = Number(d.lengthMm) || 0;
       const notes = asString(d.notes);
+      const rawType = asString(d.damageType);
+      const typeLabel = damageTypeField && rawType
+        ? lower(damageTypeField.options?.find((o) => o.value === rawType)?.label ?? rawType)
+        : "crack";
       const parts: string[] = [];
       parts.push(
         location
-          ? `At the ${location}, there is a crack.`
-          : "There is a crack.",
+          ? `At the ${location}, there is ${article(typeLabel)} ${typeLabel}.`
+          : `There is ${article(typeLabel)} ${typeLabel}.`,
       );
       if (width > 0 || length > 0) {
         const bits: string[] = [];
         if (width > 0) bits.push(`approximately ${width}mm wide`);
         if (length > 0) bits.push(`approximately ${length}mm long`);
-        parts.push(`The crack is ${bits.join(" and ")}.`);
+        parts.push(`The ${typeLabel} is ${bits.join(" and ")}.`);
       }
       if (notes) parts.push(notes);
-      void subFields;
       return parts.join(" ");
     })
     .join(" ");
@@ -114,6 +144,20 @@ function obstructionsSentence(itemFields: TemplateField[], inst: AnswerTree, nou
   if (raw.length === 0) return "";
   const labels = optionLabels(itemFields, key, raw).map(lower);
   return ` Sections of the ${noun} were obscured by ${joinList(labels)}.`;
+}
+
+/**
+ * Paving & Paths' own `defects` field (trip hazard / surface wear /
+ * settlement) used to be run through `obstructionsSentence`, producing
+ * nonsense like "Sections of the paving were obscured by surface wear" --
+ * surface wear is a defect, not a physical object blocking a view of the
+ * paving. This states it as what it is instead.
+ */
+function defectsSentence(itemFields: TemplateField[], inst: AnswerTree, key = "defects"): string {
+  const raw = asStringArray(inst[key]);
+  if (raw.length === 0) return "";
+  const labels = optionLabels(itemFields, key, raw).map(lower);
+  return ` ${capitalize(joinList(labels))} noted.`;
 }
 
 const driveway: Composer = (inst, itemFields) => {
@@ -146,7 +190,7 @@ const pavingPaths: Composer = (inst, itemFields) => {
   const pavingTag = conditionTag(itemFields, "condition", asString(inst.condition));
   if (pavingTag) parts.push(pavingTag);
   parts.push(
-    `There is paving ${where}, constructed of ${lower(pathType)}. It is in ${lower(condition)} condition with typical wear and tear.${obstructionsSentence(itemFields, inst, "paving", "defects")}`,
+    `There is paving ${where}, constructed of ${lower(pathType)}. It is in ${lower(condition)} condition with typical wear and tear.${defectsSentence(itemFields, inst, "defects")}`,
   );
   const drainage = optionLabel(itemFields, "drainage", asString(inst.drainage));
   if (inst.drainage) {
@@ -202,13 +246,14 @@ const garageCarportSheds: Composer = (inst, itemFields) => {
   const condition = optionLabel(itemFields, "condition", asString(inst.condition));
   const constructionBits: string[] = [];
   if (wall.length) constructionBits.push(joinList(wall));
-  if (roof.length) constructionBits.push(`a ${joinList(roof)} roof`);
+  if (roof.length) constructionBits.push(`${article(roof[0])} ${joinList(roof)} roof`);
   const constructionText = constructionBits.length ? `, constructed of ${constructionBits.join(" with ")}` : "";
   const parts: string[] = [];
   const structureTag = conditionTag(itemFields, "condition", asString(inst.condition));
   if (structureTag) parts.push(structureTag);
+  const lowerName = lower(name);
   parts.push(
-    `There is a ${lower(name)} to the house${position ? ` at the ${lower(position)}` : ""}${constructionText}, and is generally in ${lower(condition)} state of repair.${obstructionsSentence(itemFields, inst, "structure")}`,
+    `There is ${article(lowerName)} ${lowerName} to the house${position ? ` at the ${lower(position)}` : ""}${constructionText}, and is generally in ${lower(condition)} state of repair.${obstructionsSentence(itemFields, inst, "structure")}`,
   );
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
@@ -227,8 +272,10 @@ const poolSpa: Composer = (inst, itemFields) => {
   const parts: string[] = [];
   const poolTag = conditionTag(itemFields, "condition", asString(inst.condition));
   if (poolTag) parts.push(poolTag);
+  const lowerPoolName = lower(name);
+  const lowerPoolType = lower(poolType);
   parts.push(
-    `There is a ${lower(name)} located at the property${poolType ? `, a ${lower(poolType)}` : ""}${construction.length ? `, constructed of ${joinList(construction)}` : ""}, which is generally in ${lower(condition)} state of repair.${obstructionsSentence(itemFields, inst, "pool/spa area")}`,
+    `There is ${article(lowerPoolName)} ${lowerPoolName} located at the property${poolType ? `, ${article(lowerPoolType)} ${lowerPoolType}` : ""}${construction.length ? `, constructed of ${joinList(construction)}` : ""}, which is generally in ${lower(condition)} state of repair.${obstructionsSentence(itemFields, inst, "pool/spa area")}`,
   );
   if (fenceType.length || inst.fenceSafety) {
     parts.push(
@@ -253,8 +300,8 @@ const elevations: Composer = (inst, itemFields, label) => {
   if (elevationTag) parts.push(elevationTag);
   parts.push(
     `The ${lower(label)} elevation${orientation ? ` generally faces ${lower(orientation)}` : ""}. It is in ${lower(condition)} condition. There ${hasDamage ? "were" : "were no"} signs of notable damage.${
-      claddingObs.length ? ` ${joinList(claddingObs)} noted to the cladding.` : ""
-    }${windowDoorObs.length ? ` ${joinList(windowDoorObs)} noted to windows/doors.` : ""}`,
+      claddingObs.length ? ` ${capitalize(joinList(claddingObs))} noted to the cladding.` : ""
+    }${windowDoorObs.length ? ` ${capitalize(joinList(windowDoorObs))} noted to windows/doors.` : ""}`,
   );
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
@@ -274,7 +321,7 @@ const roofChimneys: Composer = (inst, itemFields, label) => {
   parts.push(
     `The ${lower(label)} appears to be in ${lower(condition)} condition${coveringType.length ? `, constructed of ${joinList(coveringType)}` : ""}.${
       accessibility.length ? ` Comments are based on ${joinList(accessibility)}.` : ""
-    }${observations.length ? ` ${joinList(observations)} noted.` : ""}`,
+    }${observations.length ? ` ${capitalize(joinList(observations))} noted.` : ""}`,
   );
   const notes = asString(inst.notes);
   if (notes) parts.push(notes);
@@ -298,7 +345,7 @@ const internalAreas: Composer = (inst, itemFields, label) => {
   if (roomTag) parts.push(roomTag);
   parts.push(
     `It is in ${lower(condition)} condition. There ${hasDamage ? "were" : "were no"} signs of notable damage.${obstructionsSentence(itemFields, inst, "room", "obstruction")}${
-      moisture.length ? ` ${joinList(moisture)} noted.` : ""
+      moisture.length ? ` ${capitalize(joinList(moisture))} noted.` : ""
     }`,
   );
   const damages = damageSentences(inst, itemFields, "damages");
@@ -346,7 +393,10 @@ const description: Composer = (inst, itemFields) => {
       : "";
   const openingClauses = [frontageBlockBits.join(" "), ageBit].filter(Boolean);
   if (constructionType || openingClauses.length) {
-    const subject = constructionType ? `The property is a ${lower(constructionType)}` : "The property is";
+    const lowerConstructionType = lower(constructionType);
+    const subject = constructionType
+      ? `The property is ${article(lowerConstructionType)} ${lowerConstructionType}`
+      : "The property is";
     parts.push(openingClauses.length ? `${subject}, ${joinClauses(openingClauses)}.` : `${subject}.`);
   }
 
@@ -393,7 +443,8 @@ const notes: Composer = (inst, itemFields, label) => {
     const area = asString(inst.area);
     const reason = asString(inst.reason);
     if (!area && !reason) return "";
-    return `No access was available to ${area || "an area of the property"}${reason ? `: ${reason}` : ""}.`;
+    const line = `No access was available to ${area || "an area of the property"}${reason ? `: ${reason}` : ""}`;
+    return withPeriod(line);
   }
   return "";
 };

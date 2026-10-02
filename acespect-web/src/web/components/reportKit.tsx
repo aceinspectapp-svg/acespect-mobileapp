@@ -52,6 +52,12 @@ export function SectionBand({
           fontSize: compact ? "0.82em" : "0.95em",
           letterSpacing: "0.02em",
           textTransform: "uppercase",
+          // Best-effort hint against ending a printed page right on this
+          // band -- Chromium's print pagination (the PDF pipeline's actual
+          // renderer, see reportPdf.ts) doesn't reliably honor it on its
+          // own, which is why ReportSection.tsx also wraps each heading
+          // with the content right after it in a breakInside:avoid group.
+          breakAfter: "avoid",
         }}
       >
         {children}
@@ -73,6 +79,7 @@ export function SectionBand({
         fontSize: compact ? "0.78em" : "0.92em",
         letterSpacing: "0.05em",
         textTransform: "uppercase",
+        breakAfter: "avoid",
       }}
     >
       {children}
@@ -102,6 +109,8 @@ export function Heading({
         fontSize: "1em",
         color: reportTokens.ink,
         margin: level === 2 ? "0 0 4px" : "10px 0 4px",
+        // Best-effort hint only -- see the matching note on SectionBand above.
+        breakAfter: "avoid",
       }}
     >
       {children}
