@@ -135,7 +135,7 @@ export function QcTaskDetailScreen({ navigation, route }: AppScreenProps<'QcTask
 
   return (
     <View style={styles.root}>
-      <InspectionHeader title={task.defect.summary ?? 'Untitled defect'} subtitle={task.defect.property.name} onBack={() => navigation.goBack()} />
+      <InspectionHeader title={task.defect.title ?? task.defect.summary ?? 'Untitled defect'} subtitle={task.defect.property.name} onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>Status</Text>
@@ -160,7 +160,7 @@ export function QcTaskDetailScreen({ navigation, route }: AppScreenProps<'QcTask
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>Defect</Text>
           <Pressable onPress={() => navigation.navigate('QcDefectDetail', { defectId: task.defect.id })}>
-            <Text style={styles.link}>{task.defect.summary ?? 'Add defect details →'}</Text>
+            <Text style={styles.link}>{task.defect.title ?? task.defect.summary ?? 'Add defect details →'}</Text>
           </Pressable>
         </View>
 
@@ -270,9 +270,6 @@ export function QcTaskDetailScreen({ navigation, route }: AppScreenProps<'QcTask
           </View>
 
           <Checkbox checked={markCompleted} onChange={setMarkCompleted} label="Mark this task as Completed" />
-          {markCompleted && (
-            <Text style={styles.updateHint}>This will also move the linked defect to "Pending Re-inspection".</Text>
-          )}
           <Button label={posting ? 'Posting…' : 'Post Update'} disabled={!canPost || posting} onPress={onPostUpdate} style={styles.updateSubmit} />
         </View>
       </PickerSheet>

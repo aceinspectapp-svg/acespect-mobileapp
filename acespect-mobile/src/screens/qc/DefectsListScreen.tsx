@@ -1,13 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, radius, shadows, spacing, typography } from '../../theme';
 import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { SeverityPill } from '../../components/qc/SeverityPill';
-import { StatusPicker } from '../../components/qc/StatusPicker';
+import { StatusBadge } from '../../components/qc/StatusBadge';
 import { AppScreenProps } from '../../navigation/types';
 import { useQcData } from '../../context/QcDataContext';
-import { QcDefect, QcStatus } from '../../types/qc';
+import { QcDefect } from '../../types/qc';
 
 /**
  * Defects assigned to the signed-in user for ONE property, for viewing/
@@ -18,8 +18,7 @@ import { QcDefect, QcStatus } from '../../types/qc';
  */
 export function QcDefectsListScreen({ navigation, route }: AppScreenProps<'QcDefectsList'>) {
   const { propertyId } = route.params;
-  const { tasks, loading, error, refreshTasks, updateDefect, getStatuses } = useQcData();
-  const [statuses, setStatuses] = useState<QcStatus[]>([]);
+  const { tasks, loading, error, refreshTasks } = useQcData();
 
   useFocusEffect(
     useCallback(() => {
@@ -27,10 +26,6 @@ export function QcDefectsListScreen({ navigation, route }: AppScreenProps<'QcDef
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
   );
-
-  useEffect(() => {
-    getStatuses().then(setStatuses).catch(() => {});
-  }, [getStatuses]);
 
   const defects = useMemo<QcDefect[]>(() => {
     const seen = new Set<string>();
@@ -45,15 +40,6 @@ export function QcDefectsListScreen({ navigation, route }: AppScreenProps<'QcDef
   }, [tasks, propertyId]);
 
   const first = defects[0];
-
-  async function onChangeStatus(defectId: string, status: QcStatus) {
-    try {
-      await updateDefect(defectId, { statusId: status.id });
-      refreshTasks();
-    } catch (e) {
-      Alert.alert('Could not update status', e instanceof Error ? e.message : 'Please try again.');
-    }
-  }
 
   return (
     <View style={styles.root}>
@@ -87,10 +73,11 @@ export function QcDefectsListScreen({ navigation, route }: AppScreenProps<'QcDef
           <View style={styles.card}>
             <View style={styles.cardTop}>
               <SeverityPill severity={item.severity} />
-              <StatusPicker status={item.status} statuses={statuses} onChange={(s) => onChangeStatus(item.id, s)} />
+              <StatusBadge status={item.status} />
             </View>
             <Pressable onPress={() => navigation.navigate('QcDefectDetail', { defectId: item.id })}>
-              <Text style={styles.summary}>{item.summary ?? 'Add defect details →'}</Text>
+              <Text style={styles.summary}>{item.title ?? item.summary ?? 'Add defect details →'}</Text>
+              {!!item.defectRef && <Text style={styles.ref}>{item.defectRef}{item.isDraft ? ' · Draft' : ''}</Text>}
               <Text style={styles.location}>
                 {item.property.name}
                 {item.location ? ` · ${item.location}` : ''}
@@ -128,6 +115,7 @@ const styles = StyleSheet.create({
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.sm },
   summary: { ...typography.bodySm, fontWeight: '700', color: colors.textPrimary },
+  ref: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
   location: { ...typography.caption, color: colors.textMuted, marginTop: 2, marginBottom: spacing.sm },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   breadcrumb: { ...typography.caption, color: colors.textSecondary, flexShrink: 1 },

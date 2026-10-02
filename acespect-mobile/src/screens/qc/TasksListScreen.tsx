@@ -142,7 +142,7 @@ export function QcTasksListScreen({ navigation, route }: AppScreenProps<'QcTasks
                   <Ionicons name="chevron-down" size={12} color={statusStyle.color} />
                 </Pressable>
               </View>
-              <Text style={styles.summary}>{item.defect.summary ?? 'Add defect details →'}</Text>
+              <Text style={styles.summary}>{item.defect.title ?? item.defect.summary ?? 'Add defect details →'}</Text>
               <Text style={styles.location}>
                 {item.defect.property.name}
                 {item.defect.location ? ` · ${item.defect.location}` : ''}

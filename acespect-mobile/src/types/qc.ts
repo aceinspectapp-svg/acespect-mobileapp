@@ -34,15 +34,45 @@ export interface QcPerson {
   role?: string;
 }
 
+export interface QcTradeCategory {
+  id: string;
+  name: string;
+  code: string;
+}
+
+/** A lifecycle step the server says the signed-in user may take on this defect right now. */
+export interface QcAllowedAction {
+  key: string;
+  label: string;
+  /** Spec form code (F16...F33) that collects its details; see GET /qc/spec. */
+  form: string;
+}
+
 export interface QcDefect {
   id: string;
-  // Admin creates a defect with just a property + assignee now -- these are
-  // filled in later by whoever it's assigned to, from the Defect screen.
+  defectRef: string | null;
+  title: string | null;
+  // An admin creates a defect with just a lot + assignee: it starts as a
+  // draft and these are filled in later by whoever it's assigned to.
   location: string | null;
   locationDetails: string | null;
   summary: string | null;
+  roomArea: string | null;
+  element: string | null;
+  nature: string | null;
+  codeRef: string | null;
+  isDraft: boolean;
+  flags: string[];
+  reworkCount: number;
+  photoUrls: string[];
+  tradeCategory: QcTradeCategory | null;
+  targetRectificationDate: string | null;
+  holdReason: string | null;
   dueDate: string | null;
   createdAt: string;
+  updatedAt: string;
+  /** Present on a single-defect fetch (GET /qc/defects/:id and task detail). */
+  allowedActions?: QcAllowedAction[];
   property: { id: string; name: string; propertyType: QcPropertyType };
   project: { id: string; name: string };
   client: { id: string; name: string };
@@ -98,4 +128,57 @@ const TASK_PRIORITY_LABEL: Record<TaskPriority, string> = {
 };
 export function formatTaskPriority(priority: TaskPriority): string {
   return TASK_PRIORITY_LABEL[priority];
+}
+
+// ─── Requirements spec (GET /qc/spec): the server owns each form's fields ──────
+
+export type SpecFieldKind =
+  | 'text' | 'longtext' | 'select' | 'multiselect' | 'bool' | 'date' | 'datetime' | 'int' | 'decimal' | 'currency'
+  | 'email' | 'phone' | 'abn' | 'acn' | 'address' | 'ref' | 'refs' | 'file' | 'files' | 'composite' | 'system';
+
+export interface SpecField {
+  key: string;
+  label: string;
+  kind: SpecFieldKind;
+  req: 'M' | 'O' | 'C' | 'S';
+  rules?: string;
+  min?: number;
+  max?: number;
+  options?: string[];
+  ref?: string | null;
+  requiredWhen?: { field: string; in: string[] };
+  hidden?: boolean;
+  system: boolean;
+}
+
+export interface SpecForm {
+  code: string;
+  title: string;
+  description: string;
+  fields: SpecField[];
+}
+
+export interface QcDefectEvent {
+  id: string;
+  type: string;
+  from: { key: string; label: string } | null;
+  to: { key: string; label: string } | null;
+  actor: QcPerson;
+  actorRole: string;
+  onBehalf: boolean;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface QcDefectDetail {
+  defect: QcDefect;
+  events: QcDefectEvent[];
+  actorRole: string;
+}
+
+export interface QcConfigBundle {
+  severities: QcSeverity[];
+  statuses: QcStatus[];
+  tradeCategories: QcTradeCategory[];
+  tradeCompanies: Array<{ id: string; name: string }>;
 }
