@@ -8,7 +8,11 @@ import type {
   TemplateField,
   TemplateSummaryRow,
 } from "./mockData";
-import type { QcConfigBundle, QcDefect, QcPerson } from "./qcTypes";
+import type {
+  QcClientRow, QcConfigBundle, QcDefect, QcDefectDetail, QcLotRow, QcMasterContractorRow, QcPerson, QcPersonRow,
+  QcProjectRow, QcSiteRow, QcTeamMember, QcTradeCategory, QcTradeCompanyRow, FieldData,
+} from "./qcTypes";
+import type { QcSpecPayload } from "./qcSpec";
 
 export const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000/api/v1";
@@ -66,6 +70,10 @@ function mapRole(r: string): Role {
 
 export interface ApiError extends Error {
   status?: number;
+  /** Stable machine code from the server (e.g. CATEGORY_MISMATCH). */
+  code?: string;
+  /** Field-level validation messages, keyed by spec field key. */
+  details?: Record<string, string[]>;
 }
 
 async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
@@ -80,18 +88,61 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
   });
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
+    let code: string | undefined;
+    let details: Record<string, string[]> | undefined;
     try {
       const body = await res.json();
       message = body?.error?.message ?? message;
+      code = body?.error?.code;
+      details = body?.error?.details;
     } catch {
       /* non-JSON */
     }
     const err: ApiError = new Error(message);
     err.status = res.status;
+    err.code = code;
+    err.details = details;
     throw err;
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+/** Multipart variant of req(): the browser sets the boundary, so no Content-Type header. */
+async function reqForm<T>(path: string, form: FormData, method = "POST"): Promise<T> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    body: form,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    let code: string | undefined;
+    let details: Record<string, string[]> | undefined;
+    try {
+      const body = await res.json();
+      message = body?.error?.message ?? message;
+      code = body?.error?.code;
+      details = body?.error?.details;
+    } catch {
+      /* non-JSON */
+    }
+    const err: ApiError = new Error(message);
+    err.status = res.status;
+    err.code = code;
+    err.details = details;
+    throw err;
+  }
+  return res.json() as Promise<T>;
+}
+
+/** Build the multipart body the QC action/comment endpoints take: JSON in `payload`, photos as repeated `photos` parts. */
+export function qcForm(payload: Record<string, unknown>, files: File[] = []): FormData {
+  const form = new FormData();
+  form.append("payload", JSON.stringify(payload));
+  for (const f of files) form.append("photos", f);
+  return form;
 }
 
 export const api = {
@@ -282,42 +333,109 @@ export const api = {
       `/templates/adoption/${encodeURIComponent(inspectionType)}/${encodeURIComponent(propertyType)}`,
     ).then((d) => d.adoption),
 
-  // ─── QC — admin config + defect assignment (see acespect-backend/src/modules/qc) ──
+  // ─── QC — requirements-spec admin (see acespect-backend/src/modules/qc) ──
   qc: {
+    /** Field definitions for every entity and form; the admin's forms are rendered from this. */
+    spec: () => req<QcSpecPayload>("/qc/spec"),
     getConfig: () => req<QcConfigBundle>("/qc/config"),
-    getDefects: () => req<{ defects: QcDefect[] }>("/qc/defects").then((d) => d.defects),
-    // Admin only picks property + assignee now -- location/summary/severity
-    // are filled in later by whoever it's assigned to, from mobile.
-    createDefect: (input: { propertyId: string; assignedToId: string }) =>
-      req<{ defect: QcDefect }>("/qc/defects", { method: "POST", body: JSON.stringify(input) }).then((d) => d.defect),
-    updateDefect: (
-      id: string,
-      patch: Partial<{
-        location: string;
-        locationDetails: string;
-        summary: string;
-        severityId: string;
-        statusId: string;
-        assignedToId: string | null;
-        dueDate: string | null;
-      }>,
-    ) => req<{ defect: QcDefect }>(`/qc/defects/${id}`, { method: "PATCH", body: JSON.stringify(patch) }).then((d) => d.defect),
 
+    clients: {
+      list: () => req<{ clients: QcClientRow[] }>("/qc/clients").then((d) => d.clients),
+      create: (input: FieldData) =>
+        req<{ client: QcClientRow; firstAdmin: QcPersonRow; temporaryPassword?: string }>("/qc/clients", { method: "POST", body: JSON.stringify(input) }),
+      update: (id: string, input: FieldData) =>
+        req<{ client: QcClientRow }>(`/qc/clients/${id}`, { method: "PATCH", body: JSON.stringify(input) }).then((d) => d.client),
+      setStatus: (id: string, status: string, reason?: string) =>
+        req<{ client: QcClientRow }>(`/qc/clients/${id}/status`, { method: "POST", body: JSON.stringify({ status, reason }) }).then((d) => d.client),
+      remove: (id: string) => req<void>(`/qc/clients/${id}`, { method: "DELETE" }),
+    },
+    masterContractors: {
+      list: (clientId?: string) =>
+        req<{ masterContractors: QcMasterContractorRow[] }>(`/qc/master-contractors${clientId ? `?clientId=${clientId}` : ""}`).then((d) => d.masterContractors),
+      create: (input: FieldData) => req("/qc/master-contractors", { method: "POST", body: JSON.stringify(input) }),
+      update: (id: string, input: FieldData) => req(`/qc/master-contractors/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+      remove: (id: string) => req<void>(`/qc/master-contractors/${id}`, { method: "DELETE" }),
+    },
+    tradeCompanies: {
+      list: () => req<{ tradeCompanies: QcTradeCompanyRow[] }>("/qc/trade-companies").then((d) => d.tradeCompanies),
+      create: (input: FieldData) => req("/qc/trade-companies", { method: "POST", body: JSON.stringify(input) }),
+      update: (id: string, input: FieldData) => req(`/qc/trade-companies/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+      remove: (id: string) => req<void>(`/qc/trade-companies/${id}`, { method: "DELETE" }),
+    },
+    tradeCategories: {
+      list: () => req<{ tradeCategories: QcTradeCategory[] }>("/qc/trade-categories").then((d) => d.tradeCategories),
+      create: (input: FieldData) => req("/qc/trade-categories", { method: "POST", body: JSON.stringify(input) }),
+      update: (id: string, input: FieldData) => req(`/qc/trade-categories/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+      remove: (id: string) => req<{ retired: boolean }>(`/qc/trade-categories/${id}`, { method: "DELETE" }),
+    },
+
+    projects: {
+      list: (clientId?: string) => req<{ projects: QcProjectRow[] }>(`/qc/projects${clientId ? `?clientId=${clientId}` : ""}`).then((d) => d.projects),
+      get: (id: string) => req<{ project: QcProjectRow }>(`/qc/projects/${id}`).then((d) => d.project),
+      create: (input: FieldData) => req<{ project: QcProjectRow }>("/qc/projects", { method: "POST", body: JSON.stringify(input) }).then((d) => d.project),
+      update: (id: string, input: FieldData) =>
+        req<{ project: QcProjectRow }>(`/qc/projects/${id}`, { method: "PATCH", body: JSON.stringify(input) }).then((d) => d.project),
+      remove: (id: string) => req<void>(`/qc/projects/${id}`, { method: "DELETE" }),
+      team: (id: string) => req<{ team: QcTeamMember[] }>(`/qc/projects/${id}/team`).then((d) => d.team),
+      addTeamMember: (id: string, input: FieldData) => req(`/qc/projects/${id}/team`, { method: "POST", body: JSON.stringify(input) }),
+      removeTeamMember: (memberId: string, removalReason?: string) =>
+        req<void>(`/qc/team/${memberId}`, { method: "DELETE", body: JSON.stringify({ removalReason }) }),
+    },
+    sites: {
+      list: (projectId?: string) => req<{ sites: QcSiteRow[] }>(`/qc/sites${projectId ? `?projectId=${projectId}` : ""}`).then((d) => d.sites),
+      create: (input: FieldData) => req("/qc/sites", { method: "POST", body: JSON.stringify(input) }),
+      update: (id: string, input: FieldData) => req(`/qc/sites/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+      remove: (id: string) => req<void>(`/qc/sites/${id}`, { method: "DELETE" }),
+    },
+    lots: {
+      list: (filters: { projectId?: string; siteId?: string } = {}) => {
+        const params = new URLSearchParams();
+        if (filters.projectId) params.set("projectId", filters.projectId);
+        if (filters.siteId) params.set("siteId", filters.siteId);
+        return req<{ lots: QcLotRow[] }>(`/qc/lots?${params.toString()}`).then((d) => d.lots);
+      },
+      create: (input: FieldData) => req("/qc/lots", { method: "POST", body: JSON.stringify(input) }),
+      update: (id: string, input: FieldData) => req(`/qc/lots/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+      remove: (id: string) => req<void>(`/qc/lots/${id}`, { method: "DELETE" }),
+    },
+
+    people: {
+      list: (filters: { clientId?: string; role?: string; q?: string } = {}) => {
+        const params = new URLSearchParams();
+        for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
+        return req<{ people: QcPersonRow[] }>(`/qc/people?${params.toString()}`).then((d) => d.people);
+      },
+      create: (input: FieldData) => req<{ person: QcPersonRow; temporaryPassword?: string }>("/qc/people", { method: "POST", body: JSON.stringify(input) }),
+      update: (id: string, input: FieldData) => req<{ person: QcPersonRow }>(`/qc/people/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+      deactivate: (id: string, input: { reason: string; reassignToId?: string }) =>
+        req<{ reassigned: number }>(`/qc/people/${id}/deactivate`, { method: "POST", body: JSON.stringify(input) }),
+      reactivate: (id: string) => req<void>(`/qc/people/${id}/reactivate`, { method: "POST" }),
+      saveCredentials: (id: string, input: FieldData) => req(`/qc/people/${id}/credentials`, { method: "PUT", body: JSON.stringify(input) }),
+      setCredentialStatus: (id: string, status: string) =>
+        req(`/qc/people/${id}/credentials/status`, { method: "POST", body: JSON.stringify({ status }) }),
+    },
+    /** Accounts that can be given QC work (assignee pickers). */
     getAssignableUsers: () => req<{ users: QcPerson[] }>("/qc/users").then((d) => d.users),
-    createFieldUser: (input: { name: string; email: string; password: string }) =>
-      req<{ user: QcPerson }>("/qc/users", { method: "POST", body: JSON.stringify(input) }).then((d) => d.user),
 
-    createClient: (input: { name: string }) => req("/qc/clients", { method: "POST", body: JSON.stringify(input) }),
-    deleteClient: (id: string) => req(`/qc/clients/${id}`, { method: "DELETE" }),
-    createProject: (input: { name: string; clientId: string }) =>
-      req("/qc/projects", { method: "POST", body: JSON.stringify(input) }),
-    deleteProject: (id: string) => req(`/qc/projects/${id}`, { method: "DELETE" }),
-    createProperty: (input: { name: string; projectId: string; propertyTypeId: string }) =>
-      req("/qc/properties", { method: "POST", body: JSON.stringify(input) }),
-    deleteProperty: (id: string) => req(`/qc/properties/${id}`, { method: "DELETE" }),
-    createPropertyType: (input: { key: string; label: string; icon?: string }) =>
-      req("/qc/property-types", { method: "POST", body: JSON.stringify(input) }),
-    deletePropertyType: (id: string) => req(`/qc/property-types/${id}`, { method: "DELETE" }),
+    defects: {
+      list: (filters: Record<string, string | undefined> = {}) => {
+        const params = new URLSearchParams();
+        for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
+        return req<{ defects: QcDefect[] }>(`/qc/defects?${params.toString()}`).then((d) => d.defects);
+      },
+      // The admin only picks the lot and the person; the rest is filled in on site and confirmed as Open.
+      create: (input: { propertyId: string; assignedToId: string } & FieldData) =>
+        req<{ defect: QcDefect }>("/qc/defects", { method: "POST", body: JSON.stringify(input) }).then((d) => d.defect),
+      get: (id: string) => req<QcDefectDetail>(`/qc/defects/${id}`),
+      update: (id: string, patch: FieldData) =>
+        req<{ defect: QcDefect }>(`/qc/defects/${id}`, { method: "PATCH", body: JSON.stringify(patch) }).then((d) => d.defect),
+      /** Lifecycle action (confirm, release, allocate, verify...). Photos travel with the form. */
+      act: (id: string, action: string, payload: Record<string, unknown>, files: File[] = []) =>
+        reqForm<QcDefectDetail>(`/qc/defects/${id}/actions/${action}`, qcForm(payload, files)),
+      comment: (id: string, payload: { text: string; visibleTo?: string }, files: File[] = []) =>
+        reqForm<{ comment: unknown }>(`/qc/defects/${id}/comments`, qcForm(payload, files)),
+      addPhotos: (id: string, files: File[]) => reqForm<{ defect: QcDefect }>(`/qc/defects/${id}/photos`, qcForm({}, files)),
+    },
   },
 
   /** Admin-only troubleshooting feed: the mobile submit/update/finalize/photo pipeline's own trail. See acespect-backend's SubmissionLogEntry. */

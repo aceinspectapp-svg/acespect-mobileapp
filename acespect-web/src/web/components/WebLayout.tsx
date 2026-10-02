@@ -292,18 +292,19 @@ export function GhostBtn({ children, onClick }: { children: React.ReactNode; onC
   );
 }
 
-/* ─── QC sub-nav (Defects / Configuration / Field Users) ─────────── */
+/* ─── QC sub-nav (Defects / Projects / Organisations / People) ────── */
 export function QcSubNav() {
   const location = useLocation();
   const tabs = [
-    { to: "/admin/qc", label: "Defects" },
-    { to: "/admin/qc/config", label: "Configuration" },
-    { to: "/admin/qc/users", label: "Field Users" },
+    { to: "/admin/qc", label: "Defects", match: ["/admin/qc", "/admin/qc/defects"] },
+    { to: "/admin/qc/projects", label: "Projects", match: ["/admin/qc/projects"] },
+    { to: "/admin/qc/organisations", label: "Organisations", match: ["/admin/qc/organisations"] },
+    { to: "/admin/qc/people", label: "People", match: ["/admin/qc/people"] },
   ];
   return (
     <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
       {tabs.map((t) => {
-        const active = location.pathname === t.to;
+        const active = t.match.some((m) => (m === "/admin/qc" ? location.pathname === m : location.pathname === m || location.pathname.startsWith(m + "/")));
         return (
           <Link
             key={t.to}

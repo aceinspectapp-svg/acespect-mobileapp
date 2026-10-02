@@ -1,226 +1,165 @@
-import { useEffect, useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router";
+import { Plus } from "lucide-react";
 import { api } from "../../api";
 import { PageShell, PrimaryBtn, QcSubNav, StatusBadge, TableCard } from "../../components/WebLayout";
-import type { QcConfigBundle, QcDefect, QcPerson } from "../../qcTypes";
+import { ErrorNote, Field, Modal, Select, btnGhost, btnPrimary, cell, sub } from "../../components/QcUi";
+import { inputStyle, type RefOption } from "../../components/SpecForm";
+import type { QcConfigBundle, QcDefect, QcLotRow, QcPerson } from "../../qcTypes";
 
-const fieldStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 10px", borderRadius: "8px", border: "1.5px solid #e5e7eb",
-  fontSize: "13px", color: "#1a2a4a", outline: "none", boxSizing: "border-box", fontFamily: "inherit",
+export const FLAG_STYLE: Record<string, { label: string; color: string; bg: string }> = {
+  urgent: { label: "Urgent", color: "#991b1b", bg: "#fee2e2" },
+  escalated: { label: "Escalated", color: "#9a3412", bg: "#ffedd5" },
+  overdue: { label: "Overdue", color: "#92400e", bg: "#fef3c7" },
 };
-const labelStyle: React.CSSProperties = { fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" };
-const selectStyle: React.CSSProperties = { ...fieldStyle, padding: "5px 8px", fontSize: "12px", width: "auto" };
+
+export function SeverityBadge({ severity }: { severity: QcDefect["severity"] }) {
+  return severity ? <StatusBadge label={severity.label} color={severity.color} bg={`${severity.color}18`} /> : <StatusBadge label="Not set" color="#94a3b8" bg="#f1f5f9" />;
+}
+export function StatusChip({ status }: { status: QcDefect["status"] }) {
+  return <StatusBadge label={status.label} color={status.color} bg={`${status.color}18`} />;
+}
+export function FlagChips({ defect }: { defect: QcDefect }) {
+  return (
+    <>
+      {defect.flags.map((f) => FLAG_STYLE[f] && <span key={f} style={{ marginLeft: 4 }}><StatusBadge label={FLAG_STYLE[f].label} color={FLAG_STYLE[f].color} bg={FLAG_STYLE[f].bg} /></span>)}
+      {defect.reworkCount > 0 && <span style={{ marginLeft: 4 }}><StatusBadge label={`Rework ×${defect.reworkCount}`} color="#7c2d12" bg="#ffedd5" /></span>}
+    </>
+  );
+}
 
 export function AdminQcDefects() {
+  const navigate = useNavigate();
   const [defects, setDefects] = useState<QcDefect[] | null>(null);
   const [config, setConfig] = useState<QcConfigBundle | null>(null);
-  const [users, setUsers] = useState<QcPerson[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [savingId, setSavingId] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [filters, setFilters] = useState({ q: "", status: "", severity: "", projectId: "", flag: "", draft: "" });
 
-  function reload() {
-    Promise.all([api.qc.getDefects(), api.qc.getConfig(), api.qc.getAssignableUsers()])
-      .then(([d, c, u]) => {
-        setDefects(d);
-        setConfig(c);
-        setUsers(u);
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
-  }
-  useEffect(reload, []);
+  useEffect(() => { api.qc.getConfig().then(setConfig).catch((e) => setError(e.message)); }, []);
+  const load = useCallback(() => {
+    api.qc.defects.list(filters).then(setDefects).catch((e) => setError(e.message));
+  }, [filters]);
+  useEffect(() => { load(); }, [load]);
 
-  async function patch(id: string, body: Record<string, unknown>) {
-    setSavingId(id);
-    try {
-      await api.qc.updateDefect(id, body);
-      reload();
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Update failed");
-    } finally {
-      setSavingId(null);
-    }
-  }
+  const set = (k: keyof typeof filters) => (v: string) => setFilters((f) => ({ ...f, [k]: v }));
+  const projects = (config?.clients ?? []).flatMap((c) => c.projects.map((p) => ({ id: p.id, label: `${c.name} / ${p.name}` })));
 
   return (
     <PageShell
       title="QC Defects"
-      subtitle={defects ? `${defects.length} logged defect${defects.length === 1 ? "" : "s"}` : "Loading…"}
-      actions={<PrimaryBtn onClick={() => setShowNew(true)}><Plus size={14} /> New Defect</PrimaryBtn>}
+      subtitle={defects ? `${defects.length} defect${defects.length === 1 ? "" : "s"}` : "Loading…"}
+      actions={<PrimaryBtn onClick={() => setShowNew(true)}><Plus size={14} /> New defect</PrimaryBtn>}
     >
       <QcSubNav />
-      {error && <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 14 }}>{error}</p>}
-
-      <TableCard headers={["Property", "Defect", "Severity", "Status", "Assigned to", "Due"]}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <input style={{ ...inputStyle, width: 230 }} placeholder="Search ref, title or location" value={filters.q} onChange={(e) => set("q")(e.target.value)} />
+        <div style={{ width: 180 }}><Select value={filters.status} onChange={set("status")} placeholder="All statuses" options={(config?.statuses ?? []).map((s) => ({ id: s.key, label: s.label }))} /></div>
+        <div style={{ width: 180 }}><Select value={filters.severity} onChange={set("severity")} placeholder="All severities" options={(config?.severities ?? []).map((s) => ({ id: s.key, label: s.label }))} /></div>
+        <div style={{ width: 240 }}><Select value={filters.projectId} onChange={set("projectId")} placeholder="All projects" options={projects} /></div>
+        <div style={{ width: 150 }}><Select value={filters.flag} onChange={set("flag")} placeholder="Any flag" options={Object.entries(FLAG_STYLE).map(([id, f]) => ({ id, label: f.label }))} /></div>
+        <div style={{ width: 150 }}>
+          <Select value={filters.draft} onChange={set("draft")} placeholder="Drafts & open" options={[{ id: "true", label: "Drafts only" }, { id: "false", label: "Confirmed only" }]} />
+        </div>
+      </div>
+      <ErrorNote message={error} />
+      <TableCard headers={["Ref", "Defect", "Lot", "Severity", "Status", "Assigned to", "Updated"]}>
         {defects?.map((d, i) => (
-          <tr key={d.id} style={{ borderBottom: defects.length - 1 > i ? "1px solid #f1f5f9" : "none" }}>
-            <td style={{ padding: "14px 16px" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2a4a" }}>{d.property.name}</div>
-              <div style={{ fontSize: 11, color: "#94a3b8" }}>{d.project.name} · {d.client.name}</div>
+          <tr key={d.id} style={{ borderBottom: defects.length - 1 > i ? "1px solid #f1f5f9" : "none", cursor: "pointer" }} onClick={() => navigate(`/admin/qc/defects/${d.id}`)}>
+            <td style={{ ...cell, fontFamily: "monospace", fontSize: 12, whiteSpace: "nowrap" }}>{d.defectRef ?? "—"}</td>
+            <td style={cell}>
+              <b style={{ color: d.title || d.summary ? "#1a2a4a" : "#94a3b8" }}>{d.title ?? d.summary ?? "Draft: details pending"}</b>
+              {d.isDraft && <span style={{ marginLeft: 6 }}><StatusBadge label="Draft" color="#475569" bg="#e2e8f0" /></span>}
+              {d.location && <div style={sub}>{d.location}</div>}
             </td>
-            <td style={{ padding: "14px 16px" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: d.summary ? "#1a2a4a" : "#94a3b8" }}>
-                {d.summary ?? "Not yet detailed"}
-              </div>
-              {d.location && <div style={{ fontSize: 11, color: "#94a3b8" }}>{d.location}</div>}
-            </td>
-            <td style={{ padding: "14px 16px" }}>
-              {d.severity ? (
-                <StatusBadge label={d.severity.label} color={d.severity.color} bg={`${d.severity.color}18`} />
-              ) : (
-                <StatusBadge label="Not set" color="#94a3b8" bg="#f1f5f9" />
-              )}
-            </td>
-            <td style={{ padding: "14px 16px" }}>
-              <select
-                value={d.status.id}
-                disabled={savingId === d.id}
-                onChange={(e) => patch(d.id, { statusId: e.target.value })}
-                style={selectStyle}
-              >
-                {config?.statuses.map((s) => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
-                ))}
-              </select>
-            </td>
-            <td style={{ padding: "14px 16px" }}>
-              <select
-                value={d.assignedTo?.id ?? ""}
-                disabled={savingId === d.id}
-                onChange={(e) => patch(d.id, { assignedToId: e.target.value || null })}
-                style={selectStyle}
-              >
-                <option value="">Unassigned</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name ?? u.email}</option>
-                ))}
-              </select>
-            </td>
-            <td style={{ padding: "14px 16px", fontSize: 12, color: "#94a3b8" }}>
-              {d.dueDate ? new Date(d.dueDate).toLocaleDateString() : "—"}
-            </td>
+            <td style={cell}>{d.property.name}<div style={sub}>{d.project.name} · {d.client.name}</div></td>
+            <td style={cell}><SeverityBadge severity={d.severity} /></td>
+            <td style={cell}><StatusChip status={d.status} /><FlagChips defect={d} /></td>
+            <td style={cell}>{d.assignedTo?.name ?? d.assignedTo?.email ?? "—"}</td>
+            <td style={{ ...cell, fontSize: 12, color: "#94a3b8" }}>{new Date(d.updatedAt).toLocaleDateString("en-AU")}</td>
           </tr>
         ))}
-        {defects && defects.length === 0 && (
-          <tr><td colSpan={6} style={{ textAlign: "center", padding: 28, fontSize: 13, color: "#94a3b8" }}>No defects logged yet.</td></tr>
-        )}
+        {defects?.length === 0 && <tr><td colSpan={7} style={{ textAlign: "center", padding: 28, fontSize: 13, color: "#94a3b8" }}>No defects match.</td></tr>}
       </TableCard>
 
       {showNew && config && (
-        <NewDefectModal
-          config={config}
-          users={users}
-          onClose={() => setShowNew(false)}
-          onCreated={() => {
-            setShowNew(false);
-            reload();
-          }}
-        />
+        <NewDefectModal config={config} onClose={() => setShowNew(false)} onCreated={(id) => navigate(`/admin/qc/defects/${id}`)} />
       )}
     </PageShell>
   );
 }
 
 /**
- * Admin only picks client → project → property and who it's assigned to --
- * location/location details/summary/severity/due date are deliberately left
- * out: the assigned field user fills those in on-site from the mobile app's
- * Defect screen, not the admin up front.
+ * The admin picks client, project, lot and who is assigned. Everything else
+ * (title, location, severity, photos...) is filled in on site and confirmed as
+ * Open by the Private Inspector, or by the admin acting for them from the
+ * defect page.
  */
-function NewDefectModal({
-  config,
-  users,
-  onClose,
-  onCreated,
-}: {
-  config: QcConfigBundle;
-  users: QcPerson[];
-  onClose: () => void;
-  onCreated: () => void;
-}) {
+function NewDefectModal({ config, onClose, onCreated }: { config: QcConfigBundle; onClose: () => void; onCreated: (id: string) => void }) {
   const [clientId, setClientId] = useState("");
   const [projectId, setProjectId] = useState("");
-  const [propertyId, setPropertyId] = useState("");
+  const [lotId, setLotId] = useState("");
   const [assignedToId, setAssignedToId] = useState("");
+  const [lots, setLots] = useState<QcLotRow[]>([]);
+  const [users, setUsers] = useState<QcPerson[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const projects = useMemo(() => config.clients.find((c) => c.id === clientId)?.projects ?? [], [config, clientId]);
-  const properties = useMemo(() => projects.find((p) => p.id === projectId)?.properties ?? [], [projects, projectId]);
-  const canSubmit = !!propertyId && !!assignedToId;
+  useEffect(() => { api.qc.getAssignableUsers().then(setUsers).catch(() => setUsers([])); }, []);
+  useEffect(() => {
+    setLotId("");
+    if (projectId) api.qc.lots.list({ projectId }).then(setLots).catch(() => setLots([]));
+    else setLots([]);
+  }, [projectId]);
+
+  const projects = config.clients.find((c) => c.id === clientId)?.projects ?? [];
+  const assignees: RefOption[] = users.map((u) => {
+    const role = u.qcMemberships?.find((m) => !clientId || m.client.id === clientId)?.role;
+    return { id: u.id, label: `${u.name ?? u.email}${role ? ` (${role.replace(/_/g, " ").toLowerCase()})` : ""}` };
+  });
 
   async function submit() {
-    if (!canSubmit) return;
     setSaving(true);
     setError(null);
     try {
-      await api.qc.createDefect({ propertyId, assignedToId });
-      onCreated();
+      const d = await api.qc.defects.create({ propertyId: lotId, assignedToId });
+      onCreated(d.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create defect");
+      setError((e as Error).message);
     } finally {
       setSaving(false);
     }
   }
 
+  const canSubmit = !!lotId && !!assignedToId;
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", borderRadius: "14px", width: "440px", maxWidth: "calc(100vw - 32px)", maxHeight: "calc(100vh - 48px)", overflowY: "auto", boxShadow: "0 20px 50px rgba(0,0,0,0.25)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #f1f5f9" }}>
-          <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#1a2a4a", margin: 0 }}>New Defect</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: "4px" }}>
-            <X size={16} />
-          </button>
-        </div>
-        <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: "12px" }}>
-          <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 4px" }}>
-            Location, description, and severity are filled in by the assigned field user on-site.
-          </p>
-          {error && <p style={{ fontSize: 12, color: "#dc2626", margin: 0 }}>{error}</p>}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Client</label>
-              <select style={fieldStyle} value={clientId} onChange={(e) => { setClientId(e.target.value); setProjectId(""); setPropertyId(""); }}>
-                <option value="">Select…</option>
-                {config.clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Project</label>
-              <select style={fieldStyle} value={projectId} disabled={!clientId} onChange={(e) => { setProjectId(e.target.value); setPropertyId(""); }}>
-                <option value="">Select…</option>
-                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label style={labelStyle}>Property</label>
-            <select style={fieldStyle} value={propertyId} disabled={!projectId} onChange={(e) => setPropertyId(e.target.value)}>
-              <option value="">Select…</option>
-              {properties.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.propertyType.label})</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Assign to</label>
-            <select style={fieldStyle} value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)}>
-              <option value="">Select…</option>
-              {users.map((u) => <option key={u.id} value={u.id}>{u.name ?? u.email} ({u.role})</option>)}
-            </select>
-          </div>
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "14px 20px", borderTop: "1px solid #f1f5f9" }}>
-          <button onClick={onClose} style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid #e5e7eb", background: "white", fontSize: "12px", fontWeight: 600, color: "#374151", cursor: "pointer" }}>
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={!canSubmit || saving}
-            style={{ padding: "8px 14px", borderRadius: "8px", border: "none", background: !canSubmit || saving ? "#94a3b8" : "#1a2a4a", fontSize: "12px", fontWeight: 600, color: "white", cursor: !canSubmit || saving ? "default" : "pointer" }}
-          >
-            {saving ? "Creating…" : "Create & assign"}
-          </button>
-        </div>
+    <Modal
+      title="New defect"
+      onClose={onClose}
+      width={460}
+      footer={
+        <>
+          <button style={btnGhost} onClick={onClose}>Cancel</button>
+          <button style={{ ...btnPrimary, opacity: !canSubmit || saving ? 0.6 : 1 }} disabled={!canSubmit || saving} onClick={submit}>{saving ? "Creating…" : "Create & assign"}</button>
+        </>
+      }
+    >
+      <ErrorNote message={error} />
+      <p style={{ ...sub, marginTop: 0 }}>The defect starts as a draft. The assigned inspector adds the description, severity and photos, then confirms it as Open.</p>
+      <div style={{ display: "grid", gap: 12 }}>
+        <Field label="Client" required>
+          <Select value={clientId} onChange={(v) => { setClientId(v); setProjectId(""); }} options={config.clients.map((c) => ({ id: c.id, label: c.name }))} />
+        </Field>
+        <Field label="Project" required>
+          <Select value={projectId} disabled={!clientId} onChange={setProjectId} options={projects.map((p) => ({ id: p.id, label: p.name }))} />
+        </Field>
+        <Field label="Lot" required>
+          <Select value={lotId} disabled={!projectId} onChange={setLotId} options={lots.map((l) => ({ id: l.id, label: `${l.name}${l.site ? ` · ${l.site.name}` : ""}` }))} />
+        </Field>
+        <Field label="Assign to" required>
+          <Select value={assignedToId} onChange={setAssignedToId} options={assignees} />
+        </Field>
       </div>
-    </div>
+    </Modal>
   );
 }
