@@ -241,6 +241,14 @@ export function asString(v: AnswerValue): string {
   return typeof v === "string" ? v : "";
 }
 
+/** Appends "." unless `s` already ends with sentence-ending punctuation --
+ *  a free-text answer (e.g. a Notes textarea) is just as often typed with
+ *  its own trailing period as without one, and blindly appending "." to
+ *  build a report line produced visible ".." for the former. */
+export function withPeriod(s: string): string {
+  return /[.!?]$/.test(s) ? s : `${s}.`;
+}
+
 export function resolveInstances(
   field: TemplateField,
   value: AnswerValue,
@@ -370,7 +378,7 @@ function walk(
     }
 
     if (field.type === "repeating-group") {
-      const instances = resolveInstances(field, value);
+      let instances = resolveInstances(field, value);
       const labels: string[] = [];
       // Only the section's own top-level repeating field (not one nested
       // inside another repeating-group) stands for "this whole section is
@@ -379,10 +387,33 @@ function walk(
       const composed = ancestorLabels.length === 0 ? sectionKey : undefined;
       // Houspect Victoria's template groups Internal Areas rooms under a
       // floor heading (Ground Floor / First Floor / ...) rather than
-      // mentioning the floor in each room's own sentence -- track the
-      // floor across instances (in the order they were added) and inject a
-      // heading line whenever it changes.
+      // mentioning the floor in each room's own sentence -- inject a
+      // heading line whenever the floor changes as instances are walked.
       const floorLevelField = (field.itemFields ?? []).find((f) => f.key === "floorLevel");
+      if (composed === "internal_areas" && floorLevelField) {
+        // Room order is fixed by the template (Front Entry, Living Room,
+        // Dining, Kitchen, Bedroom, Bathroom, Laundry, Toilet, Stairwell,
+        // Other) -- it has nothing to do with which physical floor each
+        // room is actually on, that's a separate answer per room. Relying
+        // on rooms happening to be answered in floor-consecutive order
+        // (the previous behaviour) meant a real property whose rooms don't
+        // line up with that fixed order -- e.g. a ground-floor Stairwell
+        // coming after a first-floor Toilet in the list -- would print
+        // repeated/interleaved "GROUND FLOOR" / "FIRST FLOOR" bands instead
+        // of one clean group per floor. Sorting by the floor field's own
+        // defined option order first (stable, so rooms on the same floor
+        // keep their original relative order) guarantees each floor's rooms
+        // are grouped together exactly once, regardless of answer order.
+        const floorOrder = new Map((floorLevelField.options ?? []).map((o, i) => [o.value, i]));
+        instances = instances
+          .map((item, i) => ({
+            item,
+            i,
+            floorIdx: floorOrder.get(asString(item.scope.floorLevel)) ?? Number.MAX_SAFE_INTEGER,
+          }))
+          .sort((a, b) => a.floorIdx - b.floorIdx || a.i - b.i)
+          .map(({ item }) => item);
+      }
       let lastFloorLevel: string | undefined;
       for (const { label, scope: inst } of instances) {
         const sub = walk(field.itemFields ?? [], inst, [...ancestorLabels, label]);
@@ -447,7 +478,7 @@ function walk(
     // Still recorded in `fields` above (so the reviewer's Field Data view
     // keeps every answer editable) -- just not echoed as its own bullet line
     // when a whole-section composer is about to produce real prose instead.
-    if (!isFlatComposedSection && !isNotesMetadata) textParts.push(`${field.label}: ${strValue}.`);
+    if (!isFlatComposedSection && !isNotesMetadata) textParts.push(`${field.label}: ${withPeriod(strValue)}`);
   }
 
   if (isFlatComposedSection) {

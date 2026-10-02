@@ -1,5 +1,14 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ReportHeader } from "../report";
 import { MetaRow, Para, reportTokens } from "./reportKit";
+
+// Puppeteer's page.pdf() (see acespect-backend/src/lib/reportPdf.ts) reserves
+// a 225mm-tall content area per printed page: A4's 297mm minus the 30mm top /
+// 42mm bottom margins it sets aside for the header/footer templates. The
+// cover anchors its signature against this same budget so the signature
+// lands at a fixed spot near the bottom of page 1, matching the reference
+// report, instead of trailing wherever the fields happen to end.
+const PAGE1_CONTENT_MM = 225;
 
 // Acespect Pty Ltd trades AS Houspect Victoria -- this report carries that
 // real trading identity, not the internal ACESPECT app's own logo. The image
@@ -22,8 +31,66 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
   const fontSize = compact ? 12.5 : 15;
   const titleSize = compact ? 22 : 38;
 
+  const hasSignature = Boolean(r.signatureUrl || r.signatureName);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [overflowsPage1, setOverflowsPage1] = useState(false);
+
+  // Detects the rare inspection where the fields + purpose text above are
+  // tall enough on their own to spill onto page 2 -- in that case the
+  // anchored copy below can no longer land on page 1's physical bottom in
+  // any meaningful sense, so a second, naturally-flowing copy renders after
+  // it to keep the signature on whichever page the cover's own text
+  // continues onto.
+  useLayoutEffect(() => {
+    if (compact || !hasSignature) return;
+    const budgetPx = PAGE1_CONTENT_MM * (96 / 25.4);
+    const recompute = () => {
+      const height = contentRef.current?.getBoundingClientRect().height ?? 0;
+      setOverflowsPage1(height > budgetPx);
+      // Puppeteer switches this page into print media right before
+      // generating the PDF (see reportPdf.ts) and waits on this marker --
+      // the cover's print-mode width is narrower than its on-screen
+      // preview, which re-wraps the Purpose paragraph and can change
+      // whether it overflows, so the check has to re-run when that happens.
+      document.body.dataset.coverMeasuredFor = window.matchMedia("print").matches ? "print" : "screen";
+    };
+    recompute();
+    const printQuery = window.matchMedia("print");
+    printQuery.addEventListener("change", recompute);
+    // Puppeteer's own render never resizes mid-flow, but the live on-screen
+    // view (e.g. a reviewer's browser window) can -- re-check then too, so
+    // this doesn't get stuck on a measurement taken at a since-changed width.
+    window.addEventListener("resize", recompute);
+    return () => {
+      printQuery.removeEventListener("change", recompute);
+      window.removeEventListener("resize", recompute);
+    };
+  }, [compact, hasSignature, r]);
+
+  const signatureBlock = hasSignature && (
+    <>
+      {r.signatureUrl && (
+        <img
+          src={r.signatureUrl}
+          alt="Signature"
+          style={{ height: compact ? "36px" : "56px", display: "block", marginBottom: "4px" }}
+        />
+      )}
+      {r.signatureName && (
+        <div style={{ fontWeight: 400, color: "#5b7ba8", fontSize: compact ? "0.95em" : "1.05em" }}>
+          {r.signatureName}
+        </div>
+      )}
+      {r.signatureTitle && (
+        <div style={{ fontWeight: 700, color: reportTokens.accent, fontSize: "0.85em" }}>{r.signatureTitle}</div>
+      )}
+    </>
+  );
+
   return (
     <div style={{ fontFamily: reportTokens.font, color: reportTokens.ink, fontSize: `${fontSize}px`, lineHeight: 1.5 }}>
+      <div style={{ position: compact ? undefined : "relative" }}>
+      <div ref={contentRef}>
       {!compact && (
         // Hidden when printed/exported to PDF: the PDF pipeline's own
         // per-page header (see acespect-backend/src/lib/reportPdf.ts)
@@ -98,30 +165,53 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
           matching the reference report exactly: its cover carries no photo
           at all, and the front-of-property image sits on the Description
           page. `coverPhotoUrl` is no longer read by this component. */}
+      </div>
 
       {/* Signature -- left-aligned with the value column (not centered),
-          matching the reference's own placement. The reference actually
-          repeats this at the bottom of both cover pages; Chromium's print
-          pagination doesn't expose "where will page 1 end" to this static
-          HTML, so reliably anchoring a second copy to that exact spot isn't
-          practical here -- this renders once, in the reference's own style. */}
-      {(r.signatureUrl || r.signatureName) && (
-        <div style={{ marginTop: compact ? "20px" : "36px", paddingLeft: `${labelW + 14}px` }}>
-          {r.signatureUrl && (
-            <img
-              src={r.signatureUrl}
-              alt="Signature"
-              style={{ height: compact ? "36px" : "56px", display: "block", marginBottom: "4px" }}
-            />
-          )}
-          {r.signatureName && (
-            <div style={{ fontWeight: 400, color: "#5b7ba8", fontSize: compact ? "0.95em" : "1.05em" }}>
-              {r.signatureName}
-            </div>
-          )}
-          {r.signatureTitle && (
-            <div style={{ fontWeight: 700, color: reportTokens.accent, fontSize: "0.85em" }}>{r.signatureTitle}</div>
-          )}
+          matching the reference's own placement. In compact mode (the
+          reviewer's narrow preview panel) this just follows the fields in
+          normal flow, as before. In the full-size report, it's pinned to a
+          fixed spot near the bottom of page 1 via this absolutely
+          positioned 225mm-tall overlay (Puppeteer's actual page-1 content
+          height -- see PAGE1_CONTENT_MM above): `alignItems:"flex-end"`
+          anchors the signature to the overlay's own bottom edge regardless
+          of how much or little room the fields + purpose content above
+          actually uses, instead of trailing right after it with a
+          content-dependent gap. The overlay is absolutely positioned (out
+          of normal flow) so it can't push later content down or collide
+          with it. */}
+      {!compact && hasSignature && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: `${PAGE1_CONTENT_MM}mm`,
+            display: "flex",
+            alignItems: "flex-end",
+            paddingBottom: "3mm",
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ paddingLeft: `${labelW + 14}px`, breakInside: "avoid" }}>{signatureBlock}</div>
+        </div>
+      )}
+      </div>
+
+      {compact && hasSignature && (
+        <div style={{ marginTop: "20px", paddingLeft: `${labelW + 14}px` }}>{signatureBlock}</div>
+      )}
+
+      {/* Overflow fallback: on the rare inspection where the fields +
+          purpose text above are tall enough on their own to spill onto
+          page 2, the anchored copy above can no longer meaningfully sit on
+          page 1 -- repeat the signature here, in normal document flow right
+          after that overflowing content, so it still appears on whichever
+          page the cover's own text continues onto. */}
+      {!compact && overflowsPage1 && hasSignature && (
+        <div style={{ marginTop: "24px", paddingLeft: `${labelW + 14}px`, breakInside: "avoid" }}>
+          {signatureBlock}
         </div>
       )}
     </div>
