@@ -10,8 +10,10 @@ import { ReportDescription } from "../components/ReportDescription";
 import { ReportScope } from "../components/ReportScope";
 import { ReportConditions } from "../components/ReportConditions";
 import { ReportSection } from "../components/ReportSection";
+import { ReportConditionSummary, type ConditionSummaryCategory } from "../components/ReportConditionSummary";
 import { ReportPoolSpaDisclaimer } from "../components/ReportPoolSpaDisclaimer";
 import { SECTION_SENTENCE_COMPOSERS } from "../reportSentences";
+import type { ConditionSummaryRow } from "../templateFields";
 import { PhotoNumberProvider, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
@@ -90,6 +92,18 @@ export function ReportView() {
     }
     renderList.push({ type: "section", section: s });
   }
+
+  // Executive Summary (Condition Summary page) -- one category per approved
+  // section that actually has condition-graded rows (derived and stored at
+  // save time, see templateFields.ts's ConditionSummaryRow); Description
+  // and Notes never produce any, so they're naturally excluded without
+  // needing their own filter here.
+  const conditionSummaryCategories: ConditionSummaryCategory[] = bodySections
+    .map((s) => ({
+      sectionName: s.name,
+      rows: (s.fields as unknown as { conditionSummary?: ConditionSummaryRow[] }).conditionSummary ?? [],
+    }))
+    .filter((c) => c.rows.length > 0);
 
   return (
     <div
@@ -190,6 +204,17 @@ export function ReportView() {
       >
         {/* Cover / front matter, generated from Job Information */}
         <ReportCover header={r} />
+
+        {/* Executive Summary (Condition Summary) -- its own dedicated page
+            right after the cover, before Description & Overview. Renders
+            nothing (including this wrapper) when there's nothing to
+            summarise yet, so an inspection with no approved sections never
+            prints a lone near-empty page. */}
+        {conditionSummaryCategories.length > 0 && (
+          <div className="report-page-break">
+            <ReportConditionSummary categories={conditionSummaryCategories} />
+          </div>
+        )}
 
         {/* Report body — approved section report text, written on approval.
             Wrapped in PhotoNumberProvider so every photo across the whole

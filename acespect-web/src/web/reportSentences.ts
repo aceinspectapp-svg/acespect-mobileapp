@@ -133,7 +133,7 @@ function damageSentences(inst: AnswerTree, itemFields: TemplateField[], damageKe
         if (length > 0) bits.push(`approximately ${length}mm long`);
         parts.push(`The ${typeLabel} is ${bits.join(" and ")}.`);
       }
-      if (notes) parts.push(notes);
+      if (notes) parts.push(withPeriod(notes));
       return parts.join(" ");
     })
     .join(" ");
@@ -177,7 +177,7 @@ const driveway: Composer = (inst, itemFields) => {
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -200,7 +200,7 @@ const pavingPaths: Composer = (inst, itemFields) => {
   const cracks = damageSentences(inst, itemFields, "cracks");
   if (cracks) parts.push(cracks);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -217,7 +217,7 @@ const fences: Composer = (inst, itemFields) => {
   const cracks = damageSentences(inst, itemFields, "cracks");
   if (cracks) parts.push(cracks);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -234,7 +234,7 @@ const retainingWalls: Composer = (inst, itemFields) => {
   const cracks = damageSentences(inst, itemFields, "cracks");
   if (cracks) parts.push(cracks);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -258,7 +258,7 @@ const garageCarportSheds: Composer = (inst, itemFields) => {
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -285,7 +285,7 @@ const poolSpa: Composer = (inst, itemFields) => {
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -306,7 +306,7 @@ const elevations: Composer = (inst, itemFields, label) => {
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -324,7 +324,7 @@ const roofChimneys: Composer = (inst, itemFields, label) => {
     }${observations.length ? ` ${capitalize(joinList(observations))} noted.` : ""}`,
   );
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -351,7 +351,7 @@ const internalAreas: Composer = (inst, itemFields, label) => {
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -436,7 +436,7 @@ const notes: Composer = (inst, itemFields, label) => {
   if (isChecklistItem) {
     if (asString(inst.value) !== "yes") return "";
     const note = asString(inst.note);
-    return `${label} observed.${note ? ` ${note}` : ""}`;
+    return `${label} observed.${note ? ` ${withPeriod(note)}` : ""}`;
   }
   const isNoAccessItem = itemFields.some((f) => f.key === "area") && itemFields.some((f) => f.key === "reason");
   if (isNoAccessItem) {
