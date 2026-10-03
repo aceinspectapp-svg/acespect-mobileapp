@@ -1,5 +1,14 @@
 import { API_BASE, getToken } from "./api";
-import { absenceSentence, composeSectionSentence } from "./reportSentences";
+import {
+  absenceSentence,
+  atLocation,
+  composeInternalAreasLeadIn,
+  composeSectionSentence,
+  floorHeading,
+  INTERNAL_AREAS_LEAD_IN_KEYS,
+  isNotPresent,
+} from "./reportSentences";
+import { gradeOf } from "./conditionGrades";
 
 /**
  * Template/answer-tree types + pure logic, ported from the mobile app
@@ -372,9 +381,43 @@ function buildDefectNote(damageField: TemplateField, inst: AnswerTree): string |
     const typeLabel =
       damageTypeField && rawType ? damageTypeField.options?.find((o) => o.value === rawType)?.label ?? rawType : "Crack";
     const location = asString(d.location);
-    return location ? `${typeLabel} at ${location}` : typeLabel;
+    return location ? `${typeLabel} ${atLocation(location)}` : typeLabel;
   });
   return parts.join("; ");
+}
+
+/** One Executive Summary row for an instance, or undefined when it has nothing to summarise (no grade answered yet, or marked as not present). */
+function conditionSummaryRow(
+  itemFields: TemplateField[],
+  inst: AnswerTree,
+  subLabel: string | undefined,
+): ConditionSummaryRow | undefined {
+  if (isNotPresent(inst)) return undefined;
+  // Every composer in reportSentences.ts reads its grade from a field keyed
+  // "condition" (most sections), "generalCondition" (Roof, Internal Areas) or
+  // "wallsCondition" (Garage) -- checking those exact names first, rather than
+  // just "the first color-select field", matters because Pool/Spa also has an
+  // unrelated "fenceSafety" colour pill that sorts earlier. The generic
+  // color-select fallback stays as a safety net for any future section.
+  const conditionField =
+    itemFields.find((f) => f.key === "condition" && f.type === "color-select") ??
+    itemFields.find((f) => f.key === "generalCondition" && f.type === "color-select") ??
+    itemFields.find((f) => f.key === "wallsCondition" && f.type === "color-select") ??
+    itemFields.find((f) => f.type === "color-select");
+  if (!conditionField) return undefined;
+  const rawCond = asString(inst[conditionField.key]);
+  const grade = gradeOf(conditionField.options?.find((o) => o.value === rawCond));
+  // Skip instances with no condition answered yet -- a fixed slot (e.g. an
+  // Internal Areas room never visited) shouldn't claim a row on an executive
+  // summary with nothing to summarise.
+  if (!grade) return undefined;
+  const damageField = itemFields.find((f) => f.type === "damage-list");
+  return {
+    subLabel,
+    conditionLabel: grade.label,
+    conditionColor: grade.color,
+    defectNote: damageField ? buildDefectNote(damageField, inst) : undefined,
+  };
 }
 
 /**
@@ -411,7 +454,19 @@ function walk(
   // list instead of the reference report's flowing prose paragraph. Route
   // this section's flat fields through its own composer instead, same as
   // every other section already does via SECTION_SENTENCE_COMPOSERS.
-  const isFlatComposedSection = ancestorLabels.length === 0 && sectionKey === "description";
+  // Driveway and Pool / Spa are flat too in the published templates (a single
+  // "is there one?" yes/no with its fields beneath it, no repeating-group),
+  // while the original seed wrapped them in a one-item list -- so they only
+  // take this path when the template has no top-level repeating-group.
+  const isFlatComposedSection =
+    ancestorLabels.length === 0 &&
+    (sectionKey === "description" ||
+      ((sectionKey === "driveway" || sectionKey === "pool_spa") && !templateFields.some((f) => f.type === "repeating-group")));
+  const isInternalAreas = ancestorLabels.length === 0 && sectionKey === "internal_areas";
+  if (isInternalAreas) {
+    const leadIn = composeInternalAreasLeadIn(scope, templateFields);
+    if (leadIn) textParts.push(leadIn);
+  }
 
   for (const field of templateFields) {
     if (!isGateSatisfied(field, scope)) continue;
@@ -478,51 +533,27 @@ function walk(
           .sort((a, b) => a.floorIdx - b.floorIdx || a.i - b.i)
           .map(({ item }) => item);
       }
-      // Condition Summary data (see ConditionSummaryRow above). Every
-      // composer in reportSentences.ts reads its condition grade from a
-      // field keyed either "condition" (most sections) or "generalCondition"
-      // (Roof & Chimneys, Internal Areas) -- checking those two exact names
-      // first, rather than just "the first color-select field", matters
-      // because at least one section (Pool/Spa) has a *second*,
-      // unrelated color-select field ("fenceSafety", for the fence-compliance
-      // pill) that happens to appear earlier in itemFields than "condition"
-      // itself; a bare type-only search would grab that one instead. The
-      // generic color-select fallback stays as a safety net for any future
-      // section that doesn't follow either naming convention.
+      // Condition Summary rows (see ConditionSummaryRow / conditionSummaryRow above).
       const conditionSummaryRows: ConditionSummaryRow[] = [];
-      const itemFieldsForSummary = field.itemFields ?? [];
-      const summaryConditionField = composed
-        ? itemFieldsForSummary.find((f) => f.key === "condition" && f.type === "color-select") ??
-          itemFieldsForSummary.find((f) => f.key === "generalCondition" && f.type === "color-select") ??
-          itemFieldsForSummary.find((f) => f.type === "color-select")
-        : undefined;
-      const summaryDamageField = composed ? itemFieldsForSummary.find((f) => f.type === "damage-list") : undefined;
+      let composedCount = 0;
       let lastFloorLevel: string | undefined;
       for (const { label, scope: inst } of instances) {
         const sub = walk(field.itemFields ?? [], inst, [...ancestorLabels, label]);
-        damages.push(...sub.damages);
+        const notPresent = !!composed && isNotPresent(inst);
+        // Stale damage records on an instance the inspector later marked as not present shouldn't reach the report.
+        if (!notPresent) damages.push(...sub.damages);
         labels.push(label);
-        if (summaryConditionField) {
-          const rawCond = asString(inst[summaryConditionField.key]);
-          const option = summaryConditionField.options?.find((o) => o.value === rawCond);
-          // Skip instances with no condition answered yet -- a fixed slot
-          // (e.g. an Internal Areas room never visited) shouldn't claim a
-          // row on an executive summary with nothing to summarise.
-          if (option?.color) {
-            conditionSummaryRows.push({
-              subLabel: instances.length > 1 ? niceInstanceLabel(field.itemFields ?? [], inst, label) : undefined,
-              conditionLabel: option.label,
-              conditionColor: option.color,
-              defectNote: summaryDamageField ? buildDefectNote(summaryDamageField, inst) : undefined,
-            });
-          }
-        }
-        if (composed === "internal_areas" && floorLevelField) {
-          const floorRaw = asString(inst.floorLevel);
-          if (floorRaw && floorRaw !== lastFloorLevel) {
-            textParts.push((floorLevelField.options?.find((o) => o.value === floorRaw)?.label ?? floorRaw).toUpperCase());
-            lastFloorLevel = floorRaw;
-          }
+        // An instance marked not present (Is there a garage? No), or a fixed
+        // slot the inspector never touched, contributes nothing -- no
+        // sentence, no floor banner, no summary row.
+        if (composed && (notPresent || !Object.values(inst).some(isAnswered))) continue;
+        if (composed) {
+          const row = conditionSummaryRow(
+            field.itemFields ?? [],
+            inst,
+            instances.length > 1 ? niceInstanceLabel(field.itemFields ?? [], inst, label) : undefined,
+          );
+          if (row) conditionSummaryRows.push(row);
         }
         const composedSentence = composed ? composeSectionSentence(composed, inst, field.itemFields ?? [], label) : undefined;
         // `undefined` means "no composer registered for this section" (fall
@@ -532,24 +563,41 @@ function walk(
         // these must NOT be treated the same, or a composer's silence gets
         // overwritten by the exact boilerplate line it was trying to avoid.
         if (composedSentence !== undefined) {
-          if (composedSentence) textParts.push(composedSentence);
+          if (composedSentence) {
+            // The floor banner goes in only once this room is known to print something.
+            if (composed === "internal_areas" && floorLevelField) {
+              const floorRaw = asString(inst.floorLevel);
+              if (floorRaw && floorRaw !== lastFloorLevel) {
+                textParts.push(floorHeading(floorLevelField.options?.find((o) => o.value === floorRaw)?.label ?? floorRaw));
+                lastFloorLevel = floorRaw;
+              }
+            }
+            textParts.push(composedSentence);
+            composedCount += 1;
+          }
         } else if (sub.reportText) {
           textParts.push(`${label}: ${sub.reportText}`.trim());
         }
       }
-      // No instances recorded for a composed section (e.g. the property has
-      // no driveway) used to leave this section's reportText empty --
-      // ReportSection.tsx would then fall back to its generic "No content
-      // recorded for this category" placeholder, which reads like the
-      // inspection was left incomplete rather than reporting the fact that
-      // the feature doesn't exist. State it properly instead, matching the
-      // reference report's own "There is no driveway." convention.
-      if (composed && instances.length === 0) {
+      // Nothing to say for a composed section that can legitimately not exist
+      // (no driveway, no pool, every garage slot marked "no", ...) used to
+      // leave this section's reportText empty -- ReportSection.tsx would then
+      // fall back to its generic "No content recorded for this category"
+      // placeholder, which reads like the inspection was left incomplete
+      // rather than reporting the fact that the feature doesn't exist. State
+      // it properly instead, matching the reference report's own "There is no
+      // driveway." convention.
+      if (composed && composedCount === 0) {
         const absence = absenceSentence(composed);
         if (absence) textParts.push(absence);
       }
       fields[field.key] = labels.join(", ");
-      if (conditionSummaryRows.length > 0) fields.conditionSummary = conditionSummaryRows;
+      // Written even when empty for a graded section: the backend merges `fields`
+      // on save, so omitting it would leave an earlier save's rows behind after
+      // every instance was later marked not present.
+      if (conditionSummaryRows.length > 0 || (composed && (field.itemFields ?? []).some((f) => f.type === "color-select"))) {
+        fields.conditionSummary = conditionSummaryRows;
+      }
       continue;
     }
 
@@ -577,11 +625,29 @@ function walk(
     // Still recorded in `fields` above (so the reviewer's Field Data view
     // keeps every answer editable) -- just not echoed as its own bullet line
     // when a whole-section composer is about to produce real prose instead.
-    if (!isFlatComposedSection && !isNotesMetadata) textParts.push(`${field.label}: ${withPeriod(strValue)}`);
+    // The "Is there a ...?" yes/no of a section that has an absence sentence is
+    // folded into the prose (or the absence sentence) instead of a bullet line,
+    // and Internal Areas' section-level answers are composed by its lead-in.
+    const isPresenceFlag = field.key === "present" && !!sectionKey && absenceSentence(sectionKey) !== undefined;
+    const isLeadInField = isInternalAreas && INTERNAL_AREAS_LEAD_IN_KEYS.has(field.key);
+    if (!isFlatComposedSection && !isNotesMetadata && !isPresenceFlag && !isLeadInField) {
+      textParts.push(`${field.label}: ${withPeriod(strValue)}`);
+    }
+  }
+
+  // A whole section answered "No" at its top level (Are there any retaining
+  // walls? No) -- everything beneath it is gated away, so state the fact.
+  if (!isFlatComposedSection && ancestorLabels.length === 0 && sectionKey && asString(scope.present) === "no") {
+    const absence = absenceSentence(sectionKey);
+    if (absence) textParts.push(absence);
   }
 
   if (isFlatComposedSection) {
     const composed = composeSectionSentence(sectionKey!, scope, templateFields, "");
+    // Driveway / Pool are a single instance, so the whole section is one summary row (no sub-label).
+    const row = sectionKey === "description" ? undefined : conditionSummaryRow(templateFields, scope, undefined);
+    if (row) fields.conditionSummary = [row];
+    else if (sectionKey !== "description" && templateFields.some((f) => f.type === "color-select")) fields.conditionSummary = [];
     return { fields, damages, reportText: composed ?? textParts.join("\n\n") };
   }
 
