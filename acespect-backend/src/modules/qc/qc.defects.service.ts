@@ -14,9 +14,15 @@ import {
 } from './qc.lifecycle';
 import { SEVERITY_KEY_TO_PRIORITY } from './qc.schemas';
 import { FormSpec, getForm, validateAgainstSpec, validateOrThrow } from './spec/qcSpec';
+import { QcContext, assertClientAccess } from './qc.context';
+import { recordAudit } from '../../lib/audit';
+import { logSecurityEvent } from '../../lib/securityLog';
+import { onDefectAction } from './qc.notify';
+import { applyActionClocks } from './qc.sla.service';
 
 type Tx = Prisma.TransactionClient;
-type Requester = { id: string; role: string };
+/** `ctx` (when the request came through the tenant-aware routes) decides the acting client and role. */
+type Requester = { id: string; role: string; ctx?: QcContext };
 type Input = Record<string, unknown>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,9 +48,17 @@ const MEMBER_ROLE_TO_ACTOR: Record<string, ActorRole> = {
  * FIELD_USER) act as a Private Inspector on defects assigned to them.
  */
 export async function resolveActor(user: Requester, defect: DefectRow): Promise<ActorContext | null> {
-  if (user.role === 'ADMIN') return { role: 'SA', permissions: [] };
-
   const project = defect.property.project;
+  if (user.role === 'ADMIN') {
+    // A Super Admin only works inside a client through a logged support session (REQ-TEN-008).
+    if (user.ctx) await assertClientAccess(user.ctx, project.clientId);
+    return { role: 'SA', permissions: [] };
+  }
+
+  if (user.ctx && !user.ctx.legacy && user.ctx.clientId !== project.clientId) {
+    await logSecurityEvent({ type: 'CROSS_TENANT', clientId: project.clientId, userId: user.id, detail: { defectId: defect.id, actorClient: user.ctx.clientId }, ip: user.ctx.ip });
+    return null;
+  }
   const membership = await prisma.qcMembership.findFirst({
     where: { userId: user.id, clientId: project.clientId, status: 'ACTIVE' },
     include: { projects: { select: { id: true } } },
@@ -73,6 +87,13 @@ export async function resolveActor(user: Requester, defect: DefectRow): Promise<
   return null;
 }
 
+/** Closed and withdrawn records are locked, even to the Super Admin (REQ-DEF-018). */
+function assertNotLocked(actor: ActorContext, defect: DefectRow): void {
+  if (actor.role === 'SA' && defect.status.terminal) {
+    throw ApiError.conflict(`This defect is ${defect.status.label.toLowerCase()} and its record is locked`, 'RECORD_LOCKED');
+  }
+}
+
 function toView(defect: DefectRow): DefectView {
   const project = defect.property.project;
   return {
@@ -99,10 +120,48 @@ export interface DefectFilters {
   q?: string;
   draft?: boolean;
   flag?: string;
+  limit?: number;
+  offset?: number;
 }
 
-export async function listDefects(filters: DefectFilters) {
+/**
+ * What a signed-in role may see in a list (REQ-AUT-004): their own client and
+ * projects, drafts only for inspectors, nothing unreleased for the builder or
+ * trades, inspectors only their own assignments, trades only their allocations.
+ */
+export async function visibilityWhere(ctx: QcContext): Promise<Prisma.QcDefectWhereInput> {
+  const clientId = ctx.clientId;
+  if (ctx.isSA) {
+    if (!clientId) throw new ApiError(409, 'Start support mode in a client first', 'SUPPORT_MODE_REQUIRED');
+    return { property: { project: { clientId } } };
+  }
+  if (ctx.legacy) return { assignedToId: ctx.userId };
+  const and: Prisma.QcDefectWhereInput[] = [{ property: { project: { clientId: clientId! } } }];
+  if (ctx.projectIds !== 'all') and.push({ property: { projectId: { in: ctx.projectIds } } });
+  switch (ctx.role) {
+    case 'PRIVATE_INSPECTOR':
+      and.push({ assignedToId: ctx.userId });
+      break;
+    case 'TRADE_USER': {
+      const tc = ctx.membership?.tradeCompanyId;
+      and.push({ isDraft: false, status: { key: { not: 'open' } }, OR: [{ allocatedTradeUserId: ctx.userId }, ...(tc ? [{ allocatedTradeUserId: null, allocatedTradeCompanyId: tc }] : [])] });
+      break;
+    }
+    case 'MC_MANAGER':
+    case 'MC_SITE_SUPERVISOR':
+    case 'MC_PROJECT_MANAGER':
+      and.push({ isDraft: false, status: { key: { not: 'open' } } });
+      break;
+    default:
+      and.push({ isDraft: false });
+  }
+  return { AND: and };
+}
+
+export async function listDefects(filters: DefectFilters, ctx?: QcContext) {
+  const scope = ctx ? await visibilityWhere(ctx) : undefined;
   const where: Prisma.QcDefectWhereInput = {
+    ...(scope ? { AND: [scope] } : {}),
     propertyId: filters.propertyId,
     assignedToId: filters.assignedToId,
     isDraft: filters.draft,
@@ -122,7 +181,7 @@ export async function listDefects(filters: DefectFilters) {
         ]
       : undefined,
   };
-  return prisma.qcDefect.findMany({ where, include: defectInclude, orderBy: { createdAt: 'desc' }, take: 500 });
+  return prisma.qcDefect.findMany({ where, include: defectInclude, orderBy: { createdAt: 'desc' }, take: filters.limit ?? 500, skip: filters.offset ?? 0 });
 }
 
 async function loadDefect(id: string): Promise<DefectRow> {
@@ -241,6 +300,9 @@ export interface CreateDefectInput extends Input {
   propertyId: string;
   assignedToId: string;
   dueDate?: string;
+  foundAtStage?: string;
+  sourceInspectionId?: string;
+  sourceItemNumber?: string;
 }
 
 /**
@@ -271,6 +333,11 @@ export async function createDefect(creator: Requester, input: CreateDefectInput)
         isDraft: true,
         assignedToId: input.assignedToId,
         dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
+        // Raised during the defects liability period (REQ-DLP-001): the clock started and has not been signed off.
+        dlpDefect: !!property.project.dlpStartDate && property.project.dlpStartDate <= new Date() && !property.project.dlpSignedOffAt,
+        foundAtStage: typeof input.foundAtStage === 'string' ? input.foundAtStage : undefined,
+        sourceInspectionId: typeof input.sourceInspectionId === 'string' ? input.sourceInspectionId : undefined,
+        sourceItemNumber: typeof input.sourceItemNumber === 'string' ? input.sourceItemNumber : undefined,
         createdById: creator.id,
       },
     });
@@ -309,6 +376,7 @@ export async function updateDefect(id: string, input: Input, requester: Requeste
     throw ApiError.badRequest('Defect status only changes through lifecycle actions (POST /qc/defects/:id/actions/:action)');
   }
   const isSA = actor.role === 'SA';
+  assertNotLocked(actor, defect);
 
   const cols: Prisma.QcDefectUncheckedUpdateInput = {};
   const f16 = validateAgainstSpec('F16', input, { partial: true });
@@ -453,6 +521,7 @@ export async function performAction(req: ActionRequest) {
 
   const action = getAction(req.action);
   if (!action) throw ApiError.notFound(`Unknown action "${req.action}"`);
+  assertNotLocked(actor, defect);
   const view = toView(defect);
   if (!canPerform(action, actor, view)) {
     const roleOk = actor.role === 'SA' || action.roles.includes(actor.role);
@@ -554,7 +623,23 @@ export async function performAction(req: ActionRequest) {
     }
   });
 
-  return getDefectDetail(defect.id, req.requester);
+  // Service-level clocks follow the action (due dates, acknowledged / rectified stamps, paused time on hold).
+  await applyActionClocks(defect.id, action.key).catch((err) => console.error('[sla] clocks', err));
+  const detail = await getDefectDetail(defect.id, req.requester);
+  // Platform audit trail and the notification matrix: both are best effort after the action committed.
+  await recordAudit({
+    clientId: defect.property.project.clientId,
+    entityType: 'Defect',
+    entityId: defect.id,
+    action: `defect.${action.key}`,
+    actor: { id: req.requester.id, role: actor.role },
+    supportSessionId: req.requester.ctx?.supportSession?.id ?? null,
+    reason: result.note ?? null,
+    before: { status: defect.status.key },
+    after: { status: detail.defect.status.key },
+  }).catch(() => undefined);
+  onDefectAction(defect.id, action.key, { actorId: req.requester.id, severityLabel: detail.defect.severity?.label }).catch(() => undefined);
+  return detail;
 }
 
 interface HandlerCtx {

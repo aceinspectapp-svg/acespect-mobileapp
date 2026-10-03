@@ -246,6 +246,21 @@ export async function uploadPhoto(
   return { id, storageKey, url: `/api/v1/media/${id}` };
 }
 
+/**
+ * Store a non-image file (PDF, report, document) unchanged. Same opaque
+ * `/api/v1/media/:id` URL as photos; the index row remembers the content type.
+ * `folder` groups files in Egnyte, e.g. "documents/<projectId>".
+ */
+export async function uploadDocument(buffer: Buffer, contentType: string, ext: string, folder = 'documents'): Promise<UploadedPhoto> {
+  if (!isStorageEnabled()) throw new Error('File storage is not configured');
+  const id = randomUUID();
+  const safeExt = ext.replace(/[^a-z0-9]/gi, '').slice(0, 8) || 'bin';
+  const storageKey = `${env.EGNYTE_ROOT_FOLDER}/${folder.split('/').map(safeSegment).filter(Boolean).join('/')}/${id}.${safeExt}`;
+  await uploadToEgnyte(storageKey, buffer, contentType);
+  await prisma.photo.create({ data: { id, storageKey, contentType } });
+  return { id, storageKey, url: `/api/v1/media/${id}` };
+}
+
 /** Streams the resized report copy for a given photo id straight from Egnyte. Used by the media proxy route. */
 export async function fetchPhotoStream(
   id: string,

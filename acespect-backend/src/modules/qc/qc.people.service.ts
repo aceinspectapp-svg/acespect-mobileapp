@@ -1,15 +1,20 @@
 /**
  * Users and roles from the requirements spec: platform identity (E04), the
  * membership that gives a user a role in a client (E05), Private Inspector
- * credentials (E06) and the project team (E10). The Super Admin manages all
- * of it from the web admin; there are no self-service invitations yet, so
- * a new account gets an initial password the admin hands over.
+ * credentials (E06) and the project team (E10). New accounts are activated
+ * through a one-time invitation link (REQ-AUT-001): the person sets their own
+ * password and accepts the privacy notice and terms. Who may create which role
+ * follows the permission matrix (REQ-USR-001..004).
  */
 import { randomBytes } from 'crypto';
 import { Prisma, QcMemberRole, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { hashPassword } from '../../utils/password';
+import { authService, revokeAllSessions } from '../auth/auth.service';
+import { recordAudit } from '../../lib/audit';
+import { QcContext, assertClientAccess } from './qc.context';
+import { Capability, can } from './qc.permissions';
 import { requireExists } from './qc.shared';
 import { validateAgainstSpec, validateOrThrow } from './spec/qcSpec';
 import { TERMINAL_STATUSES } from './qc.lifecycle';
@@ -45,6 +50,27 @@ const LOGIN_ROLE: Record<QcMemberRole, Role> = {
   PRIVATE_INSPECTOR: 'INSPECTOR',
 };
 
+/** The capability a creator needs to add someone in each role. */
+export const CREATE_CAPABILITY: Record<QcMemberRole, Capability> = {
+  CLIENT_ADMIN: 'users.clientUsers',
+  CLIENT_USER: 'users.clientUsers',
+  MC_MANAGER: 'users.mcOrg',
+  MC_SITE_SUPERVISOR: 'users.mcStaff',
+  MC_PROJECT_MANAGER: 'users.mcStaff',
+  TRADE_USER: 'users.trade',
+  PRIVATE_INSPECTOR: 'users.credentialInspector',
+};
+
+/** May this caller manage a person in this role / master contractor? */
+export function assertMayManage(ctx: QcContext, role: QcMemberRole, masterContractorId?: string | null): void {
+  if (!can(ctx, CREATE_CAPABILITY[role])) throw ApiError.forbidden('You cannot manage people in this role');
+  // A Master Contractor manager only manages people inside their own contractor organisation.
+  if ((ctx.role === 'MC_MANAGER' || ctx.role === 'MC_PROJECT_MANAGER') && role !== 'TRADE_USER') {
+    if (!masterContractorId || masterContractorId !== ctx.membership?.masterContractorId) throw ApiError.forbidden('You can only manage people in your own organisation');
+  }
+  // Client Admins create Client Admins; a Client User never reaches here (no capability).
+}
+
 const MOBILE_REQUIRED: QcMemberRole[] = ['PRIVATE_INSPECTOR', 'TRADE_USER', 'MC_SITE_SUPERVISOR'];
 const WHITE_CARD_REQUIRED: QcMemberRole[] = ['PRIVATE_INSPECTOR', 'TRADE_USER', 'MC_SITE_SUPERVISOR', 'MC_PROJECT_MANAGER'];
 
@@ -65,18 +91,20 @@ function tempPassword(): string {
   return randomBytes(9).toString('base64url');
 }
 
-export async function listPeople(filters: { clientId?: string; role?: string; q?: string }) {
+export async function listPeople(filters: { clientId?: string; role?: string; q?: string; masterContractorId?: string }) {
   const q = filters.q?.trim();
   const users = await prisma.user.findMany({
     where: {
       role: { in: ['INSPECTOR', 'FIELD_USER', 'CLIENT'] },
-      qcMemberships: filters.clientId || filters.role ? { some: { clientId: filters.clientId, role: filters.role as QcMemberRole | undefined } } : undefined,
+      qcMemberships: filters.clientId || filters.role || filters.masterContractorId
+        ? { some: { clientId: filters.clientId, role: filters.role as QcMemberRole | undefined, masterContractorId: filters.masterContractorId } }
+        : undefined,
       OR: q ? [{ name: { contains: q, mode: 'insensitive' } }, { email: { contains: q, mode: 'insensitive' } }] : undefined,
     } as Prisma.UserWhereInput,
     select: {
       id: true, name: true, email: true, phone: true, role: true, isActive: true, position: true, whiteCardNumber: true, whiteCardState: true,
       createdAt: true,
-      qcMemberships: { include: personInclude.memberships.include },
+      qcMemberships: { include: personInclude.memberships.include, where: filters.clientId ? { clientId: filters.clientId } : undefined },
       qcInspectorCredential: personInclude.qcInspectorCredential,
       _count: { select: { assignedQcDefects: true } },
     },
@@ -148,10 +176,21 @@ function membershipData(plan: MembershipPlan) {
   };
 }
 
-export async function createPerson(input: Input) {
+export async function createPerson(input: Input, ctx?: QcContext) {
   const role = str(input.role) as QcMemberRole;
   if (!MEMBER_ROLES.includes(role)) throw ApiError.badRequest('Choose a role');
   const e04 = validateOrThrow('E04', { sign_in_method: 'Password with MFA', ...input }, { extraRequired: e04Required(role), skipRequired: ['sign_in_method'] });
+  if (ctx) {
+    // A non-SA caller always creates inside their own client.
+    if (!ctx.isSA) input = { ...input, clientId: ctx.clientId };
+    if (role !== 'PRIVATE_INSPECTOR' && ctx.isSA) await assertClientAccess(ctx, str(input.clientId));
+    assertMayManage(ctx, role, role.startsWith('MC_') ? str(input.masterContractorId) : null);
+    if (role === 'MC_MANAGER' || role === 'MC_SITE_SUPERVISOR' || role === 'MC_PROJECT_MANAGER') {
+      if ((ctx.role === 'MC_MANAGER') && str(input.masterContractorId) !== ctx.membership?.masterContractorId) throw ApiError.forbidden('You can only add people to your own organisation');
+    }
+    // Optional permissions are Client Admin / Super Admin business (REQ-USR-005).
+    if (strArr(input.optionalPermissions).length && !can(ctx, 'users.grantPermissions')) throw ApiError.forbidden('You cannot grant permissions');
+  }
 
   const email = str(e04.email_address);
   if (await prisma.user.findUnique({ where: { email } })) throw ApiError.conflict('An account with this email already exists', 'EMAIL_TAKEN');
@@ -169,8 +208,8 @@ export async function createPerson(input: Input) {
     plans = [await planMembership(role, input, str(input.clientId))];
   }
 
-  const password = str(input.password) || tempPassword();
-  if (password.length < 8) throw ApiError.badRequest('Password must be at least 8 characters');
+  // The person chooses their own password through the invitation link; until then the account cannot sign in.
+  const password = tempPassword();
 
   const user = await prisma.$transaction(async (tx) => {
     const u = await tx.user.create({
@@ -217,7 +256,20 @@ export async function createPerson(input: Input) {
     where: { id: user.id },
     select: { id: true, name: true, email: true, role: true, qcMemberships: { include: personInclude.memberships.include }, qcInspectorCredential: personInclude.qcInspectorCredential },
   });
-  return { person, temporaryPassword: input.password ? undefined : password };
+  const invitation = await sendInvitation(user.id, ctx?.userId ?? null);
+  await recordAudit({
+    clientId: plans[0]?.clientId ?? null, entityType: 'User', entityId: user.id, action: 'user.create',
+    actor: ctx ? { id: ctx.userId, role: ctx.role } : { id: null, role: 'SYSTEM' }, after: { email, role },
+  });
+  return { person, invitation };
+}
+
+/** Create the activation link and email it. The link is also returned so an admin can hand it over when email is not set up. */
+export async function sendInvitation(userId: string, createdById: string | null) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  const inv = await authService.createInvitation(userId, createdById);
+  const mail = await authService.sendInvitationEmail(user, inv.url);
+  return { url: inv.url, expiresAt: inv.expiresAt, email: user.email, mail };
 }
 
 export async function updatePerson(userId: string, input: Input) {
@@ -241,7 +293,6 @@ export async function updatePerson(userId: string, input: Input) {
         position: e04.position_or_job_title as string | undefined,
         whiteCardNumber: e04.white_card_number as string | undefined,
         whiteCardState: e04.white_card_issuing_state_or_territory as string | undefined,
-        passwordHash: input.password ? await hashPassword(str(input.password)) : undefined,
       },
     });
     // Membership edits: one membership per client, addressed by membershipId.
@@ -261,9 +312,18 @@ export async function updatePerson(userId: string, input: Input) {
 export const DEACTIVATION_REASONS = ['Left the company', 'Contract ended', 'Role change', 'Security concern', 'Other'];
 
 /** F05: deactivate a user and move their open work to someone else (REQ-USR-006). */
-export async function deactivatePerson(userId: string, input: { reason: string; reassignToId?: string }) {
+export async function deactivatePerson(userId: string, input: { reason: string; reassignToId?: string }, ctx?: QcContext) {
   if (!DEACTIVATION_REASONS.includes(input.reason)) throw ApiError.badRequest('Choose a deactivation reason');
   await requireExists('user', userId, 'User');
+  if (userId === ctx?.userId) throw ApiError.badRequest('You cannot deactivate your own account');
+  const scopeClientId = ctx && !ctx.isSA ? ctx.clientId : ctx?.clientId ?? null;
+  if (ctx) {
+    if (!can(ctx, 'users.deactivate')) throw ApiError.forbidden('You cannot deactivate people');
+    if (ctx.role === 'MC_MANAGER') {
+      const target = await prisma.qcMembership.findFirst({ where: { userId, clientId: scopeClientId ?? undefined } });
+      if (!target || (target.role !== 'TRADE_USER' && target.masterContractorId !== ctx.membership?.masterContractorId)) throw ApiError.forbidden('You can only deactivate people in your own organisation');
+    }
+  }
   const openStatuses = await prisma.qcStatus.findMany({ where: { key: { notIn: TERMINAL_STATUSES } }, select: { id: true } });
   const openWhere = { assignedToId: userId, statusId: { in: openStatuses.map((s) => s.id) } };
   const openCount = await prisma.qcDefect.count({ where: openWhere });
@@ -279,17 +339,23 @@ export async function deactivatePerson(userId: string, input: { reason: string; 
       await tx.qcDefect.updateMany({ where: openWhere, data: { assignedToId: input.reassignToId } });
       await tx.qcTask.updateMany({ where: { assignedToId: userId, status: { not: 'COMPLETED' } }, data: { assignedToId: input.reassignToId } });
     }
-    await tx.user.update({ where: { id: userId }, data: { isActive: false } });
-    await tx.qcMembership.updateMany({ where: { userId }, data: { status: 'DEACTIVATED', deactivationReason: input.reason } });
-    await tx.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    await tx.qcMembership.updateMany({ where: { userId, clientId: scopeClientId ?? undefined }, data: { status: 'DEACTIVATED', deactivationReason: input.reason } });
+    // A person with roles in other clients stays active there; otherwise the account is switched off.
+    const remaining = await tx.qcMembership.count({ where: { userId, status: 'ACTIVE' } });
+    if (remaining === 0) await tx.user.update({ where: { id: userId }, data: { isActive: false } });
   });
+  // Active sessions end within a minute, and the next refresh fails (REQ-AUT-005).
+  await revokeAllSessions(userId, `deactivated: ${input.reason}`);
+  await recordAudit({ clientId: scopeClientId, entityType: 'User', entityId: userId, action: 'user.deactivate', actor: ctx ? { id: ctx.userId, role: ctx.role } : { id: null, role: 'SYSTEM' }, reason: input.reason });
   return { reassigned: input.reassignToId ? openCount : 0 };
 }
 
-export async function reactivatePerson(userId: string) {
+export async function reactivatePerson(userId: string, ctx?: QcContext) {
   await requireExists('user', userId, 'User');
+  if (ctx && !can(ctx, 'users.deactivate')) throw ApiError.forbidden('You cannot reactivate people');
   await prisma.user.update({ where: { id: userId }, data: { isActive: true } });
-  await prisma.qcMembership.updateMany({ where: { userId }, data: { status: 'ACTIVE', deactivationReason: null } });
+  await prisma.qcMembership.updateMany({ where: { userId, clientId: ctx?.clientId ?? undefined }, data: { status: 'ACTIVE', deactivationReason: null } });
+  await recordAudit({ clientId: ctx?.clientId ?? null, entityType: 'User', entityId: userId, action: 'user.reactivate', actor: ctx ? { id: ctx.userId, role: ctx.role } : { id: null, role: 'SYSTEM' } });
 }
 
 // ───────────────────────── Private Inspector credentials (E06) ─────────────────────────

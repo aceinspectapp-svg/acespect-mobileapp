@@ -24,31 +24,46 @@ enum Role {
 }
 
 model User {
-  id              String   @id @default(uuid())
-  email           String   @unique
+  id                String    @id @default(uuid())
+  email             String    @unique
   // Nullable: Google-only accounts have no local password.
-  passwordHash    String?
-  name            String?
-  phone           String?
+  passwordHash      String?
+  name              String?
+  phone             String?
   // Set when the account is linked to a Google identity (the Google "sub").
-  googleId        String?  @unique
-  avatarUrl       String?
-  avatar          String? // short initials shown in the web UI, e.g. "JT"
-  region          String?
+  googleId          String?   @unique
+  avatarUrl         String?
+  avatar            String? // short initials shown in the web UI, e.g. "JT"
+  region            String?
   // Inspector's building-inspector license/registration number (e.g. DBU
   // license). Shown alongside their name in the reviewer pane and used as
   // the report cover's "Inspector DBU License" fallback when the inspection
   // itself doesn't override it. Meaningful for INSPECTOR accounts; left
   // null for other roles.
-  licenseNumber   String?
+  licenseNumber     String?
+  // Auth hardening (AUT-001/002/005): lockout, MFA, immediate revocation, consent.
+  failedLoginCount  Int       @default(0)
+  lastFailedAt      DateTime?
+  lockedUntil       DateTime?
+  mfaEnabled        Boolean   @default(false)
+  mfaSecret         String?
+  mfaBackupCodes    String[]  @default([])
+  tokenVersion      Int       @default(0)
+  lastSignInAt      DateTime?
+  passwordChangedAt DateTime?
+  termsVersion      String?
+  termsAcceptedAt   DateTime?
+  privacyVersion    String?
+  privacyAcceptedAt DateTime?
+  microsoftId       String?   @unique
   // QC requirements spec (E04): needed to attend a construction site.
-  whiteCardNumber String?
-  whiteCardState  String?
-  position        String?
-  role            Role     @default(INSPECTOR)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  whiteCardNumber   String?
+  whiteCardState    String?
+  position          String?
+  role              Role      @default(INSPECTOR)
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   refreshTokens         RefreshToken[]
   inspections           Inspection[]           @relation("InspectorInspections")
@@ -68,6 +83,12 @@ model User {
   qcBuilderContactFor   QcDefect[]             @relation("QcDefectBuilderContact")
   qcAllocatedDefects    QcDefect[]             @relation("QcDefectAllocatedUser")
   qcClosedDefects       QcDefect[]             @relation("QcDefectClosedBy")
+  qcInvitations         QcInvitation[]
+  qcPasswordResets      QcPasswordReset[]
+  qcSupportSessions     QcSupportSession[]
+  qcNotifications       QcNotification[]
+  qcNotificationPrefs   QcNotificationPref[]
+  qcPushTokens          QcPushToken[]
 
   @@map("users")
 }
@@ -566,6 +587,14 @@ model QcProject {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
+  // Practical completion and the defects liability period (F36/F37).
+  practicalCompletionDate DateTime?
+  dlpLengthMonths         Int?
+  dlpStartDate            DateTime?
+  dlpEndDate              DateTime?
+  dlpSignedOffAt          DateTime?
+  dlpEscalatedAt          DateTime?
+
   properties  QcProperty[]
   sites       QcSite[]
   team        QcProjectMember[]
@@ -745,18 +774,34 @@ model QcDefect {
   closedById             String?
   closedAt               DateTime?
 
+  // Where it came from and its service-level clocks (REQ-SLA-*).
+  dlpDefect        Boolean   @default(false)
+  foundAtStage     String?
+  sourceInspectionId String?
+  sourceItemNumber String?
+  ackDueAt         DateTime?
+  rectifyDueAt     DateTime?
+  reinspectDueAt   DateTime?
+  acknowledgedAt   DateTime?
+  rectifiedAt      DateTime?
+  verifiedAt       DateTime?
+  lastEscalatedAt  DateTime?
+
   createdBy   User     @relation("QcDefectCreatedBy", fields: [createdById], references: [id])
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tasks    QcTask[]
-  events   QcDefectEvent[]
-  comments QcDefectComment[]
+  tasks       QcTask[]
+  events      QcDefectEvent[]
+  comments    QcDefectComment[]
+  escalations QcEscalation[]
 
   @@index([propertyId])
   @@index([assignedToId])
   @@index([statusId])
+  @@index([rectifyDueAt])
+  @@index([sourceInspectionId])
   @@index([tradeCategoryId])
   @@map("qc_defects")
 }
@@ -886,4 +931,341 @@ model SubmissionLogEntry {
   @@index([inspectionId])
   @@index([createdAt])
   @@map("submission_log_entries")
+}
+
+// ───────────────────────── QC platform: auth, tenancy, audit, notifications ───────────────
+
+/// AUT-001: one-time activation link. Only the SHA-256 of the token is stored.
+model QcInvitation {
+  id          String    @id @default(uuid())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  sentAt      DateTime  @default(now())
+  createdById String?
+
+  @@index([userId])
+  @@map("qc_invitations")
+}
+
+/// AUT-002: single-use, time-limited password reset link.
+model QcPasswordReset {
+  id        String    @id @default(uuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("qc_password_resets")
+}
+
+/// TEN-008 / CLT-004 / E32: a Super Admin works inside one client only through a
+/// logged, time-limited support session with a stated reason.
+model QcSupportSession {
+  id        String    @id @default(uuid())
+  user      User      @relation(fields: [userId], references: [id])
+  userId    String
+  clientId  String
+  reason    String
+  ticketRef String?
+  startedAt DateTime  @default(now())
+  expiresAt DateTime
+  endedAt   DateTime?
+
+  @@index([userId, endedAt])
+  @@index([clientId, startedAt])
+  @@map("qc_support_sessions")
+}
+
+/// E31: security and access log (sign-ins, lockouts, refused requests, cross-tenant
+/// attempts, support mode). Clients see their own entries; never edited.
+model QcSecurityEvent {
+  id        String   @id @default(uuid())
+  clientId  String?
+  userId    String?
+  type      String
+  detail    Json     @default("{}")
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([clientId, createdAt])
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@map("qc_security_events")
+}
+
+/// AUD-001: append-only record of data changes outside the defect lifecycle (which has
+/// its own hash-chained QcDefectEvent). Entries are never edited; each stores the hash
+/// of the previous entry for the same client so tampering is detectable.
+model QcAuditEntry {
+  id               String   @id @default(uuid())
+  clientId         String?
+  entityType       String
+  entityId         String
+  action           String
+  actorId          String?
+  actorRole        String
+  supportSessionId String?
+  reason           String?
+  before           Json?
+  after            Json?
+  prevHash         String?
+  hash             String
+  createdAt        DateTime @default(now())
+
+  @@index([clientId, createdAt])
+  @@index([entityType, entityId])
+  @@map("qc_audit_entries")
+}
+
+/// E29: in-app notification. `mandatory` ones (e.g. Safety Hazard) ignore preferences.
+model QcNotification {
+  id          String    @id @default(uuid())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  clientId    String?
+  type        String
+  title       String
+  body        String
+  entityType  String?
+  entityId    String?
+  mandatory   Boolean   @default(false)
+  readAt      DateTime?
+  ackedAt     DateTime?
+  emailStatus String    @default("NONE")
+  emailedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+  @@index([emailStatus])
+  @@map("qc_notifications")
+}
+
+/// E30: per-user, per-event channel choices.
+model QcNotificationPref {
+  id        String  @id @default(uuid())
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  eventType String
+  inApp     Boolean @default(true)
+  /// IMMEDIATE | DIGEST | OFF
+  email     String  @default("IMMEDIATE")
+
+  @@unique([userId, eventType])
+  @@map("qc_notification_prefs")
+}
+
+model QcPushToken {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  token     String   @unique
+  platform  String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("qc_push_tokens")
+}
+
+/// Lease row so scheduled jobs run on one instance at a time (see lib/scheduler.ts).
+model QcJobLease {
+  name        String    @id
+  leasedUntil DateTime
+  lastRunAt   DateTime?
+  lastStatus  String?
+
+  @@map("qc_job_leases")
+}
+
+
+// ───────────────────────── Fulfilment: registers, templates, inspections ─────────────────────────
+
+/// Spec-validated registers that are read as lists and rarely joined: project documents (E11), the
+/// project inspection plan (E12), SLA / escalation policies (E13/E14), stage definitions (E15), result
+/// codes (E18), reference library (E20), calendars, DLP sign-offs (E28), privacy requests (E33), breach
+/// incidents (E34), sub-processors (E35), legal holds (E36), generated reports (E37).
+model QcRecord {
+  id          String   @id @default(uuid())
+  kind        String
+  clientId    String?
+  projectId   String?
+  status      String   @default("ACTIVE")
+  title       String?
+  data        Json     @default("{}")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([kind, clientId])
+  @@index([kind, projectId])
+  @@map("qc_records")
+}
+
+/// E16 Checklist template. A version is its own row; publishing freezes it. Client and project
+/// templates are clones of a base template (level BASE, maintained by the Super Admin).
+model QcTemplate {
+  id            String    @id @default(uuid())
+  code          String
+  name          String
+  level         String    @default("BASE")
+  clientId      String?
+  projectId     String?
+  parentId      String?
+  parentVersion Int?
+  stageKey      String?
+  version       Int       @default(1)
+  versionStatus String    @default("DRAFT")
+  publishedAt   DateTime?
+  changeSummary String?
+  data          Json      @default("{}")
+  createdById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  items QcTemplateItem[]
+
+  @@index([code, version])
+  @@index([clientId])
+  @@index([projectId])
+  @@map("qc_templates")
+}
+
+/// E17 Checklist item. Items locked by the Super Admin cannot be edited or removed in a client clone.
+model QcTemplateItem {
+  id         String     @id @default(uuid())
+  template   QcTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId String
+  itemNumber String
+  section    String?
+  sortOrder  Int        @default(0)
+  active     Boolean    @default(true)
+  locked     Boolean    @default(false)
+  mandatory  Boolean    @default(true)
+  itemType   String     @default("PASS_FAIL")
+  data       Json       @default("{}")
+
+  @@index([templateId, sortOrder])
+  @@map("qc_template_items")
+}
+
+/// E21 Inspection. The lifecycle is REQUESTED -> PLANNED -> SCHEDULED -> IN_PROGRESS -> COMPLETED, with
+/// CANCELLED and ON_HOLD branches; a completed inspection is locked (changes are addenda).
+model QcInspection {
+  id             String    @id @default(uuid())
+  ref            String    @unique
+  clientId       String
+  projectId      String
+  siteId         String?
+  propertyId     String?
+  stageKey       String?
+  templateId     String?
+  type           String    @default("STAGE")
+  status         String    @default("PLANNED")
+  inspectorId    String?
+  plannedFrom    DateTime?
+  plannedTo      DateTime?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  signedAt       DateTime?
+  signedById     String?
+  locked         Boolean   @default(false)
+  holdPoint      Boolean   @default(false)
+  requestedById  String?
+  requestedAt    DateTime?
+  requestData    Json      @default("{}")
+  headerData     Json      @default("{}")
+  summaryData    Json      @default("{}")
+  data           Json      @default("{}")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  results QcInspectionResult[]
+
+  @@index([clientId, projectId])
+  @@index([inspectorId, status])
+  @@index([propertyId])
+  @@map("qc_inspections")
+}
+
+/// E22 Result of one checklist item. The item text is snapshotted so later template versions never
+/// change a completed inspection.
+model QcInspectionResult {
+  id             String       @id @default(uuid())
+  inspection     QcInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  inspectionId   String
+  itemNumber     String
+  itemSnapshot   Json         @default("{}")
+  resultCode     String?
+  comments       String?
+  locationDetail String?
+  measurement    Json?
+  photoUrls      Json         @default("[]")
+  reason         String?
+  defectIds      String[]     @default([])
+  carriedFromId  String?
+  previousValues Json         @default("[]")
+  answeredById   String?
+  answeredAt     DateTime?
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([inspectionId, itemNumber])
+  @@map("qc_inspection_results")
+}
+
+/// E23 Evidence file (photo or document): the content hash is recorded when it is stored.
+model QcEvidence {
+  id           String   @id @default(uuid())
+  clientId     String?
+  projectId    String?
+  linkedType   String
+  linkedId     String
+  kind         String   @default("PHOTO")
+  phase        String?
+  caption      String?
+  url          String
+  fileHash     String
+  fileName     String?
+  mime         String?
+  sizeBytes    Int?
+  capturedAt   DateTime?
+  capturedVia  String?
+  peopleShown  Boolean  @default(false)
+  uploadedById String?
+  uploadedAt   DateTime @default(now())
+
+  @@index([linkedType, linkedId])
+  @@index([clientId, projectId])
+  @@map("qc_evidence")
+}
+
+/// E27 Escalation record (levels 1-4).
+model QcEscalation {
+  id            String    @id @default(uuid())
+  defect        QcDefect  @relation(fields: [defectId], references: [id], onDelete: Cascade)
+  defectId      String
+  level         Int
+  trigger       String
+  rule          Json      @default("{}")
+  manual        Boolean   @default(false)
+  raisedById    String?
+  reason        String?
+  recipients    Json      @default("[]")
+  triggeredAt   DateTime  @default(now())
+  ackById       String?
+  ackAt         DateTime?
+  resolvedAt    DateTime?
+  resolvedById  String?
+  resolveNote   String?
+  referralType  String?
+  referralDate  DateTime?
+  referralRef   String?
+  outcome       String?
+
+  @@index([defectId])
+  @@map("qc_escalations")
 }

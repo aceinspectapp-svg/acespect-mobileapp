@@ -198,8 +198,13 @@ const tradeInclude = {
   masterContractors: { select: { id: true, name: true } },
 } as const;
 
-export async function listTradeCompanies() {
-  return prisma.qcTradeCompany.findMany({ orderBy: { name: 'asc' }, include: tradeInclude });
+/** `clientId` limits the list to companies engaged by that client's contractors. */
+export async function listTradeCompanies(clientId?: string) {
+  return prisma.qcTradeCompany.findMany({
+    where: clientId ? { masterContractors: { some: { clientId } } } : undefined,
+    orderBy: { name: 'asc' },
+    include: tradeInclude,
+  });
 }
 
 async function tradeRelations(data: Input) {
@@ -269,8 +274,9 @@ const projectInclude = {
   _count: { select: { sites: true, properties: true } },
 } as const;
 
-export async function listProjects(clientId?: string) {
-  return prisma.qcProject.findMany({ where: { clientId }, orderBy: { name: 'asc' }, include: projectInclude });
+/** `where` carries the caller's tenant and project scope (see projectScope in qc.context). */
+export async function listProjects(where: Prisma.QcProjectWhereInput = {}) {
+  return prisma.qcProject.findMany({ where, orderBy: { name: 'asc' }, include: projectInclude });
 }
 
 export async function getProject(id: string) {
@@ -369,9 +375,9 @@ export async function deleteProject(id: string) {
 
 // ───────────────────────── Sites (E08) ─────────────────────────
 
-export async function listSites(projectId?: string) {
+export async function listSites(projectId?: string, projectWhere?: Prisma.QcProjectWhereInput) {
   return prisma.qcSite.findMany({
-    where: { projectId },
+    where: { projectId, project: projectWhere },
     orderBy: { name: 'asc' },
     include: { project: { select: { id: true, name: true } }, _count: { select: { lots: true } } },
   });
@@ -416,8 +422,8 @@ const lotInclude = {
   project: { select: { id: true, name: true, clientId: true } },
 } as const;
 
-export async function listLots(filters: { projectId?: string; siteId?: string }) {
-  return prisma.qcProperty.findMany({ where: filters, orderBy: { name: 'asc' }, include: lotInclude });
+export async function listLots(filters: { projectId?: string; siteId?: string }, projectWhere?: Prisma.QcProjectWhereInput) {
+  return prisma.qcProperty.findMany({ where: { ...filters, project: projectWhere }, orderBy: { name: 'asc' }, include: lotInclude });
 }
 
 async function lotColumns(data: Input) {

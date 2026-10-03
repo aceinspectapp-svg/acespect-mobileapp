@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { env } from './config/env';
 import { prisma } from './lib/prisma';
 import { ensureBucket, isStorageEnabled } from './lib/storage';
+import { startQcJobs } from './modules/qc/qc.jobs';
 
 async function main() {
   // eslint-disable-next-line no-console
@@ -39,6 +40,9 @@ async function main() {
     // eslint-disable-next-line no-console
     console.log(`🚀 acespect-backend listening on http://localhost:${env.PORT} (${env.NODE_ENV})`);
   });
+
+  // Recurring work: SLA scan, DLP reminders, notification digests, retention. Set QC_JOBS=off to run an API-only instance.
+  if (process.env.QC_JOBS !== 'off') startQcJobs();
 
   const shutdown = async (signal: string) => {
     // eslint-disable-next-line no-console
