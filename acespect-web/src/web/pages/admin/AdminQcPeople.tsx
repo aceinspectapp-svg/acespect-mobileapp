@@ -361,6 +361,7 @@ function DeactivateDialog({ person, candidates, onClose, onDone }: {
   const [reassignTo, setReassignTo] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<Array<{ id: string; ref: string | null; title: string | null; status: string; lot: string }>>([]);
 
   async function submit() {
     setSaving(true);
@@ -370,7 +371,10 @@ function DeactivateDialog({ person, candidates, onClose, onDone }: {
       if (r.reassigned) window.alert(`${r.reassigned} open defect(s) were reassigned.`);
       onDone();
     } catch (e) {
-      setError((e as Error).message);
+      const err = e as ApiError;
+      setError(err.message);
+      const list = (err.details as { items?: typeof items } | undefined)?.items;
+      if (list) setItems(list);
     } finally {
       setSaving(false);
     }
@@ -389,6 +393,11 @@ function DeactivateDialog({ person, candidates, onClose, onDone }: {
       }
     >
       <ErrorNote message={error} />
+      {items.length > 0 && (
+        <ul style={{ fontSize: 12, color: "#374151", margin: "0 0 12px", paddingLeft: 18 }}>
+          {items.map((d) => <li key={d.id}>{d.ref ?? "Defect"}: {d.title ?? "untitled"} <span style={sub}>({d.status}, lot {d.lot})</span></li>)}
+        </ul>
+      )}
       <p style={{ fontSize: 13, color: "#374151", marginTop: 0 }}>They will be signed out and lose access. Open defects assigned to them must move to someone else.</p>
       <div style={{ display: "grid", gap: 12 }}>
         <Field label="Reason" required>

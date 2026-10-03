@@ -192,7 +192,7 @@ async function fetchBuffer(url: string): Promise<Buffer | null> {
 
 async function storeReport(ctx: QcContext, args: { clientId: string; projectId?: string | null; reportType: string; format: 'PDF' | 'Excel (XLSX)' | 'ZIP evidence pack'; params: unknown; buffer: Buffer; fileName: string; mime: string }) {
   const hash = createHash('sha256').update(args.buffer).digest('hex');
-  const file = await uploadDocument(args.buffer, args.mime, args.fileName.split('.').pop() ?? 'bin', `reports/${args.clientId}`);
+  const file = await uploadDocument(args.buffer, args.mime, args.fileName.split('.').pop() ?? 'bin', 'reports', args.clientId);
   const row = await prisma.qcRecord.create({
     data: {
       kind: 'report', clientId: args.clientId, projectId: args.projectId ?? null, status: 'READY', title: args.reportType, createdById: ctx.userId,

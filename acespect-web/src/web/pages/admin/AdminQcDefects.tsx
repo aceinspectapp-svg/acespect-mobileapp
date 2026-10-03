@@ -37,6 +37,19 @@ export function AdminQcDefects() {
   const [error, setError] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [filters, setFilters] = useState({ q: "", status: "", severity: "", projectId: "", flag: "", draft: "" });
+  const [picked, setPicked] = useState<string[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Saved views live in this browser only: a named set of filters.
+  const VIEWS_KEY = "acespect_defect_views";
+  const readViews = (): Record<string, typeof filters> => { try { return JSON.parse(localStorage.getItem(VIEWS_KEY) ?? "{}"); } catch { return {}; } };
+  const [views, setViews] = useState<Record<string, typeof filters>>(readViews);
+  const saveView = () => {
+    const name = window.prompt("Name this view:")?.trim();
+    if (!name) return;
+    const next = { ...views, [name]: filters };
+    try { localStorage.setItem(VIEWS_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
+    setViews(next);
+  };
 
   useEffect(() => { api.qc.getConfig().then(setConfig).catch((e) => setError(e.message)); }, []);
   const load = useCallback(() => {
@@ -45,6 +58,14 @@ export function AdminQcDefects() {
   useEffect(() => { load(); }, [load]);
 
   const set = (k: keyof typeof filters) => (v: string) => setFilters((f) => ({ ...f, [k]: v }));
+  const releasable = (defects ?? []).filter((d) => !d.isDraft && d.status.key === "open");
+  async function releaseSelected() {
+    const r = await api.qc.defects.bulkRelease(picked);
+    const failed = r.results.filter((x) => !x.ok);
+    setNotice(`${r.results.length - failed.length} released${failed.length ? `, ${failed.length} not released: ${failed.map((f) => f.message).join("; ")}` : ""}.`);
+    setPicked([]);
+    load();
+  }
   const projects = (config?.clients ?? []).flatMap((c) => c.projects.map((p) => ({ id: p.id, label: `${c.name} / ${p.name}` })));
 
   return (
@@ -60,14 +81,19 @@ export function AdminQcDefects() {
         <div style={{ width: 180 }}><Select value={filters.severity} onChange={set("severity")} placeholder="All severities" options={(config?.severities ?? []).map((s) => ({ id: s.key, label: s.label }))} /></div>
         <div style={{ width: 240 }}><Select value={filters.projectId} onChange={set("projectId")} placeholder="All projects" options={projects} /></div>
         <div style={{ width: 150 }}><Select value={filters.flag} onChange={set("flag")} placeholder="Any flag" options={Object.entries(FLAG_STYLE).map(([id, f]) => ({ id, label: f.label }))} /></div>
+        {Object.keys(views).length > 0 && <div style={{ width: 170 }}><Select value="" onChange={(n) => n && setFilters(views[n]!)} placeholder="Saved views" options={Object.keys(views).map((n) => ({ id: n, label: n }))} /></div>}
+        <button style={btnGhost} onClick={saveView}>Save this view</button>
         <div style={{ width: 150 }}>
           <Select value={filters.draft} onChange={set("draft")} placeholder="Drafts & open" options={[{ id: "true", label: "Drafts only" }, { id: "false", label: "Confirmed only" }]} />
         </div>
       </div>
       <ErrorNote message={error} />
-      <TableCard headers={["Ref", "Defect", "Lot", "Severity", "Status", "Assigned to", "Updated"]}>
+      {notice && <p role="status" style={{ fontSize: 13, color: "#15803d" }}>{notice}</p>}
+      {can("defects.create") && releasable.length > 0 && <div style={{ marginBottom: 10 }}><button style={btnPrimary} disabled={picked.length === 0} onClick={releaseSelected}>Release {picked.length || ""} selected to the Builder</button> <span style={sub}>Tick confirmed (Open) defects to release them together.</span></div>}
+      <TableCard headers={["", "Ref", "Defect", "Lot", "Severity", "Status", "Assigned to", "Updated"]}>
         {defects?.map((d, i) => (
           <tr key={d.id} style={{ borderBottom: defects.length - 1 > i ? "1px solid #f1f5f9" : "none", cursor: "pointer" }} onClick={() => navigate(`/qc/defects/${d.id}`)}>
+            <td style={cell} onClick={(e) => e.stopPropagation()}>{!d.isDraft && d.status.key === "open" && can("defects.create") && <input type="checkbox" aria-label={`Select ${d.defectRef ?? "defect"}`} checked={picked.includes(d.id)} onChange={(e) => setPicked(e.target.checked ? [...picked, d.id] : picked.filter((x) => x !== d.id))} />}</td>
             <td style={{ ...cell, fontFamily: "monospace", fontSize: 12, whiteSpace: "nowrap" }}>{d.defectRef ?? "—"}</td>
             <td style={cell}>
               <b style={{ color: d.title || d.summary ? "#1a2a4a" : "#94a3b8" }}>{d.title ?? d.summary ?? "Draft: details pending"}</b>
@@ -81,7 +107,7 @@ export function AdminQcDefects() {
             <td style={{ ...cell, fontSize: 12, color: "#94a3b8" }}>{new Date(d.updatedAt).toLocaleDateString("en-AU")}</td>
           </tr>
         ))}
-        {defects?.length === 0 && <tr><td colSpan={7} style={{ textAlign: "center", padding: 28, fontSize: 13, color: "#94a3b8" }}>No defects match.</td></tr>}
+        {defects?.length === 0 && <tr><td colSpan={8} style={{ textAlign: "center", padding: 28, fontSize: 13, color: "#94a3b8" }}>No defects match.</td></tr>}
       </TableCard>
 
       {showNew && config && (

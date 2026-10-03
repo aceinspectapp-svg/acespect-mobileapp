@@ -52,6 +52,9 @@ function Shell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [supportOpen, setSupportOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  // Close the phone menu after choosing a page.
+  useEffect(() => { setNavOpen(false); }, [location.pathname]);
 
   if (loading) return <div style={{ padding: 40, color: "#94a3b8", fontFamily: "Inter, sans-serif" }}>Loading…</div>;
 
@@ -79,7 +82,9 @@ function Shell() {
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#f5f6fa", fontFamily: "Inter, -apple-system, sans-serif" }}>
-      <aside style={{ width: 232, flexShrink: 0, background: "white", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", height: "100vh" }}>
+      <style>{`@media (max-width: 900px) { .qc-aside { position: fixed !important; z-index: 40; left: 0; top: 0; transform: translateX(-100%); transition: transform .2s; box-shadow: 0 0 30px rgba(0,0,0,.2); } .qc-aside.open { transform: none; } .qc-menu { display: inline-flex !important; } .qc-scrim { display: block !important; } main { -webkit-overflow-scrolling: touch; } }`}</style>
+      {navOpen && <div className="qc-scrim" onClick={() => setNavOpen(false)} style={{ display: "none", position: "fixed", inset: 0, background: "rgba(15,23,42,.4)", zIndex: 30 }} />}
+      <aside className={`qc-aside${navOpen ? " open" : ""}`} aria-label="Sidebar" style={{ width: 232, flexShrink: 0, background: "white", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", height: "100vh" }}>
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #f1f5f9" }}>
           <AcespectLogo size="sm" />
           <p style={{ fontSize: 10, color: "#94a3b8", margin: "6px 0 0", fontWeight: 500 }}>Inspection and defect platform</p>
@@ -130,7 +135,8 @@ function Shell() {
             <button style={{ ...btnGhost, padding: "5px 12px" }} onClick={() => exitSupport().then(() => navigate("/qc/organisations"))}>Leave support mode</button>
           </div>
         )}
-        <header style={{ height: 56, flexShrink: 0, background: "white", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "0 24px", gap: 10 }}>
+        <header style={{ height: 56, flexShrink: 0, background: "white", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "0 16px", gap: 10 }}>
+          <button className="qc-menu" aria-label="Open menu" aria-expanded={navOpen} onClick={() => setNavOpen(true)} style={{ display: "none", marginRight: "auto", width: 36, height: 36, borderRadius: 8, border: "1px solid #e5e7eb", background: "white", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18 }}>☰</button>
           {me.isSA && !me.supportSession && (
             <button style={btnGhost} onClick={() => setSupportOpen(true)}><LifeBuoy size={13} aria-hidden style={{ verticalAlign: "-2px" }} /> Enter support mode</button>
           )}

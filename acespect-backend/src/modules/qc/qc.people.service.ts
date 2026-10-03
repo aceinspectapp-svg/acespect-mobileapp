@@ -368,7 +368,8 @@ export async function deactivatePerson(userId: string, input: { reason: string; 
   const openWhere = { assignedToId: userId, statusId: { in: openStatuses.map((s) => s.id) } };
   const openCount = await prisma.qcDefect.count({ where: openWhere });
   if (openCount > 0 && !input.reassignToId) {
-    throw ApiError.conflict(`${openCount} open defect(s) are assigned to this user; choose someone to reassign them to`, 'OPEN_WORK');
+    const items = await prisma.qcDefect.findMany({ where: openWhere, select: { id: true, defectRef: true, title: true, status: { select: { label: true } }, property: { select: { name: true } } }, take: 50 });
+    throw new ApiError(409, `${openCount} open defect(s) are assigned to this user; choose someone to reassign them to`, 'OPEN_WORK', { items: items.map((d) => ({ id: d.id, ref: d.defectRef, title: d.title, status: d.status.label, lot: d.property.name })) });
   }
   if (input.reassignToId) {
     if (input.reassignToId === userId) throw ApiError.badRequest('Choose a different person to reassign to');
@@ -465,7 +466,7 @@ export async function addTeamMember(projectId: string, input: Input) {
     const mc = await requireExists('qcMasterContractor', masterContractorId, 'Master contractor');
     if (mc.clientId !== project.clientId) throw ApiError.badRequest("That master contractor belongs to a different client");
   }
-  return prisma.qcProjectMember.create({
+  const created = await prisma.qcProjectMember.create({
     data: {
       projectId,
       assigneeType,
@@ -476,6 +477,13 @@ export async function addTeamMember(projectId: string, input: Input) {
       data: json(without(data, ['project_role'])),
     },
   });
+  const warnings: string[] = [];
+  if (masterContractorId) {
+    const mc = await prisma.qcMasterContractor.findUnique({ where: { id: masterContractorId } });
+    const { insuranceStatus } = await import('./qc.master.service');
+    if (mc && insuranceStatus(mc.data as Input) === 'Expired') warnings.push(`${mc.name}'s insurance has expired. Check their certificates before work continues.`);
+  }
+  return Object.assign(created, { warnings });
 }
 
 function without(data: Input, keys: string[]): Input {
@@ -484,15 +492,22 @@ function without(data: Input, keys: string[]): Input {
   return out;
 }
 
-export async function removeTeamMember(id: string, removalReason?: string) {
+export async function removeTeamMember(id: string, removalReason?: string, reassignToId?: string) {
   const member = await prisma.qcProjectMember.findUnique({ where: { id } });
   if (!member) throw ApiError.notFound('Team member not found');
   if (member.userId) {
     const openForUser = await prisma.qcDefect.count({
       where: { assignedToId: member.userId, property: { projectId: member.projectId }, status: { terminal: false } },
     });
-    if (openForUser > 0 && !removalReason?.trim()) {
-      throw ApiError.badRequest('This person has open items on the project; a removal reason is required');
+    if (openForUser > 0) {
+      if (!removalReason?.trim()) throw ApiError.badRequest('This person has open items on the project; a removal reason is required');
+      if (!reassignToId) throw new ApiError(409, `${openForUser} open item(s) on this project are assigned to this person; choose who takes them over first`, 'OPEN_WORK', { count: openForUser });
+      if (reassignToId === member.userId) throw ApiError.badRequest('Choose a different person');
+      const project0 = await prisma.qcProject.findUniqueOrThrow({ where: { id: member.projectId } });
+      const target = await prisma.qcMembership.findFirst({ where: { userId: reassignToId, clientId: project0.clientId, status: 'ACTIVE' } });
+      if (!target) throw ApiError.badRequest('That person has no active role in this client');
+      await prisma.qcDefect.updateMany({ where: { assignedToId: member.userId, property: { projectId: member.projectId }, status: { terminal: false } }, data: { assignedToId: reassignToId } });
+      await prisma.qcTask.updateMany({ where: { assignedToId: member.userId, status: { not: 'COMPLETED' }, defect: { property: { projectId: member.projectId } } }, data: { assignedToId: reassignToId } });
     }
     // Take the project off their membership so the scoped access goes with them.
     const project = await prisma.qcProject.findUnique({ where: { id: member.projectId } });

@@ -160,7 +160,7 @@ export function QcSettings() {
   const { me } = useQc();
   const clientId = me?.clientId ?? "";
   const [defaults, setDefaults] = useState<Record<string, any> | null>(null);
-  const [usage, setUsage] = useState<{ users: number; projects: number; plan: unknown } | null>(null);
+  const [usage, setUsage] = useState<{ users: number; projects: number; storageBytes?: number; plan: unknown } | null>(null);
   const [holds, setHolds] = useState<Array<Record<string, any>> | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -196,7 +196,7 @@ export function QcSettings() {
       </Card>
       <Card style={{ padding: 18, marginBottom: 16 }}>
         <b style={{ fontSize: 14 }}>Your plan</b>
-        <p style={{ fontSize: 13, color: "#475569" }}>{usage ? `${usage.users} active users${plan?.[1] ? ` of ${plan[1]}` : ""} · ${usage.projects} active projects${plan?.[2] ? ` of ${plan[2]}` : ""}` : "Loading…"}{plan?.[0] ? ` · ${String(plan[0])} plan` : ""}</p>
+        <p style={{ fontSize: 13, color: "#475569" }}>{usage ? `${usage.users} active users${plan?.[1] ? ` of ${plan[1]}` : ""} · ${usage.projects} active projects${plan?.[2] ? ` of ${plan[2]}` : ""} · ${((usage.storageBytes ?? 0) / 1024 ** 3).toFixed(2)} GB of evidence${plan?.[3] ? ` of ${plan[3]} GB` : ""}` : "Loading…"}{plan?.[0] ? ` · ${String(plan[0])} plan` : ""}</p>
       </Card>
       <Card style={{ padding: 18, marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

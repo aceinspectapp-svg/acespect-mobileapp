@@ -83,17 +83,18 @@ async function main() {
   const sa = saLogin.body.accessToken as string;
 
   // ───────────── Build two clients through the API ─────────────
-  const world = async (tag: string, abn: string, acn: string, mcAbn: string) => {
+  const world = async (tag: string, abn: string, acn: string, mcAbn: string, extra: Record<string, unknown> = {}, expect = 201) => {
     const client = await api('POST', '/qc/clients', {
       token: sa,
       body: {
-        legal_entity_name: `${tag} Developer ${sfx} Pty Ltd`, entity_type: 'Company (Pty Ltd)', abn, acn, gst_registered: true, client_type: 'Developer and builder', registered_office_address: ADDR,
+        ...extra, legal_entity_name: `${tag} Developer ${sfx} Pty Ltd`, entity_type: 'Company (Pty Ltd)', abn, acn, gst_registered: true, client_type: 'Developer and builder', registered_office_address: ADDR,
         primary_contact_name: 'Pat Admin', primary_contact_email: 'pat@example.com', primary_contact_phone: '0412345678', accounts_contact_email: 'accounts@example.com', states_and_territories_of_operation: ['VIC'],
         default_time_zone: opt('E01', 'default_time_zone'), contract_start_date: '2026-10-01', mfa_required_for_all_roles: false, idle_session_timeout: 30,
         plan_and_limits: ['Standard', '', '', ''], first_client_admin_name_and_email: ['Cal Admin', `ca${tag}${sfx}@example.com`],
       },
     });
-    if (client.status !== 201) throw new Error('client create ' + JSON.stringify(client.body));
+    if (client.status !== expect) throw new Error('client create ' + JSON.stringify(client.body));
+    if (expect !== 201) return client as never;
     return client.body as { client: { id: string; status: string }; invitation: { url: string }; firstAdmin: { id: string; email: string } };
   };
   const A = await world('A', '51824753556', '004085616', '53004085616');
@@ -731,6 +732,39 @@ async function main() {
   ok(swLog >= 1, 'and recorded', swLog);
   const swForeign = await api('POST', '/qc/context/switch', { token: tokens.cuNo, body: { clientId: B.client.id } });
   ok(swForeign.status === 404, 'a client you do not belong to cannot be switched to', swForeign.status);
+
+  // ───────────── Gap closers ─────────────
+  console.log('ABN override, bulk release, storage limit, hand-over on removal');
+  const dupAbn = (await world('D', '51824753556', '004085616', '53004085616', {}, 409)) as unknown as Res;
+  ok(dupAbn.status === 409 && errCode(dupAbn) === 'ABN_TAKEN', 'a repeated ABN is refused', dupAbn.body);
+  const okAbn = await world('E', '51824753556', '004085616', '53004085616', { abnOverrideReason: 'Separate trading arm of the same group' });
+  ok(okAbn.client.status === 'PENDING_ACTIVATION', 'it can be used again with a stated reason');
+  const abnAudit = await prisma.qcAuditEntry.count({ where: { action: 'client.abn-override' } });
+  ok(abnAudit === 1, 'and the override is audited');
+
+  const rel1 = await api('POST', '/qc/defects', { token: tokens.pi, body: { propertyId: lot2, assignedToId: piId, defect_title: 'Bulk one', description: 'Chip', room_or_area: 'External - front', severity: 'Minor Defect' } });
+  await prisma.qcDefect.update({ where: { id: rel1.body.defect.id }, data: { photoUrls: [String(photoUrl.split('?')[0])] } });
+  const conf1 = await api('POST', `/qc/defects/${rel1.body.defect.id}/actions/confirm`, { token: tokens.pi, body: { defect_title: 'Bulk one', description: 'Chip', room_or_area: 'External - front', element: 'Cladding, render or brickwork', location_detail: 'Wall', severity: 'Minor Defect', nature_of_defect: 'Workmanship', trade_category: renderer.id } });
+  ok(conf1.status === 200, 'a second defect is confirmed ready to release');
+  const bulk = await api('POST', '/qc/defects/bulk/release', { token: tokens.pi, body: { ids: [rel1.body.defect.id, defectDraftId] } });
+  const okRes = bulk.body.results?.find((r: { id: string }) => r.id === rel1.body.defect.id);
+  const badRes = bulk.body.results?.find((r: { id: string }) => r.id === defectDraftId);
+  ok(bulk.status === 200 && okRes?.ok === true && badRes?.ok === false, 'bulk release releases the ready one and reports the one that cannot move', bulk.body);
+
+  await prisma.qcClient.update({ where: { id: A.client.id }, data: { data: { ...((await prisma.qcClient.findUniqueOrThrow({ where: { id: A.client.id } })).data as object), plan_and_limits: ['Tiny', '', '', 0.000000001] } } });
+  const bigForm = new FormData();
+  bigForm.append('files', new Blob([new Uint8Array(await png())], { type: 'image/png' }), 'x.png');
+  bigForm.append('linkedType', 'Inspection'); bigForm.append('linkedId', insId);
+  const full = await api('POST', '/qc/evidence', { token: tokens.pi, form: bigForm });
+  ok(full.status === 409 && errCode(full) === 'PLAN_LIMIT', 'evidence uploads stop at the storage limit', full.body);
+  const usage2 = await api('GET', '/qc/usage', { token: ca });
+  ok(usage2.body.storageBytes > 0, 'usage reports the evidence stored', usage2.body);
+  await prisma.qcClient.update({ where: { id: A.client.id }, data: { data: { ...((await prisma.qcClient.findUniqueOrThrow({ where: { id: A.client.id } })).data as object), plan_and_limits: ['Standard', '', '', ''] } } });
+
+  const teamMember = await api('POST', `/qc/projects/${projectA}/team`, { token: ca, body: { assigneeType: 'PERSON', assigneeId: piId, project_role: opt('E10', 'project_role'), start_date: '2026-10-01' } });
+  ok(teamMember.status === 201, 'the inspector joins the project team', teamMember.body);
+  const rm1 = await api('DELETE', `/qc/team/${teamMember.body.member.id}`, { token: ca, body: { removalReason: 'Moved to another job' } });
+  ok(rm1.status === 409 && errCode(rm1) === 'OPEN_WORK', 'removing someone with open items asks who takes over', rm1.body);
 
   // ───────────── Notifications ─────────────
   console.log('Notifications');

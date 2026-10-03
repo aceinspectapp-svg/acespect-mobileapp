@@ -124,11 +124,13 @@ function sectionFolderPath(sectionKey: string): string {
     .join('/');
 }
 
-function photoPath(id: string, inspectionId: string | undefined, sectionKey: string | undefined, suffix = ''): string {
+function photoPath(id: string, inspectionId: string | undefined, sectionKey: string | undefined, suffix = '', tenantId?: string): string {
+  // Client files live under their own folder so one client's files are never mixed with another's.
+  const root = tenantId ? `${env.EGNYTE_ROOT_FOLDER}/tenants/${safeSegment(tenantId)}` : env.EGNYTE_ROOT_FOLDER;
   if (inspectionId && sectionKey) {
-    return `${env.EGNYTE_ROOT_FOLDER}/${safeSegment(inspectionId)}/${sectionFolderPath(sectionKey)}/${id}${suffix}`;
+    return `${root}/${safeSegment(inspectionId)}/${sectionFolderPath(sectionKey)}/${id}${suffix}`;
   }
-  return `${env.EGNYTE_ROOT_FOLDER}/inspections/${id}${suffix}`;
+  return `${root}/inspections/${id}${suffix}`;
 }
 
 /**
@@ -208,6 +210,7 @@ export async function uploadPhoto(
   ext: string,
   inspectionId?: string,
   sectionKey?: string,
+  tenantId?: string,
 ): Promise<UploadedPhoto> {
   if (!isStorageEnabled() && !useDbStorage()) throw new Error('Photo storage is not configured');
 
@@ -231,14 +234,14 @@ export async function uploadPhoto(
     await prisma.photo.create({ data: { id, data: new Uint8Array(resized), contentType: 'image/jpeg' } });
     return { id, storageKey: `db:${id}`, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(resized).digest('hex') };
   }
-  const storageKey = photoPath(id, inspectionId, sectionKey, '.jpg');
+  const storageKey = photoPath(id, inspectionId, sectionKey, '.jpg', tenantId);
   await uploadToEgnyte(storageKey, resized, 'image/jpeg');
 
   // Full-quality original, alongside the compressed copy above. Non-fatal:
   // every in-app view depends on the compressed copy having uploaded (which
   // already happened by this point), not this one.
   try {
-    await uploadToEgnyte(photoPath(id, inspectionId, sectionKey, `-original.${ext}`), buffer, contentType);
+    await uploadToEgnyte(photoPath(id, inspectionId, sectionKey, `-original.${ext}`, tenantId), buffer, contentType);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('⚠️  Failed to store the full-quality original (compressed report copy still saved).', err);
@@ -260,7 +263,7 @@ export async function uploadPhoto(
  * `/api/v1/media/:id` URL as photos; the index row remembers the content type.
  * `folder` groups files in Egnyte, e.g. "documents/<projectId>".
  */
-export async function uploadDocument(buffer: Buffer, contentType: string, ext: string, folder = 'documents'): Promise<UploadedPhoto> {
+export async function uploadDocument(buffer: Buffer, contentType: string, ext: string, folder = 'documents', tenantId?: string): Promise<UploadedPhoto> {
   if (!isStorageEnabled() && !useDbStorage()) throw new Error('File storage is not configured');
   const id = randomUUID();
   if (useDbStorage()) {
@@ -268,7 +271,7 @@ export async function uploadDocument(buffer: Buffer, contentType: string, ext: s
     return { id, storageKey: `db:${id}`, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(buffer).digest('hex') };
   }
   const safeExt = ext.replace(/[^a-z0-9]/gi, '').slice(0, 8) || 'bin';
-  const storageKey = `${env.EGNYTE_ROOT_FOLDER}/${folder.split('/').map(safeSegment).filter(Boolean).join('/')}/${id}.${safeExt}`;
+  const storageKey = `${env.EGNYTE_ROOT_FOLDER}${tenantId ? `/tenants/${safeSegment(tenantId)}` : ''}/${folder.split('/').map(safeSegment).filter(Boolean).join('/')}/${id}.${safeExt}`;
   await uploadToEgnyte(storageKey, buffer, contentType);
   await prisma.photo.create({ data: { id, storageKey, contentType } });
   return { id, storageKey, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(buffer).digest('hex') };

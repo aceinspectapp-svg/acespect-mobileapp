@@ -88,6 +88,8 @@ export const qcAdminController = {
   createClient: asyncHandler(async (req, res) => {
     const ctx = ctxOf(req);
     const { client, firstAdmin } = await master.createClient(payloadOf(req));
+    const override = String(payloadOf(req).abnOverrideReason ?? '').trim();
+    if (override) await recordAudit({ clientId: client.id, entityType: 'Client', entityId: client.id, action: 'client.abn-override', actor: actorFor(req), reason: override });
     // E01 creates the first Client Admin with the client; they get an activation link.
     const created = await createPerson(
       {
@@ -263,7 +265,10 @@ export const qcAdminController = {
   }),
   updateLot: asyncHandler(async (req, res) => {
     await guardEntity(req, 'lot', requireId(req));
-    res.status(200).json({ lot: await master.updateLot(requireId(req), payloadOf(req)) });
+    const started = await prisma.qcInspection.count({ where: { propertyId: requireId(req), status: { in: ['IN_PROGRESS', 'COMPLETED'] } } });
+    const lot = await master.updateLot(requireId(req), payloadOf(req));
+    await recordAudit({ clientId: ctxOf(req).clientId, entityType: 'Lot', entityId: lot.id, action: 'lot.update', actor: actorFor(req), after: { fields: Object.keys(payloadOf(req)) } });
+    res.status(200).json({ lot, warning: started > 0 ? 'Inspections have already started on this lot. Changes to its construction details do not alter completed inspections.' : null });
   }),
   deleteLot: asyncHandler(async (req, res) => {
     await guardEntity(req, 'lot', requireId(req));
@@ -333,11 +338,12 @@ export const qcAdminController = {
   }),
   addTeamMember: asyncHandler(async (req, res) => {
     await guardEntity(req, 'project', requireId(req));
-    res.status(201).json({ member: await people.addTeamMember(requireId(req), payloadOf(req)) });
+    const member = await people.addTeamMember(requireId(req), payloadOf(req));
+    res.status(201).json({ member, warnings: (member as { warnings?: string[] }).warnings ?? [] });
   }),
   removeTeamMember: asyncHandler(async (req, res) => {
     await guardEntity(req, 'team', requireId(req));
-    await people.removeTeamMember(requireId(req), q(payloadOf(req).removalReason));
+    await people.removeTeamMember(requireId(req), q(payloadOf(req).removalReason), q(payloadOf(req).reassignToId));
     res.status(204).send();
   }),
 
@@ -404,6 +410,22 @@ export const qcAdminController = {
       comments: detail.comments.map(serializeComment),
       actorRole: detail.actor.role,
     });
+  }),
+  /** Release several confirmed defects to the Builder in one go (REQ-DEF-004); each is checked on its own and reported separately. */
+  bulkRelease: asyncHandler(async (req, res) => {
+    const body = payloadOf(req);
+    const ids = Array.isArray(body.ids) ? (body.ids as string[]).slice(0, 100) : [];
+    if (ids.length === 0) throw ApiError.badRequest('Choose at least one defect');
+    const results: Array<{ id: string; ok: boolean; message?: string }> = [];
+    for (const defectId of ids) {
+      try {
+        await defects.performAction({ defectId, action: 'release', input: { cover_note: q(body.cover_note) ?? 'Released' }, fileUrls: [], requester: requester(req) });
+        results.push({ id: defectId, ok: true });
+      } catch (e) {
+        results.push({ id: defectId, ok: false, message: e instanceof Error ? e.message : 'Could not release' });
+      }
+    }
+    res.status(200).json({ results });
   }),
   postComment: asyncHandler(async (req, res) => {
     const body = payloadOf(req);

@@ -13,6 +13,7 @@ import { actorOf, assertClientAccess, ctxOf, requireTenant } from './qc.context'
 import { guardEntity, ownerOf } from './qc.guard';
 import { can } from './qc.permissions';
 import * as policy from './qc.policy.service';
+import * as master from './qc.master.service';
 import * as sla from './qc.sla.service';
 import * as dlp from './qc.dlp.service';
 import * as privacy from './qc.privacy.service';
@@ -367,6 +368,7 @@ export const qcOpsController = {
     ]);
     const client = await prisma.qcClient.findUniqueOrThrow({ where: { id: clientId }, select: { data: true } });
     const plan = (client.data as Record<string, unknown>).plan_and_limits;
-    res.status(200).json({ users, projects, plan: plan ?? null, canView: can(ctx, 'client.defaults') });
+    const storageBytes = await master.storageUsedBytes(clientId);
+    res.status(200).json({ users, projects, storageBytes, plan: plan ?? null, canView: can(ctx, 'client.defaults') });
   }),
 };

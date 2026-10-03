@@ -504,9 +504,9 @@ export const api = {
         req<{ project: QcProjectRow }>(`/qc/projects/${id}`, { method: "PATCH", body: JSON.stringify(input) }).then((d) => d.project),
       remove: (id: string) => req<void>(`/qc/projects/${id}`, { method: "DELETE" }),
       team: (id: string) => req<{ team: QcTeamMember[] }>(`/qc/projects/${id}/team`).then((d) => d.team),
-      addTeamMember: (id: string, input: FieldData) => req(`/qc/projects/${id}/team`, { method: "POST", body: JSON.stringify(input) }),
-      removeTeamMember: (memberId: string, removalReason?: string) =>
-        req<void>(`/qc/team/${memberId}`, { method: "DELETE", body: JSON.stringify({ removalReason }) }),
+      addTeamMember: (id: string, input: FieldData) => req<{ warnings?: string[] }>(`/qc/projects/${id}/team`, { method: "POST", body: JSON.stringify(input) }),
+      removeTeamMember: (memberId: string, removalReason?: string, reassignToId?: string) =>
+        req<void>(`/qc/team/${memberId}`, { method: "DELETE", body: JSON.stringify({ removalReason, reassignToId }) }),
     },
     sites: {
       list: (projectId?: string) => req<{ sites: QcSiteRow[] }>(`/qc/sites${projectId ? `?projectId=${projectId}` : ""}`).then((d) => d.sites),
@@ -522,7 +522,7 @@ export const api = {
         return req<{ lots: QcLotRow[] }>(`/qc/lots?${params.toString()}`).then((d) => d.lots);
       },
       create: (input: FieldData) => req("/qc/lots", { method: "POST", body: JSON.stringify(input) }),
-      update: (id: string, input: FieldData) => req(`/qc/lots/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+      update: (id: string, input: FieldData) => req<{ warning?: string | null }>(`/qc/lots/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
       remove: (id: string) => req<void>(`/qc/lots/${id}`, { method: "DELETE" }),
     },
 
@@ -561,6 +561,8 @@ export const api = {
         reqForm<QcDefectDetail>(`/qc/defects/${id}/actions/${action}`, qcForm(payload, files)),
       comment: (id: string, payload: { text: string; visibleTo?: string }, files: File[] = []) =>
         reqForm<{ comment: unknown }>(`/qc/defects/${id}/comments`, qcForm(payload, files)),
+      bulkRelease: (ids: string[], cover_note?: string) =>
+        req<{ results: Array<{ id: string; ok: boolean; message?: string }> }>("/qc/defects/bulk/release", { method: "POST", body: JSON.stringify({ ids, cover_note }) }),
       addPhotos: (id: string, files: File[]) => reqForm<{ defect: QcDefect }>(`/qc/defects/${id}/photos`, qcForm({}, files)),
     },
   },

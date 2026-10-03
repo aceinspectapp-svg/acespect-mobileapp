@@ -105,7 +105,8 @@ export const qcWorkflowController = {
     const f = files(req)[0];
     if (!f) throw ApiError.badRequest('Attach the document file');
     const ext = (f.originalname.split('.').pop() || 'pdf').toLowerCase();
-    const stored = await uploadDocument(f.buffer, f.mimetype, ext, `projects/${id(req)}`);
+    const owner = await guardEntity(req, 'project', id(req));
+    const stored = await uploadDocument(f.buffer, f.mimetype, ext, `projects/${id(req)}`, owner.clientId ?? undefined);
     res.status(201).json({ document: await proj.addDocument(ctxOf(req), id(req), payloadOf(req), { url: stored.url, name: f.originalname, size: f.size, mime: f.mimetype }) });
   }),
   getPlan: asyncHandler(async (req, res) => {

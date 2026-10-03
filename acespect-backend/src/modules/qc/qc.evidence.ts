@@ -11,6 +11,7 @@ import { fetchPhotoStream, uploadDocument, uploadPhoto } from '../../lib/storage
 import { signMediaUrl } from '../../lib/mediaLinks';
 import { recordAudit } from '../../lib/audit';
 import { QcContext } from './qc.context';
+import { assertWithinPlan } from './qc.master.service';
 
 const IMAGE = /^image\/(jpeg|png|heic|heif|webp)$/i;
 const OTHER = /^(application\/pdf|video\/mp4)$/i;
@@ -37,14 +38,15 @@ export async function uploadEvidence(ctx: QcContext, files: Express.Multer.File[
   if (files.length === 0) throw ApiError.badRequest('Attach at least one file');
   if (meta.phase && !PHASES.includes(meta.phase)) throw ApiError.badRequest('Choose the phase this evidence belongs to');
   const out = [];
+  if (meta.clientId) await assertWithinPlan(meta.clientId, 'storage', files.reduce((a, f) => a + f.size, 0));
   for (const file of files) {
     const mime = file.mimetype || 'application/octet-stream';
     if (!IMAGE.test(mime) && !OTHER.test(mime)) throw ApiError.badRequest(`${file.originalname}: only JPEG, PNG, HEIC, MP4 and PDF files are accepted`);
     if (file.size > MAX_EVIDENCE_BYTES) throw ApiError.badRequest(`${file.originalname} is larger than 50 MB`);
     const ext = (file.originalname.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
     const stored = IMAGE.test(mime)
-      ? await uploadPhoto(file.buffer, mime, ext, meta.linkedId, 'evidence')
-      : await uploadDocument(file.buffer, mime, ext, `evidence/${meta.projectId ?? 'general'}`);
+      ? await uploadPhoto(file.buffer, mime, ext, meta.linkedId, 'evidence', meta.clientId ?? undefined)
+      : await uploadDocument(file.buffer, mime, ext, `evidence/${meta.projectId ?? 'general'}`, meta.clientId ?? undefined);
     const row = await prisma.qcEvidence.create({
       data: {
         clientId: meta.clientId, projectId: meta.projectId, linkedType: meta.linkedType, linkedId: meta.linkedId, kind: kindOf(mime), phase: meta.phase ?? 'Identification',

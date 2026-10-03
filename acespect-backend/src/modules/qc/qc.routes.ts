@@ -111,6 +111,7 @@ router.post('/people/:id/credentials/status', requireAuth, cap('users.credential
 
 // ─── Defects ────────────────────────────────────────────────────────────────
 router.get('/defects', requireAuth, cap('defects.view'), a.listDefects);
+router.post('/defects/bulk/release', requireAuth, cap('defects.view'), a.bulkRelease);
 router.post('/defects', requireAuth, cap('defects.create'), a.createDefect);
 // Single-defect reads/edits/actions are scoped per caller inside the service
 // (role, client, project and assignment) -- see resolveActor.

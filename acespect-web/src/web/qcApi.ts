@@ -191,7 +191,7 @@ export const qcx = {
   settings: {
     defaults: (clientId: string) => req<{ defaults: Json; plan: unknown }>(`/qc/clients/${clientId}/defaults`),
     saveDefaults: (clientId: string, body: Json) => req(`/qc/clients/${clientId}/defaults`, { method: "PUT", body: j(body) }),
-    usage: () => req<{ users: number; projects: number; plan: unknown }>("/qc/usage"),
+    usage: () => req<{ users: number; projects: number; storageBytes?: number; plan: unknown }>("/qc/usage"),
     holds: () => req<{ holds: Json[] }>("/qc/legal-holds").then((d) => d.holds),
     placeHold: (body: Json) => req<Json>("/qc/legal-holds", { method: "POST", body: j(body) }),
     releaseHold: (id: string, reason: string) => req<Json>(`/qc/legal-holds/${id}/release`, { method: "POST", body: j({ reason }) }),

@@ -62,6 +62,24 @@ export function registerQcJobs(): void {
     },
   });
 
+  // Offboarded clients past their grace period are destroyed, unless a legal hold applies. Off unless the operator turns it on.
+  if (process.env.QC_AUTO_DESTROY === 'on') {
+    registerJob({
+      name: 'qc.tenant-destruction',
+      everyMs: 24 * 60 * MIN,
+      run: async () => {
+        const { destroyTenant } = await import('./qc.privacy.service');
+        const clients = await prisma.qcClient.findMany({ where: { status: 'OFFBOARDED' } });
+        for (const c of clients) {
+          const off = (c.data as { offboarding?: { destroyOn?: string } }).offboarding;
+          if (off?.destroyOn && new Date(off.destroyOn) <= new Date()) {
+            await destroyTenant({ userId: 'system', role: 'SA', isSA: true } as never, c.id).catch((e) => console.warn('[tenant-destruction] skipped', c.id, e instanceof Error ? e.message : e));
+          }
+        }
+      },
+    });
+  }
+
   registerJob({ name: 'qc.retention', everyMs: 24 * 60 * MIN, run: async () => void (await enforceRetention()) });
 }
 

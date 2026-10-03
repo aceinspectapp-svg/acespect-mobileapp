@@ -63,6 +63,7 @@ function Clients() {
   const [offboarding, setOffboarding] = useState<QcClientRow | null>(null);
   const { enterSupport } = useQc();
   const navigate = useNavigate();
+  const [abnClash, setAbnClash] = useState(false);
 
   const reload = () => api.qc.clients.list().then(setRows).catch((e) => setError(e.message));
   useEffect(() => { reload(); }, []);
@@ -127,14 +128,15 @@ function Clients() {
           title={dialog.row ? `Edit ${dialog.row.name}` : "New client"}
           formCode="E01"
           initial={dialog.row?.data ?? { mfa_required_for_all_roles: false, idle_session_timeout: 30 }}
+          extra={!dialog.row ? (v, set) => (v.abnOverrideReason !== undefined || abnClash) ? <Field label="This ABN is already registered. Why is it being used again?" required><input style={{ width: "100%", padding: 8, border: "1px solid #e5e7eb", borderRadius: 8 }} value={String(v.abnOverrideReason ?? "")} onChange={(e) => set({ abnOverrideReason: e.target.value })} /></Field> : null : undefined}
           hide={dialog.row ? ["first_client_admin_name_and_email"] : []}
           note={!dialog.row && <p style={{ ...sub, marginTop: 0 }}>Creating a client also invites its first Client Admin. Type their details in the last field as <b>Jane Smith, jane@example.com</b>; they get an activation link and the client becomes Active when they use it.</p>}
-          onClose={() => setDialog(null)}
+          onClose={() => { setDialog(null); setAbnClash(false); }}
           onSubmit={async (payload) => {
             if (dialog.row) {
               await api.qc.clients.update(dialog.row.id, payload);
             } else {
-              const r = await api.qc.clients.create(payload) as unknown as { firstAdmin: { email: string }; invitation?: InvitationInfo };
+              const r = await api.qc.clients.create(payload).catch((e) => { if ((e as { code?: string }).code === "ABN_TAKEN") setAbnClash(true); throw e; }) as unknown as { firstAdmin: { email: string }; invitation?: InvitationInfo };
               if (r.invitation) setInvite({ ...r.invitation, email: r.firstAdmin.email });
             }
             setDialog(null);

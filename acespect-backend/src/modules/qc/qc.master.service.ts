@@ -33,14 +33,23 @@ export function planLimits(clientData: Input): { plan: string | null; maxUsers: 
   return { plan: str(parts[0]) || null, maxUsers: num(parts[1]), maxProjects: num(parts[2]), storageGb: num(parts[3]) };
 }
 
+export async function storageUsedBytes(clientId: string): Promise<number> {
+  const r = await prisma.qcEvidence.aggregate({ where: { clientId }, _sum: { sizeBytes: true } });
+  return r._sum.sizeBytes ?? 0;
+}
+
 /** Refuse to add a user or project beyond the client's plan, with a message that says what to do. */
-export async function assertWithinPlan(clientId: string, kind: 'users' | 'projects'): Promise<void> {
+export async function assertWithinPlan(clientId: string, kind: 'users' | 'projects' | 'storage', addBytes = 0): Promise<void> {
   const client = await prisma.qcClient.findUnique({ where: { id: clientId }, select: { data: true, name: true } });
   if (!client) return;
   const limits = planLimits(client.data as Input);
   if (kind === 'users' && limits.maxUsers) {
     const n = await prisma.qcMembership.count({ where: { clientId, status: 'ACTIVE' } });
     if (n >= limits.maxUsers) throw ApiError.conflict(`${client.name}'s plan allows ${limits.maxUsers} users and all are in use. Deactivate someone or ask the platform administrator to raise the limit.`, 'PLAN_LIMIT');
+  }
+  if (kind === 'storage' && limits.storageGb) {
+    const used = await storageUsedBytes(clientId);
+    if (used + addBytes > limits.storageGb * 1024 ** 3) throw ApiError.conflict(`${client.name}'s plan allows ${limits.storageGb} GB of evidence and it is full. Ask the platform administrator to raise the limit.`, 'PLAN_LIMIT');
   }
   if (kind === 'projects' && limits.maxProjects) {
     const n = await prisma.qcProject.count({ where: { clientId, status: { notIn: ['ARCHIVED', 'DLP_COMPLETE'] } } });
@@ -52,12 +61,13 @@ export async function assertWithinPlan(clientId: string, kind: 'users' | 'projec
 
 const CLIENT_STATUS = ['PENDING_ACTIVATION', 'ACTIVE', 'SUSPENDED', 'OFFBOARDED'] as const;
 
-async function ensureAbnFree(abn: string, exceptClientId?: string) {
+async function ensureAbnFree(abn: string, exceptClientId?: string, overrideReason?: string) {
   const clash = await prisma.qcClient.findFirst({
     where: { data: { path: ['abn'], equals: abn }, id: exceptClientId ? { not: exceptClientId } : undefined },
     select: { id: true, name: true },
   });
-  if (clash) throw ApiError.conflict(`ABN ${abn} is already used by ${clash.name}`, 'ABN_TAKEN');
+  // A Super Admin may knowingly register the same ABN twice (for example a trading arm) by giving a reason.
+  if (clash && (overrideReason ?? '').trim().length < 10) throw ApiError.conflict(`ABN ${abn} is already used by ${clash.name}. If this is intended, give a reason of at least 10 characters to continue.`, 'ABN_TAKEN');
 }
 
 async function nextClientCode(): Promise<string> {
@@ -90,7 +100,7 @@ export async function getClient(id: string) {
 export async function createClient(input: Input) {
   // The first Client Admin is created together with the client (E01); the name/email pair is handled below.
   const data = validateOrThrow('E01', input);
-  await ensureAbnFree(str(data.abn));
+  await ensureAbnFree(str(data.abn), undefined, str(input.abnOverrideReason));
   const { name: adminName, email: adminEmail } = parseFirstAdmin(data.first_client_admin_name_and_email);
   if (!adminEmail) throw ApiError.badRequest('Enter the first Client Admin as a name and an email address, for example "Jane Smith, jane@example.com"');
   const client = await prisma.qcClient.create({

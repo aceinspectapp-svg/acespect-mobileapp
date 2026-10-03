@@ -297,8 +297,10 @@ function Lots({ project, onChange, onImport }: { project: QcProjectRow; onChange
           )}
           onClose={() => setDialog(null)}
           onSubmit={async (payload) => {
-            if (dialog.row) await api.qc.lots.update(dialog.row.id, payload);
-            else await api.qc.lots.create(payload);
+            if (dialog.row) {
+              const r = await api.qc.lots.update(dialog.row.id, payload);
+              if (r?.warning) window.alert(r.warning);
+            } else await api.qc.lots.create(payload);
             setDialog(null);
             load();
             onChange();
@@ -332,7 +334,15 @@ function Team({ project, onChange }: { project: QcProjectRow; onChange: () => vo
       await api.qc.projects.removeTeamMember(m.id, reason);
       load();
     } catch (e) {
-      window.alert((e as Error).message);
+      const err = e as { code?: string; message: string };
+      if (err.code !== "OPEN_WORK") return window.alert(err.message);
+      // Open items must move to someone first.
+      const others = (data?.people ?? []).filter((p) => p.id !== m.userId && p.qcMemberships.some((x) => x.client.id === project.clientId && x.status === "ACTIVE" && x.role === "PRIVATE_INSPECTOR"));
+      const names = others.map((p, i) => `${i + 1}. ${p.name ?? p.email}`).join("\n");
+      const pick = window.prompt(`${err.message}\n\nType the number of the person who takes over:\n${names}`);
+      const target = others[Number(pick) - 1];
+      if (!target) return;
+      try { await api.qc.projects.removeTeamMember(m.id, reason, target.id); load(); } catch (e2) { window.alert((e2 as Error).message); }
     }
   }
 
@@ -385,7 +395,8 @@ function Team({ project, onChange }: { project: QcProjectRow; onChange: () => vo
           )}
           onClose={() => setAdding(false)}
           onSubmit={async (payload) => {
-            await api.qc.projects.addTeamMember(project.id, payload);
+            const r = await api.qc.projects.addTeamMember(project.id, payload);
+            if (r?.warnings?.length) window.alert(r.warnings.join("\n"));
             setAdding(false);
             load();
             onChange();
