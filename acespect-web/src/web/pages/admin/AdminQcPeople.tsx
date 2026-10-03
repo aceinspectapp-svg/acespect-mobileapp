@@ -10,6 +10,7 @@ import { findForm, type QcSpecPayload } from "../../qcSpec";
 import type { QcMembershipRow, QcPersonRow } from "../../qcTypes";
 import { useQc } from "../../qcContext";
 import { qcx } from "../../qcApi";
+import { RoleMatrix } from "../../components/RoleMatrix";
 
 /** The capability needed to add or manage someone in each role (mirrors the server). */
 const ROLE_CAP: Record<string, string> = {
@@ -39,6 +40,7 @@ export function AdminQcPeople() {
   const [invite, setInvite] = useState<InvitationInfo | null>(null);
   const { can, me } = useQc();
   const mayAdd = Object.values(ROLE_CAP).some(can);
+  const [matrixOpen, setMatrixOpen] = useState(false);
   const [credentialsFor, setCredentialsFor] = useState<QcPersonRow | null>(null);
   const [deactivating, setDeactivating] = useState<QcPersonRow | null>(null);
 
@@ -62,7 +64,7 @@ export function AdminQcPeople() {
     <PageShell
       title="People"
       subtitle={people ? `${people.length} account${people.length === 1 ? "" : "s"} with QC access` : "Loading…"}
-      actions={mayAdd ? <PrimaryBtn onClick={() => setPerson({})}><Plus size={14} /> Add person</PrimaryBtn> : undefined}
+      actions={<div style={{ display: "flex", gap: 8 }}><button style={btnGhost} onClick={() => setMatrixOpen(true)}>What can each role do?</button>{mayAdd && <PrimaryBtn onClick={() => setPerson({})}><Plus size={14} /> Add person</PrimaryBtn>}</div>}
     >
       <QcSubNav />
       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
@@ -124,6 +126,7 @@ export function AdminQcPeople() {
         />
       )}
       {invite && <InvitationDialog invitation={invite} onClose={() => setInvite(null)} />}
+      {matrixOpen && <RoleMatrix onClose={() => setMatrixOpen(false)} />}
       {credentialsFor && (
         <CredentialsForm
           person={credentialsFor}

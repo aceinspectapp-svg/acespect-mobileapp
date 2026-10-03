@@ -15,6 +15,7 @@ import { actorOf, assertClientAccess, ctxOf, projectScope } from './qc.context';
 import { guardEntity, tenantOf } from './qc.guard';
 import { OPTIONAL_PERMISSIONS, can } from './qc.permissions';
 import { authService } from '../auth/auth.service';
+import { registerDefectUploads } from './qc.evidence';
 
 function requireId(req: Request, label = 'id'): string {
   const { id } = req.params;
@@ -42,16 +43,20 @@ export function payloadOf(req: Request): Record<string, unknown> {
   return body;
 }
 
-async function storeUploads(req: Request): Promise<string[]> {
+/** Store the request's photos. When the defect they belong to is known they are also registered as hashed evidence. */
+async function storeUploads(req: Request, defectId?: string): Promise<string[]> {
   const files = (req.files as Express.Multer.File[] | undefined) ?? [];
   if (files.length === 0) return [];
   const { uploadPhoto } = await import('../../lib/storage');
   const urls: string[] = [];
+  const uploads: Array<{ url: string; hash?: string; name: string; mime: string; size: number }> = [];
   for (const file of files) {
     const ext = (file.originalname.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
     const uploaded = await uploadPhoto(file.buffer, file.mimetype || 'image/jpeg', ext);
     urls.push(uploaded.url);
+    uploads.push({ url: uploaded.url, hash: uploaded.storedHash, name: file.originalname, mime: file.mimetype, size: file.size });
   }
+  if (defectId && req.user) await registerDefectUploads(uploads, defectId, req.user.id);
   return urls;
 }
 
@@ -382,7 +387,7 @@ export const qcAdminController = {
   }),
   performAction: asyncHandler(async (req, res) => {
     const body = payloadOf(req);
-    const fileUrls = await storeUploads(req);
+    const fileUrls = await storeUploads(req, requireId(req));
     const expected = typeof body.expectedUpdatedAt === 'string' ? body.expectedUpdatedAt : undefined;
     const detail = await defects.performAction({
       defectId: requireId(req),
@@ -402,11 +407,11 @@ export const qcAdminController = {
   }),
   postComment: asyncHandler(async (req, res) => {
     const body = payloadOf(req);
-    const comment = await defects.postComment(requireId(req), requester(req), { text: String(body.text ?? ''), visibleTo: q(body.visibleTo) }, await storeUploads(req));
+    const comment = await defects.postComment(requireId(req), requester(req), { text: String(body.text ?? ''), visibleTo: q(body.visibleTo) }, await storeUploads(req, requireId(req)));
     res.status(201).json({ comment: serializeComment(comment) });
   }),
   addPhotos: asyncHandler(async (req, res) => {
-    const defect = await defects.addDefectPhotos(requireId(req), requester(req), await storeUploads(req));
+    const defect = await defects.addDefectPhotos(requireId(req), requester(req), await storeUploads(req, requireId(req)));
     res.status(200).json({ defect: serializeDefect(defect) });
   }),
 };

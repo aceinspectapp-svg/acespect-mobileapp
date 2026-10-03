@@ -260,7 +260,7 @@ export async function runSlaScan(now = new Date()): Promise<{ flagged: number; e
   let flagged = 0;
   let escalated = 0;
   const defects = await prisma.qcDefect.findMany({
-    where: { isDraft: false, status: { terminal: false, key: { notIn: ['open', 'on_hold', 'disputed', 'verified'] } } },
+    where: { isDraft: false, status: { terminal: false, key: { notIn: ['open', 'on_hold', 'disputed', 'verified'] } }, property: { project: { client: { status: { notIn: ['SUSPENDED', 'OFFBOARDED'] } } } } },
     include: defectInclude,
     take: 2000,
   });

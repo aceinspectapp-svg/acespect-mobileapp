@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { API_URL } from '../config/api';
 import { api } from './apiClient';
-import { AuthResponse, AuthUser, LoginInput, RegisterInput } from '../types/auth';
+import { AuthResponse, AuthUser, LoginInput, LoginResult, RegisterInput } from '../types/auth';
 
 /**
  * Auth API.
@@ -16,8 +16,11 @@ export const authApi = {
   register: (input: RegisterInput): Promise<AuthResponse> =>
     bare.post<AuthResponse>('/auth/register', input).then((r) => r.data),
 
-  login: (input: LoginInput): Promise<AuthResponse> =>
-    bare.post<AuthResponse>('/auth/login', input).then((r) => r.data),
+  login: (input: LoginInput): Promise<LoginResult> =>
+    bare.post<LoginResult>('/auth/login', input).then((r) => r.data),
+
+  verifyMfa: (mfaToken: string, code: string): Promise<AuthResponse> =>
+    bare.post<AuthResponse>('/auth/mfa/verify', { mfaToken, code }).then((r) => r.data),
 
   google: (idToken: string): Promise<AuthResponse> =>
     bare.post<AuthResponse>('/auth/google', { idToken }).then((r) => r.data),

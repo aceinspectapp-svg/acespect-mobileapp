@@ -58,6 +58,18 @@ export async function uploadEvidence(ctx: QcContext, files: Express.Multer.File[
   return out;
 }
 
+/** Register photos that were just uploaded against a defect (action, comment, task update) so they are hashed and served only through signed links. */
+export async function registerDefectUploads(uploads: Array<{ url: string; hash?: string; name?: string; mime?: string; size?: number }>, defectId: string, userId: string, phase = 'Progress'): Promise<void> {
+  if (uploads.length === 0) return;
+  const d = await prisma.qcDefect.findUnique({ where: { id: defectId }, select: { property: { select: { projectId: true, project: { select: { clientId: true } } } } } });
+  if (!d) return;
+  for (const u of uploads) {
+    await prisma.qcEvidence.create({
+      data: { clientId: d.property.project.clientId, projectId: d.property.projectId, linkedType: 'Defect', linkedId: defectId, kind: 'PHOTO', phase, url: u.url, fileHash: u.hash ?? 'unavailable', fileName: u.name ?? null, mime: u.mime ?? 'image/jpeg', sizeBytes: u.size ?? null, capturedVia: 'In-app camera', uploadedById: userId },
+    });
+  }
+}
+
 export function serializeEvidence(e: { id: string; url: string; kind: string; phase: string | null; caption: string | null; fileHash: string; fileName: string | null; mime: string | null; sizeBytes: number | null; capturedAt: Date | null; capturedVia: string | null; peopleShown: boolean; uploadedAt: Date; uploadedById: string | null; linkedType: string; linkedId: string }) {
   return { id: e.id, url: signMediaUrl(e.url), rawUrl: e.url, kind: e.kind, phase: e.phase, caption: e.caption, fileHash: e.fileHash, fileName: e.fileName, mime: e.mime, sizeBytes: e.sizeBytes, capturedAt: e.capturedAt, capturedVia: e.capturedVia, peopleShown: e.peopleShown, uploadedAt: e.uploadedAt, uploadedById: e.uploadedById, linkedType: e.linkedType, linkedId: e.linkedId };
 }

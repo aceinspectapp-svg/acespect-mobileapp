@@ -69,6 +69,10 @@ export type AppStackParamList = {
   QcTasksList: { propertyId: string };
   QcTaskDetail: { taskId: string };
   QcDefectDetail: { defectId: string };
+  QcInspections: undefined;
+  QcInspection: { inspectionId: string };
+  QcInspectionComplete: { inspectionId: string };
+  QcNotifications: undefined;
 };
 
 export type AuthScreenProps<T extends keyof AuthStackParamList> =

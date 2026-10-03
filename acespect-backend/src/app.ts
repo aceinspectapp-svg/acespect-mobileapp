@@ -18,6 +18,9 @@ export function createApp() {
 
   // Security + parsing
   app.disable('x-powered-by');
+  // One proxy hop in front (Railway): without this every request appears to come from the proxy, which breaks
+  // the per-IP rate limits and the IP address written to the security log.
+  app.set('trust proxy', 1);
   app.use(helmet());
   app.use(
     cors({

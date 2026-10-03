@@ -11,6 +11,14 @@ import { setOnUnauthorized } from '../services/apiClient';
 import { tokenStorage } from '../services/tokenStorage';
 import { AuthUser, RegisterInput } from '../types/auth';
 
+/** Thrown by signIn when the account has two-step verification: the screen then asks for the code. */
+export class MfaChallenge extends Error {
+  constructor(public readonly mfaToken: string) {
+    super('Enter the code from your authenticator app');
+    this.name = 'MfaChallenge';
+  }
+}
+
 interface AuthState {
   user: AuthUser | null;
   isAuthenticated: boolean;
@@ -19,6 +27,8 @@ interface AuthState {
   /** True while a sign-in / sign-up request is in flight. */
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  /** Second sign-in step: the authenticator (or backup) code. */
+  verifyMfa: (mfaToken: string, code: string) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
   /** Exchange a verified Google ID token for an app session. */
   loginWithGoogleIdToken: (idToken: string) => Promise<void>;
@@ -83,6 +93,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const res = await authApi.login({ email, password });
+      if ('mfaRequired' in res) throw new MfaChallenge(res.mfaToken);
+      if ('mfaEnrollRequired' in res) {
+        throw new Error('Your role needs two-step verification. Sign in on the ACE SPECT web portal to set it up, then sign in here.');
+      }
+      await tokenStorage.setTokens(res.accessToken, res.refreshToken);
+      setUser(res.user);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const verifyMfa = useCallback(async (mfaToken: string, code: string) => {
+    setIsLoading(true);
+    try {
+      const res = await authApi.verifyMfa(mfaToken, code);
       await tokenStorage.setTokens(res.accessToken, res.refreshToken);
       setUser(res.user);
     } finally {
@@ -132,11 +157,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isBootstrapping,
       isLoading,
       signIn,
+      verifyMfa,
       register,
       loginWithGoogleIdToken,
       signOut,
     }),
-    [user, isBootstrapping, isLoading, signIn, register, loginWithGoogleIdToken, signOut],
+    [user, isBootstrapping, isLoading, signIn, verifyMfa, register, loginWithGoogleIdToken, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

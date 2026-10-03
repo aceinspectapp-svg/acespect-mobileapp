@@ -16,6 +16,7 @@ import { runSlaScan } from '../modules/qc/qc.sla.service';
 import { runDlpScan } from '../modules/qc/qc.dlp.service';
 import { enforceRetention } from '../modules/qc/qc.privacy.service';
 import { ensureTemplateReferenceData } from '../modules/qc/qc.templates.service';
+import { outbox } from '../lib/mailer';
 
 if (!/@(localhost|127\.0\.0\.1)[:/]/.test(process.env.DATABASE_URL ?? '')) {
   console.error('Refusing to run: DATABASE_URL must point at a local scratch database.');
@@ -59,13 +60,13 @@ async function login(email: string, password = PW): Promise<Res> {
 }
 
 /** Accept the invitation of a freshly created person and return a signed-in token (handles the MFA-enrol step). */
-async function activate(inv: { url: string }, email: string): Promise<{ token: string; mfaSecret?: string }> {
+async function activate(inv: { url: string }, email: string): Promise<{ token: string; mfaSecret?: string; backupCodes?: string[] }> {
   const token = inv.url.split('/accept/')[1]!;
   const r = await api('POST', `/auth/invitations/${token}/accept`, { body: { password: PW, acceptTerms: true } });
   if (r.body.mfaEnrollRequired) {
     const start = await api('POST', '/auth/mfa/enroll/start', { body: { mfaToken: r.body.mfaToken } });
     const done = await api('POST', '/auth/mfa/enroll/complete', { body: { mfaToken: r.body.mfaToken, code: totp(start.body.secret) } });
-    return { token: done.body.accessToken, mfaSecret: start.body.secret };
+    return { token: done.body.accessToken, mfaSecret: start.body.secret, backupCodes: done.body.backupCodes };
   }
   if (!r.body.accessToken) throw new Error(`activate ${email}: ${JSON.stringify(r.body)}`);
   return { token: r.body.accessToken };
@@ -109,6 +110,13 @@ async function main() {
   ok(reuse.status === 410 && errCode(reuse) === 'INVITATION_USED', 'invitation link works once', reuse.body);
   const caB = await activate(B.invitation, B.firstAdmin.email);
 
+  ok((caA.backupCodes ?? []).length === 8, 'eight backup codes are issued once at enrolment');
+  const viaBackup = await login(A.firstAdmin.email);
+  const backupTry = await api('POST', '/auth/mfa/verify', { body: { mfaToken: viaBackup.body.mfaToken, code: caA.backupCodes![0] } });
+  ok(backupTry.status === 200 && backupTry.body.accessToken, 'a backup code signs in');
+  const viaBackup2 = await login(A.firstAdmin.email);
+  const backupReuse = await api('POST', '/auth/mfa/verify', { body: { mfaToken: viaBackup2.body.mfaToken, code: caA.backupCodes![0] } });
+  ok(backupReuse.status === 401, 'a backup code works only once', backupReuse.status);
   const second = await login(A.firstAdmin.email);
   ok(second.status === 200 && second.body.mfaRequired === true, 'Client Admin sign-in asks for the MFA code');
   const badMfa = await api('POST', '/auth/mfa/verify', { body: { mfaToken: second.body.mfaToken, code: '000000' } });
@@ -558,6 +566,58 @@ async function main() {
   const escLog = await api('GET', `/qc/escalations?projectId=${projectA}`, { token: ca });
   ok(escLog.status === 200 && escLog.body.escalations.length >= 4, 'the escalation log lists every level', escLog.body.escalations?.length);
 
+  // ───────────── Password reset, SSO, config scoping, legacy mobile accounts ─────────────
+  console.log('Password reset, SSO, config scope, legacy accounts');
+  const cuEmail = `cu${sfx}@example.com`;
+  outbox.length = 0;
+  const forgot = await api('POST', '/auth/password/forgot', { body: { email: cuEmail } });
+  const forgotUnknown = await api('POST', '/auth/password/forgot', { body: { email: 'nobody@example.com' } });
+  ok(forgot.status === 200 && forgotUnknown.status === 200, 'reset request answers the same for unknown emails');
+  const resetMail = outbox.find((m) => m.to === cuEmail && m.subject.includes('Reset'));
+  ok(!!resetMail && !outbox.some((m) => m.to === 'nobody@example.com'), 'a reset email is sent only to a real account');
+  const resetToken = /\/reset\/([\w-]+)/.exec(resetMail?.text ?? '')?.[1] ?? '';
+  const weakReset = await api('POST', '/auth/password/reset', { body: { token: resetToken, password: 'short' } });
+  ok(weakReset.status === 400, 'reset enforces the 12 character minimum', weakReset.status);
+  const NEWPW = 'An0ther-Str0ng-Pass!';
+  const goodReset = await api('POST', '/auth/password/reset', { body: { token: resetToken, password: NEWPW } });
+  ok(goodReset.status === 200, 'a valid reset link changes the password', goodReset.body);
+  const reuseReset = await api('POST', '/auth/password/reset', { body: { token: resetToken, password: NEWPW } });
+  ok(reuseReset.status === 410, 'a reset link works once', reuseReset.status);
+  ok((await login(cuEmail, PW)).status === 401 && (await login(cuEmail, NEWPW)).status === 200, 'the old password stops working, the new one works');
+  const oldSession = await api('GET', '/qc/me', { token: tokens.cuNo });
+  ok(oldSession.status === 401, 'resetting a password signs out the person\'s other sessions', oldSession.status);
+  tokens.cuNo = (await login(cuEmail, NEWPW)).body.accessToken;
+  const ssoBogus = await api('POST', '/auth/sso/google', { body: { idToken: 'not-a-real-token' } });
+  ok([400, 401, 501].includes(ssoBogus.status), 'single sign-on refuses an unverifiable token', ssoBogus.status);
+
+  const cfgA = await api('GET', '/qc/config', { token: ca });
+  ok(cfgA.status === 200 && cfgA.body.clients.length === 1 && cfgA.body.clients[0].id === A.client.id, 'the config bundle shows a Client Admin only their own client', cfgA.body.clients?.map((c: { name: string }) => c.name));
+  const cfgB = await api('GET', '/qc/config', { token: caB.token });
+  ok(cfgB.status === 200 && cfgB.body.clients.every((c: { id: string }) => c.id === B.client.id), 'and the other client only theirs');
+  const cfgSa = await api('GET', '/qc/config', { token: sa });
+  ok(cfgSa.status === 200 && cfgSa.body.clients.length === 0, 'the Super Admin sees no client data in the config bundle outside support mode', cfgSa.body.clients?.length);
+  const cfgTrade = await api('GET', '/qc/config', { token: tokens.trade });
+  ok(cfgTrade.status === 200 && cfgTrade.body.clients.every((c: { id: string }) => c.id === A.client.id), 'a Trade User\'s bundle is limited to their client');
+
+  // An account that predates memberships (the mobile Houspect inspectors) keeps working on its own assignments.
+  const legacyReg = await api('POST', '/auth/register', { body: { email: `legacy${sfx}@example.com`, password: 'Legacy-Passw0rd!', name: 'Legacy Inspector' } });
+  ok(legacyReg.status === 201, 'a plain account can still register');
+  const legacy = legacyReg.body.accessToken as string;
+  await api('POST', '/qc/support/start', { token: sa, body: { clientId: A.client.id, reason: 'Assign a defect to a legacy account' } });
+  const legacyDefect = await api('POST', '/qc/defects', { token: sa, body: { propertyId: lot2, assignedToId: legacyReg.body.user.id, defect_title: 'Legacy defect', description: 'Crack', room_or_area: 'External - front', severity: 'Minor Defect' } });
+  await api('POST', '/qc/support/end', { token: sa });
+  ok(legacyDefect.status === 201, 'a defect can be assigned to a legacy account', legacyDefect.body);
+  const myTasks = await api('GET', '/qc/tasks/assigned', { token: legacy });
+  ok(myTasks.status === 200 && myTasks.body.tasks.length === 1, 'the legacy account sees its own task');
+  const myDefect = await api('GET', `/qc/defects/${legacyDefect.body.defect.id}`, { token: legacy });
+  ok(myDefect.status === 200 && myDefect.body.defect.id === legacyDefect.body.defect.id, 'and its own defect');
+  const otherDefect = await api('GET', `/qc/defects/${defectDraftId}`, { token: legacy });
+  ok([403, 404].includes(otherDefect.status), 'but not anyone else\'s', otherDefect.status);
+  const legacyList = await api('GET', '/qc/defects', { token: legacy });
+  ok(legacyList.status === 200 && legacyList.body.defects.length === 1, 'its defect list holds only its own work', legacyList.body.defects?.length);
+  const legacyNoPeople = await api('GET', '/qc/people', { token: legacy });
+  ok(legacyNoPeople.status === 403, 'and it cannot list people', legacyNoPeople.status);
+
   // ───────────── Dashboard and reports ─────────────
   console.log('Dashboard and reports');
   const dash = await api('GET', `/qc/dashboard?projectId=${projectA}`, { token: ca });
@@ -630,6 +690,48 @@ async function main() {
   const again30 = await prisma.qcRecord.count({ where: { kind: 'dlp_reminder', projectId: proj2, title: '30' } });
   ok(again30 === 1 && dr2.reminders <= 1, 'a later scan does not repeat the same reminder');
 
+  // ───────────── Closed records, last admin, shared logins ─────────────
+  console.log('Archived projects, last admin, one login for several clients');
+  await api('POST', '/qc/support/start', { token: sa, body: { clientId: A.client.id, reason: 'Check the last-admin rule' } });
+  const lastAdmin = await api('POST', `/qc/people/${A.firstAdmin.id}/deactivate`, { token: sa, body: { reason: 'Left the company' } });
+  ok(lastAdmin.status === 409 && errCode(lastAdmin) === 'LAST_ADMIN', 'the last active Client Admin cannot be deactivated', lastAdmin.body);
+  await api('POST', '/qc/support/end', { token: sa });
+
+  const noReasonArchive = await api('POST', `/qc/projects/${proj2}/status`, { token: ca, body: { status: 'ARCHIVED' } });
+  ok(noReasonArchive.status === 400, 'archiving needs a reason', noReasonArchive.body);
+  const archive = await api('POST', `/qc/projects/${proj2}/status`, { token: ca, body: { status: 'ARCHIVED', reason: 'Project complete' } });
+  ok(archive.status === 200, 'a finished project can be archived', archive.body);
+  const siteOnArchived = await api('POST', '/qc/sites', { token: ca, body: { projectId: proj2, site_name: 'Late site', site_address: ADDR, site_contact_name: 'Sam', site_contact_mobile: '0444444444', site_induction_required: false } });
+  ok(siteOnArchived.status === 409 && errCode(siteOnArchived) === 'PROJECT_ARCHIVED', 'an archived project is read-only', siteOnArchived.body);
+  const editArchived = await api('PATCH', `/qc/projects/${proj2}`, { token: ca, body: { project_name: 'Renamed' } });
+  ok(editArchived.status === 409, 'its details cannot be edited either', editArchived.status);
+  const reopen = await api('POST', `/qc/projects/${proj2}/status`, { token: ca, body: { status: 'CONSTRUCTION', reason: 'Late claim' } });
+  ok(reopen.status === 200, 'it can be reopened with a reason', reopen.body);
+
+  // One login can hold roles in several clients: each client's admin links the existing account instead of being refused.
+  const legacyEmail = `legacy${sfx}@example.com`;
+  const linkedA = await mkPerson(ca, { email_address: legacyEmail, first_name: 'Legacy', last_name: 'Inspector', role: 'CLIENT_USER' });
+  ok(linkedA.status === 201 && linkedA.body.linked === true, 'an existing account is given a role instead of refused', linkedA.body);
+  const dupLink = await mkPerson(ca, { email_address: legacyEmail, first_name: 'Legacy', last_name: 'Inspector', role: 'CLIENT_USER' });
+  ok(dupLink.status === 409 && errCode(dupLink) === 'ALREADY_MEMBER', 'but not twice in the same client', dupLink.body);
+  const linkedB = await mkPerson(caB.token, { email_address: legacyEmail, first_name: 'Legacy', last_name: 'Inspector', role: 'CLIENT_USER' });
+  ok(linkedB.status === 201, 'a second client can give the same login another role', linkedB.body);
+  const memberCount = await prisma.qcMembership.count({ where: { user: { email: legacyEmail }, status: 'ACTIVE' } });
+  ok(memberCount === 2, 'the person now holds roles in two clients', memberCount);
+  const noCtx = await api('GET', '/qc/me', { token: legacy });
+  ok(noCtx.status === 409 && errCode(noCtx) === 'CONTEXT_REQUIRED', 'they are asked which client they are working in', noCtx.body);
+  const asB = await api('GET', '/qc/me', { token: legacy, client: B.client.id });
+  const asA = await api('GET', '/qc/me', { token: legacy, client: A.client.id });
+  ok(asB.status === 200 && asA.status === 200 && asA.body.clientId === A.client.id && asB.body.clientId === B.client.id, 'and work in either one by naming it', { a: asA.body.role, b: asB.body.role });
+  const dataIsolated = await api('GET', '/qc/projects', { token: legacy, client: A.client.id });
+  ok(dataIsolated.status === 200 && dataIsolated.body.projects.every((p: { clientId: string }) => p.clientId === A.client.id), 'each context shows only its own client data');
+  const sw = await api('POST', '/qc/context/switch', { token: legacy, body: { clientId: A.client.id } });
+  ok(sw.status === 200, 'switching context is accepted');
+  const swLog = await prisma.qcSecurityEvent.count({ where: { type: 'CONTEXT_SWITCH', clientId: A.client.id } });
+  ok(swLog >= 1, 'and recorded', swLog);
+  const swForeign = await api('POST', '/qc/context/switch', { token: tokens.cuNo, body: { clientId: B.client.id } });
+  ok(swForeign.status === 404, 'a client you do not belong to cannot be switched to', swForeign.status);
+
   // ───────────── Notifications ─────────────
   console.log('Notifications');
   const nlist = await api('GET', '/qc/notifications?unread=true', { token: tokens.pi });
@@ -684,7 +786,7 @@ async function main() {
   ok(usage.status === 200 && usage.body.users >= 5, 'usage reports users and projects', usage.body);
 
   // Plan limits.
-  await prisma.qcClient.update({ where: { id: B.client.id }, data: { data: { ...((await prisma.qcClient.findUniqueOrThrow({ where: { id: B.client.id } })).data as object), plan_and_limits: ['Starter', 2, 1, 5] } } });
+  await prisma.qcClient.update({ where: { id: B.client.id }, data: { data: { ...((await prisma.qcClient.findUniqueOrThrow({ where: { id: B.client.id } })).data as object), plan_and_limits: ['Starter', 3, 1, 5] } } });
   const limitUser = await api('POST', '/qc/people', { token: caB.token, body: person({ email_address: `lim${sfx}@example.com`, first_name: 'Lim', last_name: 'It', role: 'CLIENT_USER' }) });
   ok(limitUser.status === 201, 'within the plan limit a user can be added');
   const limitUser2 = await api('POST', '/qc/people', { token: caB.token, body: person({ email_address: `lim2${sfx}@example.com`, first_name: 'Lim', last_name: 'Two', role: 'CLIENT_USER' }) });

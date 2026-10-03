@@ -62,7 +62,8 @@ export function QcProvider({ children }: { children: React.ReactNode }) {
     me, loading, error, pickClient,
     can: (c) => caps.has(c),
     refresh,
-    switchClient: async (id) => { setActiveClientId(id); setLoading(true); await refresh(); },
+    // The server records every switch of working context.
+    switchClient: async (id) => { await qcx.context.switch(id).catch(() => undefined); setActiveClientId(id); setLoading(true); await refresh(); },
     enterSupport: async (clientId, reason, ticketRef) => { await qcx.support.start(clientId, reason, ticketRef); setActiveClientId(clientId); await refresh(); },
     exitSupport: async () => { await qcx.support.end(); setActiveClientId(null); await refresh(); },
   };

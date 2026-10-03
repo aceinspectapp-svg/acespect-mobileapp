@@ -381,6 +381,7 @@ export async function createProject(input: Input) {
 
 export async function updateProject(id: string, input: Input) {
   const existing = await requireExists('qcProject', id, 'Project');
+  if (existing.status === 'ARCHIVED') throw ApiError.conflict('This project is archived and read-only. Reopen it to make changes.', 'PROJECT_ARCHIVED');
   const base: Input = { ...(existing.data as Input), developer: existing.clientId, builder: existing.builderId };
   const specInput = without(input, ['closurePolicy', 'deskReviewAllowed', 'safetyAutoRelease', 'status']);
   const data = validateOrThrow('E07', { ...base, ...specInput });
@@ -421,15 +422,23 @@ export async function listSites(projectId?: string, projectWhere?: Prisma.QcProj
   });
 }
 
+/** An archived project is a closed record: nothing under it changes until it is reopened (REQ-PRJ-006). */
+export async function assertProjectOpen(projectId: string): Promise<void> {
+  const p = await prisma.qcProject.findUnique({ where: { id: projectId }, select: { status: true } });
+  if (p?.status === 'ARCHIVED') throw ApiError.conflict('This project is archived and read-only. Reopen it to make changes.', 'PROJECT_ARCHIVED');
+}
+
 export async function createSite(input: Input) {
   const projectId = str(input.projectId);
   await requireExists('qcProject', projectId, 'Project');
+  await assertProjectOpen(projectId);
   const data = validateOrThrow('E08', without(input, ['projectId']));
   return prisma.qcSite.create({ data: { projectId, name: str(data.site_name), data: json(data) } });
 }
 
 export async function updateSite(id: string, input: Input) {
   const existing = await requireExists('qcSite', id, 'Site');
+  await assertProjectOpen(existing.projectId);
   const data = validateOrThrow('E08', { ...(existing.data as Input), ...without(input, ['projectId', 'status']) });
   return prisma.qcSite.update({
     where: { id },
@@ -477,6 +486,7 @@ export const LOT_IMPORT_OPTIONAL = ['street_address', 'ncc_building_class', 'sto
 export async function createLot(input: Input, opts: { lenient?: boolean } = {}) {
   const siteId = str(input.siteId);
   const site = await requireExists('qcSite', siteId, 'Site');
+  await assertProjectOpen(site.projectId);
   const data = validateOrThrow('E09', without(input, ['siteId']), opts.lenient ? { skipRequired: LOT_IMPORT_OPTIONAL } : {});
   const clash = await prisma.qcProperty.findFirst({ where: { siteId, name: str(data.lot_reference) } });
   if (clash) throw ApiError.conflict(`Lot reference ${data.lot_reference} already exists on this site`, 'LOT_TAKEN');
@@ -488,6 +498,7 @@ export async function createLot(input: Input, opts: { lenient?: boolean } = {}) 
 
 export async function updateLot(id: string, input: Input, opts: { lenient?: boolean } = {}) {
   const existing = await requireExists('qcProperty', id, 'Lot');
+  await assertProjectOpen(existing.projectId);
   const data = validateOrThrow('E09', { ...(existing.data as Input), ...without(input, ['siteId']) }, opts.lenient ? { skipRequired: LOT_IMPORT_OPTIONAL } : {});
   if (str(data.lot_reference) !== existing.name && existing.siteId) {
     const clash = await prisma.qcProperty.findFirst({ where: { siteId: existing.siteId, name: str(data.lot_reference), id: { not: id } } });

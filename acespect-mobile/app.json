@@ -56,6 +56,12 @@
           "microphonePermission": "ACE SPECT uses your microphone for hands-free Voice Mode.",
           "speechRecognitionPermission": "ACE SPECT uses on-device speech recognition for hands-free Voice Mode."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#E63329"
+        }
       ]
     ],
     "extra": {

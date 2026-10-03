@@ -14,6 +14,12 @@ export interface AuthResponse {
   refreshToken: string;
 }
 
+/** What the server answers to a password: a session, or a second step first. */
+export type LoginResult =
+  | AuthResponse
+  | { mfaRequired: true; mfaToken: string }
+  | { mfaEnrollRequired: true; mfaToken: string };
+
 export interface LoginInput {
   email: string;
   password: string;

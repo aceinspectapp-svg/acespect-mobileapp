@@ -7,6 +7,9 @@ import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { AppScreenProps } from '../../navigation/types';
 import { useQcData } from '../../context/QcDataContext';
 import { useAuth } from '../../context/AuthContext';
+import { qcMe } from '../../services/qcPlatformApi';
+import { setActiveClientId } from '../../services/apiClient';
+import { registerForPush } from '../../services/pushRegistration';
 
 interface PropertyCard {
   propertyId: string;
@@ -26,9 +29,25 @@ interface PropertyCard {
 export function QcHomeScreen({ navigation }: AppScreenProps<'QcHome'>) {
   const { tasks, loading, error, refreshTasks } = useQcData();
   const { signOut } = useAuth();
+  const [pickClient, setPickClient] = React.useState<Array<{ id: string; name: string; role: string }> | null>(null);
+  const [caps, setCaps] = React.useState<string[]>([]);
+
+  const loadMe = useCallback(async () => {
+    try {
+      const me = await qcMe();
+      setPickClient(null);
+      setCaps(me.capabilities);
+      registerForPush();
+    } catch (e) {
+      const body = (e as { response?: { status?: number; data?: { error?: { code?: string; details?: { clients?: Array<{ id: string; name: string; role: string }> } } } } }).response;
+      // A person with roles in several clients names the one they are working in.
+      if (body?.data?.error?.code === 'CONTEXT_REQUIRED' && body.data.error.details?.clients) setPickClient(body.data.error.details.clients);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
+      loadMe();
       refreshTasks();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
@@ -68,7 +87,10 @@ export function QcHomeScreen({ navigation }: AppScreenProps<'QcHome'>) {
         title="QC"
         subtitle="Client & project defect tracking"
         onBack={() => navigation.goBack()}
-        actions={[{ icon: 'log-out-outline', onPress: onSignOut, accessibilityLabel: 'Sign out' }]}
+        actions={[
+          { icon: 'notifications-outline', onPress: () => navigation.navigate('QcNotifications'), accessibilityLabel: 'Notifications' },
+          { icon: 'log-out-outline', onPress: onSignOut, accessibilityLabel: 'Sign out' },
+        ]}
       />
 
       {loading && properties.length === 0 && (
@@ -85,8 +107,34 @@ export function QcHomeScreen({ navigation }: AppScreenProps<'QcHome'>) {
         </View>
       )}
 
+      {pickClient && (
+        <View style={styles.pick}>
+          <Text style={styles.cardTitle}>Which client are you working in?</Text>
+          {pickClient.map((c) => (
+            <Pressable key={c.id} style={styles.pickBtn} onPress={() => { setActiveClientId(c.id); loadMe(); refreshTasks(); }} accessibilityRole="button">
+              <Text style={styles.cardTitle}>{c.name}</Text>
+              <Text style={styles.cardSub}>{c.role.replace(/_/g, ' ').toLowerCase()}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
       <FlatList
         data={properties}
+        ListHeaderComponent={
+          caps.includes('inspections.progress') ? (
+            <Pressable onPress={() => navigation.navigate('QcInspections')} style={({ pressed }) => [styles.card, pressed && styles.cardPressed]} accessibilityRole="button" accessibilityLabel="Inspections">
+              <View style={[styles.iconTile, { backgroundColor: colors.accentGreen }]}>
+                <Ionicons name="clipboard-outline" size={26} color={colors.accentGreenFg} />
+              </View>
+              <View style={styles.cardText}>
+                <Text style={styles.cardTitle}>Inspections</Text>
+                <Text style={styles.cardSub}>Assigned to you: start, record, sign</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </Pressable>
+          ) : null
+        }
         keyExtractor={(p) => p.propertyId}
         contentContainerStyle={styles.list}
         refreshing={loading}
@@ -147,4 +195,6 @@ const styles = StyleSheet.create({
   cardTitle: { ...typography.h3, color: colors.textPrimary },
   cardSub: { ...typography.bodySm, color: colors.textMuted, marginTop: 2 },
   empty: { ...typography.bodySm, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xxxl },
+  pick: { padding: spacing.xl, gap: spacing.md },
+  pickBtn: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
 });

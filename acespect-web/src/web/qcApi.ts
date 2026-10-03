@@ -78,6 +78,7 @@ export interface Escalation { id: string; level: number; trigger: string; manual
 export const qcx = {
   me: () => req<QcMe>("/qc/me"),
   permissions: () => req<{ matrix: Array<{ capability: string; roles: Record<string, boolean | string> }>; optionalPermissions: string[] }>("/qc/permissions"),
+  context: { switch: (clientId: string) => req<{ clientId: string }>("/qc/context/switch", { method: "POST", body: j({ clientId }) }) },
   support: {
     start: (clientId: string, reason: string, ticketRef?: string) => req("/qc/support/start", { method: "POST", body: j({ clientId, reason, ticketRef }) }),
     end: () => req("/qc/support/end", { method: "POST" }),

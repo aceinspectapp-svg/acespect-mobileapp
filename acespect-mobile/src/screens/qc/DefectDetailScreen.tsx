@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { mediaUri } from '../../config/api';
 import { colors, radius, spacing, typography } from '../../theme';
 import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { Button } from '../../components/ui';
@@ -176,6 +177,11 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
               <Row label="Nature" value={defect.nature} />
               <Row label="Code or standard" value={defect.codeRef} />
               <Row label="Trade category" value={defect.tradeCategory?.name} />
+              <Row label="Acknowledge by" value={defect.ackDueAt ? `${new Date(defect.ackDueAt).toLocaleString()}${defect.acknowledgedAt ? ' (done)' : ''}` : null} />
+              <Row label="Rectify by" value={defect.rectifyDueAt ? `${new Date(defect.rectifyDueAt).toLocaleString()}${defect.rectifiedAt ? ' (done)' : ''}` : null} />
+              <Row label="Re-inspect by" value={defect.reinspectDueAt ? new Date(defect.reinspectDueAt).toLocaleString() : null} />
+              <Row label="Found at stage" value={defect.foundAtStage ?? null} />
+              <Row label="Raised during the DLP" value={defect.dlpDefect ? 'Yes' : null} />
               <Row label="Target rectification" value={defect.targetRectificationDate ? new Date(defect.targetRectificationDate).toLocaleDateString() : null} />
               {defect.holdReason && <Row label="On hold" value={defect.holdReason} />}
             </View>
@@ -185,7 +191,7 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
             <Text style={styles.sectionTitle}>PHOTOS ({defect.photoUrls.length})</Text>
             {defect.photoUrls.length > 0 && (
               <View style={styles.photoRow}>
-                {defect.photoUrls.map((u) => <Image key={u} source={{ uri: u }} style={styles.photo} />)}
+                {defect.photoUrls.map((u) => <Image key={u} source={{ uri: mediaUri(u) }} style={styles.photo} />)}
               </View>
             )}
             {defect.isDraft && (

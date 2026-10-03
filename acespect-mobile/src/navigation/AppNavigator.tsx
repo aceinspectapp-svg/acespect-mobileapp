@@ -18,6 +18,10 @@ import { QcDefectsListScreen } from '../screens/qc/DefectsListScreen';
 import { QcDefectDetailScreen } from '../screens/qc/DefectDetailScreen';
 import { QcTasksListScreen } from '../screens/qc/TasksListScreen';
 import { QcTaskDetailScreen } from '../screens/qc/TaskDetailScreen';
+import { QcInspectionsListScreen } from '../screens/qc/InspectionsListScreen';
+import { QcInspectionScreen } from '../screens/qc/InspectionScreen';
+import { QcInspectionCompleteScreen } from '../screens/qc/InspectionCompleteScreen';
+import { QcNotificationsScreen } from '../screens/qc/NotificationsScreen';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
@@ -224,6 +228,10 @@ export function AppNavigator() {
       <Stack.Screen name="QcTasksList" component={QcTasksListScreen} />
       <Stack.Screen name="QcTaskDetail" component={QcTaskDetailScreen} />
       <Stack.Screen name="QcDefectDetail" component={QcDefectDetailScreen} />
+      <Stack.Screen name="QcInspections" component={QcInspectionsListScreen} />
+      <Stack.Screen name="QcInspection" component={QcInspectionScreen} />
+      <Stack.Screen name="QcInspectionComplete" component={QcInspectionCompleteScreen} />
+      <Stack.Screen name="QcNotifications" component={QcNotificationsScreen} />
     </Stack.Navigator>
   );
 }

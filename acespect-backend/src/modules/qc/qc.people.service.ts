@@ -13,6 +13,7 @@ import { ApiError } from '../../utils/ApiError';
 import { hashPassword } from '../../utils/password';
 import { authService, revokeAllSessions } from '../auth/auth.service';
 import { recordAudit } from '../../lib/audit';
+import { notify } from './qc.notify';
 import { QcContext, assertClientAccess } from './qc.context';
 import { Capability, can } from './qc.permissions';
 import { requireExists } from './qc.shared';
@@ -195,7 +196,8 @@ export async function createPerson(input: Input, ctx?: QcContext, opts: { platfo
   }
 
   const email = str(e04.email_address);
-  if (await prisma.user.findUnique({ where: { email } })) throw ApiError.conflict('An account with this email already exists', 'EMAIL_TAKEN');
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (existingUser) return linkExistingPerson(existingUser.id, role, input, ctx);
 
   // Private Inspectors are credentialed by the Super Admin and approved for specific clients (E06).
   let credential: Input | undefined;
@@ -268,6 +270,32 @@ export async function createPerson(input: Input, ctx?: QcContext, opts: { platfo
   return { person, invitation };
 }
 
+/**
+ * The email already belongs to someone: they keep their one login and gain a role in this client too (REQ-TEN-003).
+ * Credentialed inspectors are linked through the approved-clients list instead.
+ */
+async function linkExistingPerson(userId: string, role: QcMemberRole, input: Input, ctx?: QcContext) {
+  if (role === 'PRIVATE_INSPECTOR') throw ApiError.conflict('This inspector already has an account. Add this client to their approved clients instead.', 'EMAIL_TAKEN');
+  const clientId = str(input.clientId);
+  const plan = await planMembership(role, input, clientId);
+  const existing = await prisma.qcMembership.findUnique({ where: { userId_clientId: { userId, clientId } } });
+  if (existing?.status === 'ACTIVE') throw ApiError.conflict('This person already has a role in this client.', 'ALREADY_MEMBER');
+  await assertWithinPlan(clientId, 'users');
+  const data = { role: plan.role, optionalPermissions: plan.optionalPermissions, masterContractorId: plan.masterContractorId ?? null, tradeCompanyId: plan.tradeCompanyId ?? null, status: 'ACTIVE', deactivationReason: null };
+  const m = existing
+    ? await prisma.qcMembership.update({ where: { id: existing.id }, data: { ...data, tradeCategories: { set: plan.tradeCategoryIds.map((id) => ({ id })) }, projects: { set: plan.projectIds.map((id) => ({ id })) } } })
+    : await prisma.qcMembership.create({ data: { userId, clientId, ...data, tradeCategories: { connect: plan.tradeCategoryIds.map((id) => ({ id })) }, projects: { connect: plan.projectIds.map((id) => ({ id })) } } });
+  await prisma.user.update({ where: { id: userId }, data: { isActive: true } });
+  await recordAudit({ clientId, entityType: 'User', entityId: userId, action: 'user.link', actor: ctx ? { id: ctx.userId, role: ctx.role } : { id: null, role: 'SYSTEM' }, after: { role, membershipId: m.id } });
+  const person = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, role: true, qcMemberships: { include: personInclude.memberships.include }, qcInspectorCredential: personInclude.qcInspectorCredential },
+  });
+  const client = await prisma.qcClient.findUniqueOrThrow({ where: { id: clientId }, select: { name: true } });
+  await notify({ type: 'account.invitation', userIds: [userId], clientId, title: `You now have access to ${client.name} as ${ROLE_LABEL[role]}`, mandatory: true });
+  return { person, invitation: undefined, linked: true };
+}
+
 /** Create the activation link and email it. The link is also returned so an admin can hand it over when email is not set up. */
 export async function sendInvitation(userId: string, createdById: string | null) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
@@ -320,6 +348,14 @@ export async function deactivatePerson(userId: string, input: { reason: string; 
   if (!DEACTIVATION_REASONS.includes(input.reason)) throw ApiError.badRequest('Choose a deactivation reason');
   await requireExists('user', userId, 'User');
   if (userId === ctx?.userId) throw ApiError.badRequest('You cannot deactivate your own account');
+  {
+    // A client always keeps at least one active Client Admin (REQ-USR-001).
+    const adminOf = await prisma.qcMembership.findMany({ where: { userId, role: 'CLIENT_ADMIN', status: 'ACTIVE', ...(ctx && !ctx.isSA ? { clientId: ctx.clientId ?? undefined } : {}) }, select: { clientId: true } });
+    for (const m of adminOf) {
+      const others = await prisma.qcMembership.count({ where: { clientId: m.clientId, role: 'CLIENT_ADMIN', status: 'ACTIVE', userId: { not: userId }, user: { isActive: true } } });
+      if (others === 0) throw ApiError.conflict('This is the last active Client Admin of the client. Add another Client Admin before deactivating them.', 'LAST_ADMIN');
+    }
+  }
   const scopeClientId = ctx && !ctx.isSA ? ctx.clientId : ctx?.clientId ?? null;
   if (ctx) {
     if (!can(ctx, 'users.deactivate')) throw ApiError.forbidden('You cannot deactivate people');

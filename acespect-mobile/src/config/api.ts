@@ -22,3 +22,8 @@ export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_DEV_BASE_
 export const API_PREFIX = '/api/v1';
 
 export const API_URL = `${API_BASE_URL}${API_PREFIX}`;
+
+/** Photo and file links come back as `/api/v1/media/<id>?e=...&s=...`; make them absolute for <Image>. */
+export function mediaUri(url: string): string {
+  return url.startsWith('/') ? `${API_BASE_URL}${url}` : url;
+}

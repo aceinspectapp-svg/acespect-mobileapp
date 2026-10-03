@@ -52,6 +52,14 @@ export interface QcDefect {
   id: string;
   defectRef: string | null;
   title: string | null;
+  /** Service-level clocks and DLP flag, set by the server when the defect is released. */
+  ackDueAt?: string | null;
+  rectifyDueAt?: string | null;
+  reinspectDueAt?: string | null;
+  acknowledgedAt?: string | null;
+  rectifiedAt?: string | null;
+  dlpDefect?: boolean;
+  foundAtStage?: string | null;
   // An admin creates a defect with just a lot + assignee: it starts as a
   // draft and these are filled in later by whoever it's assigned to.
   location: string | null;

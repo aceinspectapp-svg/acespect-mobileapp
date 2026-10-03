@@ -6,6 +6,7 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
 import { prisma } from '../../lib/prisma';
 import { ctxOf, endSupportSession, loadMemberships, startSupportSession } from './qc.context';
+import { logSecurityEvent } from '../../lib/securityLog';
 import { capabilityList, permissionMatrix as matrix } from './qc.permissions';
 import { OPTIONAL_PERMISSIONS } from './qc.permissions';
 
@@ -26,6 +27,18 @@ export const qcPlatformController = {
       capabilities: capabilityList(ctx),
       supportSession: ctx.supportSession,
     });
+  }),
+
+  /** The person says which client they are about to work in; the switch is checked against their memberships and logged (REQ-TEN-003). */
+  switchContext: asyncHandler(async (req, res) => {
+    // Runs before a client is chosen, so it reads the memberships directly instead of building a client context.
+    if (!req.user) throw ApiError.unauthorized();
+    const clientId = String((req.body ?? {}).clientId ?? '');
+    const memberships = req.user.role === 'ADMIN' ? [] : await loadMemberships(req.user.id);
+    const target = memberships.find((m) => m.clientId === clientId);
+    if (!target) throw ApiError.notFound('Client not found');
+    await logSecurityEvent({ type: 'CONTEXT_SWITCH', clientId, userId: req.user.id, detail: { to: clientId, role: target.role }, ip: req.ip ?? null });
+    res.status(200).json({ clientId, role: target.role, name: target.clientName });
   }),
 
   startSupport: asyncHandler(async (req, res) => {

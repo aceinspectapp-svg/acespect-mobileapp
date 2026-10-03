@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { mediaUri } from '../../config/api';
 import { colors, radius, spacing, typography } from '../../theme';
 import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { PickerSheet } from '../../components/qc/PickerSheet';
@@ -215,7 +216,7 @@ export function QcTaskDetailScreen({ navigation, route }: AppScreenProps<'QcTask
                 {u.photoUrls.length > 0 && (
                   <View style={styles.updatePhotoRow}>
                     {u.photoUrls.map((url) => (
-                      <Image key={url} source={{ uri: url }} style={styles.updatePhotoThumb} />
+                      <Image key={url} source={{ uri: mediaUri(url) }} style={styles.updatePhotoThumb} />
                     ))}
                   </View>
                 )}

@@ -14,14 +14,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../theme';
 import { AppTextInput, Button, Checkbox } from '../../components/ui';
-import { useAuth } from '../../context/AuthContext';
+import { MfaChallenge, useAuth } from '../../context/AuthContext';
 import { useGoogleSignIn } from '../../hooks/useGoogleSignIn';
 import { GOOGLE_AUTH_ENABLED } from '../../config/google';
 import { getApiErrorMessage } from '../../services/apiError';
 import { AuthScreenProps } from '../../navigation/types';
 
 export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
-  const { signIn, loginWithGoogleIdToken, isLoading } = useAuth();
+  const { signIn, verifyMfa, loginWithGoogleIdToken, isLoading } = useAuth();
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [code, setCode] = useState('');
   const google = useGoogleSignIn(loginWithGoogleIdToken);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,7 +38,21 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
     try {
       await signIn(email.trim(), password);
     } catch (e) {
+      if (e instanceof MfaChallenge) {
+        setMfaToken(e.mfaToken);
+        return;
+      }
       setError(getApiErrorMessage(e, 'Unable to sign in. Please check your credentials.'));
+    }
+  };
+
+  const onVerify = async () => {
+    setError(null);
+    if (!mfaToken || code.trim().length < 6) return;
+    try {
+      await verifyMfa(mfaToken, code.trim());
+    } catch (e) {
+      setError(getApiErrorMessage(e, 'That code is not valid.'));
     }
   };
 
@@ -77,6 +93,29 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {mfaToken ? (
+            <>
+              <Text style={styles.heroSubtitle}>Enter the 6-digit code from your authenticator app, or one of your backup codes.</Text>
+              <View style={{ height: spacing.lg }} />
+              <AppTextInput
+                label="Verification code"
+                placeholder="123456"
+                leftIcon="key-outline"
+                keyboardType="number-pad"
+                autoCapitalize="none"
+                value={code}
+                onChangeText={setCode}
+                onSubmitEditing={onVerify}
+                returnKeyType="go"
+              />
+              {!!error && <Text style={styles.errorBanner}>{error}</Text>}
+              <View style={{ height: spacing.lg }} />
+              <Button label="VERIFY" onPress={onVerify} disabled={code.trim().length < 6 || isLoading} loading={isLoading} />
+              <View style={{ height: spacing.md }} />
+              <Button label="Back" variant="outline" onPress={() => { setMfaToken(null); setCode(''); setError(null); }} />
+            </>
+          ) : (
+          <>
           <AppTextInput
             label="Email Address"
             placeholder="Enter your email"
@@ -145,6 +184,8 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
               <Text style={styles.signupLink}>Sign Up</Text>
             </Pressable>
           </View>
+          </>
+          )}
 
           <View style={styles.footer}>
             <View style={styles.footerLeft}>

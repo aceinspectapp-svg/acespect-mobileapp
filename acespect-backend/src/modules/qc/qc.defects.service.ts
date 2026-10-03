@@ -181,7 +181,13 @@ export async function listDefects(filters: DefectFilters, ctx?: QcContext) {
         ]
       : undefined,
   };
-  return prisma.qcDefect.findMany({ where, include: defectInclude, orderBy: { createdAt: 'desc' }, take: filters.limit ?? 500, skip: filters.offset ?? 0 });
+  const rows = await prisma.qcDefect.findMany({ where, include: defectInclude, orderBy: { createdAt: 'desc' }, take: filters.limit ?? 500, skip: filters.offset ?? 0 });
+  if (filters.statusKey === 'pending_re_inspection') {
+    // The re-inspection queue is worked most serious first, then oldest first (REQ-DEF-012).
+    const rank: Record<string, number> = { safety_hazard: 0, major: 1, minor: 2, monitor: 3 };
+    rows.sort((a, b) => (rank[a.severity?.key ?? 'monitor'] ?? 4) - (rank[b.severity?.key ?? 'monitor'] ?? 4) || a.createdAt.getTime() - b.createdAt.getTime());
+  }
+  return rows;
 }
 
 async function loadDefect(id: string): Promise<DefectRow> {
@@ -313,6 +319,7 @@ export interface CreateDefectInput extends Input {
 export async function createDefect(creator: Requester, input: CreateDefectInput) {
   const property = await prisma.qcProperty.findUnique({ where: { id: input.propertyId }, include: { project: true } });
   if (!property) throw ApiError.notFound('Property not found');
+  if (property.project.status === 'ARCHIVED') throw ApiError.conflict('This project is archived and read-only.', 'PROJECT_ARCHIVED');
   await assertAssignableInspector(input.assignedToId, property.project.clientId);
   const openStatus = await prisma.qcStatus.findUnique({ where: { key: 'open' } });
   if (!openStatus) throw ApiError.badRequest('The Open status is missing -- run the QC migrations');

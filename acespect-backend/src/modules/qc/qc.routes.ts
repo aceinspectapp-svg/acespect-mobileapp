@@ -36,6 +36,7 @@ const self = [requireAuth, cap('account.self')];
 
 // ─── Who am I, support mode ─────────────────────────────────────────────────
 router.get('/me', ...self, pl.me);
+router.post('/context/switch', requireAuth, pl.switchContext);
 router.post('/support/start', requireAuth, cap('support.enter'), pl.startSupport);
 router.post('/support/end', requireAuth, cap('support.enter'), pl.endSupport);
 

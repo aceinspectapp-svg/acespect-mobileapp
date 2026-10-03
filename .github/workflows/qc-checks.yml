@@ -1,0 +1,82 @@
+name: QC checks
+
+# Type-checks all three apps and runs the QC end-to-end checks (tenant isolation,
+# permissions, lifecycle, SLA, DLP, inspections, reports, privacy) against a
+# throwaway Postgres. A failure in the isolation checks blocks the merge.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: acespect
+          POSTGRES_PASSWORD: scratch
+          POSTGRES_DB: qc_scratch
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U acespect" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://acespect:scratch@localhost:5432/qc_scratch?schema=public
+      JWT_ACCESS_SECRET: ci-access-secret-0123456789abcdef
+      JWT_REFRESH_SECRET: ci-refresh-secret-0123456789abcdef
+      RATE_LIMIT_OFF: '1'
+      QC_JOBS: 'off'
+      EGNYTE_DOMAIN: ''
+      EGNYTE_API_TOKEN: ''
+    defaults:
+      run:
+        working-directory: acespect-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: acespect-backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npx prisma migrate deploy
+      - name: Seed the Super Admin the checks sign in as
+        run: |
+          HASH=$(node -e "require('bcryptjs').hash('Admin123456!x',10).then(h=>process.stdout.write(h))")
+          PGPASSWORD=scratch psql -h localhost -U acespect -d qc_scratch -c "INSERT INTO users (id,email,role,\"passwordHash\",\"updatedAt\") VALUES ('admin1','admin@test.com','ADMIN','$HASH',now())"
+      - run: npm run check:lifecycle
+      - run: npm run check:platform
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: acespect-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: acespect-web/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit -p .
+      - run: npm run build
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: acespect-mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: acespect-mobile/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
