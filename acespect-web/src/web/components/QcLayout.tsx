@@ -82,6 +82,7 @@ function Shell() {
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#f5f6fa", fontFamily: "Inter, -apple-system, sans-serif" }}>
+      <a className="skip-link" href="#qc-main">Skip to the page content</a>
       <style>{`@media (max-width: 900px) { .qc-aside { position: fixed !important; z-index: 40; left: 0; top: 0; transform: translateX(-100%); transition: transform .2s; box-shadow: 0 0 30px rgba(0,0,0,.2); } .qc-aside.open { transform: none; } .qc-menu { display: inline-flex !important; } .qc-scrim { display: block !important; } main { -webkit-overflow-scrolling: touch; } }`}</style>
       {navOpen && <div className="qc-scrim" onClick={() => setNavOpen(false)} style={{ display: "none", position: "fixed", inset: 0, background: "rgba(15,23,42,.4)", zIndex: 30 }} />}
       <aside className={`qc-aside${navOpen ? " open" : ""}`} aria-label="Sidebar" style={{ width: 232, flexShrink: 0, background: "white", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -142,7 +143,7 @@ function Shell() {
           )}
           <Bell2 />
         </header>
-        <main style={{ flex: 1, overflow: "auto" }}>
+        <main id="qc-main" tabIndex={-1} style={{ flex: 1, overflow: "auto", outline: "none" }}>
           {error && <div style={{ padding: "12px 32px" }}><ErrorNote message={error} /></div>}
           {needsClient ? <NeedsClient onEnter={() => setSupportOpen(true)} /> : <Outlet />}
         </main>

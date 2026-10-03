@@ -3,6 +3,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
 import { env } from './config/env';
+import { prisma } from './lib/prisma';
 import { apiLimiter } from './middleware/rateLimit';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { authRouter } from './modules/auth/auth.routes';
@@ -43,6 +44,17 @@ export function createApp() {
   // Liveness — no DB dependency.
   app.get('/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok', service: 'acespect-backend', timestamp: new Date().toISOString() });
+  });
+
+  // Readiness: the database answers and how quickly (for uptime monitors and the performance targets).
+  app.get('/health/ready', async (_req: Request, res: Response) => {
+    const t0 = Date.now();
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ status: 'ok', dbMs: Date.now() - t0, timestamp: new Date().toISOString() });
+    } catch {
+      res.status(503).json({ status: 'degraded', dbMs: Date.now() - t0 });
+    }
   });
 
   // API v1 — media is exempt from the general rate limiter: a single report

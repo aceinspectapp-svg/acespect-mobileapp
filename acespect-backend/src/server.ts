@@ -50,6 +50,13 @@ async function main() {
     console.error('⚠️  Could not seed QC reference data.', err);
   }
 
+  try {
+    await (await import('./modules/qc/qc.privacy.service')).ensureSubProcessors();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('⚠️  Could not seed the sub-processor register.', err);
+  }
+
   // Recurring work: SLA scan, DLP reminders, notification digests, retention. Set QC_JOBS=off to run an API-only instance.
   if (process.env.QC_JOBS !== 'off') startQcJobs();
 

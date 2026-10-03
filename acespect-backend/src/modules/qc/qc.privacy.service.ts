@@ -139,6 +139,26 @@ export async function saveSubProcessor(ctx: QcContext, id: string | null, input:
   return row;
 }
 
+/**
+ * The services that handle personal information, listed once so the register is never empty. Their hosting regions are
+ * infrastructure settings this code cannot see, so they are recorded as unconfirmed overseas: an administrator must complete
+ * the APP 8 assessment and the real location before approving each one (REQ-TEN-004).
+ */
+export async function ensureSubProcessors(): Promise<void> {
+  if ((await prisma.qcRecord.count({ where: { kind: 'subprocessor' } })) > 0) return;
+  const rows = [
+    ['Railway', 'Hosting of the API, web app and database', 'All platform data'],
+    ['Egnyte', 'Storage of photos, documents and reports', 'Photos, documents, reports'],
+    ['Expo (EAS)', 'Mobile app updates and push notifications', 'Device push tokens, notification titles'],
+    ['Email provider (to be chosen)', 'Sending invitation, reset and alert emails', 'Names and email addresses'],
+  ];
+  for (const [name, purpose, data_types] of rows) {
+    await prisma.qcRecord.create({
+      data: { kind: 'subprocessor', status: 'Proposed', title: name, data: asJson({ name, purpose, data_types, processing_location: 'To be confirmed', outside_australia: true, note: 'Location unconfirmed: complete the APP 8 assessment before approving.' }) },
+    });
+  }
+}
+
 // ───────────────────────── Legal holds (E36) ─────────────────────────
 
 /** Is there an active hold covering this project, lot or defect? Deletion and retention must check this. */
