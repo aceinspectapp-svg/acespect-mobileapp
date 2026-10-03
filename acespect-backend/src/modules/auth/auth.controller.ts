@@ -4,7 +4,7 @@ import { ApiError } from '../../utils/ApiError';
 import { authService, isMicrosoftConfigured, RequestInfo } from './auth.service';
 import { prisma } from '../../lib/prisma';
 import { capabilityList } from '../qc/qc.permissions';
-import { loadMemberships, getActiveSupportSession } from '../qc/qc.context';
+import { loadMemberships } from '../qc/qc.context';
 
 const infoOf = (req: Request): RequestInfo => ({ ip: req.ip ?? null, appClient: String(req.headers['x-app-client'] ?? '') || null });
 
@@ -95,9 +95,8 @@ export const authController = {
   me: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
     const user = await authService.getById(req.user.id);
-    const [memberships, support, row] = await Promise.all([
+    const [memberships, row] = await Promise.all([
       loadMemberships(req.user.id),
-      getActiveSupportSession(req.user.id),
       prisma.user.findUnique({ where: { id: req.user.id }, select: { termsVersion: true, privacyVersion: true } }),
     ]);
     // Capabilities per membership so the web app can hide what a role cannot use.
@@ -108,7 +107,6 @@ export const authController = {
     res.status(200).json({
       user,
       memberships: withCaps,
-      supportSession: support,
       terms: row ? { termsVersion: row.termsVersion, privacyVersion: row.privacyVersion } : null,
       superAdminCapabilities: req.user.role === 'ADMIN' ? capabilityList({ role: 'SA', permissions: [] }) : [],
     });

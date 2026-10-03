@@ -34,11 +34,9 @@ const cap = requireCap;
 const capDefect = (c: Capability) => requireCap(c, async (req) => (await ownerOf('defect', String(req.params.id)))?.clientId ?? undefined);
 const self = [requireAuth, cap('account.self')];
 
-// ─── Who am I, support mode ─────────────────────────────────────────────────
+// ─── Who am I ─────────────────────────────────────────────────
 router.get('/me', ...self, pl.me);
 router.post('/context/switch', requireAuth, pl.switchContext);
-router.post('/support/start', requireAuth, cap('support.enter'), pl.startSupport);
-router.post('/support/end', requireAuth, cap('support.enter'), pl.endSupport);
 
 // ─── Config bundle — any authenticated caller (dashboard + mobile both read this) ──
 router.get('/config', requireAuth, qcController.getConfig);

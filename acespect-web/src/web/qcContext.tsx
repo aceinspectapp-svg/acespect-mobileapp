@@ -11,8 +11,6 @@ interface QcState {
   can: (capability: string) => boolean;
   refresh: () => Promise<void>;
   switchClient: (id: string) => Promise<void>;
-  enterSupport: (clientId: string, reason: string, ticketRef?: string) => Promise<void>;
-  exitSupport: () => Promise<void>;
 }
 
 const Ctx = createContext<QcState | null>(null);
@@ -36,7 +34,7 @@ export function QcProvider({ children }: { children: React.ReactNode }) {
       setPickClient(null);
       setError(null);
       // Remember the client the server resolved so later requests name it explicitly.
-      if (m.clientId && !m.isSA) setActiveClientId(m.clientId);
+      if (m.clientId) setActiveClientId(m.clientId);
     } catch (e) {
       const err = e as ApiError;
       if (err.code === "CONTEXT_REQUIRED" && err.details?.clients) {
@@ -64,8 +62,6 @@ export function QcProvider({ children }: { children: React.ReactNode }) {
     refresh,
     // The server records every switch of working context.
     switchClient: async (id) => { await qcx.context.switch(id).catch(() => undefined); setActiveClientId(id); setLoading(true); await refresh(); },
-    enterSupport: async (clientId, reason, ticketRef) => { await qcx.support.start(clientId, reason, ticketRef); setActiveClientId(clientId); await refresh(); },
-    exitSupport: async () => { await qcx.support.end(); setActiveClientId(null); await refresh(); },
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

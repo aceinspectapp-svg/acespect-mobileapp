@@ -204,7 +204,7 @@ async function storeReport(ctx: QcContext, args: { clientId: string; projectId?:
 }
 
 export async function listReports(ctx: QcContext, projectId?: string) {
-  if (!ctx.clientId) throw new ApiError(409, 'Start support mode in a client first', 'SUPPORT_MODE_REQUIRED');
+  if (!ctx.clientId) throw new ApiError(409, 'Choose a client first', 'CLIENT_REQUIRED');
   const rows = await prisma.qcRecord.findMany({ where: { kind: 'report', clientId: ctx.clientId, projectId, ...(ctx.isSA || ctx.role === 'CLIENT_ADMIN' ? {} : { createdById: ctx.userId }) }, orderBy: { createdAt: 'desc' }, take: 100 });
   return rows.map((r) => {
     const { fileUrl: _u, downloads, ...rest } = r.data as Record<string, unknown>;
@@ -374,7 +374,7 @@ export async function dlpCloseOutReport(ctx: QcContext, projectId: string) {
 
 export async function escalationLogReport(ctx: QcContext, f: ReportFilters, format: 'pdf' | 'xlsx') {
   const clientId = ctx.clientId;
-  if (!clientId) throw new ApiError(409, 'Start support mode in a client first', 'SUPPORT_MODE_REQUIRED');
+  if (!clientId) throw new ApiError(409, 'Choose a client first', 'CLIENT_REQUIRED');
   const rows = await prisma.qcEscalation.findMany({
     where: { defect: { property: { projectId: f.projectId, project: { clientId, ...(ctx.projectIds === 'all' ? {} : { id: { in: ctx.projectIds } }) } } }, triggeredAt: { gte: f.from ? new Date(f.from) : undefined, lte: f.to ? new Date(`${f.to}T23:59:59Z`) : undefined } },
     include: { defect: { select: { defectRef: true, title: true, severity: { select: { label: true } }, status: { select: { label: true } }, property: { select: { name: true, project: { select: { name: true } } } } } } },
@@ -400,7 +400,7 @@ export async function escalationLogReport(ctx: QcContext, f: ReportFilters, form
 /** A Client Admin's portfolio view across projects (REQ-RPT-007). */
 export async function portfolio(ctx: QcContext) {
   const clientId = ctx.clientId;
-  if (!clientId) throw new ApiError(409, 'Start support mode in a client first', 'SUPPORT_MODE_REQUIRED');
+  if (!clientId) throw new ApiError(409, 'Choose a client first', 'CLIENT_REQUIRED');
   const projects = await prisma.qcProject.findMany({ where: { clientId }, include: { builder: { select: { name: true } }, _count: { select: { properties: true } } }, orderBy: { name: 'asc' } });
   const out = [];
   for (const p of projects) {

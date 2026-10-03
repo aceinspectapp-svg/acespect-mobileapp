@@ -3,7 +3,7 @@ import { Modal, btnPrimary, cell, sub, ErrorNote } from "./QcUi";
 import { qcx } from "../qcApi";
 
 const LABEL: Record<string, string> = {
-  "client.manage": "Create and manage clients", "client.defaults": "Set client defaults and see usage", "support.enter": "Enter a client in support mode",
+  "client.manage": "Create and manage clients", "client.defaults": "Set client defaults and see usage",
   "securitylog.view": "See the security log and support sessions", "retention.hold": "Place and release legal holds", "tenant.export": "Export the client's data", "privacy.handle": "Handle privacy requests and breaches",
   "users.clientUsers": "Add Client Admins and Client Users", "users.mcOrg": "Add Master Contractor organisations and managers", "users.mcStaff": "Add Master Contractor staff",
   "users.trade": "Add trade companies and Trade Users", "users.credentialInspector": "Credential Private Inspectors", "users.deactivate": "Deactivate people", "users.grantPermissions": "Grant optional permissions",

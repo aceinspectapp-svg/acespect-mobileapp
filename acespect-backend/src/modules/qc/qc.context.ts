@@ -75,13 +75,6 @@ export async function loadMemberships(userId: string): Promise<QcMembershipSumma
   }));
 }
 
-export async function getActiveSupportSession(userId: string) {
-  return prisma.qcSupportSession.findFirst({
-    where: { userId, endedAt: null, expiresAt: { gt: new Date() } },
-    orderBy: { startedAt: 'desc' },
-  });
-}
-
 function headerValue(req: Request, name: string): string | undefined {
   const v = req.headers[name];
   return Array.isArray(v) ? v[0] : v;
@@ -95,11 +88,14 @@ export async function buildContext(req: Request, opts: { clientHint?: string } =
   if (!user || !user.isActive) throw ApiError.unauthorized('This account is not active', 'ACCOUNT_INACTIVE');
 
   if (user.role === 'ADMIN') {
-    const session = await getActiveSupportSession(user.id);
+    // The Super Admin administers every client: they choose the one they are working in (X-Client-Id) and everything they
+    // do is still recorded in that client's audit trail with their role.
     const hint = opts.clientHint ?? headerValue(req, 'x-client-id');
-    if (hint && session && hint !== session.clientId) {
-      // The caller thinks they are in another client than their session.
-      throw ApiError.conflict('Your support session is for a different client', 'SUPPORT_SESSION_MISMATCH');
+    let chosen: string | null = null;
+    if (hint) {
+      const c = await prisma.qcClient.findUnique({ where: { id: hint }, select: { id: true } });
+      if (!c) throw ApiError.notFound('Client not found');
+      chosen = c.id;
     }
     return {
       userId: user.id,
@@ -108,12 +104,10 @@ export async function buildContext(req: Request, opts: { clientHint?: string } =
       legacy: false,
       role: 'SA',
       permissions: [],
-      clientId: session?.clientId ?? null,
+      clientId: chosen,
       membership: null,
       projectIds: 'all',
-      supportSession: session
-        ? { id: session.id, clientId: session.clientId, reason: session.reason, ticketRef: session.ticketRef, expiresAt: session.expiresAt }
-        : null,
+      supportSession: null,
       ip,
     };
   }
@@ -209,12 +203,7 @@ export function requireCap(capability: Capability, hint?: (req: Request) => Prom
  */
 export async function assertClientAccess(ctx: QcContext, clientId: string | null | undefined): Promise<void> {
   if (!clientId) return;
-  if (ctx.isSA) {
-    if (!ctx.supportSession || ctx.supportSession.clientId !== clientId) {
-      throw new ApiError(409, 'Start support mode in this client first', 'SUPPORT_MODE_REQUIRED', { clientId });
-    }
-    return;
-  }
+  if (ctx.isSA) return;
   if (ctx.clientId !== clientId) {
     await logSecurityEvent({ type: 'CROSS_TENANT', clientId, userId: ctx.userId, detail: { actorClient: ctx.clientId }, ip: ctx.ip });
     throw ApiError.notFound('Not found');
@@ -224,7 +213,7 @@ export async function assertClientAccess(ctx: QcContext, clientId: string | null
 /** Which client a list/create is scoped to. A Super Admin outside a session has none, which is an error for tenant data. */
 export function requireTenant(ctx: QcContext): string {
   if (ctx.clientId) return ctx.clientId;
-  if (ctx.isSA) throw new ApiError(409, 'Start support mode in a client first', 'SUPPORT_MODE_REQUIRED');
+  if (ctx.isSA) throw new ApiError(409, 'Choose a client first', 'CLIENT_REQUIRED');
   throw ApiError.forbidden('No client context');
 }
 
@@ -241,34 +230,3 @@ export function canSeeProject(ctx: QcContext, project: { id: string; clientId: s
 }
 
 export const actorOf = (ctx: QcContext) => ({ id: ctx.userId, role: ctx.role });
-
-// ───────────────────────── Support mode (E32) ─────────────────────────
-
-export async function startSupportSession(ctx: QcContext, clientId: string, reason: string, ticketRef?: string) {
-  if (!ctx.isSA) throw ApiError.forbidden('Only a Super Admin can enter support mode');
-  if (!reason?.trim() || reason.trim().length < 5) throw ApiError.badRequest('A reason is required (at least 5 characters)');
-  const client = await prisma.qcClient.findUnique({ where: { id: clientId } });
-  if (!client) throw ApiError.notFound('Client not found');
-  // One session at a time: starting a new one ends the old one.
-  await prisma.qcSupportSession.updateMany({ where: { userId: ctx.userId, endedAt: null }, data: { endedAt: new Date() } });
-  const session = await prisma.qcSupportSession.create({
-    data: {
-      userId: ctx.userId,
-      clientId,
-      reason: reason.trim(),
-      ticketRef: ticketRef?.trim() || null,
-      expiresAt: new Date(Date.now() + env.SUPPORT_SESSION_MINUTES * 60_000),
-    },
-  });
-  await logSecurityEvent({ type: 'SUPPORT_START', clientId, userId: ctx.userId, detail: { reason: session.reason, ticketRef: session.ticketRef, sessionId: session.id }, ip: ctx.ip });
-  await recordAudit({ clientId, entityType: 'SupportSession', entityId: session.id, action: 'support.start', actor: { id: ctx.userId, role: 'SA' }, supportSessionId: session.id, reason: session.reason });
-  return session;
-}
-
-export async function endSupportSession(ctx: QcContext) {
-  const session = await getActiveSupportSession(ctx.userId);
-  if (!session) return;
-  await prisma.qcSupportSession.update({ where: { id: session.id }, data: { endedAt: new Date() } });
-  await logSecurityEvent({ type: 'SUPPORT_END', clientId: session.clientId, userId: ctx.userId, detail: { sessionId: session.id }, ip: ctx.ip });
-  await recordAudit({ clientId: session.clientId, entityType: 'SupportSession', entityId: session.id, action: 'support.end', actor: { id: ctx.userId, role: 'SA' }, supportSessionId: session.id });
-}

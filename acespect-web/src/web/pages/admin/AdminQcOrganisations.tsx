@@ -61,7 +61,7 @@ function Clients() {
   const [dialog, setDialog] = useState<{ row?: QcClientRow } | null>(null);
   const [invite, setInvite] = useState<InvitationInfo | null>(null);
   const [offboarding, setOffboarding] = useState<QcClientRow | null>(null);
-  const { enterSupport } = useQc();
+  const { switchClient } = useQc();
   const navigate = useNavigate();
   const [abnClash, setAbnClash] = useState(false);
 
@@ -109,7 +109,7 @@ function Clients() {
             <td style={cell}>{statusPill(c.status)}</td>
             <td style={{ ...cell, whiteSpace: "nowrap", textAlign: "right" }}>
               <button style={btnLink} onClick={() => setDialog({ row: c })}>Edit</button>{" "}
-              {c.status !== "OFFBOARDED" && <button style={btnLink} onClick={() => { const reason = window.prompt(`Enter ${c.name} in support mode. Why?`); if (reason && reason.trim().length >= 5) enterSupport(c.id, reason.trim()).then(() => navigate("/qc")).catch((e) => window.alert(e.message)); }}>Enter support mode</button>}{" "}
+              {c.status !== "OFFBOARDED" && <button style={btnLink} onClick={() => switchClient(c.id).then(() => navigate("/qc"))}>Open client</button>}{" "}
               {c.status === "SUSPENDED" ? (
                 <button style={btnLink} onClick={() => setStatus(c, "ACTIVE")}>Reactivate</button>
               ) : c.status !== "OFFBOARDED" ? (

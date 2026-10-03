@@ -375,7 +375,7 @@ export async function cloneTemplate(ctx: QcContext, sourceId: string, input: Rec
   const src = await prisma.qcTemplate.findUniqueOrThrow({ where: { id: sourceId }, include: { items: true } });
   if (src.versionStatus !== 'PUBLISHED') throw ApiError.badRequest('Only a published version can be cloned');
   const clientId = ctx.clientId;
-  if (!clientId) throw ApiError.conflict('Choose a client first (support mode)', 'SUPPORT_MODE_REQUIRED');
+  if (!clientId) throw ApiError.conflict('Choose a client first', 'CLIENT_REQUIRED');
   if (src.level !== 'BASE' && src.clientId !== clientId) throw ApiError.notFound('Template not found');
   const level = str(data.level).toUpperCase() === 'PROJECT' ? 'PROJECT' : 'CLIENT';
   let projectId: string | null = null;

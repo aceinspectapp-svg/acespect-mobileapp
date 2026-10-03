@@ -1,5 +1,5 @@
 import { prisma } from '../../lib/prisma';
-import { getActiveSupportSession, loadMemberships } from './qc.context';
+import { loadMemberships } from './qc.context';
 import { ApiError } from '../../utils/ApiError';
 import { requireExists, taskInclude } from './qc.shared';
 import {
@@ -150,8 +150,7 @@ async function visibleHierarchy(user: { id: string; role: string }) {
   type ProjectFilter = { clientId: string; projectIds: string[] | 'all' };
   const scopes: ProjectFilter[] = [];
   if (user.role === 'ADMIN') {
-    const session = await getActiveSupportSession(user.id);
-    if (session) scopes.push({ clientId: session.clientId, projectIds: 'all' });
+    for (const c of await prisma.qcClient.findMany({ select: { id: true } })) scopes.push({ clientId: c.id, projectIds: 'all' });
   } else {
     for (const m of await loadMemberships(user.id)) {
       scopes.push({ clientId: m.clientId, projectIds: m.role === 'CLIENT_ADMIN' || m.projectIds.length === 0 ? 'all' : m.projectIds });

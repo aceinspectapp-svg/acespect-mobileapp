@@ -148,7 +148,7 @@ export function QcAudit() {
             ))}
             {sessions?.length === 0 && <tr><td colSpan={6} style={{ textAlign: "center", padding: 28, fontSize: 13, color: "#94a3b8" }}>No Super Admin has accessed this client.</td></tr>}
           </TableCard>
-        ) : <p style={sub}>Enter a client through support mode to see its sessions.</p>
+        ) : <p style={sub}>Choose a client to see its past support sessions.</p>
       )}
     </PageShell>
   );

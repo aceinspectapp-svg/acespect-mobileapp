@@ -32,7 +32,6 @@ export const CAPABILITIES = {
   // Platform and tenancy
   'client.manage': { SA: true },
   'client.defaults': { SA: true, CLIENT_ADMIN: true },
-  'support.enter': { SA: true },
   'securitylog.view': { SA: true, CLIENT_ADMIN: true },
   'retention.hold': { SA: true, CLIENT_ADMIN: true },
   'tenant.export': { SA: true, CLIENT_ADMIN: 'scope' },

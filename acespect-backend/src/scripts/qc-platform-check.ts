@@ -186,23 +186,19 @@ async function main() {
   const hdr = await api('GET', '/qc/projects', { token: ca, client: B.client.id });
   ok(hdr.status === 404, 'X-Client-Id for a client you do not belong to is refused', hdr.status);
 
-  console.log('Support mode');
-  const saNoSession = await api('GET', '/qc/projects', { token: sa });
-  ok(saNoSession.status === 409 && errCode(saNoSession) === 'SUPPORT_MODE_REQUIRED', 'Super Admin needs support mode to see client data', saNoSession.body);
-  const noReason = await api('POST', '/qc/support/start', { token: sa, body: { clientId: A.client.id, reason: 'x' } });
-  ok(noReason.status === 400, 'support mode requires a reason', noReason.status);
-  const start = await api('POST', '/qc/support/start', { token: sa, body: { clientId: A.client.id, reason: 'Investigating a support ticket', ticketRef: 'T-100' } });
-  ok(start.status === 201, 'support session starts', start.body);
-  const saIn = await api('GET', '/qc/projects', { token: sa });
-  ok(saIn.status === 200 && saIn.body.projects.length === 1, 'Super Admin sees the client inside the session');
-  const saWrong = await api('GET', `/qc/projects/${projectB}`, { token: sa });
-  ok(saWrong.status === 409 || saWrong.status === 404, 'session for client A does not open client B', saWrong.status);
-  const sessions = await api('GET', '/qc/support-sessions', { token: ca });
-  ok(sessions.status === 200 && sessions.body.sessions.length === 1 && sessions.body.sessions[0].reason.includes('support ticket'), 'the client can see the support session');
-  const audit = await api('GET', '/qc/audit?action=support', { token: ca });
-  ok(audit.status === 200 && audit.body.entries.length >= 1, 'support start is in the client\'s audit trail');
-  const end = await api('POST', '/qc/support/end', { token: sa });
-  ok(end.status === 200, 'support session ends');
+  console.log('Super Admin works in any client without a support session');
+  const saNoClient = await api('GET', '/qc/projects', { token: sa });
+  ok(saNoClient.status === 409 && errCode(saNoClient) === 'CLIENT_REQUIRED', 'Super Admin must say which client to work in', saNoClient.body);
+  const saGhost = await api('GET', '/qc/projects', { token: sa, client: '00000000-0000-0000-0000-000000000000' });
+  ok(saGhost.status === 404, 'a client that does not exist is refused', saGhost.status);
+  const saIn = await api('GET', '/qc/projects', { token: sa, client: A.client.id });
+  ok(saIn.status === 200 && saIn.body.projects.length === 1, 'Super Admin sees the client they name, with no reason or session');
+  const saWrong = await api('GET', `/qc/projects/${projectB}`, { token: sa, client: A.client.id });
+  ok(saWrong.status === 200, 'the Super Admin can open a record of any client by its link', saWrong.status);
+  const saMe = await api('GET', '/qc/me', { token: sa });
+  ok(saMe.status === 200 && saMe.body.clients.length >= 2, 'the Super Admin is offered every client', saMe.body.clients?.length);
+  const oldStart = await api('POST', '/qc/support/start', { token: sa, body: { clientId: A.client.id, reason: 'Investigating a support ticket' } });
+  ok(oldStart.status === 404, 'support mode no longer exists', oldStart.status);
 
   // ───────────── People and permissions ─────────────
   console.log('People, invitations and permissions');
@@ -216,10 +212,9 @@ async function main() {
   const supP = await mkPerson(ca, { email_address: `sup${sfx}@example.com`, first_name: 'Sue', last_name: 'Super', mobile: '0455555556', role: 'MC_SITE_SUPERVISOR', masterContractorId: mcAId, projectIds: [projectA] });
   const trP = await mkPerson(ca, { email_address: `tr${sfx}@example.com`, first_name: 'Tom', last_name: 'Trade', mobile: '0466666666', role: 'TRADE_USER', tradeCompanyId: tradeId, tradeCategoryIds: [renderer.id] });
   ok([cuNo, cuYes, pmP, supP, trP].every((p) => p.status === 201), 'all roles can be created', [cuNo.body, pmP.body, supP.body, trP.body]);
-  const piP = await api('POST', '/qc/support/start', { token: sa, body: { clientId: A.client.id, reason: 'Credential the inspector' } });
-  void piP;
   const piCreate = await api('POST', '/qc/people', {
     token: sa,
+    client: A.client.id,
     body: person({
       email_address: `pi${sfx}@example.com`, first_name: 'Ivy', last_name: 'Inspector', mobile: '0455555555', role: 'PRIVATE_INSPECTOR',
       credentials: { engagement_type: opt('E06', 'engagement_type'), registering_authority: opt('E06', 'registering_authority'), registration_category: opt('E06', 'registration_category'), registration_number: 'BI-U1', registration_expiry: '2027-05-01', qualifications: 'Dip Building', professional_indemnity_insurer_policy_number_lim: ['Ins', 'P1', 1000000, '2027-01-01'], public_liability_insurer_policy_number_expiry: ['a', 'b', '2027-01-01'], approved_for_clients: [A.client.id], signature_image: '/api/v1/media/00000000-0000-0000-0000-000000000000' },
@@ -227,8 +222,7 @@ async function main() {
   });
   ok(piCreate.status === 201, 'Super Admin credentials a Private Inspector', piCreate.body);
   const piId = piCreate.body.person.id as string;
-  await api('POST', `/qc/people/${piId}/credentials/status`, { token: sa, body: { status: 'APPROVED' } });
-  await api('POST', '/qc/support/end', { token: sa });
+  await api('POST', `/qc/people/${piId}/credentials/status`, { token: sa, client: A.client.id, body: { status: 'APPROVED' } });
 
   const tokens: Record<string, string> = {};
   tokens.mgr = (await activate(mcMgr.body.invitation, 'mgr')).token;
@@ -596,7 +590,7 @@ async function main() {
   const cfgB = await api('GET', '/qc/config', { token: caB.token });
   ok(cfgB.status === 200 && cfgB.body.clients.every((c: { id: string }) => c.id === B.client.id), 'and the other client only theirs');
   const cfgSa = await api('GET', '/qc/config', { token: sa });
-  ok(cfgSa.status === 200 && cfgSa.body.clients.length === 0, 'the Super Admin sees no client data in the config bundle outside support mode', cfgSa.body.clients?.length);
+  ok(cfgSa.status === 200 && cfgSa.body.clients.length >= 2, 'the Super Admin sees every client in the config bundle', cfgSa.body.clients?.length);
   const cfgTrade = await api('GET', '/qc/config', { token: tokens.trade });
   ok(cfgTrade.status === 200 && cfgTrade.body.clients.every((c: { id: string }) => c.id === A.client.id), 'a Trade User\'s bundle is limited to their client');
 
@@ -604,9 +598,7 @@ async function main() {
   const legacyReg = await api('POST', '/auth/register', { body: { email: `legacy${sfx}@example.com`, password: 'Legacy-Passw0rd!', name: 'Legacy Inspector' } });
   ok(legacyReg.status === 201, 'a plain account can still register');
   const legacy = legacyReg.body.accessToken as string;
-  await api('POST', '/qc/support/start', { token: sa, body: { clientId: A.client.id, reason: 'Assign a defect to a legacy account' } });
-  const legacyDefect = await api('POST', '/qc/defects', { token: sa, body: { propertyId: lot2, assignedToId: legacyReg.body.user.id, defect_title: 'Legacy defect', description: 'Crack', room_or_area: 'External - front', severity: 'Minor Defect' } });
-  await api('POST', '/qc/support/end', { token: sa });
+  const legacyDefect = await api('POST', '/qc/defects', { token: sa, client: A.client.id, body: { propertyId: lot2, assignedToId: legacyReg.body.user.id, defect_title: 'Legacy defect', description: 'Crack', room_or_area: 'External - front', severity: 'Minor Defect' } });
   ok(legacyDefect.status === 201, 'a defect can be assigned to a legacy account', legacyDefect.body);
   const myTasks = await api('GET', '/qc/tasks/assigned', { token: legacy });
   ok(myTasks.status === 200 && myTasks.body.tasks.length === 1, 'the legacy account sees its own task');
@@ -674,11 +666,8 @@ async function main() {
   ok(after.status === 'DLP_COMPLETE' && !!after.dlpSignedOffAt, 'project is DLP complete');
   const dlpReport = await api('POST', `/qc/projects/${projectA}/dlp/report`, { token: ca });
   ok(dlpReport.status === 201, 'DLP close-out report generated', dlpReport.body);
-  const lockedSa = await api('POST', '/qc/support/start', { token: sa, body: { clientId: A.client.id, reason: 'Check closed record lock' } });
-  void lockedSa;
-  const saEditClosed = await api('PATCH', `/qc/defects/${dlpId}`, { token: sa, body: { dueDate: '2027-01-01' } });
+  const saEditClosed = await api('PATCH', `/qc/defects/${dlpId}`, { token: sa, client: A.client.id, body: { dueDate: '2027-01-01' } });
   ok(saEditClosed.status === 409 && errCode(saEditClosed) === 'RECORD_LOCKED', 'a terminal record is locked, even to the Super Admin', saEditClosed.body);
-  await api('POST', '/qc/support/end', { token: sa });
 
   // DLP reminders and escalation window, on a second project.
   const proj2 = (await api('POST', '/qc/projects', { token: ca, body: projBody(mcAId, 'C') })).body.project.id as string;
@@ -693,10 +682,8 @@ async function main() {
 
   // ───────────── Closed records, last admin, shared logins ─────────────
   console.log('Archived projects, last admin, one login for several clients');
-  await api('POST', '/qc/support/start', { token: sa, body: { clientId: A.client.id, reason: 'Check the last-admin rule' } });
-  const lastAdmin = await api('POST', `/qc/people/${A.firstAdmin.id}/deactivate`, { token: sa, body: { reason: 'Left the company' } });
+  const lastAdmin = await api('POST', `/qc/people/${A.firstAdmin.id}/deactivate`, { token: sa, client: A.client.id, body: { reason: 'Left the company' } });
   ok(lastAdmin.status === 409 && errCode(lastAdmin) === 'LAST_ADMIN', 'the last active Client Admin cannot be deactivated', lastAdmin.body);
-  await api('POST', '/qc/support/end', { token: sa });
 
   const noReasonArchive = await api('POST', `/qc/projects/${proj2}/status`, { token: ca, body: { status: 'ARCHIVED' } });
   ok(noReasonArchive.status === 400, 'archiving needs a reason', noReasonArchive.body);

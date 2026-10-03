@@ -132,7 +132,7 @@ export interface DefectFilters {
 export async function visibilityWhere(ctx: QcContext): Promise<Prisma.QcDefectWhereInput> {
   const clientId = ctx.clientId;
   if (ctx.isSA) {
-    if (!clientId) throw new ApiError(409, 'Start support mode in a client first', 'SUPPORT_MODE_REQUIRED');
+    if (!clientId) throw new ApiError(409, 'Choose a client first', 'CLIENT_REQUIRED');
     return { property: { project: { clientId } } };
   }
   if (ctx.legacy) return { assignedToId: ctx.userId };

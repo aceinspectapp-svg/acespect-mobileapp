@@ -26,7 +26,6 @@ export interface QcMe {
   projectIds: string[] | "all";
   permissions: string[];
   capabilities: string[];
-  supportSession: { id: string; clientId: string; reason: string; ticketRef: string | null; expiresAt: string } | null;
 }
 
 export interface Duration { value: number; unit: "hours" | "business_days" | "calendar_days" }
@@ -80,8 +79,6 @@ export const qcx = {
   permissions: () => req<{ matrix: Array<{ capability: string; roles: Record<string, boolean | string> }>; optionalPermissions: string[] }>("/qc/permissions"),
   context: { switch: (clientId: string) => req<{ clientId: string }>("/qc/context/switch", { method: "POST", body: j({ clientId }) }) },
   support: {
-    start: (clientId: string, reason: string, ticketRef?: string) => req("/qc/support/start", { method: "POST", body: j({ clientId, reason, ticketRef }) }),
-    end: () => req("/qc/support/end", { method: "POST" }),
     sessions: () => req<{ sessions: Array<{ id: string; reason: string; ticketRef: string | null; startedAt: string; expiresAt: string; endedAt: string | null; actionsPerformed: number; user: { name: string | null; email: string } }> }>("/qc/support-sessions").then((d) => d.sessions),
   },
 

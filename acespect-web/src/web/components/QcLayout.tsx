@@ -2,15 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import {
   LayoutDashboard, ShieldAlert, ClipboardCheck, Building2, Users, FileText, Gauge, BarChart3, ScrollText, Settings, Lock, UserCircle2,
-  Bell, LogOut, HardHat, ArrowLeft, LifeBuoy, Layers,
+  Bell, LogOut, HardHat, ArrowLeft, Layers,
 } from "lucide-react";
 import { AcespectLogo } from "../../components/AcespectLogo";
 import { useAppData } from "../data";
 import { QcProvider, useQc } from "../qcContext";
 import { qcx, type Notification } from "../qcApi";
-import { btnGhost, btnPrimary, ErrorNote, Field, Modal, Select } from "./QcUi";
+import { btnGhost, btnPrimary, ErrorNote } from "./QcUi";
 import { inputStyle } from "./SpecForm";
-import { api } from "../api";
 
 interface NavItem { to: string; label: string; icon: React.ElementType; cap: string | string[]; end?: boolean }
 
@@ -47,11 +46,10 @@ export function QcLayout() {
 }
 
 function Shell() {
-  const { me, loading, error, pickClient, can, switchClient, exitSupport } = useQc();
+  const { me, loading, error, pickClient, can, switchClient } = useQc();
   const { currentUser, logout } = useAppData();
   const navigate = useNavigate();
   const location = useLocation();
-  const [supportOpen, setSupportOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   // Close the phone menu after choosing a page.
   useEffect(() => { setNavOpen(false); }, [location.pathname]);
@@ -93,6 +91,12 @@ function Shell() {
         <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#1a2a4a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser?.name ?? currentUser?.email}</div>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed" }}>{roleLabel(me.role)}</div>
+          {me.isSA && (
+            <select value={me.clientId ?? ""} onChange={(e) => e.target.value && switchClient(e.target.value)} style={{ ...inputStyle, marginTop: 8, fontSize: 12, padding: "6px 8px" }} aria-label="Client to work in">
+              <option value="">Choose a client…</option>
+              {me.clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
           {me.clients.length > 1 && !me.isSA && (
             <select value={me.clientId ?? ""} onChange={(e) => switchClient(e.target.value)} style={{ ...inputStyle, marginTop: 8, fontSize: 12, padding: "6px 8px" }} aria-label="Client">
               {me.clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -126,29 +130,15 @@ function Shell() {
       </aside>
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-        {me.supportSession && (
-          <div role="status" style={{ background: "#7c2d12", color: "white", padding: "8px 24px", fontSize: 13, display: "flex", alignItems: "center", gap: 12 }}>
-            <LifeBuoy size={15} aria-hidden />
-            <span style={{ flex: 1 }}>
-              <b>Support mode</b>: you are working inside {me.clients[0]?.name ?? "a client"} ({me.supportSession.reason}
-              {me.supportSession.ticketRef ? `, ${me.supportSession.ticketRef}` : ""}). Everything you do is logged and visible to the client. Ends {new Date(me.supportSession.expiresAt).toLocaleTimeString()}.
-            </span>
-            <button style={{ ...btnGhost, padding: "5px 12px" }} onClick={() => exitSupport().then(() => navigate("/qc/organisations"))}>Leave support mode</button>
-          </div>
-        )}
         <header style={{ height: 56, flexShrink: 0, background: "white", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "0 16px", gap: 10 }}>
           <button className="qc-menu" aria-label="Open menu" aria-expanded={navOpen} onClick={() => setNavOpen(true)} style={{ display: "none", marginRight: "auto", width: 36, height: 36, borderRadius: 8, border: "1px solid #e5e7eb", background: "white", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18 }}>☰</button>
-          {me.isSA && !me.supportSession && (
-            <button style={btnGhost} onClick={() => setSupportOpen(true)}><LifeBuoy size={13} aria-hidden style={{ verticalAlign: "-2px" }} /> Enter support mode</button>
-          )}
           <Bell2 />
         </header>
         <main id="qc-main" tabIndex={-1} style={{ flex: 1, overflow: "auto", outline: "none" }}>
           {error && <div style={{ padding: "12px 32px" }}><ErrorNote message={error} /></div>}
-          {needsClient ? <NeedsClient onEnter={() => setSupportOpen(true)} /> : <Outlet />}
+          {needsClient ? <NeedsClient /> : <Outlet />}
         </main>
       </div>
-      {supportOpen && <SupportDialog onClose={() => setSupportOpen(false)} />}
     </div>
   );
 }
@@ -167,45 +157,20 @@ function Centered({ title, sub, children }: { title: string; sub: string; childr
   );
 }
 
-function NeedsClient({ onEnter }: { onEnter: () => void }) {
+function NeedsClient() {
+  const { me, switchClient } = useQc();
   return (
     <div style={{ padding: "60px 32px", maxWidth: 560 }}>
       <Layers size={28} color="#94a3b8" aria-hidden />
       <h1 style={{ fontSize: 18, color: "#1a2a4a", margin: "12px 0 6px" }}>Choose a client to work in</h1>
-      <p style={{ fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>
-        A Super Admin sees a client's projects, defects and people only inside a support session. Start one with a reason; it is time limited, logged,
-        and visible to that client.
-      </p>
-      <button style={btnPrimary} onClick={onEnter}>Enter support mode</button>
-    </div>
-  );
-}
-
-function SupportDialog({ onClose }: { onClose: () => void }) {
-  const { enterSupport } = useQc();
-  const navigate = useNavigate();
-  const [clients, setClients] = useState<Array<{ id: string; label: string }>>([]);
-  const [clientId, setClientId] = useState("");
-  const [reason, setReason] = useState("");
-  const [ticket, setTicket] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  useEffect(() => { api.qc.clients.list().then((c) => setClients(c.map((x) => ({ id: x.id, label: x.name })))).catch(() => undefined); }, []);
-  return (
-    <Modal title="Enter support mode" onClose={onClose} width={460}
-      footer={<><button style={btnGhost} onClick={onClose}>Cancel</button>
-        <button style={btnPrimary} disabled={busy || !clientId || reason.trim().length < 5} onClick={async () => {
-          setBusy(true); setError(null);
-          try { await enterSupport(clientId, reason.trim(), ticket.trim() || undefined); onClose(); navigate("/qc"); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-        }}>Start session</button></>}>
-      <ErrorNote message={error} />
-      <div style={{ display: "grid", gap: 12 }}>
-        <Field label="Client" required><Select value={clientId} onChange={setClientId} options={clients} /></Field>
-        <Field label="Reason" required><textarea style={{ ...inputStyle, minHeight: 70 }} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why do you need access?" /></Field>
-        <Field label="Ticket reference"><input style={inputStyle} value={ticket} onChange={(e) => setTicket(e.target.value)} /></Field>
-        <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>The session ends after an hour. The client can see it in their audit log.</p>
+      <p style={{ fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>Pick the client whose projects, defects and inspections you want to see. You can change it any time from the sidebar.</p>
+      {me?.clients.length === 0 && <p style={{ fontSize: 13, color: "#94a3b8" }}>There are no clients yet. Create one under Organisations.</p>}
+      <div style={{ display: "grid", gap: 8 }}>
+        {me?.clients.map((c) => (
+          <button key={c.id} style={{ ...btnGhost, textAlign: "left", padding: "12px 14px" }} onClick={() => switchClient(c.id)}><b>{c.name}</b></button>
+        ))}
       </div>
-    </Modal>
+    </div>
   );
 }
 

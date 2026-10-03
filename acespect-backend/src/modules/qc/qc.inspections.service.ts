@@ -39,7 +39,7 @@ type InspectionRow = Prisma.QcInspectionGetPayload<{ include: typeof include }>;
 export function inspectionScope(ctx: QcContext): Prisma.QcInspectionWhereInput {
   if (!ctx.clientId) {
     if (ctx.legacy) return { inspectorId: ctx.userId };
-    throw new ApiError(409, 'Start support mode in a client first', 'SUPPORT_MODE_REQUIRED');
+    throw new ApiError(409, 'Choose a client first', 'CLIENT_REQUIRED');
   }
   const where: Prisma.QcInspectionWhereInput = { clientId: ctx.clientId };
   if (ctx.projectIds !== 'all') where.projectId = { in: ctx.projectIds };

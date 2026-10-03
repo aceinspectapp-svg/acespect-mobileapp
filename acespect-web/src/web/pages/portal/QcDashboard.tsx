@@ -42,7 +42,7 @@ export function QcDashboard() {
 
   const t = data?.totals;
   return (
-    <PageShell title="Dashboard" subtitle={me?.isSA ? "Inside the client you entered through support mode" : "Defects and inspections across the projects you can see"}>
+    <PageShell title="Dashboard" subtitle={me?.isSA ? "The client you are working in" : "Defects and inspections across the projects you can see"}>
       <div style={{ width: 300, marginBottom: 16 }}><Select value={projectId} onChange={setProjectId} placeholder="All my projects" options={projects.map((p) => ({ id: p.id, label: p.name }))} /></div>
       <ErrorNote message={error} />
       {!data && !error && <p style={sub}>Loading…</p>}
