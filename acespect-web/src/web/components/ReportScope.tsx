@@ -37,8 +37,15 @@ function Block({ block }: { block: ScopeBlock }) {
       return (
         <div style={{ margin: "0 0 8px" }}>
           {block.intro && <p style={{ margin: "0 0 5px", textAlign: "left", lineHeight: 1.4 }}>{block.intro}</p>}
-          {block.items.map((it) => (
-            <div key={it.label} style={{ display: "flex", gap: "8px", margin: "0 0 5px" }}>
+          {block.items.map((it, i) => (
+            // Index, not `it.label` -- most lists use a unique lettered
+            // label ("a)", "b)", ...), but the Houspect grading list below
+            // (New/Satisfactory/Fair/...) uses the same plain "●" bullet for
+            // every item, which produced duplicate keys within that one
+            // list's own items array. `SCOPE_BLOCKS` is static, hardcoded
+            // data that's never reordered or edited at runtime, so an index
+            // key is safe here.
+            <div key={i} style={{ display: "flex", gap: "8px", margin: "0 0 5px" }}>
               <span style={{ width: `${LIST_LABEL_W}px`, flexShrink: 0, color: reportTokens.ink }}>{it.label}</span>
               <div style={{ flex: 1 }}>
                 <p style={{ margin: 0, textAlign: "left", lineHeight: 1.4 }}>{it.text}</p>

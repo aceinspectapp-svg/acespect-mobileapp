@@ -265,15 +265,23 @@ export function MetaRow({
  * own layout (it never runs two across, unlike this grid used to for
  * Fences specifically once its content happened to be narrow enough).
  * Sized to the reference's own admin note: 5.9cm wide for a landscape
- * photo, 5.2cm for portrait -- there's no orientation metadata to pick
- * between the two per photo, so this uses the landscape width (the more
- * common case) and lets `aspect-ratio` size the height. Each photo is a
- * real hyperlink to its own full-size URL (matching the reference report's
- * convention of linking inserted photos), so it opens full-size in a new
- * tab on screen and survives as an actual clickable link annotation in the
- * exported PDF (Puppeteer/Chromium turns an `<a>` around an image into a
- * real PDF link, not just a picture). Plain thin border only -- no rounded
- * corners or shadow, which the reference doesn't use either.
+ * photo, 5.2cm for portrait. Every photo box is the same fixed 4:3 shape
+ * (`aspect-ratio: 4 / 3`) so a grid row of mixed portrait/landscape photos
+ * lines up neatly, like a real photo album, instead of leaving a ragged
+ * gap under whichever photo happens to be shorter. Within that fixed box,
+ * `object-fit: contain` on a tinted background letterboxes/pillarboxes a
+ * photo that doesn't match the box's own shape (shown smaller, centred,
+ * with even padding) rather than `object-fit: cover`, which used to crop a
+ * portrait-shot photo down to a sliver -- these are evidence of a specific
+ * defect, not decorative, so nothing may ever be cut off. Chromium's print
+ * pipeline computes this the same way any browser does; no orientation
+ * needs to be detected or stored up front. Each photo is a real hyperlink to its own full-size URL (matching
+ * the reference report's convention of linking inserted photos), so it
+ * opens full-size in a new tab on screen and survives as an actual
+ * clickable link annotation in the exported PDF (Puppeteer/Chromium turns
+ * an `<a>` around an image into a real PDF link, not just a picture).
+ * Plain thin border only -- no rounded corners or shadow, which the
+ * reference doesn't use either.
  */
 export function PhotoGrid({
   photos,
@@ -315,7 +323,8 @@ export function PhotoGrid({
               style={{
                 width: "100%",
                 aspectRatio: "4 / 3",
-                objectFit: "cover",
+                objectFit: "contain",
+                background: "#f4f5f7",
                 border: `1px solid ${reportTokens.border}`,
                 display: "block",
               }}

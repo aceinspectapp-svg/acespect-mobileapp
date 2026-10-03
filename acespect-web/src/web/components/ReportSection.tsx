@@ -158,9 +158,16 @@ function DamageBlock({
     <div style={{ margin: "10px 0 0" }}>
       {!hideDamageText && <Para style={{ margin: "0 0 6px" }}>{describeDamage(damage)}</Para>}
       {damage.photos.length > 0 && (
-        <Para style={{ margin: "0 0 4px", fontSize: "0.92em", color: reportTokens.inkMuted }}>{numbering.label}</Para>
+        // Caption + grid kept together (same breakInside:avoid technique as
+        // every other heading-like line in this report) -- without it, the
+        // caption alone can end up as the last line on a page with its
+        // photos starting fresh on the next, which reads like the photos
+        // reference has gone missing rather than just turned the page.
+        <div style={{ breakInside: "avoid" }}>
+          <Para style={{ margin: "0 0 4px", fontSize: "0.92em", color: reportTokens.inkMuted }}>{numbering.label}</Para>
+          <PhotoGrid photos={damage.photos} compact={compact} startNumber={numbering.start} layout="grid" />
+        </div>
       )}
-      <PhotoGrid photos={damage.photos} compact={compact} startNumber={numbering.start} layout="grid" />
     </div>
   );
 }

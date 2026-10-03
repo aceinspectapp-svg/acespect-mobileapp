@@ -105,6 +105,32 @@ function yesNo(itemFields: TemplateField[], inst: AnswerTree, key: string): bool
  * only ever track cracks) correctly keep "crack" as a fixed default, since
  * there's no other type that field could ever hold.
  */
+/** A typed location starting with its own preposition ("above the front
+ *  window", "near the meter box") used to get a second one stacked in front
+ *  of it ("At the above the front window..."); this detects that case so
+ *  the lead-in can drop "At the" and just capitalise the typed text instead
+ *  ("Above the front window, there is..."), while a plain noun-phrase
+ *  location ("centre of the driveway") still gets "At the" as before. */
+const LOCATION_STARTS_WITH_PREPOSITION_RE =
+  /^(above|below|near|beside|under|over|behind|within|along|across|adjacent to|between|next to|around|at|in|on)\b/i;
+
+/** "At the centre of the driveway, there is" / "Above the front window, there is" / "There is" (no location typed) -- see LOCATION_STARTS_WITH_PREPOSITION_RE above. */
+function damageLeadIn(location: string): string {
+  if (!location) return "There is";
+  if (LOCATION_STARTS_WITH_PREPOSITION_RE.test(location)) return `${capitalize(location)}, there is`;
+  return `At the ${location}, there is`;
+}
+
+/** "leaning"/"other" don't read naturally as bare nouns the way "crack"/
+ *  "spall" do ("there is a leaning", "there is an other") -- this gives
+ *  them a noun to sit on instead, without changing the two labels that
+ *  already read fine on their own. */
+function damageNoun(rawType: string, typeLabel: string): string {
+  if (rawType === "leaning") return "leaning defect";
+  if (rawType === "other") return "defect";
+  return typeLabel;
+}
+
 function damageSentences(inst: AnswerTree, itemFields: TemplateField[], damageKey = "damages"): string {
   const damageField = itemFields.find((f) => f.key === damageKey);
   const list = Array.isArray(inst[damageKey]) ? (inst[damageKey] as AnswerTree[]) : [];
@@ -121,19 +147,16 @@ function damageSentences(inst: AnswerTree, itemFields: TemplateField[], damageKe
       const typeLabel = damageTypeField && rawType
         ? lower(damageTypeField.options?.find((o) => o.value === rawType)?.label ?? rawType)
         : "crack";
+      const noun = damageNoun(rawType, typeLabel);
       const parts: string[] = [];
-      parts.push(
-        location
-          ? `At the ${location}, there is ${article(typeLabel)} ${typeLabel}.`
-          : `There is ${article(typeLabel)} ${typeLabel}.`,
-      );
+      parts.push(`${damageLeadIn(location)} ${article(noun)} ${noun}.`);
       if (width > 0 || length > 0) {
         const bits: string[] = [];
         if (width > 0) bits.push(`approximately ${width}mm wide`);
         if (length > 0) bits.push(`approximately ${length}mm long`);
-        parts.push(`The ${typeLabel} is ${bits.join(" and ")}.`);
+        parts.push(`The ${noun} is ${bits.join(" and ")}.`);
       }
-      if (notes) parts.push(notes);
+      if (notes) parts.push(withPeriod(notes));
       return parts.join(" ");
     })
     .join(" ");
@@ -177,7 +200,7 @@ const driveway: Composer = (inst, itemFields) => {
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -195,12 +218,19 @@ const pavingPaths: Composer = (inst, itemFields) => {
   const drainage = optionLabel(itemFields, "drainage", asString(inst.drainage));
   if (inst.drainage) {
     const drainageNote = asString(inst.drainageNote);
-    parts.push(`Drainage is ${lower(drainage)}.${drainageNote ? ` ${drainageNote}` : ""}`);
+    const lowerDrainage = lower(drainage);
+    // "Adequate" reads fine as a bare adjective ("Drainage is adequate"),
+    // but "Minor Issue"/"Major Issue" are noun phrases and need their own
+    // article ("Drainage is a minor issue") -- matched on the label ending
+    // in "issue" rather than hardcoding those two option values, so a
+    // future "...Issue"-style option on this field is covered too.
+    const drainagePhrase = /issue$/.test(lowerDrainage) ? `${article(lowerDrainage)} ${lowerDrainage}` : lowerDrainage;
+    parts.push(`Drainage is ${drainagePhrase}.${drainageNote ? ` ${drainageNote}` : ""}`);
   }
   const cracks = damageSentences(inst, itemFields, "cracks");
   if (cracks) parts.push(cracks);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -217,7 +247,7 @@ const fences: Composer = (inst, itemFields) => {
   const cracks = damageSentences(inst, itemFields, "cracks");
   if (cracks) parts.push(cracks);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -234,7 +264,7 @@ const retainingWalls: Composer = (inst, itemFields) => {
   const cracks = damageSentences(inst, itemFields, "cracks");
   if (cracks) parts.push(cracks);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -258,7 +288,7 @@ const garageCarportSheds: Composer = (inst, itemFields) => {
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -285,7 +315,7 @@ const poolSpa: Composer = (inst, itemFields) => {
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -306,7 +336,7 @@ const elevations: Composer = (inst, itemFields, label) => {
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -324,7 +354,7 @@ const roofChimneys: Composer = (inst, itemFields, label) => {
     }${observations.length ? ` ${capitalize(joinList(observations))} noted.` : ""}`,
   );
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -351,7 +381,7 @@ const internalAreas: Composer = (inst, itemFields, label) => {
   const damages = damageSentences(inst, itemFields, "damages");
   if (damages) parts.push(damages);
   const notes = asString(inst.notes);
-  if (notes) parts.push(notes);
+  if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
 };
 
@@ -368,42 +398,100 @@ const internalAreas: Composer = (inst, itemFields, label) => {
  * The section's other fields (site address, scope, safety) aren't part of
  * this paragraph; they stay in `fields` for the reviewer's own editing view.
  */
+/** North/South/East/West read fine lower-cased mid-sentence ("facing
+ *  north"); the 4 intercardinal abbreviations don't ("facing ne" reads like
+ *  a typo) -- this spells them out instead. */
+const COMPASS_EXPANSIONS: Record<string, string> = {
+  NE: "north-east",
+  NW: "north-west",
+  SE: "south-east",
+  SW: "south-west",
+};
+function compassPhrase(label: string): string {
+  return COMPASS_EXPANSIONS[label] ?? lower(label);
+}
+
+/**
+ * Six of Description & Overview's fields (Foundations, Roof Design, Roof
+ * Covering, Windows, and both Wall Cladding fields) offer an "Other" option
+ * paired with its own free-text "please specify" box -- `optionLabel` alone
+ * would print the literal word "Other" instead of what the inspector typed,
+ * since it only ever looks up the fixed option list. This substitutes that
+ * typed text in when the selected value is "other" and something was
+ * actually typed, and falls back to the plain option label otherwise
+ * (including when "Other" was picked but the detail box was left blank).
+ */
+function optionLabelWithOther(itemFields: TemplateField[], key: string, raw: string, otherText: string): string {
+  if (raw === "other") {
+    const custom = otherText.trim();
+    if (custom) return custom;
+  }
+  return optionLabel(itemFields, key, raw);
+}
+function optionLabelsWithOther(itemFields: TemplateField[], key: string, raws: string[], otherText: string): string[] {
+  return raws.map((raw) => optionLabelWithOther(itemFields, key, raw, otherText));
+}
+
 const description: Composer = (inst, itemFields) => {
   const constructionType = optionLabel(itemFields, "constructionIs", asString(inst.constructionIs));
   const streetFrontage = optionLabel(itemFields, "streetFrontage", asString(inst.streetFrontage));
   const blockSlope = optionLabel(itemFields, "blockSlope", asString(inst.blockSlope));
   const constructedYear = asString(inst.constructedYear);
   const underConstructionStage = asString(inst.underConstructionStage);
-  const wallGround = optionLabels(itemFields, "wallCladdingGround", asStringArray(inst.wallCladdingGround)).map(lower);
-  const wallFirst = optionLabels(itemFields, "wallCladdingFirst", asStringArray(inst.wallCladdingFirst)).map(lower);
-  const foundations = optionLabel(itemFields, "foundations", asString(inst.foundations));
-  const roofDesign = optionLabel(itemFields, "roofDesign", asString(inst.roofDesign));
-  const roofCovering = optionLabels(itemFields, "roofCovering", asStringArray(inst.roofCovering)).map(lower);
-  const windows = optionLabels(itemFields, "windows", asStringArray(inst.windows)).map(lower);
+  const wallGround = optionLabelsWithOther(
+    itemFields,
+    "wallCladdingGround",
+    asStringArray(inst.wallCladdingGround),
+    asString(inst.wallCladdingGroundOther),
+  ).map(lower);
+  const wallFirst = optionLabelsWithOther(
+    itemFields,
+    "wallCladdingFirst",
+    asStringArray(inst.wallCladdingFirst),
+    asString(inst.wallCladdingFirstOther),
+  ).map(lower);
+  const foundations = optionLabelWithOther(itemFields, "foundations", asString(inst.foundations), asString(inst.foundationsOther));
+  const roofDesign = optionLabelWithOther(itemFields, "roofDesign", asString(inst.roofDesign), asString(inst.roofDesignOther));
+  const roofCovering = optionLabelsWithOther(
+    itemFields,
+    "roofCovering",
+    asStringArray(inst.roofCovering),
+    asString(inst.roofCoveringOther),
+  ).map(lower);
+  const windows = optionLabelsWithOther(itemFields, "windows", asStringArray(inst.windows), asString(inst.windowsOther)).map(lower);
 
   const parts: string[] = [];
 
   const frontageBlockBits: string[] = [];
-  if (streetFrontage) frontageBlockBits.push(`facing ${lower(streetFrontage)}`);
+  if (streetFrontage) frontageBlockBits.push(`facing ${compassPhrase(streetFrontage)}`);
   if (blockSlope) frontageBlockBits.push(`on a ${lower(blockSlope)} block of land`);
   const ageBit = constructedYear
     ? `estimated to have been constructed around ${constructedYear}`
     : underConstructionStage
-      ? `currently under construction at ${lower(underConstructionStage)} stage`
+      ? // If the inspector's own typed stage already says "stage" ("Frame
+        // Stage"), appending it again used to produce "frame stage stage".
+        `currently under construction at ${lower(underConstructionStage)}${/\bstage\b/i.test(underConstructionStage) ? "" : " stage"}`
       : "";
   const openingClauses = [frontageBlockBits.join(" "), ageBit].filter(Boolean);
   if (constructionType || openingClauses.length) {
-    const lowerConstructionType = lower(constructionType);
-    const subject = constructionType
-      ? `The property is ${article(lowerConstructionType)} ${lowerConstructionType}`
-      : "The property is";
-    parts.push(openingClauses.length ? `${subject}, ${joinClauses(openingClauses)}.` : `${subject}.`);
+    if (constructionType) {
+      const lowerConstructionType = lower(constructionType);
+      const subject = `The property is ${article(lowerConstructionType)} ${lowerConstructionType}`;
+      parts.push(openingClauses.length ? `${subject}, ${joinClauses(openingClauses)}.` : `${subject}.`);
+    } else {
+      // No stray "The property is, facing..." comma when there's no
+      // construction-type clause in front of it to attach to.
+      parts.push(`The property is ${joinClauses(openingClauses)}.`);
+    }
   }
 
   const wallsBit = wallGround.length
     ? `${joinList(wallGround)} walls${wallFirst.length ? ` to the ground floor and ${joinList(wallFirst)} to the first floor` : ""}`
     : wallFirst.length
-      ? `${joinList(wallFirst)} walls`
+      ? // First-floor cladding recorded with no ground-floor answer used to
+        // drop the floor distinction entirely ("constructed of hebel
+        // walls..."), reading as if the whole building were clad in it.
+        `${joinList(wallFirst)} walls to the first floor`
       : "";
   const buildClauses: string[] = [];
   if (wallsBit) buildClauses.push(`constructed of ${wallsBit}`);
@@ -436,7 +524,7 @@ const notes: Composer = (inst, itemFields, label) => {
   if (isChecklistItem) {
     if (asString(inst.value) !== "yes") return "";
     const note = asString(inst.note);
-    return `${label} observed.${note ? ` ${note}` : ""}`;
+    return `${label} observed.${note ? ` ${withPeriod(note)}` : ""}`;
   }
   const isNoAccessItem = itemFields.some((f) => f.key === "area") && itemFields.some((f) => f.key === "reason");
   if (isNoAccessItem) {
