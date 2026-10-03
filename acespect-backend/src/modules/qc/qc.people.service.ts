@@ -104,7 +104,7 @@ export async function listPeople(filters: { clientId?: string; role?: string; q?
     } as Prisma.UserWhereInput,
     select: {
       id: true, name: true, email: true, phone: true, role: true, isActive: true, position: true, whiteCardNumber: true, whiteCardState: true,
-      createdAt: true,
+      createdAt: true, lastSignInAt: true, mfaEnabled: true,
       qcMemberships: { include: personInclude.memberships.include, where: filters.clientId ? { clientId: filters.clientId } : undefined },
       qcInspectorCredential: personInclude.qcInspectorCredential,
       _count: { select: { assignedQcDefects: true } },

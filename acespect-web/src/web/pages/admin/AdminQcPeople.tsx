@@ -3,11 +3,19 @@ import { Plus } from "lucide-react";
 import { api, type ApiError } from "../../api";
 import { PageShell, PrimaryBtn, QcSubNav, TableCard } from "../../components/WebLayout";
 import {
-  CredentialsDialog, ErrorNote, Field, FormDialog, Modal, Select, btnGhost, btnLink, btnPrimary, cell, statusPill, sub, useRefData, type RefData,
+  InvitationDialog, type InvitationInfo, ErrorNote, Field, FormDialog, Modal, Select, btnGhost, btnLink, btnPrimary, cell, statusPill, sub, useRefData, type RefData,
 } from "../../components/QcUi";
 import { SpecForm, cleanPayload, inputStyle, useQcSpec, type RefOption } from "../../components/SpecForm";
 import { findForm, type QcSpecPayload } from "../../qcSpec";
 import type { QcMembershipRow, QcPersonRow } from "../../qcTypes";
+import { useQc } from "../../qcContext";
+import { qcx } from "../../qcApi";
+
+/** The capability needed to add or manage someone in each role (mirrors the server). */
+const ROLE_CAP: Record<string, string> = {
+  CLIENT_ADMIN: "users.clientUsers", CLIENT_USER: "users.clientUsers", MC_MANAGER: "users.mcOrg", MC_SITE_SUPERVISOR: "users.mcStaff",
+  MC_PROJECT_MANAGER: "users.mcStaff", TRADE_USER: "users.trade", PRIVATE_INSPECTOR: "users.credentialInspector",
+};
 
 const ROLE_SHORT: Record<string, string> = {
   CLIENT_ADMIN: "Client Admin",
@@ -28,7 +36,9 @@ export function AdminQcPeople() {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState({ clientId: "", role: "", q: "" });
   const [person, setPerson] = useState<{ row?: QcPersonRow } | null>(null);
-  const [creds, setCreds] = useState<{ email: string; password: string } | null>(null);
+  const [invite, setInvite] = useState<InvitationInfo | null>(null);
+  const { can, me } = useQc();
+  const mayAdd = Object.values(ROLE_CAP).some(can);
   const [credentialsFor, setCredentialsFor] = useState<QcPersonRow | null>(null);
   const [deactivating, setDeactivating] = useState<QcPersonRow | null>(null);
 
@@ -50,13 +60,13 @@ export function AdminQcPeople() {
 
   return (
     <PageShell
-      title="QC People"
+      title="People"
       subtitle={people ? `${people.length} account${people.length === 1 ? "" : "s"} with QC access` : "Loading…"}
-      actions={<PrimaryBtn onClick={() => setPerson({})}><Plus size={14} /> Add person</PrimaryBtn>}
+      actions={mayAdd ? <PrimaryBtn onClick={() => setPerson({})}><Plus size={14} /> Add person</PrimaryBtn> : undefined}
     >
       <QcSubNav />
       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-        <div style={{ width: 220 }}><Select value={filters.clientId} onChange={(v) => setFilters({ ...filters, clientId: v })} options={refOptions.E01 ?? []} placeholder="All clients" /></div>
+        {me?.isSA && !me.clientId && <div style={{ width: 220 }}><Select value={filters.clientId} onChange={(v) => setFilters({ ...filters, clientId: v })} options={refOptions.E01 ?? []} placeholder="All clients" /></div>}
         <div style={{ width: 220 }}><Select value={filters.role} onChange={(v) => setFilters({ ...filters, role: v })} options={roleOptions} placeholder="All roles" /></div>
         <input style={{ ...inputStyle, width: 240 }} placeholder="Search name or email" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} />
       </div>
@@ -83,14 +93,15 @@ export function AdminQcPeople() {
               ) : "—"}
             </td>
             <td style={cell}>{p._count.assignedQcDefects}</td>
-            <td style={cell}>{statusPill(p.isActive ? "Active" : "Deactivated")}</td>
+            <td style={cell}>{statusPill(p.isActive ? (p.lastSignInAt ? "Active" : "Invited") : "Deactivated")}{p.mfaEnabled && <div style={sub}>2-step on</div>}</td>
             <td style={{ ...cell, whiteSpace: "nowrap", textAlign: "right" }}>
-              <button style={btnLink} onClick={() => setPerson({ row: p })}>Edit</button>{" "}
-              {p.isActive ? (
+              {(p.qcMemberships.length === 0 ? can("client.manage") : p.qcMemberships.some((m) => can(ROLE_CAP[m.role] ?? ""))) && <button style={btnLink} onClick={() => setPerson({ row: p })}>Edit</button>}{" "}
+              {p.isActive && !p.lastSignInAt && <><button style={btnLink} onClick={() => qcx.people.resendInvitation(p.id).then((i) => setInvite(i)).catch((e) => window.alert(e.message))}>Resend invitation</button>{" "}</>}
+              {can("users.deactivate") && p.qcMemberships.some((m) => can(ROLE_CAP[m.role] ?? "")) && (p.isActive ? (
                 <button style={{ ...btnLink, color: "#dc2626" }} onClick={() => setDeactivating(p)}>Deactivate</button>
               ) : (
                 <button style={btnLink} onClick={() => reactivate(p)}>Reactivate</button>
-              )}
+              ))}
             </td>
           </tr>
         ))}
@@ -106,13 +117,13 @@ export function AdminQcPeople() {
           onClose={() => setPerson(null)}
           onSaved={(result) => {
             setPerson(null);
-            if (result?.temporaryPassword) setCreds({ email: result.email, password: result.temporaryPassword });
+            if (result?.invitation) setInvite({ ...result.invitation, email: result.email });
             load();
             reloadRefs();
           }}
         />
       )}
-      {creds && <CredentialsDialog email={creds.email} password={creds.password} onClose={() => setCreds(null)} />}
+      {invite && <InvitationDialog invitation={invite} onClose={() => setInvite(null)} />}
       {credentialsFor && (
         <CredentialsForm
           person={credentialsFor}
@@ -141,7 +152,7 @@ function PersonDialog({ row, spec, data, refOptions, onClose, onSaved }: {
   data: RefData;
   refOptions: Record<string, RefOption[]>;
   onClose: () => void;
-  onSaved: (r?: { email: string; temporaryPassword?: string }) => void;
+  onSaved: (r?: { email: string; invitation?: InvitationInfo }) => void;
 }) {
   const editing = !!row;
   const membership: QcMembershipRow | undefined = row?.qcMemberships.length === 1 ? row.qcMemberships[0] : undefined;
@@ -160,7 +171,7 @@ function PersonDialog({ row, spec, data, refOptions, onClose, onSaved }: {
   const [categoryIds, setCategoryIds] = useState<string[]>(membership?.tradeCategories.map((c) => c.id) ?? []);
   const [projectIds, setProjectIds] = useState<string[]>(membership?.projects.map((p) => p.id) ?? []);
   const [permissions, setPermissions] = useState<string[]>(membership?.optionalPermissions ?? []);
-  const [password, setPassword] = useState("");
+  const { can } = useQc();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
@@ -180,11 +191,11 @@ function PersonDialog({ row, spec, data, refOptions, onClose, onSaved }: {
       const base = cleanPayload(e04);
       const scope = { role, clientId, masterContractorId: mcId || undefined, tradeCompanyId: tcId || undefined, tradeCategoryIds: categoryIds, projectIds, optionalPermissions: permissions };
       if (editing) {
-        await api.qc.people.update(row!.id, { ...base, ...(membership ? { membershipId: membership.id, ...scope } : {}), ...(password ? { password } : {}) });
+        await api.qc.people.update(row!.id, { ...base, ...(membership ? { membershipId: membership.id, ...scope } : {}) });
         onSaved();
       } else {
-        const r = await api.qc.people.create({ ...base, ...scope, ...(password ? { password } : {}), ...(isPI ? { credentials: cleanPayload(e06) } : {}) });
-        onSaved({ email: r.person.email, temporaryPassword: r.temporaryPassword });
+        const r = await api.qc.people.create({ ...base, ...scope, ...(isPI ? { credentials: cleanPayload(e06) } : {}) }) as unknown as { person: { email: string }; invitation?: InvitationInfo };
+        onSaved({ email: r.person.email, invitation: r.invitation });
       }
     } catch (e) {
       const err = e as ApiError;
@@ -216,7 +227,7 @@ function PersonDialog({ row, spec, data, refOptions, onClose, onSaved }: {
           <div style={{ fontSize: 11, fontWeight: 700, color: "#1a2a4a", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>Role and organisation</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Field label="Role" required>
-              <Select value={role} onChange={(v) => { setRole(v); setMcId(""); setTcId(""); }} options={spec.roles.map((r) => ({ id: r.code, label: r.label }))} />
+              <Select value={role} onChange={(v) => { setRole(v); setMcId(""); setTcId(""); }} options={spec.roles.filter((r) => can(ROLE_CAP[r.code] ?? "")).map((r) => ({ id: r.code, label: r.label }))} />
             </Field>
             {!isPI && (
               <Field label="Client (tenant)" required>
@@ -258,12 +269,13 @@ function PersonDialog({ row, spec, data, refOptions, onClose, onSaved }: {
           )}
           {!isPI && role && role !== "CLIENT_ADMIN" && clientProjects.length > 0 && (
             <div style={{ marginTop: 12 }}>
-              <Field label="Projects accessible (leave empty for all)">
+              <Field label="Projects accessible">
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px" }}>
                   {clientProjects.map((p) => (
                     <label key={p.id} style={checkRow}><input type="checkbox" checked={projectIds.includes(p.id)} onChange={(e) => toggle(projectIds, setProjectIds, p.id, e.target.checked)} />{p.name}</label>
                   ))}
                 </div>
+                {projectIds.length === 0 && <p style={{ fontSize: 12, color: "#92400e", margin: "8px 0 0" }}>No projects chosen: this person will be able to see every project in the client. Choose the projects they work on to limit them.</p>}
               </Field>
             </div>
           )}
@@ -273,11 +285,7 @@ function PersonDialog({ row, spec, data, refOptions, onClose, onSaved }: {
       <div style={{ fontSize: 11, fontWeight: 700, color: "#1a2a4a", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>Personal details</div>
       <SpecForm form={findForm(spec, "E04")} value={e04} onChange={setE04} errors={fieldErrors} hide={editing ? ["sign_in_method", "mfa_method"] : []} />
 
-      <div style={{ marginTop: 16 }}>
-        <Field label={editing ? "New password (leave blank to keep)" : "Initial password (leave blank to generate one)"}>
-          <input style={inputStyle} type="text" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" />
-        </Field>
-      </div>
+      {!editing && <p style={{ ...sub, marginTop: 16 }}>No password is set here. The person gets an email with a one-time link to choose their own password and accept the terms.</p>}
 
       {isPI && !editing && (
         <div style={{ marginTop: 18 }}>

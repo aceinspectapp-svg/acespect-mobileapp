@@ -6,6 +6,7 @@ import { PageShell, PrimaryBtn, QcSubNav, StatusBadge, TableCard } from "../../c
 import { ErrorNote, Field, Modal, Select, btnGhost, btnPrimary, cell, sub } from "../../components/QcUi";
 import { inputStyle, type RefOption } from "../../components/SpecForm";
 import type { QcConfigBundle, QcDefect, QcLotRow, QcPerson } from "../../qcTypes";
+import { useQc } from "../../qcContext";
 
 export const FLAG_STYLE: Record<string, { label: string; color: string; bg: string }> = {
   urgent: { label: "Urgent", color: "#991b1b", bg: "#fee2e2" },
@@ -30,6 +31,7 @@ export function FlagChips({ defect }: { defect: QcDefect }) {
 
 export function AdminQcDefects() {
   const navigate = useNavigate();
+  const { can } = useQc();
   const [defects, setDefects] = useState<QcDefect[] | null>(null);
   const [config, setConfig] = useState<QcConfigBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,9 +49,9 @@ export function AdminQcDefects() {
 
   return (
     <PageShell
-      title="QC Defects"
+      title="Defects"
       subtitle={defects ? `${defects.length} defect${defects.length === 1 ? "" : "s"}` : "Loading…"}
-      actions={<PrimaryBtn onClick={() => setShowNew(true)}><Plus size={14} /> New defect</PrimaryBtn>}
+      actions={can("defects.create") ? <PrimaryBtn onClick={() => setShowNew(true)}><Plus size={14} /> New defect</PrimaryBtn> : undefined}
     >
       <QcSubNav />
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
@@ -65,7 +67,7 @@ export function AdminQcDefects() {
       <ErrorNote message={error} />
       <TableCard headers={["Ref", "Defect", "Lot", "Severity", "Status", "Assigned to", "Updated"]}>
         {defects?.map((d, i) => (
-          <tr key={d.id} style={{ borderBottom: defects.length - 1 > i ? "1px solid #f1f5f9" : "none", cursor: "pointer" }} onClick={() => navigate(`/admin/qc/defects/${d.id}`)}>
+          <tr key={d.id} style={{ borderBottom: defects.length - 1 > i ? "1px solid #f1f5f9" : "none", cursor: "pointer" }} onClick={() => navigate(`/qc/defects/${d.id}`)}>
             <td style={{ ...cell, fontFamily: "monospace", fontSize: 12, whiteSpace: "nowrap" }}>{d.defectRef ?? "—"}</td>
             <td style={cell}>
               <b style={{ color: d.title || d.summary ? "#1a2a4a" : "#94a3b8" }}>{d.title ?? d.summary ?? "Draft: details pending"}</b>
@@ -83,7 +85,7 @@ export function AdminQcDefects() {
       </TableCard>
 
       {showNew && config && (
-        <NewDefectModal config={config} onClose={() => setShowNew(false)} onCreated={(id) => navigate(`/admin/qc/defects/${id}`)} />
+        <NewDefectModal config={config} onClose={() => setShowNew(false)} onCreated={(id) => navigate(`/qc/defects/${id}`)} />
       )}
     </PageShell>
   );
@@ -96,7 +98,7 @@ export function AdminQcDefects() {
  * defect page.
  */
 function NewDefectModal({ config, onClose, onCreated }: { config: QcConfigBundle; onClose: () => void; onCreated: (id: string) => void }) {
-  const [clientId, setClientId] = useState("");
+  const [clientId, setClientId] = useState(config.clients.length === 1 ? config.clients[0]!.id : "");
   const [projectId, setProjectId] = useState("");
   const [lotId, setLotId] = useState("");
   const [assignedToId, setAssignedToId] = useState("");
@@ -147,9 +149,9 @@ function NewDefectModal({ config, onClose, onCreated }: { config: QcConfigBundle
       <ErrorNote message={error} />
       <p style={{ ...sub, marginTop: 0 }}>The defect starts as a draft. The assigned inspector adds the description, severity and photos, then confirms it as Open.</p>
       <div style={{ display: "grid", gap: 12 }}>
-        <Field label="Client" required>
+        {config.clients.length > 1 && <Field label="Client" required>
           <Select value={clientId} onChange={(v) => { setClientId(v); setProjectId(""); }} options={config.clients.map((c) => ({ id: c.id, label: c.name }))} />
-        </Field>
+        </Field>}
         <Field label="Project" required>
           <Select value={projectId} disabled={!clientId} onChange={setProjectId} options={projects.map((p) => ({ id: p.id, label: p.name }))} />
         </Field>

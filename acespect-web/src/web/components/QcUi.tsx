@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { api, type ApiError } from "../api";
 import { SpecForm, cleanPayload, inputStyle, labelStyle, useQcSpec, type RefOption } from "./SpecForm";
 import { findForm, type FormSpec } from "../qcSpec";
+import { useQc } from "../qcContext";
 import type { QcMasterContractorRow, QcPersonRow, QcProjectRow, QcSiteRow, QcTradeCategory, QcTradeCompanyRow, QcClientRow } from "../qcTypes";
 
 export const btnPrimary: React.CSSProperties = {
@@ -83,21 +84,23 @@ export interface RefData {
 
 export function useRefData() {
   const [data, setData] = useState<RefData | null>(null);
+  const { can, me } = useQc();
   const reload = useCallback(() => {
+    // Each list is only requested if the caller's role may read it (a refused request is logged), and a failure leaves it empty.
+    const soft = <T,>(allowed: boolean, p: () => Promise<T>, empty: T) => (allowed ? p().catch(() => empty) : Promise.resolve(empty));
+    const tenant = !me?.isSA || !!me?.clientId;
     Promise.all([
-      api.qc.clients.list(),
-      api.qc.masterContractors.list(),
-      api.qc.tradeCompanies.list(),
-      api.qc.tradeCategories.list(),
-      api.qc.projects.list(),
-      api.qc.sites.list(),
-      api.qc.people.list(),
-    ])
-      .then(([clients, masterContractors, tradeCompanies, tradeCategories, projects, sites, people]) =>
-        setData({ clients, masterContractors, tradeCompanies, tradeCategories, projects, sites, people }))
-      .catch(() => setData(null));
+      soft(can("client.manage"), () => api.qc.clients.list(), [] as QcClientRow[]),
+      soft(can("users.view") && tenant, () => api.qc.masterContractors.list(), [] as QcMasterContractorRow[]),
+      soft(can("users.view") && tenant, () => api.qc.tradeCompanies.list(), [] as QcTradeCompanyRow[]),
+      soft(true, () => api.qc.tradeCategories.list(), [] as QcTradeCategory[]),
+      soft(can("projects.view") && tenant, () => api.qc.projects.list(), [] as QcProjectRow[]),
+      soft(can("projects.view") && tenant, () => api.qc.sites.list(), [] as QcSiteRow[]),
+      soft(can("users.view"), () => api.qc.people.list(), [] as QcPersonRow[]),
+    ]).then(([clients, masterContractors, tradeCompanies, tradeCategories, projects, sites, people]) =>
+      setData({ clients, masterContractors, tradeCompanies, tradeCategories, projects, sites, people }));
   }, []);
-  useEffect(reload, [reload]);
+  useEffect(reload, [reload]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refOptions: Record<string, RefOption[]> = data
     ? {
@@ -186,13 +189,21 @@ export function FormDialog({ title, formCode, initial = {}, submitLabel = "Save"
   );
 }
 
-export function CredentialsDialog({ email, password, onClose }: { email: string; password: string; onClose: () => void }) {
+export interface InvitationInfo { url: string; email: string; expiresAt: string; mail?: string }
+
+/** Shown after an account is created or an invitation is resent: the person activates through this one-time link. */
+export function InvitationDialog({ invitation, onClose }: { invitation: InvitationInfo; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const emailed = invitation.mail === "SENT";
   return (
-    <Modal title="Account created" onClose={onClose} width={440} footer={<button style={btnPrimary} onClick={onClose}>Done</button>}>
-      <p style={{ fontSize: 13, color: "#374151", marginTop: 0 }}>Give these sign-in details to the new user. The password is shown only now.</p>
-      <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, fontSize: 13, color: "#1a2a4a", lineHeight: 1.8 }}>
-        <div><span style={sub}>Email</span><br /><b>{email}</b></div>
-        <div style={{ marginTop: 6 }}><span style={sub}>Temporary password</span><br /><code style={{ fontSize: 14 }}>{password}</code></div>
+    <Modal title="Invitation sent" onClose={onClose} width={520} footer={<button style={btnPrimary} onClick={onClose}>Done</button>}>
+      <p style={{ fontSize: 13, color: "#374151", marginTop: 0 }}>
+        {emailed ? <>We emailed <b>{invitation.email}</b> a link to activate their account.</> : <>Email is not set up on this server, so nothing was sent. Give <b>{invitation.email}</b> this link yourself.</>} They choose their own password, so you never see it.
+      </p>
+      <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, fontSize: 12, wordBreak: "break-all", color: "#1a2a4a" }}>{invitation.url}</div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+        <button style={btnGhost} onClick={() => { navigator.clipboard?.writeText(invitation.url).then(() => setCopied(true)); }}>{copied ? "Copied" : "Copy link"}</button>
+        <span style={sub}>Works once. Expires {new Date(invitation.expiresAt).toLocaleDateString("en-AU")}.</span>
       </div>
     </Modal>
   );

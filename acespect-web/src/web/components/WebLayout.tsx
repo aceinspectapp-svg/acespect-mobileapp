@@ -21,7 +21,7 @@ const ROLE_NAV: Record<Role, { to: string; icon: React.ElementType; label: strin
     { to: "/admin/dashboard",   icon: LayoutDashboard, label: "Dashboard" },
     { to: "/admin/inspections", icon: ClipboardCheck,  label: "Inspections" },
     { to: "/admin/templates",   icon: FileText,         label: "Templates" },
-    { to: "/admin/qc",          icon: ShieldCheck,      label: "QC" },
+    { to: "/qc",              icon: ShieldCheck,      label: "QC" },
     { to: "/admin/users",       icon: Users,            label: "Users" },
     { to: "/admin/reports",     icon: BarChart3,        label: "Reports" },
     { to: "/admin/troubleshoot", icon: Bug,             label: "Troubleshoot" },
@@ -292,37 +292,9 @@ export function GhostBtn({ children, onClick }: { children: React.ReactNode; onC
   );
 }
 
-/* ─── QC sub-nav (Defects / Projects / Organisations / People) ────── */
+/* ─── QC sub-nav: the QC area has its own sidebar now, so the old tab strip renders nothing ── */
 export function QcSubNav() {
-  const location = useLocation();
-  const tabs = [
-    { to: "/admin/qc", label: "Defects", match: ["/admin/qc", "/admin/qc/defects"] },
-    { to: "/admin/qc/projects", label: "Projects", match: ["/admin/qc/projects"] },
-    { to: "/admin/qc/organisations", label: "Organisations", match: ["/admin/qc/organisations"] },
-    { to: "/admin/qc/people", label: "People", match: ["/admin/qc/people"] },
-  ];
-  return (
-    <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
-      {tabs.map((t) => {
-        const active = t.match.some((m) => (m === "/admin/qc" ? location.pathname === m : location.pathname === m || location.pathname.startsWith(m + "/")));
-        return (
-          <Link
-            key={t.to}
-            to={t.to}
-            style={{
-              padding: "7px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 600,
-              textDecoration: "none",
-              border: active ? "none" : "1px solid #e5e7eb",
-              background: active ? "#1a2a4a" : "white",
-              color: active ? "white" : "#374151",
-            }}
-          >
-            {t.label}
-          </Link>
-        );
-      })}
-    </div>
-  );
+  return null;
 }
 
 /* ─── Table ──────────────────────────────────────────────────────── */
@@ -332,8 +304,8 @@ export function TableCard({ headers, children }: { headers: string[]; children: 
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: "#f8fafc" }}>
-            {headers.map(h => (
-              <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: "11px", fontWeight: 600, color: "#94a3b8", letterSpacing: "0.04em", textTransform: "uppercase", borderBottom: "1px solid #e5e7eb" }}>
+            {headers.map((h, i) => (
+              <th key={`${h}-${i}`} style={{ padding: "11px 16px", textAlign: "left", fontSize: "11px", fontWeight: 600, color: "#94a3b8", letterSpacing: "0.04em", textTransform: "uppercase", borderBottom: "1px solid #e5e7eb" }}>
                 {h}
               </th>
             ))}

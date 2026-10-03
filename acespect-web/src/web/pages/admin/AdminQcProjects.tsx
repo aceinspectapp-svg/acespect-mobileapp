@@ -6,64 +6,19 @@ import { Card, PageShell, PrimaryBtn, QcSubNav, TableCard } from "../../componen
 import { ErrorNote, Field, FormDialog, Select, btnDanger, btnLink, cell, statusPill, sub, showValue, useRefData } from "../../components/QcUi";
 import type { RefOption } from "../../components/SpecForm";
 import type { QcLotRow, QcProjectRow, QcSiteRow, QcTeamMember } from "../../qcTypes";
-
-const CLOSURE_OPTIONS: RefOption[] = [
-  { id: "DEVELOPER_SIGNOFF", label: "Developer signs off (default)" },
-  { id: "AUTO_CLOSE", label: "Close automatically when verified" },
-  { id: "INSPECTOR_CLOSE", label: "Inspector closes" },
-];
-const PROJECT_STATUS: RefOption[] = [
-  { id: "SETUP", label: "Setup" },
-  { id: "CONSTRUCTION", label: "Construction" },
-  { id: "PRACTICAL_COMPLETION", label: "Practical Completion" },
-  { id: "DLP", label: "Defects Liability Period" },
-  { id: "DLP_COMPLETE", label: "DLP Complete" },
-  { id: "ARCHIVED", label: "Archived" },
-];
-
-/** Policy switches the lifecycle reads (REQ-PRJ-005), shown above the E07 fields. */
-function PolicyFields({ value, set, showStatus }: { value: Record<string, unknown>; set: (p: Record<string, unknown>) => void; showStatus: boolean }) {
-  return (
-    <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 10, padding: 14 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#1a2a4a", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>Defect policy</div>
-      <div style={{ display: "grid", gridTemplateColumns: showStatus ? "1fr 1fr" : "1fr", gap: 12 }}>
-        <Field label="Who closes a verified defect">
-          <Select value={String(value.closurePolicy ?? "DEVELOPER_SIGNOFF")} onChange={(v) => set({ closurePolicy: v })} options={CLOSURE_OPTIONS} placeholder="Choose…" />
-        </Field>
-        {showStatus && (
-          <Field label="Project status">
-            <Select value={String(value.status ?? "SETUP")} onChange={(v) => set({ status: v })} options={PROJECT_STATUS} placeholder="Choose…" />
-          </Field>
-        )}
-      </div>
-      <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#374151", marginTop: 10, cursor: "pointer" }}>
-        <input type="checkbox" checked={value.safetyAutoRelease !== false} onChange={(e) => set({ safetyAutoRelease: e.target.checked })} />
-        Release Safety Hazards to the Builder as soon as the Inspector confirms them
-      </label>
-      <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#374151", marginTop: 6, cursor: "pointer" }}>
-        <input type="checkbox" checked={value.deskReviewAllowed === true} onChange={(e) => set({ deskReviewAllowed: e.target.checked })} />
-        Allow evidence-only re-inspection for Minor and Monitor defects
-      </label>
-    </div>
-  );
-}
+import { useQc } from "../../qcContext";
+import { DlpPanel, DocumentsPanel, LotImportDialog, PlanPanel, StatusMover } from "../portal/QcProjectPanels";
+import { PolicyPanel, SlaPanel } from "../portal/QcPolicy";
 
 function projectInitial(p: QcProjectRow): Record<string, unknown> {
-  return {
-    ...p.data,
-    developer: p.clientId,
-    builder: p.builderId,
-    closurePolicy: p.closurePolicy,
-    deskReviewAllowed: p.deskReviewAllowed,
-    safetyAutoRelease: p.safetyAutoRelease,
-    status: p.status,
-  };
+  return { ...p.data, developer: p.clientId, builder: p.builderId };
 }
 
 // ─── Project list ────────────────────────────────────────────────────────────
 
 export function AdminQcProjects() {
   const { data, refOptions } = useRefData();
+  const { me, can } = useQc();
   const navigate = useNavigate();
   const [rows, setRows] = useState<QcProjectRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,15 +33,15 @@ export function AdminQcProjects() {
 
   return (
     <PageShell
-      title="QC Projects"
+      title="Projects"
       subtitle={rows ? `${rows.length} project${rows.length === 1 ? "" : "s"}` : "Loading…"}
-      actions={<PrimaryBtn onClick={() => setCreating(true)}><Plus size={14} /> New project</PrimaryBtn>}
+      actions={can("projects.create") ? <PrimaryBtn onClick={() => setCreating(true)}><Plus size={14} /> New project</PrimaryBtn> : undefined}
     >
       <QcSubNav />
       <ErrorNote message={error} />
       <TableCard headers={["Project", "Job no.", "Client / developer", "Builder", "State", "Sites · Lots", "Status", ""]}>
         {rows?.map((p, i) => (
-          <tr key={p.id} style={{ borderBottom: rows.length - 1 > i ? "1px solid #f1f5f9" : "none", cursor: "pointer" }} onClick={() => navigate(`/admin/qc/projects/${p.id}`)}>
+          <tr key={p.id} style={{ borderBottom: rows.length - 1 > i ? "1px solid #f1f5f9" : "none", cursor: "pointer" }} onClick={() => navigate(`/qc/projects/${p.id}`)}>
             <td style={cell}><b>{p.name}</b><div style={sub}>{p.projectRef}</div></td>
             <td style={cell}>{p.jobNumber ?? "—"}</td>
             <td style={cell}>{p.client.name}</td>
@@ -104,15 +59,16 @@ export function AdminQcProjects() {
         <FormDialog
           title="New project"
           formCode="E07"
-          initial={{ dlp_length: 12, safetyAutoRelease: true, closurePolicy: "DEVELOPER_SIGNOFF", status: "SETUP" }}
+          initial={{ dlp_length: 12, developer: me?.clientId ?? undefined }}
+          hide={me?.isSA ? [] : ["developer"]}
           refOptions={refOptions}
           fieldOptions={builderOptions}
-          extra={(v, set) => <PolicyFields value={v} set={set} showStatus />}
+          note={<p style={{ ...sub, marginTop: 0 }}>Closure policy, service-level targets and escalation are set on the project's SLA and policy tab once it exists. The project starts in Set-up.</p>}
           onClose={() => setCreating(false)}
           onSubmit={async (payload) => {
             const created = await api.qc.projects.create(payload);
             setCreating(false);
-            navigate(`/admin/qc/projects/${created.id}`);
+            navigate(`/qc/projects/${created.id}`);
           }}
         />
       )}
@@ -122,7 +78,8 @@ export function AdminQcProjects() {
 
 // ─── Project detail: sites, lots, team ───────────────────────────────────────
 
-type DetailTab = "sites" | "lots" | "team";
+type DetailTab = "sites" | "lots" | "team" | "plan" | "documents" | "sla" | "policy" | "dlp";
+const TAB_LABEL: Record<DetailTab, string> = { sites: "Sites", lots: "Lots", team: "Team", plan: "Inspection plan", documents: "Documents", sla: "Service levels", policy: "Escalation and policy", dlp: "DLP" };
 
 export function AdminQcProjectDetail() {
   const { id = "" } = useParams();
@@ -131,6 +88,8 @@ export function AdminQcProjectDetail() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<DetailTab>("sites");
   const [editing, setEditing] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const { me, can } = useQc();
 
   const reload = useCallback(() => api.qc.projects.get(id).then(setProject).catch((e) => setError(e.message)), [id]);
   useEffect(() => { reload(); }, [reload]);
@@ -141,39 +100,46 @@ export function AdminQcProjectDetail() {
   const builderOptions = (value: Record<string, unknown>): Record<string, RefOption[]> => ({
     builder: (data?.masterContractors ?? []).filter((m) => m.clientId === value.developer).map((m) => ({ id: m.id, label: m.name })),
   });
-  const policyLabel = CLOSURE_OPTIONS.find((o) => o.id === project.closurePolicy)?.label ?? project.closurePolicy;
+  const policyLabel = ({ DEVELOPER_SIGNOFF: "Developer signs off", AUTO_CLOSE: "Closed automatically when verified", INSPECTOR_CLOSE: "Inspector closes" } as Record<string, string>)[project.closurePolicy] ?? project.closurePolicy;
 
   return (
     <PageShell
       title={project.name}
       subtitle={`${project.projectRef} · Job ${project.jobNumber ?? "—"} · ${project.client.name}`}
-      actions={<PrimaryBtn onClick={() => setEditing(true)}>Edit project</PrimaryBtn>}
+      actions={<div style={{ display: "flex", gap: 8, alignItems: "center" }}><StatusMover project={project} onChange={reload} />{can("projects.create") && <PrimaryBtn onClick={() => setEditing(true)}>Edit project</PrimaryBtn>}</div>}
     >
       <QcSubNav />
-      <Link to="/admin/qc/projects" style={{ ...btnLink, display: "inline-block", marginBottom: 12 }}>← All projects</Link>
+      <Link to="/qc/projects" style={{ ...btnLink, display: "inline-block", marginBottom: 12 }}>← All projects</Link>
       <Card style={{ padding: "16px 20px", marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
         <Summary label="Builder" value={project.builder?.name ?? "—"} />
         <Summary label="State / council" value={`${project.state ?? "—"} · ${showValue(project.data.local_government_area)}`} />
         <Summary label="Practical completion (expected)" value={showValue(project.data.expected_practical_completion_date)} />
         <Summary label="DLP length" value={`${showValue(project.data.dlp_length)} months`} />
         <Summary label="Status" value={statusPill(project.status)} />
+        <Summary label="DLP ends" value={project.dlpEndDate ? new Date(project.dlpEndDate).toLocaleDateString("en-AU") : "Not started"} />
         <Summary label="Closure" value={policyLabel} />
         <Summary label="Safety Hazard auto-release" value={project.safetyAutoRelease ? "On" : "Off"} />
         <Summary label="Evidence-only re-inspection" value={project.deskReviewAllowed ? "Allowed (Minor, Monitor)" : "Not allowed"} />
       </Card>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 16, borderBottom: "1px solid #e5e7eb" }}>
-        {(["sites", "lots", "team"] as DetailTab[]).map((t) => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", background: "none", border: "none", textTransform: "capitalize",
+        {(["sites", "lots", "team", "plan", "documents", "sla", "policy", "dlp"] as DetailTab[]).map((t) => (
+          <button key={t} onClick={() => setTab(t)} role="tab" aria-selected={tab === t} style={{
+            padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", background: "none", border: "none",
             color: tab === t ? "#1a2a4a" : "#94a3b8", borderBottom: tab === t ? "2px solid #1a2a4a" : "2px solid transparent", marginBottom: -1,
-          }}>{t}</button>
+          }}>{TAB_LABEL[t]}</button>
         ))}
       </div>
 
       {tab === "sites" && <Sites project={project} onChange={reload} />}
-      {tab === "lots" && <Lots project={project} onChange={reload} />}
+      {tab === "lots" && <Lots project={project} onChange={reload} onImport={can("projects.create") ? () => setImporting(true) : undefined} />}
       {tab === "team" && <Team project={project} onChange={reload} />}
+      {tab === "plan" && <PlanPanel project={project} />}
+      {tab === "documents" && <DocumentsPanel project={project} />}
+      {tab === "sla" && <SlaPanel projectId={project.id} />}
+      {tab === "policy" && <PolicyPanel projectId={project.id} />}
+      {tab === "dlp" && <DlpPanel project={project} onChange={reload} />}
+      {importing && <LotImportDialog project={project} onClose={() => setImporting(false)} onDone={reload} />}
 
       {editing && data && (
         <FormDialog
@@ -182,7 +148,7 @@ export function AdminQcProjectDetail() {
           initial={projectInitial(project)}
           refOptions={refOptions}
           fieldOptions={builderOptions}
-          extra={(v, set) => <PolicyFields value={v} set={set} showStatus />}
+          hide={me?.isSA ? [] : ["developer"]}
           onClose={() => setEditing(false)}
           onSubmit={async (payload) => {
             await api.qc.projects.update(project.id, payload);
@@ -270,7 +236,7 @@ function Sites({ project, onChange }: { project: QcProjectRow; onChange: () => v
 
 // ─── Lots (E09) ──────────────────────────────────────────────────────────────
 
-function Lots({ project, onChange }: { project: QcProjectRow; onChange: () => void }) {
+function Lots({ project, onChange, onImport }: { project: QcProjectRow; onChange: () => void; onImport?: () => void }) {
   const [lots, setLots] = useState<QcLotRow[] | null>(null);
   const [siteFilter, setSiteFilter] = useState("");
   const [dialog, setDialog] = useState<{ row?: QcLotRow } | null>(null);
@@ -296,7 +262,10 @@ function Lots({ project, onChange }: { project: QcProjectRow; onChange: () => vo
         <div style={{ width: 240 }}>
           <Select value={siteFilter} onChange={setSiteFilter} options={siteOptions} placeholder="All sites" />
         </div>
-        <PrimaryBtn onClick={() => (siteOptions.length ? setDialog({}) : window.alert("Add a site first; every lot belongs to a site."))}><Plus size={14} /> Add lot</PrimaryBtn>
+        <div style={{ display: "flex", gap: 8 }}>
+          {onImport && <button style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #e5e7eb", background: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }} onClick={() => (siteOptions.length ? onImport() : window.alert("Add a site first; every lot belongs to a site."))}>Import from CSV</button>}
+          <PrimaryBtn onClick={() => (siteOptions.length ? setDialog({}) : window.alert("Add a site first; every lot belongs to a site."))}><Plus size={14} /> Add lot</PrimaryBtn>
+        </div>
       </div>
       <TableCard headers={["Lot", "Site", "Dwelling", "NCC class", "Storeys", "Floor system", "Lot status", ""]}>
         {lots?.map((l, i) => (

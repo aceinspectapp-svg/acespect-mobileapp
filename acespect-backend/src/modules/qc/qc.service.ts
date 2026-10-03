@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma';
+import { getActiveSupportSession, loadMemberships } from './qc.context';
 import { ApiError } from '../../utils/ApiError';
 import { requireExists, taskInclude } from './qc.shared';
 import {
@@ -140,23 +141,53 @@ async function updateTaskStatus(taskId: string, status: UpdateTaskStatusInput['s
 
 // ─── Config bundle (one round-trip for mobile/dashboard on load) ────────────
 
-async function getConfig() {
-  const [propertyTypes, severities, statuses, tradeCategories, tradeCompanies, clients] = await Promise.all([
+/**
+ * Which clients, projects and lots a signed-in person may see in the config bundle (REQ-TEN-001): their own
+ * memberships narrowed to the projects they are assigned to, the Super Admin's support-session client only,
+ * and, for accounts that predate memberships, just the lots their own defects are on.
+ */
+async function visibleHierarchy(user: { id: string; role: string }) {
+  type ProjectFilter = { clientId: string; projectIds: string[] | 'all' };
+  const scopes: ProjectFilter[] = [];
+  if (user.role === 'ADMIN') {
+    const session = await getActiveSupportSession(user.id);
+    if (session) scopes.push({ clientId: session.clientId, projectIds: 'all' });
+  } else {
+    for (const m of await loadMemberships(user.id)) {
+      scopes.push({ clientId: m.clientId, projectIds: m.role === 'CLIENT_ADMIN' || m.projectIds.length === 0 ? 'all' : m.projectIds });
+    }
+  }
+  if (scopes.length > 0) {
+    return prisma.qcClient.findMany({
+      where: { id: { in: scopes.map((s) => s.clientId) } },
+      orderBy: { name: 'asc' },
+      include: { projects: { orderBy: { name: 'asc' }, include: { properties: { orderBy: { name: 'asc' }, include: { propertyType: true } } } } },
+    }).then((rows) => rows.map((c) => {
+      const scope = scopes.find((s) => s.clientId === c.id)!;
+      return { ...c, projects: scope.projectIds === 'all' ? c.projects : c.projects.filter((p) => (scope.projectIds as string[]).includes(p.id)) };
+    }));
+  }
+  // Legacy accounts: only the lots where they have a defect assigned.
+  const mine = await prisma.qcDefect.findMany({ where: { assignedToId: user.id }, select: { propertyId: true } });
+  const propertyIds = [...new Set(mine.map((d) => d.propertyId))];
+  if (propertyIds.length === 0) return [];
+  return prisma.qcClient.findMany({
+    where: { projects: { some: { properties: { some: { id: { in: propertyIds } } } } } },
+    orderBy: { name: 'asc' },
+    include: { projects: { where: { properties: { some: { id: { in: propertyIds } } } }, orderBy: { name: 'asc' }, include: { properties: { where: { id: { in: propertyIds } }, orderBy: { name: 'asc' }, include: { propertyType: true } } } } },
+  });
+}
+
+async function getConfig(user: { id: string; role: string }) {
+  const clients = await visibleHierarchy(user);
+  const clientIds = clients.map((c) => c.id);
+  const [propertyTypes, severities, statuses, tradeCategories, tradeCompanies] = await Promise.all([
     listPropertyTypes(),
     prisma.qcSeverity.findMany({ where: { active: true }, orderBy: { order: 'asc' } }),
     prisma.qcStatus.findMany({ where: { active: true }, orderBy: { order: 'asc' } }),
     prisma.qcTradeCategory.findMany({ where: { active: true }, orderBy: { name: 'asc' } }),
-    // Names only: mobile roles that allocate defects need something to pick from.
-    prisma.qcTradeCompany.findMany({ where: { status: 'ACTIVE' }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    prisma.qcClient.findMany({
-      orderBy: { name: 'asc' },
-      include: {
-        projects: {
-          orderBy: { name: 'asc' },
-          include: { properties: { orderBy: { name: 'asc' }, include: { propertyType: true } } },
-        },
-      },
-    }),
+    // Names only, and only companies engaged by the contractors of the clients this person can see.
+    prisma.qcTradeCompany.findMany({ where: { status: 'ACTIVE', masterContractors: { some: { clientId: { in: clientIds } } } }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
   ]);
   return { propertyTypes, severities, statuses, tradeCategories, tradeCompanies, clients };
 }

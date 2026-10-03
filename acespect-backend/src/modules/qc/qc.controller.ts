@@ -81,7 +81,7 @@ export const qcController = {
   }),
 
   // ─── Config bundle ─────────────────────────────────────────────────────
-  getConfig: asyncHandler(async (_req, res) => {
-    res.status(200).json(await qcService.getConfig());
+  getConfig: asyncHandler(async (req, res) => {
+    res.status(200).json(await qcService.getConfig(requireUser(req)));
   }),
 };

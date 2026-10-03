@@ -140,6 +140,10 @@ export interface QcProjectRow {
   closurePolicy: string;
   deskReviewAllowed: boolean;
   safetyAutoRelease: boolean;
+  practicalCompletionDate?: string | null;
+  dlpStartDate?: string | null;
+  dlpEndDate?: string | null;
+  dlpSignedOffAt?: string | null;
   data: FieldData;
   client: { id: string; name: string };
   builder: { id: string; name: string } | null;
@@ -169,6 +173,8 @@ export interface QcPersonRow {
   isActive: boolean;
   position: string | null;
   whiteCardNumber: string | null;
+  lastSignInAt?: string | null;
+  mfaEnabled?: boolean;
   qcMemberships: QcMembershipRow[];
   qcInspectorCredential: { status: string; data: FieldData; approvedClients: { id: string; name: string }[] } | null;
   _count: { assignedQcDefects: number };
@@ -214,6 +220,17 @@ export interface QcDefect {
   exceptionReason: string | null;
   disputeBy: string | null;
   closedAt: string | null;
+  dlpDefect?: boolean;
+  foundAtStage?: string | null;
+  sourceInspectionId?: string | null;
+  sourceItemNumber?: string | null;
+  ackDueAt?: string | null;
+  rectifyDueAt?: string | null;
+  reinspectDueAt?: string | null;
+  acknowledgedAt?: string | null;
+  rectifiedAt?: string | null;
+  verifiedAt?: string | null;
+  releasedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   property: { id: string; name: string; propertyType: QcPropertyType };

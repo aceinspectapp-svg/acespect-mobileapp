@@ -36,11 +36,35 @@ export function resolveMediaUrl(value: string): string {
 const TOKEN_KEY = "acespect_token";
 const USER_KEY = "acespect_user";
 
+export interface QcMembership {
+  clientId: string;
+  clientName: string;
+  role: string;
+}
+
 export interface AuthUser {
   id: string;
   email: string;
   name: string | null;
   role: Role;
+  /** Roles this person holds in QC clients (empty for the Super Admin and plain Houspect inspectors). */
+  memberships?: QcMembership[];
+}
+
+const CLIENT_KEY = "acespect_client";
+/** The client a multi-client person is working in; sent as X-Client-Id on every request. */
+export function getActiveClientId(): string | null {
+  try { return localStorage.getItem(CLIENT_KEY); } catch { return null; }
+}
+export function setActiveClientId(id: string | null) {
+  try { if (id) localStorage.setItem(CLIENT_KEY, id); else localStorage.removeItem(CLIENT_KEY); } catch { /* storage unavailable */ }
+}
+
+/** Where a signed-in person lands: the QC portal for anyone with a QC role, the admin area for the Super Admin. */
+export function homeFor(user: AuthUser): string {
+  if (user.role === "admin") return "/admin/dashboard";
+  if (user.memberships && user.memberships.length > 0) return "/qc";
+  return `/${user.role}/dashboard`;
 }
 
 export function getToken(): string | null {
@@ -54,16 +78,20 @@ export function getStoredUser(): AuthUser | null {
     return null;
   }
 }
-function setSession(token: string, user: AuthUser) {
+export function setSession(token: string, user: AuthUser) {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  setActiveClientId(null);
+}
+export function setRefreshToken(t: string | null) {
+  try { if (t) localStorage.setItem("acespect_refresh", t); else localStorage.removeItem("acespect_refresh"); } catch { /* storage unavailable */ }
 }
 
-function mapRole(r: string): Role {
+export function mapRole(r: string): Role {
   const x = (r || "").toLowerCase();
   return x === "admin" ? "admin" : x === "reviewer" ? "reviewer" : "inspector";
 }
@@ -73,16 +101,57 @@ export interface ApiError extends Error {
   /** Stable machine code from the server (e.g. CATEGORY_MISMATCH). */
   code?: string;
   /** Field-level validation messages, keyed by spec field key. */
-  details?: Record<string, string[]>;
+  details?: Record<string, any>;
 }
 
-async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
+let refreshing: Promise<boolean> | null = null;
+/** Swap the refresh token for a new pair once; every request that hit an expired token waits for the same attempt. */
+async function refreshSession(): Promise<boolean> {
+  const rt = (() => { try { return localStorage.getItem("acespect_refresh"); } catch { return null; } })();
+  if (!rt) return false;
+  refreshing ??= (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, { method: "POST", headers: { "Content-Type": "application/json", "X-App-Client": "web" }, body: JSON.stringify({ refreshToken: rt }) });
+      if (!res.ok) return false;
+      const r = (await res.json()) as AuthResponse;
+      const u = getStoredUser();
+      if (u) setSession(r.accessToken, u);
+      setRefreshToken(r.refreshToken ?? null);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setTimeout(() => { refreshing = null; }, 0);
+    }
+  })();
+  return refreshing;
+}
+
+async function fetchWithRefresh(url: string, init: RequestInit): Promise<Response> {
+  const res = await fetch(url, init);
+  if (res.status !== 401) return res;
+  const body = await res.clone().json().catch(() => null);
+  const code = body?.error?.code as string | undefined;
+  if (code === "SESSION_IDLE" || code === "SESSION_REVOKED" || code === "ACCOUNT_INACTIVE") {
+    clearSession();
+    if (typeof window !== "undefined" && window.location.pathname !== "/") window.location.assign("/?reason=" + code);
+    return res;
+  }
+  if (code !== "TOKEN_EXPIRED" || !(await refreshSession())) return res;
+  const headers = { ...(init.headers as Record<string, string>), Authorization: `Bearer ${getToken()}` };
+  return fetch(url, { ...init, headers });
+}
+
+export async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const token = getToken();
-  const res = await fetch(`${API_BASE}${path}`, {
+  const client = getActiveClientId();
+  const res = await fetchWithRefresh(`${API_BASE}${path}`, {
     ...opts,
     headers: {
       "Content-Type": "application/json",
+      "X-App-Client": "web",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(client ? { "X-Client-Id": client } : {}),
       ...(opts.headers ?? {}),
     },
   });
@@ -109,12 +178,13 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
 }
 
 /** Multipart variant of req(): the browser sets the boundary, so no Content-Type header. */
-async function reqForm<T>(path: string, form: FormData, method = "POST"): Promise<T> {
+export async function reqForm<T>(path: string, form: FormData, method = "POST"): Promise<T> {
   const token = getToken();
+  const client = getActiveClientId();
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     body: form,
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: { "X-App-Client": "web", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(client ? { "X-Client-Id": client } : {}) },
   });
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
@@ -145,21 +215,78 @@ export function qcForm(payload: Record<string, unknown>, files: File[] = []): Fo
   return form;
 }
 
+interface AuthResponse {
+  accessToken: string;
+  refreshToken?: string;
+  user: { id: string; email: string; name: string | null; role: string };
+}
+export type LoginOutcome =
+  | { kind: "ok"; user: AuthUser }
+  | { kind: "mfa"; mfaToken: string }
+  | { kind: "enroll"; mfaToken: string };
+
+/** Store a successful sign-in, or report which second step the server wants. Memberships decide where the person lands. */
+async function finishLogin(r: unknown): Promise<LoginOutcome> {
+  const x = r as Partial<AuthResponse> & { mfaRequired?: boolean; mfaEnrollRequired?: boolean; mfaToken?: string };
+  if (x.mfaRequired && x.mfaToken) return { kind: "mfa", mfaToken: x.mfaToken };
+  if (x.mfaEnrollRequired && x.mfaToken) return { kind: "enroll", mfaToken: x.mfaToken };
+  const user: AuthUser = { id: x.user!.id, email: x.user!.email, name: x.user!.name, role: mapRole(x.user!.role) };
+  setSession(x.accessToken!, user);
+  setRefreshToken(x.refreshToken ?? null);
+  const full = await api.me().catch(() => user);
+  setSession(x.accessToken!, full);
+  return { kind: "ok", user: full };
+}
+
 export const api = {
-  async login(email: string, password: string): Promise<AuthUser> {
-    const r = await req<{ accessToken: string; user: { id: string; email: string; name: string | null; role: string } }>(
+  /** First step of sign-in: either signed in, or a second step (MFA code / MFA enrolment) is needed. */
+  async loginStep(email: string, password: string): Promise<LoginOutcome> {
+    const r = await req<AuthResponse | { mfaRequired: true; mfaToken: string } | { mfaEnrollRequired: true; mfaToken: string }>(
       "/auth/login",
       { method: "POST", body: JSON.stringify({ email, password }) },
     );
-    const user: AuthUser = { id: r.user.id, email: r.user.email, name: r.user.name, role: mapRole(r.user.role) };
-    setSession(r.accessToken, user);
-    return user;
+    return finishLogin(r);
+  },
+
+  async login(email: string, password: string): Promise<AuthUser> {
+    const o = await api.loginStep(email, password);
+    if (o.kind !== "ok") throw new Error("This account needs a second sign-in step; use the sign-in page.");
+    return o.user;
+  },
+
+  auth: {
+    verifyMfa: (mfaToken: string, code: string) =>
+      req<AuthResponse>("/auth/mfa/verify", { method: "POST", body: JSON.stringify({ mfaToken, code }) }).then(finishLogin),
+    startEnrol: (mfaToken: string) =>
+      req<{ secret: string; otpauthUri: string }>("/auth/mfa/enroll/start", { method: "POST", body: JSON.stringify({ mfaToken }) }),
+    completeEnrol: (mfaToken: string, code: string) =>
+      req<AuthResponse & { backupCodes: string[] }>("/auth/mfa/enroll/complete", { method: "POST", body: JSON.stringify({ mfaToken, code }) }).then(async (r) => ({
+        outcome: await finishLogin(r), backupCodes: r.backupCodes,
+      })),
+    sso: (provider: "google" | "microsoft", idToken: string) =>
+      req<AuthResponse>(`/auth/sso/${provider}`, { method: "POST", body: JSON.stringify({ idToken }) }).then(finishLogin),
+    ssoConfig: () => req<{ microsoft: boolean }>("/auth/sso/config"),
+    invitation: (token: string) =>
+      req<{ email: string; name: string | null; termsVersion: string; privacyVersion: string }>(`/auth/invitations/${token}`),
+    accept: (token: string, password: string, acceptTerms: boolean) =>
+      req<AuthResponse | { mfaEnrollRequired: true; mfaToken: string } | { mfaRequired: true; mfaToken: string }>(`/auth/invitations/${token}/accept`, { method: "POST", body: JSON.stringify({ password, acceptTerms }) }).then(finishLogin),
+    forgot: (email: string) => req<{ success: boolean }>("/auth/password/forgot", { method: "POST", body: JSON.stringify({ email }) }),
+    reset: (token: string, password: string) => req<{ success: boolean }>("/auth/password/reset", { method: "POST", body: JSON.stringify({ token, password }) }),
+    changePassword: (currentPassword: string, newPassword: string) =>
+      req<{ success: boolean }>("/auth/password/change", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
+    setupMfa: () => req<{ secret: string; otpauthUri: string }>("/auth/mfa/setup", { method: "POST" }),
+    confirmMfa: (code: string) => req<{ backupCodes: string[] }>("/auth/mfa/confirm", { method: "POST", body: JSON.stringify({ code }) }),
+    disableMfa: (password: string) => req<{ success: boolean }>("/auth/mfa/disable", { method: "POST", body: JSON.stringify({ password }) }),
   },
 
   async me(): Promise<AuthUser> {
-    const r = await req<{ user: { id: string; email: string; name: string | null; role: string } }>("/auth/me");
-    return { id: r.user.id, email: r.user.email, name: r.user.name, role: mapRole(r.user.role) };
+    const r = await req<{ user: { id: string; email: string; name: string | null; role: string; mfaEnabled?: boolean }; memberships?: Array<{ clientId: string; clientName: string; role: string }> }>("/auth/me");
+    return {
+      id: r.user.id, email: r.user.email, name: r.user.name, role: mapRole(r.user.role),
+      memberships: (r.memberships ?? []).map((m) => ({ clientId: m.clientId, clientName: m.clientName, role: m.role })),
+    };
   },
+  mfaEnabled: () => req<{ user: { mfaEnabled?: boolean } }>("/auth/me").then((d) => !!d.user.mfaEnabled),
 
   getInspections: () => req<{ inspections: Inspection[] }>("/web/inspections").then((d) => d.inspections),
   getInspection: (id: string) => req<{ inspection: Inspection }>(`/web/inspections/${id}`).then((d) => d.inspection),

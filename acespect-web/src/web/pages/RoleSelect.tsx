@@ -3,10 +3,24 @@ import { useNavigate } from "react-router";
 import { Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
 import { AcespectLogo } from "../../components/AcespectLogo";
 import { useAppData } from "../data";
+import { api, homeFor, type AuthUser } from "../api";
+import { EnrolStep, ForgotLink, MfaStep, SsoButtons } from "../components/SignInSteps";
 
 export function RoleSelect() {
   const navigate = useNavigate();
-  const { login } = useAppData();
+  const { completeSignIn } = useAppData();
+  const [step, setStep] = useState<{ kind: "creds" } | { kind: "mfa"; token: string } | { kind: "enroll"; token: string }>({ kind: "creds" });
+  const reason = new URLSearchParams(window.location.search).get("reason");
+
+  const finish = async (user: AuthUser) => {
+    await completeSignIn(user);
+    navigate(homeFor(user));
+  };
+  const handleOutcome = async (o: Awaited<ReturnType<typeof api.loginStep>>) => {
+    if (o.kind === "ok") return finish(o.user);
+    setStep(o.kind === "mfa" ? { kind: "mfa", token: o.mfaToken } : { kind: "enroll", token: o.mfaToken });
+    setLoading(false);
+  };
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass]  = useState(false);
@@ -21,8 +35,7 @@ export function RoleSelect() {
     }
     setLoading(true);
     try {
-      const user = await login(email.trim(), password);
-      navigate(`/${user.role}/dashboard`);
+      await handleOutcome(await api.loginStep(email.trim(), password));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
       setLoading(false);
@@ -78,6 +91,11 @@ export function RoleSelect() {
           maxWidth: "400px",
           boxSizing: "border-box",
         }}>
+          {step.kind === "mfa" && <MfaStep token={step.token} onDone={finish} onBack={() => setStep({ kind: "creds" })} />}
+          {step.kind === "enroll" && <EnrolStep token={step.token} onDone={finish} />}
+          {step.kind === "creds" && (<>
+          {reason === "SESSION_IDLE" && <p role="status" style={{ fontSize: 12, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px", margin: "0 0 14px" }}>You were signed out after a period of inactivity.</p>}
+          {(reason === "SESSION_REVOKED" || reason === "ACCOUNT_INACTIVE") && <p role="status" style={{ fontSize: 12, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px", margin: "0 0 14px" }}>Your session was ended. Sign in again.</p>}
           <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#1a2a4a", margin: "0 0 24px" }}>
             Sign In
           </h2>
@@ -166,6 +184,9 @@ export function RoleSelect() {
             <LogIn size={16} />
             {loading ? "Signing in…" : "Sign In"}
           </button>
+          <ForgotLink />
+          <SsoButtons onOutcome={handleOutcome} onError={setError} />
+          </>)}
         </div>
 
         {/* Demo credentials panel */}

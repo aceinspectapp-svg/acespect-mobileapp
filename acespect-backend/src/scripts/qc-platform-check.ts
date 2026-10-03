@@ -709,10 +709,13 @@ async function main() {
   ok(typeof ret.tokens === 'number', 'retention housekeeping runs', ret);
   const verifyChain = await api('GET', '/qc/audit/verify', { token: ca });
   ok(verifyChain.status === 200 && verifyChain.body.ok === true && verifyChain.body.checked > 20, `audit trail chain verifies (${verifyChain.body.checked} entries)`, verifyChain.body);
-  const first = await prisma.qcAuditEntry.findFirstOrThrow({ where: { clientId: A.client.id }, orderBy: { createdAt: 'asc' } });
-  await prisma.qcAuditEntry.update({ where: { id: first.id }, data: { reason: 'tampered' } });
-  const tamper = await api('GET', '/qc/audit/verify', { token: ca });
-  ok(tamper.body.ok === false, 'editing an audit entry is detected', tamper.body);
+  // Skipped with QC_CHECK_TAMPER=off so the data left behind is clean for manual testing.
+  if (process.env.QC_CHECK_TAMPER !== 'off') {
+    const first = await prisma.qcAuditEntry.findFirstOrThrow({ where: { clientId: A.client.id }, orderBy: { createdAt: 'asc' } });
+    await prisma.qcAuditEntry.update({ where: { id: first.id }, data: { reason: 'tampered' } });
+    const tamper = await api('GET', '/qc/audit/verify', { token: ca });
+    ok(tamper.body.ok === false, 'editing an audit entry is detected', tamper.body);
+  }
 
   console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
 }

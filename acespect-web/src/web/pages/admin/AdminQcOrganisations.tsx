@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
+import { useNavigate } from "react-router";
 import { api } from "../../api";
+import { qcx } from "../../qcApi";
+import { useQc } from "../../qcContext";
 import { PageShell, PrimaryBtn, QcSubNav, TableCard } from "../../components/WebLayout";
 import {
-  CredentialsDialog, ErrorNote, Field, FormDialog, Select, btnDanger, btnLink, cell, statusPill, sub, showValue, useRefData,
+  InvitationDialog, type InvitationInfo, ErrorNote, Field, FormDialog, Select, btnDanger, btnLink, cell, statusPill, sub, showValue, useRefData,
 } from "../../components/QcUi";
 import type { QcClientRow, QcMasterContractorRow, QcTradeCategory, QcTradeCompanyRow } from "../../qcTypes";
 
@@ -18,12 +21,14 @@ const TABS: Array<{ id: Tab; label: string }> = [
 export const fmtAbn = (abn: unknown) => (typeof abn === "string" && abn.length === 11 ? abn.replace(/(\d{2})(\d{3})(\d{3})(\d{3})/, "$1 $2 $3 $4") : showValue(abn));
 
 export function AdminQcOrganisations() {
-  const [tab, setTab] = useState<Tab>("clients");
+  const { can, me } = useQc();
+  const tabs = TABS.filter((t) => (t.id === "clients" ? can("client.manage") : t.id === "categories" ? true : can("users.view") && (!me?.isSA || !!me?.clientId)));
+  const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "categories");
   return (
-    <PageShell title="QC Organisations" subtitle="Clients, builders, trade companies and trade categories">
+    <PageShell title="Organisations" subtitle="Clients, builders, trade companies and trade categories">
       <QcSubNav />
       <div style={{ display: "flex", gap: 6, marginBottom: 16, borderBottom: "1px solid #e5e7eb" }}>
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
@@ -54,7 +59,10 @@ function Clients() {
   const [rows, setRows] = useState<QcClientRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ row?: QcClientRow } | null>(null);
-  const [creds, setCreds] = useState<{ email: string; password: string } | null>(null);
+  const [invite, setInvite] = useState<InvitationInfo | null>(null);
+  const [offboarding, setOffboarding] = useState<QcClientRow | null>(null);
+  const { enterSupport } = useQc();
+  const navigate = useNavigate();
 
   const reload = () => api.qc.clients.list().then(setRows).catch((e) => setError(e.message));
   useEffect(() => { reload(); }, []);
@@ -100,11 +108,13 @@ function Clients() {
             <td style={cell}>{statusPill(c.status)}</td>
             <td style={{ ...cell, whiteSpace: "nowrap", textAlign: "right" }}>
               <button style={btnLink} onClick={() => setDialog({ row: c })}>Edit</button>{" "}
-              {c.status === "ACTIVE" ? (
-                <button style={btnLink} onClick={() => setStatus(c, "SUSPENDED")}>Suspend</button>
-              ) : (
+              {c.status !== "OFFBOARDED" && <button style={btnLink} onClick={() => { const reason = window.prompt(`Enter ${c.name} in support mode. Why?`); if (reason && reason.trim().length >= 5) enterSupport(c.id, reason.trim()).then(() => navigate("/qc")).catch((e) => window.alert(e.message)); }}>Enter support mode</button>}{" "}
+              {c.status === "SUSPENDED" ? (
                 <button style={btnLink} onClick={() => setStatus(c, "ACTIVE")}>Reactivate</button>
-              )}{" "}
+              ) : c.status !== "OFFBOARDED" ? (
+                <button style={btnLink} onClick={() => setStatus(c, "SUSPENDED")}>Suspend</button>
+              ) : null}{" "}
+              {c.status !== "OFFBOARDED" && <button style={btnLink} onClick={() => setOffboarding(c)}>Offboard…</button>}{" "}
               <button style={btnDanger} onClick={() => remove(c)}>Delete</button>
             </td>
           </tr>
@@ -118,21 +128,32 @@ function Clients() {
           formCode="E01"
           initial={dialog.row?.data ?? { mfa_required_for_all_roles: false, idle_session_timeout: 30 }}
           hide={dialog.row ? ["first_client_admin_name_and_email"] : []}
-          note={!dialog.row && <p style={{ ...sub, marginTop: 0 }}>Creating a client also creates its first Client Admin from the name and email at the bottom of the form.</p>}
+          note={!dialog.row && <p style={{ ...sub, marginTop: 0 }}>Creating a client also invites its first Client Admin. Type their details in the last field as <b>Jane Smith, jane@example.com</b>; they get an activation link and the client becomes Active when they use it.</p>}
           onClose={() => setDialog(null)}
           onSubmit={async (payload) => {
             if (dialog.row) {
               await api.qc.clients.update(dialog.row.id, payload);
             } else {
-              const r = await api.qc.clients.create(payload);
-              if (r.temporaryPassword) setCreds({ email: r.firstAdmin.email, password: r.temporaryPassword });
+              const r = await api.qc.clients.create(payload) as unknown as { firstAdmin: { email: string }; invitation?: InvitationInfo };
+              if (r.invitation) setInvite({ ...r.invitation, email: r.firstAdmin.email });
             }
             setDialog(null);
             reload();
           }}
         />
       )}
-      {creds && <CredentialsDialog email={creds.email} password={creds.password} onClose={() => setCreds(null)} />}
+      {invite && <InvitationDialog invitation={invite} onClose={() => setInvite(null)} />}
+      {offboarding && (
+        <FormDialog
+          title={`Offboard ${offboarding.name}`}
+          formCode="F42"
+          hide={["destruction_record"]}
+          initial={{ request_type: "Offboard tenant", grace_period: 90, export_contents: ["Data (CSV, JSON)", "Audit trail"] }}
+          note={<p style={{ ...sub, marginTop: 0 }}>Everyone in this client is signed out now and cannot sign in. Their data is kept for the grace period so they can export it, then it can be destroyed unless a legal hold applies.</p>}
+          onClose={() => setOffboarding(null)}
+          onSubmit={async (payload) => { await qcx.settings.offboard(offboarding.id, payload); setOffboarding(null); reload(); }}
+        />
+      )}
     </>
   );
 }
@@ -140,6 +161,7 @@ function Clients() {
 // ─── Master contractors (E02) ────────────────────────────────────────────────
 
 function MasterContractors() {
+  const { can } = useQc();
   const { data, refOptions } = useRefData();
   const [rows, setRows] = useState<QcMasterContractorRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +183,7 @@ function MasterContractors() {
   return (
     <>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-        <PrimaryBtn onClick={() => setDialog({})}><Plus size={14} /> New master contractor</PrimaryBtn>
+        {can("users.mcOrg") && <PrimaryBtn onClick={() => setDialog({})}><Plus size={14} /> New master contractor</PrimaryBtn>}
       </div>
       <ErrorNote message={error} />
       <TableCard headers={["Builder", "Client", "ABN", "Licence", "Insurance", "Contact", "Status", ""]}>
@@ -175,8 +197,8 @@ function MasterContractors() {
             <td style={cell}>{showValue(m.data.primary_contact_name)}<div style={sub}>{showValue(m.data.primary_contact_phone)}</div></td>
             <td style={cell}>{statusPill(m.status)}</td>
             <td style={{ ...cell, whiteSpace: "nowrap", textAlign: "right" }}>
-              <button style={btnLink} onClick={() => setDialog({ row: m })}>Edit</button>{" "}
-              <button style={btnDanger} onClick={() => remove(m)}>Delete</button>
+              {can("users.mcOrg") && <><button style={btnLink} onClick={() => setDialog({ row: m })}>Edit</button>{" "}
+              <button style={btnDanger} onClick={() => remove(m)}>Delete</button></>}
             </td>
           </tr>
         ))}
@@ -214,6 +236,7 @@ function MasterContractors() {
 // ─── Trade companies (E03) ───────────────────────────────────────────────────
 
 function TradeCompanies() {
+  const { can } = useQc();
   const { data, refOptions } = useRefData();
   const [rows, setRows] = useState<QcTradeCompanyRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -235,7 +258,7 @@ function TradeCompanies() {
   return (
     <>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-        <PrimaryBtn onClick={() => setDialog({})}><Plus size={14} /> New trade company</PrimaryBtn>
+        {can("users.trade") && <PrimaryBtn onClick={() => setDialog({})}><Plus size={14} /> New trade company</PrimaryBtn>}
       </div>
       <ErrorNote message={error} />
       <TableCard headers={["Company", "ABN", "Trade categories", "Engaged by", "Contact", "Status", ""]}>
@@ -248,8 +271,8 @@ function TradeCompanies() {
             <td style={cell}>{showValue(t.data.primary_contact_name)}<div style={sub}>{showValue(t.data.primary_contact_mobile)}</div></td>
             <td style={cell}>{statusPill(t.status)}</td>
             <td style={{ ...cell, whiteSpace: "nowrap", textAlign: "right" }}>
-              <button style={btnLink} onClick={() => setDialog({ row: t })}>Edit</button>{" "}
-              <button style={btnDanger} onClick={() => remove(t)}>Delete</button>
+              {can("users.trade") && <><button style={btnLink} onClick={() => setDialog({ row: t })}>Edit</button>{" "}
+              <button style={btnDanger} onClick={() => remove(t)}>Delete</button></>}
             </td>
           </tr>
         ))}
@@ -281,6 +304,7 @@ function TradeCompanies() {
 // ─── Trade categories (E19) ──────────────────────────────────────────────────
 
 function TradeCategories() {
+  const { can } = useQc();
   const [rows, setRows] = useState<QcTradeCategory[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ row?: QcTradeCategory } | null>(null);
@@ -302,7 +326,7 @@ function TradeCategories() {
   return (
     <>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-        <PrimaryBtn onClick={() => setDialog({})}><Plus size={14} /> New trade category</PrimaryBtn>
+        {can("client.manage") && <PrimaryBtn onClick={() => setDialog({})}><Plus size={14} /> New trade category</PrimaryBtn>}
       </div>
       <ErrorNote message={error} />
       <TableCard headers={["Category", "Code", "Licence required", "Licensing authority", "Active", ""]}>
@@ -314,8 +338,8 @@ function TradeCategories() {
             <td style={cell}>{c.licenceHint ?? "—"}</td>
             <td style={cell}>{statusPill(c.active ? "Active" : "Inactive")}</td>
             <td style={{ ...cell, whiteSpace: "nowrap", textAlign: "right" }}>
-              <button style={btnLink} onClick={() => setDialog({ row: c })}>Edit</button>{" "}
-              <button style={btnDanger} onClick={() => remove(c)}>Remove</button>
+              {can("client.manage") && <><button style={btnLink} onClick={() => setDialog({ row: c })}>Edit</button>{" "}
+              <button style={btnDanger} onClick={() => remove(c)}>Remove</button></>}
             </td>
           </tr>
         ))}

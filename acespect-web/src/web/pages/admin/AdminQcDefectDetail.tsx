@@ -6,6 +6,8 @@ import { ErrorNote, FormDialog, Select, btnGhost, btnLink, btnPrimary, sub, show
 import { inputStyle, type RefOption } from "../../components/SpecForm";
 import { FlagChips, SeverityBadge, StatusChip } from "./AdminQcDefects";
 import type { QcAllowedAction, QcDefect, QcDefectDetail, QcDefectEvent } from "../../qcTypes";
+import { qcx, type Escalation } from "../../qcApi";
+import { useQc } from "../../qcContext";
 
 const ROLE_LABEL: Record<string, string> = {
   SA: "Super Admin", CLIENT_ADMIN: "Client Admin", CLIENT_USER: "Client User", MC_MANAGER: "MC Manager", MC_SITE_SUPERVISOR: "MC Site Supervisor",
@@ -43,9 +45,17 @@ export function AdminQcDefectDetail() {
   const [error, setError] = useState<string | null>(null);
   const [action, setAction] = useState<QcAllowedAction | null>(null);
   const [editing, setEditing] = useState(false);
+  const { can } = useQc();
+  const [escalations, setEscalations] = useState<Escalation[]>([]);
+  const [escalating, setEscalating] = useState(false);
+  const [referral, setReferral] = useState<Escalation | null>(null);
+  const [pack, setPack] = useState<{ url: string; name: string } | null>(null);
+  const [packError, setPackError] = useState<string | null>(null);
 
   const load = useCallback(() => api.qc.defects.get(id).then(setDetail).catch((e) => setError(e.message)), [id]);
   useEffect(() => { load(); }, [load]);
+  const loadEscalations = useCallback(() => qcx.escalations.forDefect(id).then(setEscalations).catch(() => setEscalations([])), [id]);
+  useEffect(() => { loadEscalations(); }, [loadEscalations, detail?.defect.updatedAt]);
 
   if (error) return <PageShell title="Defect"><QcSubNav /><ErrorNote message={error} /></PageShell>;
   if (!detail) return <PageShell title="Defect"><QcSubNav /><p style={sub}>Loading…</p></PageShell>;
@@ -55,7 +65,7 @@ export function AdminQcDefectDetail() {
   return (
     <PageShell title={d.title ?? "Draft defect"} subtitle={`${d.defectRef ?? ""} · ${d.property.name} · ${d.project.name} · ${d.client.name}`}>
       <QcSubNav />
-      <Link to="/admin/qc" style={{ ...btnLink, display: "inline-block", marginBottom: 12 }}>← All defects</Link>
+      <Link to="/qc/defects" style={{ ...btnLink, display: "inline-block", marginBottom: 12 }}>← All defects</Link>
 
       <Card style={{ padding: "16px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: actions.length || d.isDraft ? 14 : 0 }}>
@@ -76,7 +86,16 @@ export function AdminQcDefectDetail() {
             <button key={a.key} style={a.key === "confirm" ? btnPrimary : btnGhost} onClick={() => setAction(a)}>{a.label}</button>
           ))}
           {actions.length === 0 && !d.isDraft && <span style={sub}>No actions available in this status.</span>}
+          {!d.isDraft && can("sla.escalate") && !["closed", "withdrawn", "accepted_exception"].includes(d.status.key) && <button style={btnGhost} onClick={() => setEscalating(true)}>Escalate manually</button>}
+          {!d.isDraft && can("evidence.export") && (
+            <button style={btnGhost} onClick={async () => {
+              setPackError(null);
+              try { const r = await qcx.reports.evidencePack(d.id); const l = await qcx.reports.link(String(r.id)); setPack({ url: l.url, name: l.fileName }); } catch (e) { setPackError((e as Error).message); }
+            }}>Evidence pack (ZIP)</button>
+          )}
         </div>
+        <ErrorNote message={packError} />
+        {pack && <p role="status" style={{ fontSize: 12, margin: "10px 0 0" }}>Ready: <a href={resolveMediaUrl(pack.url)} target="_blank" rel="noreferrer">{pack.name}</a> (link valid for 15 minutes). It holds the files, the full history with its hash chain, and a manifest of SHA-256 hashes.</p>}
       </Card>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.25fr) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
@@ -101,6 +120,11 @@ export function AdminQcDefectDetail() {
               ["Builder contact", d.builderContact?.name ?? d.builderContact?.email],
               ["Allocated trade", d.allocatedTradeCompany?.name],
               ["Trade user", d.allocatedTradeUser?.name ?? d.allocatedTradeUser?.email],
+              ["Acknowledge by", d.ackDueAt ? `${fmtTime(d.ackDueAt)}${d.acknowledgedAt ? ` (acknowledged ${fmtTime(d.acknowledgedAt)})` : ""}` : null],
+              ["Rectify by", d.rectifyDueAt ? `${fmtTime(d.rectifyDueAt)}${d.rectifiedAt ? ` (rectified ${fmtTime(d.rectifiedAt)})` : ""}` : null],
+              ["Re-inspect by", d.reinspectDueAt ? fmtTime(d.reinspectDueAt) : null],
+              ["Found at stage", d.foundAtStage ? `${d.foundAtStage}${d.sourceItemNumber ? `, item ${d.sourceItemNumber}` : ""}` : null],
+              ["Raised during the DLP", d.dlpDefect ? "Yes" : null],
               ["Target rectification", fmtDate(d.targetRectificationDate)],
               ["Scheduled attendance", fmtDate(d.scheduledAttendanceDate)],
               ["Rework count", String(d.reworkCount)],
@@ -112,6 +136,21 @@ export function AdminQcDefectDetail() {
               ["Closure policy", d.project.closurePolicy.replace(/_/g, " ").toLowerCase()],
             ]} />
           </Card>
+          {escalations.length > 0 && (
+            <Card style={{ padding: "16px 20px" }}>
+              <Heading>Escalations ({escalations.length})</Heading>
+              {escalations.map((e) => (
+                <div key={e.id} style={{ borderBottom: "1px solid #f1f5f9", padding: "8px 0", fontSize: 13 }}>
+                  <b>Level {e.level}</b> <span style={sub}>· {e.manual ? "manual" : "automatic"} · {fmtTime(e.triggeredAt)}</span>
+                  <div style={{ color: "#374151" }}>{e.trigger}{e.reason ? `: ${e.reason}` : ""}</div>
+                  <div style={sub}>{e.resolvedAt ? `Resolved ${fmtTime(e.resolvedAt)}${e.resolveNote ? `: ${e.resolveNote}` : ""}` : "Open"}{e.referralType ? ` · Referred to ${e.referralType}${e.referralRef ? ` (${e.referralRef})` : ""}` : ""}</div>
+                  {!e.resolvedAt && !e.ackAt && <button style={btnLink} onClick={() => qcx.escalations.ack(e.id).then(loadEscalations)}>Acknowledge</button>}
+                  {e.level === 4 && !e.referralType && can("sla.escalate") && <button style={{ ...btnLink, marginLeft: 8 }} onClick={() => setReferral(e)}>Record external referral</button>}
+                </div>
+              ))}
+              {can("sla.escalate") && escalations.some((e) => !e.resolvedAt) && <button style={{ ...btnGhost, marginTop: 10 }} onClick={async () => { const note = window.prompt("Mark the escalations resolved. Note:"); if (note?.trim()) { try { await qcx.escalations.escalate(d.id, { action: "Mark resolved", reason_or_resolution_note: note }); load(); loadEscalations(); } catch (e) { window.alert((e as Error).message); } } }}>Mark resolved</button>}
+            </Card>
+          )}
           <Card style={{ padding: "16px 20px" }}>
             <Heading>Photos ({d.photoUrls.length})</Heading>
             {d.photoUrls.length === 0 ? <p style={sub}>No photos yet.</p> : <PhotoGrid urls={d.photoUrls} />}
@@ -141,6 +180,15 @@ export function AdminQcDefectDetail() {
         </div>
       </div>
 
+      {escalating && (
+        <FormDialog title="Escalate manually" formCode="F34" hide={["action"]} initial={{ action: "Escalate", target_level: 2 }} onClose={() => setEscalating(false)}
+          note={<p style={{ ...sub, marginTop: 0 }}>Choose the level (2 formal notice, 3 developer notice, 4 external referral). The people that level names are notified and the escalation is recorded.</p>}
+          onSubmit={async (p) => { await qcx.escalations.escalate(d.id, { ...p, action: "Escalate" }); setEscalating(false); load(); loadEscalations(); }} />
+      )}
+      {referral && (
+        <FormDialog title="Record external referral" formCode="F35" initial={{}} onClose={() => setReferral(null)}
+          onSubmit={async (p) => { await qcx.escalations.referral(referral.id, p); setReferral(null); loadEscalations(); }} />
+      )}
       {editing && (
         <FormDialog
           title="Edit draft details"
