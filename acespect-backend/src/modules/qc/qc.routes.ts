@@ -4,6 +4,7 @@ import { qcController } from './qc.controller';
 import { qcAdminController as a } from './qc.admin.controller';
 import { qcPlatformController as pl } from './qc.platform.controller';
 import { qcOpsController as op } from './qc.ops.controller';
+import { qcWorkflowController as wf } from './qc.workflow.controller';
 import { requireAuth } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
 import { requireCap } from './qc.context';
@@ -25,6 +26,8 @@ import {
 const router = Router();
 // Up to 12 photos per request, 15 MB each -- same cap as inspection photo uploads.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+// Documents, videos and imports may be larger (50 MB, as the spec allows).
+const uploadBig = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 const cap = requireCap;
 /** For /defects/:id routes the defect's client picks the context (a Private Inspector may work for several clients). */
@@ -115,6 +118,71 @@ router.patch('/defects/:id', requireAuth, capDefect('defects.view'), a.updateDef
 router.post('/defects/:id/actions/:action', requireAuth, capDefect('defects.view'), upload.array('photos', 12), a.performAction);
 router.post('/defects/:id/comments', requireAuth, capDefect('defects.comment'), upload.array('photos', 6), a.postComment);
 router.post('/defects/:id/photos', requireAuth, capDefect('defects.view'), upload.array('photos', 12), a.addPhotos);
+
+// ─── Stages (E15), result codes (E18), templates (E16/E17) ──────────────────
+router.get('/stages', ...self, wf.listStages);
+router.post('/stages', requireAuth, cap('templates.maintainBase'), wf.saveStage);
+router.put('/stages/:id', requireAuth, cap('templates.maintainBase'), wf.saveStage);
+router.get('/result-codes', ...self, wf.listResultCodes);
+router.put('/result-codes/:code', requireAuth, cap('templates.customise'), wf.saveResultCode);
+
+router.get('/templates', requireAuth, cap('templates.view'), wf.listTemplates);
+router.post('/templates', requireAuth, cap('templates.maintainBase'), wf.createTemplate);
+router.get('/templates/:id', requireAuth, cap('templates.view'), wf.getTemplate);
+router.patch('/templates/:id', requireAuth, cap('templates.customise'), wf.updateTemplate);
+router.post('/templates/:id/items', requireAuth, cap('templates.customise'), wf.addItem);
+router.patch('/template-items/:id', requireAuth, cap('templates.customise'), wf.updateItem);
+router.delete('/template-items/:id', requireAuth, cap('templates.customise'), wf.removeItem);
+router.post('/templates/:id/draft', requireAuth, cap('templates.customise'), wf.newDraft);
+router.post('/templates/:id/publish', requireAuth, cap('templates.customise'), wf.publish);
+router.post('/templates/:id/adopt', requireAuth, cap('templates.assign'), wf.adopt);
+router.post('/templates/:id/clone', requireAuth, cap('templates.customise'), wf.clone);
+router.get('/templates/:id/diff', requireAuth, cap('templates.customise'), wf.diff);
+router.post('/templates/:id/merge', requireAuth, cap('templates.customise'), wf.merge);
+router.get('/templates/:id/export', requireAuth, cap('templates.view'), wf.exportTemplate);
+router.post('/templates/:id/import', requireAuth, cap('templates.customise'), uploadBig.array('files', 1), wf.importTemplate);
+
+// ─── Project documents, inspection plan, lots, status ───────────────────────
+router.get('/projects/:id/documents', requireAuth, cap('projects.docs.view'), wf.listDocuments);
+router.post('/projects/:id/documents', requireAuth, cap('projects.docs.upload'), uploadBig.array('files', 1), wf.addDocument);
+router.get('/projects/:id/plan', requireAuth, cap('projects.view'), wf.getPlan);
+router.post('/projects/:id/plan/seed', requireAuth, cap('projects.create'), wf.seedPlan);
+router.patch('/projects/:id/plan/:stageRowId', requireAuth, cap('projects.create'), wf.updatePlanStage);
+router.get('/projects/:id/matrix', requireAuth, cap('projects.view'), wf.planMatrix);
+router.post('/projects/:id/status', requireAuth, cap('projects.status'), wf.transitionProject);
+router.get('/lots/csv-template', ...self, wf.lotCsvTemplate);
+router.post('/sites/:id/lots/import', requireAuth, cap('projects.create'), uploadBig.array('files', 1), wf.importLots);
+
+// ─── Inspections (E21/E22) ──────────────────────────────────────────────────
+router.get('/inspections', requireAuth, cap('inspections.progress'), wf.listInspections);
+router.post('/inspections/request', requireAuth, cap('inspections.request'), wf.requestInspection);
+router.post('/inspections/plan', requireAuth, cap('inspections.plan'), wf.planInspections);
+router.post('/inspections/adhoc', requireAuth, cap('inspections.adhoc'), wf.adHoc);
+router.get('/inspections/:id', requireAuth, cap('inspections.progress'), wf.getInspection);
+router.post('/inspections/:id/change', requireAuth, cap('inspections.plan'), wf.changeInspection);
+router.post('/inspections/:id/start', requireAuth, cap('inspections.perform'), wf.start);
+router.put('/inspections/:id/results/:itemNumber', requireAuth, cap('inspections.perform'), wf.saveResult);
+router.post('/inspections/:id/results/:itemNumber/defects', requireAuth, cap('inspections.perform'), wf.raiseDefect);
+router.get('/inspections/:id/completion', requireAuth, cap('inspections.perform'), wf.completionCheck);
+router.post('/inspections/:id/complete', requireAuth, cap('inspections.perform'), wf.complete);
+router.post('/inspections/:id/addendum', requireAuth, cap('inspections.perform'), uploadBig.array('files', 6), wf.addendum);
+router.post('/inspections/:id/report', requireAuth, cap('inspections.reports'), wf.inspectionReport);
+
+// ─── Evidence ───────────────────────────────────────────────────────────────
+router.post('/evidence', requireAuth, cap('defects.comment'), uploadBig.array('files', 12), wf.uploadEvidence);
+router.get('/evidence', requireAuth, cap('defects.view'), wf.listEvidence);
+router.get('/evidence/:id/verify', requireAuth, cap('evidence.export'), wf.verifyEvidence);
+
+// ─── Dashboard and reports ──────────────────────────────────────────────────
+router.get('/dashboard', requireAuth, cap('reports.dashboard'), wf.dashboard);
+router.get('/portfolio', requireAuth, cap('reports.portfolio'), wf.portfolio);
+router.post('/portfolio/export', requireAuth, cap('reports.portfolio'), wf.portfolioXlsx);
+router.get('/reports', requireAuth, cap('inspections.reports'), wf.listReports);
+router.get('/reports/:id/download', requireAuth, cap('inspections.reports'), wf.downloadReport);
+router.post('/reports/open-items', requireAuth, cap('reports.openItems'), wf.openItems);
+router.post('/reports/escalations', requireAuth, cap('reports.dlpEscalation'), wf.escalationReport);
+router.post('/projects/:id/dlp/report', requireAuth, cap('reports.dlpEscalation'), wf.dlpReport);
+router.post('/defects/:id/evidence-pack', requireAuth, capDefect('evidence.export'), wf.evidencePack);
 
 // ─── SLA targets (E13) and escalation / project policy (E14) ────────────────
 router.get('/sla', requireAuth, cap('projects.view'), op.getSla);

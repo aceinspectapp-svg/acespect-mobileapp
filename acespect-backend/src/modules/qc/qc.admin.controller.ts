@@ -7,7 +7,7 @@ import * as master from './qc.master.service';
 import * as people from './qc.people.service';
 import * as defects from './qc.defects.service';
 import { createPerson } from './qc.people.service';
-import { serializeDefect, serializeEvent } from './qc.serializers';
+import { serializeComment, serializeDefect, serializeEvent } from './qc.serializers';
 import { getSpecPayload } from './spec/qcSpec';
 import { ROLE_LABEL, MEMBER_ROLES, DEACTIVATION_REASONS } from './qc.people.service';
 import { ACTIONS } from './qc.lifecycle';
@@ -93,6 +93,7 @@ export const qcAdminController = {
         clientId: client.id,
       },
       ctx,
+      { platformOnboarding: true },
     ).catch(async (err) => {
       await prisma.qcClient.delete({ where: { id: client.id } });
       throw err;
@@ -205,6 +206,7 @@ export const qcAdminController = {
   updateProject: asyncHandler(async (req, res) => {
     const owner = await guardEntity(req, 'project', requireId(req));
     const body = { ...payloadOf(req), developer: owner.clientId };
+    if ('status' in body) throw ApiError.badRequest('Project status changes through POST /qc/projects/:id/status, which checks the guards for each move');
     // Status moves and policy switches have their own capabilities and guards.
     const ctx = ctxOf(req);
     if (('status' in body || 'closurePolicy' in body || 'deskReviewAllowed' in body || 'safetyAutoRelease' in body) && !can(ctx, 'projects.status')) {
@@ -370,7 +372,7 @@ export const qcAdminController = {
     res.status(200).json({
       defect: serializeDefect(detail.defect, { allowedActions: detail.allowedActions }),
       events: detail.events.map((e) => serializeEvent(e, statusById)),
-      comments: detail.comments,
+      comments: detail.comments.map(serializeComment),
       actorRole: detail.actor.role,
     });
   }),
@@ -394,14 +396,14 @@ export const qcAdminController = {
     res.status(200).json({
       defect: serializeDefect(detail.defect, { allowedActions: detail.allowedActions }),
       events: detail.events.map((e) => serializeEvent(e, statusById)),
-      comments: detail.comments,
+      comments: detail.comments.map(serializeComment),
       actorRole: detail.actor.role,
     });
   }),
   postComment: asyncHandler(async (req, res) => {
     const body = payloadOf(req);
     const comment = await defects.postComment(requireId(req), requester(req), { text: String(body.text ?? ''), visibleTo: q(body.visibleTo) }, await storeUploads(req));
-    res.status(201).json({ comment });
+    res.status(201).json({ comment: serializeComment(comment) });
   }),
   addPhotos: asyncHandler(async (req, res) => {
     const defect = await defects.addDefectPhotos(requireId(req), requester(req), await storeUploads(req));

@@ -29,11 +29,23 @@ export interface AuditInput {
   after?: unknown;
 }
 
+/** JSON with sorted keys, so the hash does not depend on key order (Postgres jsonb reorders keys on the way back). */
+function canon(v: unknown): string {
+  if (v === undefined || v === null) return 'null';
+  if (v instanceof Date) return JSON.stringify(v.toISOString());
+  if (Array.isArray(v)) return `[${v.map(canon).join(',')}]`;
+  if (typeof v === 'object') {
+    // Keys holding undefined vanish when the value is stored as JSON, so they must not count here either.
+    return `{${Object.keys(v as object).filter((k) => (v as Record<string, unknown>)[k] !== undefined).sort().map((k) => `${JSON.stringify(k)}:${canon((v as Record<string, unknown>)[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v);
+}
+
 function entryHash(prev: string | null, e: Pick<AuditInput, 'clientId' | 'entityType' | 'entityId' | 'action' | 'actor' | 'reason'>, createdAt: Date, before: unknown, after: unknown): string {
   return createHash('sha256')
     .update([
       prev ?? '', e.clientId ?? '', e.entityType, e.entityId, e.action, e.actor.id ?? '', e.actor.role, e.reason ?? '',
-      JSON.stringify(before ?? null), JSON.stringify(after ?? null), createdAt.toISOString(),
+      canon(before), canon(after), createdAt.toISOString(),
     ].join('|'))
     .digest('hex');
 }
@@ -48,8 +60,10 @@ export async function recordAudit(e: AuditInput, tx?: Prisma.TransactionClient):
   const run = async (db: Prisma.TransactionClient) => {
     const key = e.clientId ?? 'platform';
     await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'audit:' + key}))`;
-    const prev = await db.qcAuditEntry.findFirst({ where: { clientId: e.clientId ?? null }, orderBy: { createdAt: 'desc' }, select: { hash: true } });
-    const createdAt = new Date();
+    const prev = await db.qcAuditEntry.findFirst({ where: { clientId: e.clientId ?? null }, orderBy: { createdAt: 'desc' }, select: { hash: true, createdAt: true } });
+    // Strictly increasing timestamps keep the chain order unambiguous when two entries land in the same millisecond.
+    const now = new Date();
+    const createdAt = prev && now.getTime() <= prev.createdAt.getTime() ? new Date(prev.createdAt.getTime() + 1) : now;
     const before = redact(e.before);
     const after = redact(e.after);
     await db.qcAuditEntry.create({

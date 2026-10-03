@@ -99,7 +99,7 @@ async function mfaRequired(user: User): Promise<boolean> {
 async function assertClientNotSuspended(user: User): Promise<void> {
   if (user.role === 'ADMIN') return;
   const rows = await prisma.qcMembership.findMany({ where: { userId: user.id, status: 'ACTIVE' }, select: { client: { select: { status: true } } } });
-  if (rows.length && rows.every((r) => r.client.status === 'SUSPENDED')) {
+  if (rows.length && rows.every((r) => ['SUSPENDED', 'OFFBOARDED'].includes(r.client.status))) {
     throw new ApiError(403, "Your organisation's access to ACE SPECT is suspended. Contact your administrator.", 'CLIENT_SUSPENDED');
   }
 }
@@ -282,6 +282,8 @@ export const authService = {
         },
       });
     });
+    // The first Client Admin activating their account activates the client.
+    await prisma.qcClient.updateMany({ where: { status: 'PENDING_ACTIVATION', memberships: { some: { userId: user.id, role: 'CLIENT_ADMIN' } } }, data: { status: 'ACTIVE' } });
     await logSecurityEvent({ type: 'INVITATION_ACCEPTED', userId: user.id, detail: { terms: env.TERMS_VERSION, privacy: env.PRIVACY_VERSION }, ip: info.ip });
     return afterPasswordOk(user, info);
   },
@@ -392,7 +394,7 @@ export const authService = {
 
   /** When a client is suspended/offboarded, end sessions of people who have no other active client (REQ-TEN-006). */
   async revokeSessionsIfOnlyClient(userId: string, clientId: string, reason: string): Promise<void> {
-    const others = await prisma.qcMembership.count({ where: { userId, status: 'ACTIVE', clientId: { not: clientId }, client: { status: { not: 'SUSPENDED' } } } });
+    const others = await prisma.qcMembership.count({ where: { userId, status: 'ACTIVE', clientId: { not: clientId }, client: { status: { notIn: ['SUSPENDED', 'OFFBOARDED'] } } } });
     if (others === 0) await revokeAllSessions(userId, reason);
   },
 

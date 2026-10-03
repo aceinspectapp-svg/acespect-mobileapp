@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { env } from '../config/env';
 import { prisma } from './prisma';
@@ -40,6 +40,9 @@ function egnyteBase(): string {
 function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${env.EGNYTE_API_TOKEN}` };
 }
+
+/** Local development only: with no Egnyte configured, files are kept in the `photos` table so the app and its tests still work. */
+export const useDbStorage = (): boolean => !isStorageEnabled() && env.NODE_ENV !== 'production';
 
 export function isStorageEnabled(): boolean {
   return !!env.EGNYTE_DOMAIN && !!env.EGNYTE_API_TOKEN;
@@ -92,6 +95,8 @@ export interface UploadedPhoto {
   id: string;
   storageKey: string;
   url: string;
+  /** SHA-256 of the stored (served) copy, so evidence can later be proven unchanged. */
+  storedHash?: string;
 }
 
 /** Egnyte paths are slash-separated but each segment must be URI-encoded individually. */
@@ -204,7 +209,7 @@ export async function uploadPhoto(
   inspectionId?: string,
   sectionKey?: string,
 ): Promise<UploadedPhoto> {
-  if (!isStorageEnabled()) throw new Error('Photo storage is not configured');
+  if (!isStorageEnabled() && !useDbStorage()) throw new Error('Photo storage is not configured');
 
   const id = randomUUID();
 
@@ -222,6 +227,10 @@ export async function uploadPhoto(
     .jpeg({ quality: REPORT_JPEG_QUALITY })
     .toBuffer();
 
+  if (useDbStorage()) {
+    await prisma.photo.create({ data: { id, data: new Uint8Array(resized), contentType: 'image/jpeg' } });
+    return { id, storageKey: `db:${id}`, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(resized).digest('hex') };
+  }
   const storageKey = photoPath(id, inspectionId, sectionKey, '.jpg');
   await uploadToEgnyte(storageKey, resized, 'image/jpeg');
 
@@ -243,7 +252,7 @@ export async function uploadPhoto(
   // baked-in absolute URL would go dead (and break every already-submitted
   // photo) the next time the tunnel restarts. Clients resolve this path
   // against whatever API host they're currently configured for.
-  return { id, storageKey, url: `/api/v1/media/${id}` };
+  return { id, storageKey, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(resized).digest('hex') };
 }
 
 /**
@@ -252,19 +261,29 @@ export async function uploadPhoto(
  * `folder` groups files in Egnyte, e.g. "documents/<projectId>".
  */
 export async function uploadDocument(buffer: Buffer, contentType: string, ext: string, folder = 'documents'): Promise<UploadedPhoto> {
-  if (!isStorageEnabled()) throw new Error('File storage is not configured');
+  if (!isStorageEnabled() && !useDbStorage()) throw new Error('File storage is not configured');
   const id = randomUUID();
+  if (useDbStorage()) {
+    await prisma.photo.create({ data: { id, data: new Uint8Array(buffer), contentType } });
+    return { id, storageKey: `db:${id}`, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(buffer).digest('hex') };
+  }
   const safeExt = ext.replace(/[^a-z0-9]/gi, '').slice(0, 8) || 'bin';
   const storageKey = `${env.EGNYTE_ROOT_FOLDER}/${folder.split('/').map(safeSegment).filter(Boolean).join('/')}/${id}.${safeExt}`;
   await uploadToEgnyte(storageKey, buffer, contentType);
   await prisma.photo.create({ data: { id, storageKey, contentType } });
-  return { id, storageKey, url: `/api/v1/media/${id}` };
+  return { id, storageKey, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(buffer).digest('hex') };
 }
 
 /** Streams the resized report copy for a given photo id straight from Egnyte. Used by the media proxy route. */
 export async function fetchPhotoStream(
   id: string,
 ): Promise<{ body: ReadableStream; contentType: string } | null> {
+  if (useDbStorage()) {
+    const row = await prisma.photo.findUnique({ where: { id } });
+    if (!row?.data) return null;
+    const bytes = Buffer.from(row.data);
+    return { body: new Response(bytes).body as unknown as ReadableStream, contentType: row.contentType };
+  }
   if (!isStorageEnabled()) return null;
 
   // Look up the real Egnyte path from the index; fall back to the old flat

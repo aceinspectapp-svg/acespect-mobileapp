@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { ApiError } from '../utils/ApiError';
 import { isProd } from '../config/env';
 import { isSubmissionPath, recordSubmissionEvent } from '../lib/submissionLog';
+import { logSecurityEvent } from '../lib/securityLog';
 
 /** 404 for unmatched routes. */
 export function notFound(req: Request, _res: Response, next: NextFunction): void {
@@ -51,6 +52,11 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     // hitting the same rejection, with nothing in `railway logs` to show it
     // was even trying. Concise on purpose (no stack -- this isn't a bug in
     // this server, just a bad request), but enough to trace what and who.
+    // A refusal inside a handler (a role may not do this to that record) goes in the security log too
+    // (REQ-AUT-003); the route guard logs its own refusals and marks the request.
+    if (status === 403 && req.qc && !req.qc.forbiddenLogged) {
+      void logSecurityEvent({ type: 'FORBIDDEN', clientId: req.qc.clientId, userId: req.qc.userId, detail: { role: req.qc.role, method: req.method, path: req.originalUrl.split('?')[0], reason: message }, ip: req.qc.ip });
+    }
     // eslint-disable-next-line no-console
     console.warn('[reject]', `${req.method} ${req.originalUrl}`, code, message, details ? JSON.stringify(details) : '');
     if (isSubmissionPath(req.originalUrl)) {

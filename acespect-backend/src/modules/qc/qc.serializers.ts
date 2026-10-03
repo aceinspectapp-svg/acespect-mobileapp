@@ -5,6 +5,11 @@
  * alongside the originals so older mobile builds keep working.
  */
 
+import { signMediaUrl } from '../../lib/mediaLinks';
+
+/** Every photo link leaves the API signed (expiring); links to files that are not protected simply ignore the signature. */
+export const signUrls = (urls: unknown): string[] => (Array.isArray(urls) ? urls.map((u) => signMediaUrl(String(u))) : []);
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function serializeDefect(defect: any, extras?: { allowedActions?: unknown }) {
   const project = defect.property.project;
@@ -23,7 +28,7 @@ export function serializeDefect(defect: any, extras?: { allowedActions?: unknown
     flags: defect.flags ?? [],
     escalationLevel: defect.escalationLevel,
     reworkCount: defect.reworkCount,
-    photoUrls: defect.photoUrls ?? [],
+    photoUrls: signUrls(defect.photoUrls),
     dueDate: defect.dueDate,
     targetRectificationDate: defect.targetRectificationDate,
     scheduledAttendanceDate: defect.scheduledAttendanceDate,
@@ -102,7 +107,7 @@ export function serializeTask(task: any, allowedActions?: unknown) {
       id: u.id,
       author: u.author,
       comment: u.comment,
-      photoUrls: u.photoUrls,
+      photoUrls: signUrls(u.photoUrls),
       statusAfter: u.statusAfter,
       statusChanged: u.statusChanged,
       createdAt: u.createdAt,
@@ -122,9 +127,14 @@ export function serializeEvent(e: any, statusById: Map<string, { key: string; la
     onBehalf: e.onBehalf,
     note: e.note,
     changes: e.changes,
-    attachments: e.attachments,
+    attachments: signUrls(e.attachments),
     reworkCount: e.reworkCount,
     hash: e.hash,
     createdAt: e.createdAt,
   };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function serializeComment(c: any) {
+  return { ...c, attachments: signUrls(c.attachments) };
 }

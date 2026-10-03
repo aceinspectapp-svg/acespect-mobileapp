@@ -18,6 +18,7 @@ import { Capability, can } from './qc.permissions';
 import { requireExists } from './qc.shared';
 import { validateAgainstSpec, validateOrThrow } from './spec/qcSpec';
 import { TERMINAL_STATUSES } from './qc.lifecycle';
+import { assertWithinPlan } from './qc.master.service';
 
 type Input = Record<string, unknown>;
 const json = (v: unknown) => v as Prisma.InputJsonValue;
@@ -176,14 +177,15 @@ function membershipData(plan: MembershipPlan) {
   };
 }
 
-export async function createPerson(input: Input, ctx?: QcContext) {
+export async function createPerson(input: Input, ctx?: QcContext, opts: { platformOnboarding?: boolean } = {}) {
   const role = str(input.role) as QcMemberRole;
   if (!MEMBER_ROLES.includes(role)) throw ApiError.badRequest('Choose a role');
   const e04 = validateOrThrow('E04', { sign_in_method: 'Password with MFA', ...input }, { extraRequired: e04Required(role), skipRequired: ['sign_in_method'] });
   if (ctx) {
     // A non-SA caller always creates inside their own client.
     if (!ctx.isSA) input = { ...input, clientId: ctx.clientId };
-    if (role !== 'PRIVATE_INSPECTOR' && ctx.isSA) await assertClientAccess(ctx, str(input.clientId));
+    // Creating a client creates its first admin as part of platform onboarding; every other SA action needs a support session.
+    if (role !== 'PRIVATE_INSPECTOR' && ctx.isSA && !opts.platformOnboarding) await assertClientAccess(ctx, str(input.clientId));
     assertMayManage(ctx, role, role.startsWith('MC_') ? str(input.masterContractorId) : null);
     if (role === 'MC_MANAGER' || role === 'MC_SITE_SUPERVISOR' || role === 'MC_PROJECT_MANAGER') {
       if ((ctx.role === 'MC_MANAGER') && str(input.masterContractorId) !== ctx.membership?.masterContractorId) throw ApiError.forbidden('You can only add people to your own organisation');
@@ -209,6 +211,8 @@ export async function createPerson(input: Input, ctx?: QcContext) {
   }
 
   // The person chooses their own password through the invitation link; until then the account cannot sign in.
+  // Each new membership counts against the client's user limit.
+  for (const plan of plans) await assertWithinPlan(plan.clientId, 'users');
   const password = tempPassword();
 
   const user = await prisma.$transaction(async (tx) => {

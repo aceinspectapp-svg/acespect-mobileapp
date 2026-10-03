@@ -23,6 +23,31 @@ function without(data: Input, keys: string[]): Input {
   return out;
 }
 
+// ───────────────────────── Plan limits (E01 plan_and_limits) ─────────────────────────
+
+/** Plan name, maximum users, maximum active projects, storage (GB). A blank or zero limit means unlimited. */
+export function planLimits(clientData: Input): { plan: string | null; maxUsers: number | null; maxProjects: number | null; storageGb: number | null } {
+  const raw = clientData.plan_and_limits;
+  const parts = Array.isArray(raw) ? raw : [];
+  const num = (v: unknown) => (Number(v) > 0 ? Number(v) : null);
+  return { plan: str(parts[0]) || null, maxUsers: num(parts[1]), maxProjects: num(parts[2]), storageGb: num(parts[3]) };
+}
+
+/** Refuse to add a user or project beyond the client's plan, with a message that says what to do. */
+export async function assertWithinPlan(clientId: string, kind: 'users' | 'projects'): Promise<void> {
+  const client = await prisma.qcClient.findUnique({ where: { id: clientId }, select: { data: true, name: true } });
+  if (!client) return;
+  const limits = planLimits(client.data as Input);
+  if (kind === 'users' && limits.maxUsers) {
+    const n = await prisma.qcMembership.count({ where: { clientId, status: 'ACTIVE' } });
+    if (n >= limits.maxUsers) throw ApiError.conflict(`${client.name}'s plan allows ${limits.maxUsers} users and all are in use. Deactivate someone or ask the platform administrator to raise the limit.`, 'PLAN_LIMIT');
+  }
+  if (kind === 'projects' && limits.maxProjects) {
+    const n = await prisma.qcProject.count({ where: { clientId, status: { notIn: ['ARCHIVED', 'DLP_COMPLETE'] } } });
+    if (n >= limits.maxProjects) throw ApiError.conflict(`${client.name}'s plan allows ${limits.maxProjects} active projects and all are in use. Archive a finished project or ask the platform administrator to raise the limit.`, 'PLAN_LIMIT');
+  }
+}
+
 // ───────────────────────── Clients (E01) ─────────────────────────
 
 const CLIENT_STATUS = ['PENDING_ACTIVATION', 'ACTIVE', 'SUSPENDED', 'OFFBOARDED'] as const;
@@ -41,6 +66,16 @@ async function nextClientCode(): Promise<string> {
   return `CLI-${String(max + 1).padStart(4, '0')}`;
 }
 
+/** The spec field is free text; accept [name, email], "Name <email>", "Name, email" or just an email. */
+export function parseFirstAdmin(v: unknown): { name: string; email: string } {
+  const parts: string[] = Array.isArray(v) ? v.map((x) => String(x ?? '').trim()) : [String(v ?? '').trim()];
+  const joined = parts.join(' ').trim();
+  const emailMatch = /[^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+/.exec(joined);
+  const email = (emailMatch?.[0] ?? '').toLowerCase();
+  const name = joined.replace(emailMatch?.[0] ?? '', '').replace(/[<>,;]/g, ' ').replace(/\s+/g, ' ').trim() || email.split('@')[0] || '';
+  return { name, email };
+}
+
 export async function listClients() {
   return prisma.qcClient.findMany({
     orderBy: { name: 'asc' },
@@ -56,12 +91,14 @@ export async function createClient(input: Input) {
   // The first Client Admin is created together with the client (E01); the name/email pair is handled below.
   const data = validateOrThrow('E01', input);
   await ensureAbnFree(str(data.abn));
-  const [adminName, adminEmail] = (data.first_client_admin_name_and_email as string[] | undefined) ?? [];
+  const { name: adminName, email: adminEmail } = parseFirstAdmin(data.first_client_admin_name_and_email);
+  if (!adminEmail) throw ApiError.badRequest('Enter the first Client Admin as a name and an email address, for example "Jane Smith, jane@example.com"');
   const client = await prisma.qcClient.create({
     data: {
       name: str(data.legal_entity_name),
       clientCode: await nextClientCode(),
-      status: 'ACTIVE',
+      // Becomes Active when the first Client Admin accepts their invitation.
+      status: 'PENDING_ACTIVATION',
       data: json(without(data, ['first_client_admin_name_and_email'])),
     },
   });
@@ -324,6 +361,7 @@ async function nextProjectRef(): Promise<string> {
 export async function createProject(input: Input) {
   const data = validateOrThrow('E07', input);
   const { clientId, builderId } = await projectRefs(data);
+  await assertWithinPlan(clientId, 'projects');
   const clash = await prisma.qcProject.findFirst({ where: { clientId, jobNumber: str(data.job_number) } });
   if (clash) throw ApiError.conflict(`Job number ${data.job_number} is already used by ${clash.name}`, 'JOB_NUMBER_TAKEN');
   return prisma.qcProject.create({
@@ -433,10 +471,13 @@ async function lotColumns(data: Input) {
   return { name: str(data.lot_reference), propertyTypeId: propertyType.id, lotStatus: str(data.lot_status) || undefined };
 }
 
-export async function createLot(input: Input) {
+/** Fields a bulk import may leave blank to be completed later (the lot is flagged until they are). */
+export const LOT_IMPORT_OPTIONAL = ['street_address', 'ncc_building_class', 'storeys', 'floor_system', 'frame', 'floor_area', 'plan_type_and_number', 'wall_cladding', 'roof_cover'];
+
+export async function createLot(input: Input, opts: { lenient?: boolean } = {}) {
   const siteId = str(input.siteId);
   const site = await requireExists('qcSite', siteId, 'Site');
-  const data = validateOrThrow('E09', without(input, ['siteId']));
+  const data = validateOrThrow('E09', without(input, ['siteId']), opts.lenient ? { skipRequired: LOT_IMPORT_OPTIONAL } : {});
   const clash = await prisma.qcProperty.findFirst({ where: { siteId, name: str(data.lot_reference) } });
   if (clash) throw ApiError.conflict(`Lot reference ${data.lot_reference} already exists on this site`, 'LOT_TAKEN');
   return prisma.qcProperty.create({
@@ -445,9 +486,9 @@ export async function createLot(input: Input) {
   });
 }
 
-export async function updateLot(id: string, input: Input) {
+export async function updateLot(id: string, input: Input, opts: { lenient?: boolean } = {}) {
   const existing = await requireExists('qcProperty', id, 'Lot');
-  const data = validateOrThrow('E09', { ...(existing.data as Input), ...without(input, ['siteId']) });
+  const data = validateOrThrow('E09', { ...(existing.data as Input), ...without(input, ['siteId']) }, opts.lenient ? { skipRequired: LOT_IMPORT_OPTIONAL } : {});
   if (str(data.lot_reference) !== existing.name && existing.siteId) {
     const clash = await prisma.qcProperty.findFirst({ where: { siteId: existing.siteId, name: str(data.lot_reference), id: { not: id } } });
     if (clash) throw ApiError.conflict(`Lot reference ${data.lot_reference} already exists on this site`, 'LOT_TAKEN');

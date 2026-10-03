@@ -43,6 +43,8 @@ export interface QcContext extends PermissionSubject {
   projectIds: string[] | 'all';
   supportSession: { id: string; clientId: string; reason: string; ticketRef: string | null; expiresAt: Date } | null;
   ip: string | null;
+  /** Set when the route guard already logged a refusal for this request. */
+  forbiddenLogged?: boolean;
 }
 
 const MEMBER_ROLE: Record<string, ActorRole> = {
@@ -57,7 +59,7 @@ const MEMBER_ROLE: Record<string, ActorRole> = {
 
 export async function loadMemberships(userId: string): Promise<QcMembershipSummary[]> {
   const rows = await prisma.qcMembership.findMany({
-    where: { userId, status: 'ACTIVE', client: { status: { not: 'SUSPENDED' } } },
+    where: { userId, status: 'ACTIVE', client: { status: { notIn: ['SUSPENDED', 'OFFBOARDED'] } } },
     include: { client: { select: { id: true, name: true } }, projects: { select: { id: true } } },
     orderBy: { createdAt: 'asc' },
   });
@@ -150,7 +152,9 @@ export async function buildContext(req: Request, opts: { clientHint?: string } =
     permissions: m.permissions,
     clientId: m.clientId,
     membership: m,
-    projectIds: m.role === 'CLIENT_ADMIN' ? 'all' : m.projectIds,
+    // A membership with no projects selected is not narrowed to any: the Client Admin always sees all, and so does anyone
+    // not yet assigned (the people form warns about this); once projects are chosen they are the limit.
+    projectIds: m.role === 'CLIENT_ADMIN' || m.projectIds.length === 0 ? 'all' : m.projectIds,
     supportSession: null,
     ip,
   };
@@ -187,6 +191,8 @@ export function requireCap(capability: Capability, hint?: (req: Request) => Prom
           detail: { capability, role: ctx.role, method: req.method, path: req.originalUrl.split('?')[0] },
           ip: ctx.ip,
         });
+        ctx.forbiddenLogged = true;
+        req.qc = ctx;
         throw ApiError.forbidden('You do not have access to this resource');
       }
       req.qc = ctx;

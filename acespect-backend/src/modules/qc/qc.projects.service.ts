@@ -206,7 +206,7 @@ export function parseCsv(text: string): string[][] {
 const LOT_COLUMNS: Record<string, string> = {
   'lot number': 'lot_number', 'lot reference': 'lot_reference', 'unit number': 'unit_or_apartment_number', 'unit': 'unit_or_apartment_number', building: 'building_or_block_name',
   level: 'level_or_floor', 'street address': 'street_address', 'dwelling type': 'dwelling_type', 'ncc class': 'ncc_building_class', 'building class': 'ncc_building_class',
-  storeys: 'storeys', 'floor system': 'floor_system', frame: 'frame', 'floor area': 'floor_area', 'plan number': 'plan_type_and_number',
+  storeys: 'storeys', 'floor system': 'floor_system', frame: 'frame', 'floor area': 'floor_area', 'plan number': 'plan_type_and_number', 'wall cladding': 'wall_cladding', 'roof cover': 'roof_cover',
 };
 
 export interface LotImportReport {
@@ -244,7 +244,7 @@ export async function importLots(ctx: QcContext, siteId: string, csv: string, op
       const known = byName.get(ref);
       if (known && opts.mode === 'add') throw new Error(`Lot ${ref} already exists on this site`);
       const merged = known ? { ...(known.data as Record<string, unknown>), ...raw } : { dwelling_type: 'Detached house', ...raw };
-      const { data, issues } = validateAgainstSpec('E09', merged, { partial: false, skipRequired: ['street_address', 'ncc_building_class', 'storeys', 'floor_system', 'frame', 'floor_area', 'plan_type_and_number'] });
+      const { data, issues } = validateAgainstSpec('E09', merged, { partial: false, skipRequired: ['street_address', 'ncc_building_class', 'storeys', 'floor_system', 'frame', 'floor_area', 'plan_type_and_number', 'wall_cladding', 'roof_cover'] });
       if (issues.length) throw new Error(issues.map((i) => i.message).join('; '));
       plan.push({ mode: known ? 'update' : 'add', id: known?.id, data });
     } catch (err) {
@@ -255,8 +255,8 @@ export async function importLots(ctx: QcContext, siteId: string, csv: string, op
 
   const { createLotRow, updateLotRow } = await import('./qc.master.service').then((m) => ({ createLotRow: m.createLot, updateLotRow: m.updateLot }));
   for (const p of plan) {
-    if (p.mode === 'add') { await createLotRow({ ...p.data, siteId }); report.added++; }
-    else { await updateLotRow(p.id!, p.data); report.updated++; }
+    if (p.mode === 'add') { await createLotRow({ ...p.data, siteId }, { lenient: true }); report.added++; }
+    else { await updateLotRow(p.id!, p.data, { lenient: true }); report.updated++; }
   }
   await recordAudit({ clientId: site.project.clientId, entityType: 'Site', entityId: siteId, action: 'lots.import', actor: actor(ctx), after: { added: report.added, updated: report.updated, errors: report.errors.length } });
   return report;
@@ -266,11 +266,17 @@ export function csvTemplate(): string {
   return 'Lot number,Unit number,Building,Level,Street address,Dwelling type,NCC class,Storeys,Floor system,Frame\n1,,,,12 Example St,Detached house,1a,2,Slab on ground,Timber\n';
 }
 
+/** Floor systems named in a stage or item ("Slab on ground") match the lot's longer option ("Slab on ground - waffle pod"). */
+export function floorAllowed(allowed: string, lotFloor: string): boolean {
+  const a = allowed.trim().toLowerCase();
+  const f = lotFloor.trim().toLowerCase();
+  if (!a || a === 'all' || !f) return true;
+  return a.split(/[,;]/).map((x) => x.trim()).filter(Boolean).some((tok) => f === tok || f.startsWith(tok) || tok.startsWith(f));
+}
+
 /** Does this stage apply to this lot, by the stage's floor systems and building classes (REQ-PRJ-006)? */
 export function stageApplies(stage: Record<string, unknown>, lot: Record<string, unknown>): boolean {
-  const floors = String(stage.applies_to_floor_systems ?? 'All').toLowerCase();
-  const lotFloor = String(lot.floor_system ?? '').toLowerCase();
-  if (floors !== 'all' && lotFloor && !floors.split(/[,;]/).map((s) => s.trim()).includes(lotFloor)) return false;
+  if (!floorAllowed(String(stage.applies_to_floor_systems ?? 'All'), String(lot.floor_system ?? ''))) return false;
   const classes = (stage.applies_to_building_classes as string[] | undefined) ?? [];
   const lotClass = String(lot.ncc_building_class ?? '').toLowerCase();
   if (classes.length && lotClass && !classes.map((c) => c.toLowerCase()).includes(lotClass)) return false;

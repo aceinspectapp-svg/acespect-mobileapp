@@ -33,6 +33,7 @@
     "ioredis": "^5.11.1",
     "jose": "^6.2.12",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.2",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
     "nodemailer": "^10.0.14",

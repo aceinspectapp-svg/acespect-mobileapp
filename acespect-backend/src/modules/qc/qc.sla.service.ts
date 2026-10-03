@@ -229,10 +229,12 @@ async function raise(d: DefectRowForScan, level: EscalationLevel, trigger: strin
       reason: manual?.reason ?? null, recipients: recipients as Prisma.InputJsonValue,
     },
   });
-  const flags = new Set(d.flags);
+  // Re-read the flags: the scan may have just added Overdue, and this update must not undo it.
+  const fresh = await prisma.qcDefect.findUnique({ where: { id: d.id }, select: { flags: true, escalationLevel: true } });
+  const flags = new Set(fresh?.flags ?? d.flags);
   if (level.level >= 2) flags.add('escalated');
   if (level.level >= 3) flags.add('contract_review');
-  await prisma.qcDefect.update({ where: { id: d.id }, data: { escalationLevel: Math.max(d.escalationLevel, level.level), lastEscalatedAt: new Date(), flags: [...flags] } });
+  await prisma.qcDefect.update({ where: { id: d.id }, data: { escalationLevel: Math.max(fresh?.escalationLevel ?? d.escalationLevel, level.level), lastEscalatedAt: new Date(), flags: [...flags] } });
   await appendSystemEvent(d.id, level.level === 1 ? 'Reminder sent' : 'Escalated', `${level.name} (level ${level.level}): ${trigger}`, { level: level.level, trigger, manual: !!manual });
   const ref = d.defectRef ?? 'Defect';
   await notify({
