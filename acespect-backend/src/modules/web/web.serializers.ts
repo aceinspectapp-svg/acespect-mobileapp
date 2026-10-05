@@ -1,5 +1,6 @@
 // Maps DB rows to the exact shapes the acespect-web frontend expects
 // (camelCase fields, lowercase-hyphen enum strings from mockData.ts).
+import { inspectionFolderUrl } from '../../lib/storage';
 import type { Damage, Inspection, Section, User } from '@prisma/client';
 
 export const INS_STATUS_TO_WEB = {
@@ -112,6 +113,8 @@ export function serializeInspection(i: InspectionWithSections, withSections = tr
     status: INS_STATUS_TO_WEB[i.status],
     overallProgress: i.overallProgress,
     notes: i.notes,
+    // Where this job's photos are saved (Egnyte folder named by job number) -- the report's "Click here" link.
+    photoArchiveUrl: inspectionFolderUrl(i.jobNo, i.id),
     sections: withSections ? i.sections.map(serializeSection) : [],
   };
 }

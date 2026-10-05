@@ -21,7 +21,7 @@ import { ReportConditions } from "../../components/ReportConditions";
 import { ReportSection } from "../../components/ReportSection";
 import { buildReportHeader, DEFAULT_PURPOSE, withExcludedPhotosRemoved } from "../../report";
 import { SectionFieldEditor, PhotoUploadContext } from "../../components/SectionFieldEditor";
-import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSectionToDraft, fetchActiveTemplate } from "../../templateFields";
+import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSectionToDraft, fetchActiveTemplate, listMissingItems } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { api, resolveMediaUrl } from "../../api";
 
@@ -45,10 +45,13 @@ function SectionListItem({
   section,
   isSelected,
   onClick,
+  pendingItems = [],
 }: {
   section: FormSection;
   isSelected: boolean;
   onClick: () => void;
+  /** Required answers the inspector still hasn't given (see listMissingItems) -- empty when there's nothing outstanding. */
+  pendingItems?: string[];
 }) {
   const rc = REVIEW_STATUS_CONFIG[section.reviewStatus];
   return (
@@ -101,6 +104,12 @@ function SectionListItem({
         }}>
           {rc.label}
         </span>
+        {pendingItems.length > 0 && (
+          <p style={{ fontSize: "10px", color: "#dc2626", margin: "3px 0 0", lineHeight: 1.35, whiteSpace: "normal" }} title={pendingItems.join("\n")}>
+            Pending: {pendingItems.slice(0, 2).join(", ")}
+            {pendingItems.length > 2 ? ` +${pendingItems.length - 2} more` : ""}
+          </p>
+        )}
       </div>
       <ChevronRight size={13} color={isSelected ? "#2563eb" : "#94a3b8"} />
     </button>
@@ -773,7 +782,7 @@ export function ReviewerFormView() {
   async function updatePhotoArchiveUrl(descriptionSection: FormSection) {
     const currentFields = (descriptionSection.fields as Record<string, unknown> | null | undefined) ?? {};
     const current = typeof currentFields.photoArchiveUrl === "string" ? currentFields.photoArchiveUrl : "";
-    const next = prompt("Paste the full photo archive link (e.g. a Dropbox or Google Drive folder URL):", current);
+    const next = prompt("Override the photo archive link (normally generated automatically from the job number). Paste a full link, or leave blank:", current);
     if (next === null) return;
     await updateSectionFields(descriptionSection.id, { ...currentFields, photoArchiveUrl: next.trim() });
   }
@@ -866,6 +875,19 @@ export function ReviewerFormView() {
    * `excludedPhotoUrls` is untouched here -- exclusion stays exclusively
    * that separate mechanism's job.
    */
+  // What the inspector still has to complete in a section that isn't marked
+  // complete -- shown on its list row and, outlined in red, in its Field
+  // Data card, so a reviewer can say exactly what to finish instead of only
+  // seeing "Pending". Uses the same required-field rules as the inspector's
+  // Submit check; Job Information has its own form and isn't covered.
+  function pendingItemsFor(section: FormSection): string[] {
+    const key = section.key ?? section.id;
+    const template = templates[key];
+    if (!template || key.startsWith("job-info") || section.status === "complete") return [];
+    const answers = answerEdits[section.id] ?? ((section.answers as AnswerTree | null | undefined) ?? {});
+    return listMissingItems(template.fields, answers);
+  }
+
   async function saveSectionAnswers(section: FormSection) {
     const answers = answerEdits[section.id];
     const template = templates[section.key ?? section.id];
@@ -1042,6 +1064,7 @@ export function ReviewerFormView() {
                   section={s}
                   isSelected={s.id === selectedSectionId}
                   onClick={() => setSelectedSectionId(s.id)}
+                  pendingItems={pendingItemsFor(s)}
                 />
               ))
             )}
@@ -1186,6 +1209,22 @@ export function ReviewerFormView() {
                           </div>
                         </div>
                         <div style={{ padding: "16px" }}>
+                          {(() => {
+                            const items = pendingItemsFor(selectedSection);
+                            if (items.length === 0) return null;
+                            return (
+                              <div style={{ border: "1.5px solid #dc2626", background: "#fef2f2", borderRadius: "8px", padding: "10px 12px", marginBottom: "14px" }}>
+                                <p style={{ fontSize: "12px", fontWeight: 700, color: "#b91c1c", margin: "0 0 4px" }}>
+                                  Still to complete ({items.length})
+                                </p>
+                                <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "12px", color: "#7f1d1d" }}>
+                                  {items.map((it, i) => (
+                                    <li key={i}>{it}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            );
+                          })()}
                           {/* Photo editing is ON here (unlike before) -- the reviewer
                               can now attach a photo straight into the same per-field
                               "Photos" slot the inspector filled in (a specific
@@ -1199,6 +1238,7 @@ export function ReviewerFormView() {
                               scope={currentAnswers}
                               onChange={(key, value) => setSectionAnswer(selectedSection, key, value)}
                               readOnly={false}
+                              showMissing={pendingItemsFor(selectedSection).length > 0}
                             />
                           </PhotoUploadContext.Provider>
                         </div>
@@ -1351,14 +1391,14 @@ export function ReviewerFormView() {
                         </button>
                         <button
                           onClick={() => updatePhotoArchiveUrl(selectedSection)}
-                          title="The link printed as 'Click here' for the full photo download, in the Photographs section of the report"
+                          title="The 'Click here' photo link in the report is generated automatically from the job number. Use this only to override it."
                           style={{ fontSize: "11px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}
                         >
                           📎{" "}
                           {typeof (selectedSection.fields as Record<string, unknown> | null | undefined)?.photoArchiveUrl === "string" &&
                           (selectedSection.fields as Record<string, unknown>).photoArchiveUrl
-                            ? "Edit photo archive link"
-                            : "Add photo archive link"}
+                            ? "Edit photo link override"
+                            : "Override photo link"}
                         </button>
                       </div>
                     </div>

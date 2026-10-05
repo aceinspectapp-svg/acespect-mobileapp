@@ -21,6 +21,15 @@ export const reportTokens = {
   placeholderBg: "#fbf3e3",
   placeholderBorder: "#eddcb5",
   placeholderInk: "#8a6d2f",
+  radius: "6px", // every coloured box (title bands, condition tags and pills, placeholders) rounds its corners by this much
+};
+
+/** The one title look shared by every band and page title: same family, weight, case and letter-spacing. Only the size (band vs page title) and the band's own colours differ. */
+const titleFont = {
+  fontFamily: reportTokens.font,
+  fontWeight: 700,
+  letterSpacing: "0.05em",
+  textTransform: "uppercase" as const,
 };
 
 /**
@@ -45,13 +54,12 @@ export function SectionBand({
       <div
         style={{
           background: tone === "peach" ? "#f6c89f" : "#c7bd93",
-          padding: compact ? "5px 10px" : "6px 14px",
+          borderRadius: reportTokens.radius,
+          padding: compact ? "6px 10px" : "9px 14px",
           margin: compact ? "12px 0 8px" : "16px 0 10px",
           color: "#000",
-          fontWeight: 700,
-          fontSize: compact ? "0.82em" : "0.95em",
-          letterSpacing: "0.02em",
-          textTransform: "uppercase",
+          ...titleFont,
+          fontSize: compact ? "0.78em" : "0.92em",
           // Best-effort hint against ending a printed page right on this
           // band -- Chromium's print pagination (the PDF pipeline's actual
           // renderer, see reportPdf.ts) doesn't reliably honor it on its
@@ -71,19 +79,38 @@ export function SectionBand({
         display: "flex",
         alignItems: "center",
         background: bg,
-        borderRadius: "4px",
+        borderRadius: reportTokens.radius,
         padding: compact ? "6px 10px" : "9px 14px",
         margin: compact ? "16px 0 9px" : "26px 0 14px",
         color: reportTokens.accent,
-        fontWeight: 700,
+        ...titleFont,
         fontSize: compact ? "0.78em" : "0.92em",
-        letterSpacing: "0.05em",
-        textTransform: "uppercase",
         breakAfter: "avoid",
       }}
     >
       {children}
     </div>
+  );
+}
+
+/**
+ * A page title (Condition Summary, Scope, Conditions for the Provision of the
+ * Report) -- the same size, weight and font on every page, left-aligned.
+ */
+export function PageTitle({ children, compact = false }: { children: ReactNode; compact?: boolean }) {
+  return (
+    <h2
+      style={{
+        fontFamily: reportTokens.font,
+        fontWeight: 700,
+        fontSize: compact ? "15px" : "20px",
+        color: reportTokens.ink,
+        textAlign: "left",
+        margin: "8px 0 8px",
+      }}
+    >
+      {children}
+    </h2>
   );
 }
 
@@ -105,6 +132,7 @@ export function Heading({
   return (
     <p
       style={{
+        fontFamily: reportTokens.font,
         fontWeight: 700,
         fontSize: "1em",
         color: reportTokens.ink,
