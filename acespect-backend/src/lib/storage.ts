@@ -88,6 +88,21 @@ export async function ensureBucket(): Promise<boolean> {
   return true;
 }
 
+/**
+ * The Egnyte web-interface link to the folder where this job's photos are
+ * saved -- `{EGNYTE_ROOT_FOLDER}/{job number}` (the folder is created under
+ * the draft id and moved to the job number at submit, see
+ * `renameInspectionFolder`; a job with no job number yet stays under its id).
+ * Derived from the job number alone, so it is always the link for THIS job and
+ * needs no per-job setup. Null when photo storage isn't configured.
+ */
+export function inspectionFolderUrl(jobNo: string | null | undefined, inspectionId: string): string | null {
+  if (!isStorageEnabled()) return null;
+  const segment = safeSegment((jobNo ?? '').trim()) || safeSegment(inspectionId);
+  const root = env.EGNYTE_ROOT_FOLDER.startsWith('/') ? env.EGNYTE_ROOT_FOLDER : `/${env.EGNYTE_ROOT_FOLDER}`;
+  return `${egnyteBase()}/app/index.do#storage/files/1${encodeEgnytePath(`${root}/${segment}`)}`;
+}
+
 export interface UploadedPhoto {
   id: string;
   storageKey: string;
