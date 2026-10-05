@@ -288,9 +288,12 @@ function tail(parts: string[], itemFields: TemplateField[], inst: AnswerTree): s
   return parts.join("\n\n");
 }
 
-const driveway: Composer = (inst, itemFields) => {
-  if (isNotPresent(inst)) return "There is no driveway to the property.";
-  const location = one(itemFields, inst, ["location", "locatedAt"]);
+const driveway: Composer = (inst, itemFields, label) => {
+  // A driveway divided into parts (Front left / Front right / Rear / Side) is called with the part's name as `label` and
+  // has no "Located at" question of its own; the older single-item form is called with no label.
+  const part = label && itemFields.some((f) => f.key === "present") ? label : "";
+  if (isNotPresent(inst)) return part ? "" : "There is no driveway to the property.";
+  const location = one(itemFields, inst, ["location", "locatedAt"]) || part;
   const material = one(itemFields, inst, ["material"]);
   const cond = conditionOf(itemFields, inst);
   if (!location && !material && !cond.word) return "There is no driveway.";
@@ -431,9 +434,11 @@ const garageCarportSheds: Composer = (inst, itemFields, label) => {
   return tail(parts, itemFields, inst);
 };
 
-const poolSpa: Composer = (inst, itemFields) => {
-  if (isNotPresent(inst)) return "There is no pool or spa to the property.";
-  const name = asString(inst.name) || "pool/spa";
+const poolSpa: Composer = (inst, itemFields, label) => {
+  // A pool / spa divided into parts (Pool, Spa) is called with the part's name as `label`; the older single-item form is called with no label.
+  const part = label && itemFields.some((f) => f.key === "present") ? label : "";
+  if (isNotPresent(inst)) return part ? "" : "There is no pool or spa to the property.";
+  const name = asString(inst.name) || part || "pool/spa";
   const poolType = one(itemFields, inst, ["poolType"]);
   const position = one(itemFields, inst, ["position"]);
   const construction = many(itemFields, inst, ["construction", "constructed"]).map(lower);
@@ -460,7 +465,7 @@ const poolSpa: Composer = (inst, itemFields) => {
         ? fenceSafety.slice(4)
         : `appears to be ${fenceSafety || "not observed"}`;
     parts.push(
-      `The pool fence is constructed of ${fenceType.length ? joinList(fenceType) : "the surrounding boundary"} and ${safetyPhrase}.`,
+      `The ${part ? lower(part) : "pool"} fence is constructed of ${fenceType.length ? joinList(fenceType) : "the surrounding boundary"} and ${safetyPhrase}.`,
     );
   }
   return tail(parts, itemFields, inst);

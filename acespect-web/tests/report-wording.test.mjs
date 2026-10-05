@@ -20,6 +20,7 @@ after(() => server.close());
 
 const { flattenSectionToDraft } = await server.ssrLoadModule("/src/web/templateFields.ts");
 const { composeSectionSentence } = await server.ssrLoadModule("/src/web/reportSentences.ts");
+const { listMissingItems } = await server.ssrLoadModule("/src/web/templateFields.ts");
 
 const snapshot = JSON.parse(
   readFileSync(resolve(webRoot, "../acespect-backend/prisma/templates-snapshot.json"), "utf8"),
@@ -402,5 +403,89 @@ describe("original seed field layout (still accepted)", () => {
   it("skips an item marked Available: No", () => {
     const fields = [{ key: "available", type: "yesno" }, condition];
     assert.equal(composeSectionSentence("elevations", { available: "no", condition: "fair" }, fields, "Rear"), "");
+  });
+});
+
+describe("what is still pending in a section", () => {
+  const missing = (key, answers) => listMissingItems(template(key), answers);
+
+  it("lists the one question when nothing is answered", () => {
+    assert.deepEqual(missing("driveway", {}), ["Is there a driveway?"]);
+  });
+
+  it("lists the gated questions once 'Yes' is chosen, and none when 'No'", () => {
+    const out = missing("driveway", { present: "yes" });
+    assert.ok(out.includes("Located at") && out.includes("Material") && out.includes("Condition"));
+    assert.deepEqual(missing("driveway", { present: "no" }), []);
+  });
+
+  it("names each slot of a fixed-slot section", () => {
+    const out = missing("paving_paths", { areas: { front: { present: "yes", material: ["concrete"] } } });
+    assert.ok(out.some((m) => m.startsWith("Front: ")));
+    assert.ok(out.some((m) => m.startsWith("Left: ")), "slots nobody touched are pending too");
+  });
+
+  it("asks for a defect when the condition demands one", () => {
+    const out = missing("driveway", { present: "yes", locatedAt: "front_left", material: "concrete", condition: "poor", crackingSummary: "several_minor_cracks", obscuredBy: ["vegetation"], notes: "x" });
+    assert.ok(out.includes("record at least one defect"));
+  });
+});
+
+describe("Driveway divided into parts (what seed-driveway-parts.ts publishes)", () => {
+  const flat = template("driveway");
+  const partsTemplate = [
+    {
+      key: "parts", type: "repeating-group", label: "Driveway", order: 0,
+      repeat: { presentation: "fixed-tabs", fixedInstances: [{ key: "front_left", label: "Front left" }, { key: "front_right", label: "Front right" }, { key: "rear", label: "Rear" }, { key: "side", label: "Side" }] },
+      itemFields: flat.filter((f) => f.key !== "locatedAt"),
+    },
+  ];
+  const run = (parts) => flattenSectionToDraft(partsTemplate, { parts }, "driveway");
+  const part = (material, condition) => ({ present: "yes", material, condition });
+
+  it("gives every part its own condition label and paragraph", () => {
+    const { reportText, fields } = run({ front_left: part("concrete", "fair"), front_right: part("pavers", "poor"), side: part("gravel", "new") });
+    assert.equal((reportText.match(/COND::/g) ?? []).length, 3);
+    assert.ok(reportText.includes("The driveway is to the front left of the block and is constructed of concrete."));
+    assert.ok(reportText.includes("The driveway is to the front right of the block and is constructed of pavers."));
+    assert.ok(reportText.includes("The driveway is to the side of the block and is constructed of gravel."));
+    assert.deepEqual(fields.conditionSummary.map((r) => [r.subLabel, r.conditionLabel]), [["Front left", "Fair"], ["Front right", "Poor"], ["Side", "New"]]);
+  });
+
+  it("leaves out a part marked not present, and says so only when every part is absent", () => {
+    const some = run({ front_left: part("concrete", "fair"), rear: { present: "no" } });
+    assert.ok(!some.reportText.includes("rear"));
+    assert.equal(some.fields.conditionSummary.length, 1);
+    assert.equal(run({ front_left: { present: "no" }, rear: { present: "no" } }).reportText, "There is no driveway to the property.");
+  });
+});
+
+describe("Pool / Spa divided into parts (what seed-section-parts.ts publishes)", () => {
+  const flat = template("pool_spa");
+  const partsTemplate = [
+    {
+      key: "parts", type: "repeating-group", label: "Pool / Spa", order: 0,
+      repeat: { presentation: "fixed-tabs", fixedInstances: [{ key: "pool", label: "Pool" }, { key: "spa", label: "Spa" }] },
+      itemFields: flat,
+    },
+  ];
+  const run = (parts) => flattenSectionToDraft(partsTemplate, { parts }, "pool_spa");
+
+  it("gives the pool and the spa their own label and paragraph", () => {
+    const { reportText, fields } = run({
+      pool: { present: "yes", position: "rear", constructed: ["fibreglass"], poolFence: ["glass_panels"], fenceSafety: "appears_to_be_okay", condition: "satisfactory_with_typical_wear_and_tear" },
+      spa: { present: "yes", constructed: ["concrete_and_tile"], condition: "poor" },
+    });
+    assert.equal((reportText.match(/COND::/g) ?? []).length, 2);
+    assert.ok(reportText.includes("There is a pool located at the rear of the property, constructed of fibreglass, which is generally in satisfactory state of repair."));
+    assert.ok(reportText.includes("The pool fence is constructed of glass panels and appears to be okay."));
+    assert.ok(reportText.includes("There is a spa located at the property, constructed of concrete and tile, which is generally in poor state of repair."));
+    assert.deepEqual(fields.conditionSummary.map((r) => [r.subLabel, r.conditionLabel]), [["Pool", "Satisfactory"], ["Spa", "Poor"]]);
+  });
+
+  it("leaves out a part that is not there, and says so only when neither exists", () => {
+    const poolOnly = run({ pool: { present: "yes", condition: "fair" }, spa: { present: "no" } });
+    assert.ok(!poolOnly.reportText.toLowerCase().includes("spa"));
+    assert.equal(run({ pool: { present: "no" }, spa: { present: "no" } }).reportText, "There is no pool or spa to the property.");
   });
 });

@@ -240,6 +240,44 @@ export function meetsAllRequiredFields(templateFields: TemplateField[], scope: A
   return true;
 }
 
+/**
+ * Plain-language list of what is still missing from a section -- the same
+ * required-field and mandatory-defect rules `meetsAllRequiredFields` /
+ * `meetsAllRequireWhen` enforce at Submit, but naming each gap so an admin
+ * can tell the inspector exactly what to finish. Items inside a repeating
+ * group are prefixed with that instance's own label ("Front: Condition").
+ * Fields sharing a `requiredGroup` (either/or) are listed once, joined with "or".
+ */
+export function listMissingItems(templateFields: TemplateField[], scope: AnswerTree, context = ""): string[] {
+  const out: string[] = [];
+  const named = (label: string) => (context ? `${context}: ${label}` : label);
+  const seenGroups = new Set<string>();
+  for (const field of templateFields) {
+    if (!isGateSatisfied(field, scope)) continue;
+    const value = scope[field.key];
+    if (field.type === "repeating-group") {
+      for (const { label, scope: inst } of resolveInstances(field, value)) {
+        out.push(...listMissingItems(field.itemFields ?? [], inst, context ? `${context} / ${label}` : label));
+      }
+      if (field.required && !isAnswered(value)) out.push(named(field.label));
+    }
+    if (field.repeat?.requireWhen && !isRepeatRequirementMet(field, value, scope)) {
+      out.push(named("record at least one defect"));
+      continue;
+    }
+    if (field.type === "repeating-group" || !isFieldMissing(field, templateFields, scope)) continue;
+    if (field.requiredGroup) {
+      if (seenGroups.has(field.requiredGroup)) continue;
+      seenGroups.add(field.requiredGroup);
+      const labels = templateFields.filter((f) => f.requiredGroup === field.requiredGroup).map((f) => f.label);
+      out.push(named(labels.join(" or ")));
+    } else {
+      out.push(named(field.label));
+    }
+  }
+  return out;
+}
+
 export function asAnswerTree(v: AnswerValue): AnswerTree {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as AnswerTree) : {};
 }

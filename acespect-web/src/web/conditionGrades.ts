@@ -24,13 +24,20 @@ export interface Grade {
   word: string;
 }
 
-const FALLBACK_PALETTE: [RegExp, string][] = [
-  [/^new/, "#16a34a"],
-  [/^satisfactory/, "#65a30d"],
-  [/^fair/, "#d97706"],
-  [/^average/, "#ea580c"],
-  [/^poor/, "#dc2626"],
+/**
+ * The five grades, their standard colours and what each means -- the one place
+ * all of it is defined. The meanings are the report's own wording (they are
+ * printed in the Scope appendix and in the Condition Summary's legend).
+ */
+export const GRADE_LEGEND: { label: string; color: string; meaning: string }[] = [
+  { label: "New", color: "#16a34a", meaning: "Self-explanatory." },
+  { label: "Satisfactory", color: "#65a30d", meaning: "Generally good condition." },
+  { label: "Fair", color: "#d97706", meaning: "Starting to look like it needs maintenance." },
+  { label: "Average", color: "#ea580c", meaning: "Working but needs maintenance within 6 months." },
+  { label: "Poor", color: "#dc2626", meaning: "Needs replacement." },
 ];
+
+const FALLBACK_PALETTE: [RegExp, string][] = GRADE_LEGEND.map((g) => [new RegExp(`^${g.label.toLowerCase()}`), g.color]);
 
 /** "Satisfactory with typical wear and tear" -> "Satisfactory" -- the sentence templates already add "with typical wear and tear" themselves, and a pill/table cell needs the short form. */
 export function shortConditionLabel(label: string): string {
