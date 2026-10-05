@@ -33,5 +33,6 @@ router.patch(
   validate(damageUpdateSchema),
   webController.updateDamage,
 );
+router.get('/submission-logs', requireAuth, admins, webController.listSubmissionLogs);
 
 export const webRouter = router;

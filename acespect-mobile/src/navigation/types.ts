@@ -11,6 +11,9 @@ export type AuthStackParamList = {
 
 /** Screens available once authenticated. */
 export type AppStackParamList = {
+  // Purpose gate — first screen after login. Chooses which flow to enter;
+  // does not itself belong to either one.
+  SelectPurpose: undefined;
   SelectInspectionType: undefined;
   // Sync/storage preferences — Wi-Fi-only upload toggle, local storage usage.
   Settings: undefined;
@@ -50,6 +53,26 @@ export type AppStackParamList = {
   CustomSection: { sectionKey: string; sectionName: string };
   // Final overview — receives the live completion map + job setup data.
   ReportSummary: { completed: Record<string, boolean>; data: JobSetupData };
+
+  // ─── QC flow — separate from the Houspect screens above, entered via
+  // SelectPurpose. See src/screens/qc/*. Client/project/property config and
+  // defect creation/assignment are admin-only now (acespect-web's QC
+  // section) — mobile is "my assigned defects/tasks", scoped one property at
+  // a time: QcHome lists the properties you have assigned work in, each
+  // opening QcPropertyHome's module grid (Defects + Tasks live; Drawings/
+  // Inspections/Daily Reports are placeholders), which branch into the
+  // Defects list (view/edit a defect's own details) and the Tasks list
+  // (site-visit activity log, comments + photos, free status dropdown).
+  QcHome: undefined;
+  QcPropertyHome: { propertyId: string };
+  QcDefectsList: { propertyId: string };
+  QcTasksList: { propertyId: string };
+  QcTaskDetail: { taskId: string };
+  QcDefectDetail: { defectId: string };
+  QcInspections: undefined;
+  QcInspection: { inspectionId: string };
+  QcInspectionComplete: { inspectionId: string };
+  QcNotifications: undefined;
 };
 
 export type AuthScreenProps<T extends keyof AuthStackParamList> =

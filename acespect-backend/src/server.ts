@@ -2,6 +2,8 @@ import { createApp } from './app';
 import { env } from './config/env';
 import { prisma } from './lib/prisma';
 import { ensureBucket, isStorageEnabled } from './lib/storage';
+import { startQcJobs } from './modules/qc/qc.jobs';
+import { ensureTemplateReferenceData } from './modules/qc/qc.templates.service';
 
 async function main() {
   // eslint-disable-next-line no-console
@@ -39,6 +41,24 @@ async function main() {
     // eslint-disable-next-line no-console
     console.log(`🚀 acespect-backend listening on http://localhost:${env.PORT} (${env.NODE_ENV})`);
   });
+
+  // Standard stages and the seven result codes, created once.
+  try {
+    await ensureTemplateReferenceData();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('⚠️  Could not seed QC reference data.', err);
+  }
+
+  try {
+    await (await import('./modules/qc/qc.privacy.service')).ensureSubProcessors();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('⚠️  Could not seed the sub-processor register.', err);
+  }
+
+  // Recurring work: SLA scan, DLP reminders, notification digests, retention. Set QC_JOBS=off to run an API-only instance.
+  if (process.env.QC_JOBS !== 'off') startQcJobs();
 
   const shutdown = async (signal: string) => {
     // eslint-disable-next-line no-console

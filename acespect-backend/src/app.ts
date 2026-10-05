@@ -3,6 +3,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
 import { env } from './config/env';
+import { prisma } from './lib/prisma';
 import { apiLimiter } from './middleware/rateLimit';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { authRouter } from './modules/auth/auth.routes';
@@ -11,12 +12,16 @@ import { reviewRouter } from './modules/review/review.routes';
 import { templatesRouter } from './modules/templates/templates.routes';
 import { webRouter } from './modules/web/web.routes';
 import { mediaRouter } from './modules/media/media.routes';
+import { qcRouter } from './modules/qc/qc.routes';
 
 export function createApp() {
   const app = express();
 
   // Security + parsing
   app.disable('x-powered-by');
+  // One proxy hop in front (Railway): without this every request appears to come from the proxy, which breaks
+  // the per-IP rate limits and the IP address written to the security log.
+  app.set('trust proxy', 1);
   app.use(helmet());
   app.use(
     cors({
@@ -24,13 +29,32 @@ export function createApp() {
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: '1mb' }));
-  app.use(express.urlencoded({ extended: true }));
+  // Logged before body-parsing so a payload-too-large rejection below still
+  // shows up here -- express.json() throwing calls next(err), which skips
+  // any regular middleware registered after it (morgan included), so a
+  // rejected submit would otherwise leave zero trace in these logs.
   if (env.NODE_ENV !== 'test') app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+  // A full multi-section inspection submit (every section's answers +
+  // damages, no photo bytes -- those are separate uploads) can run well
+  // past 1mb for a long/detailed report; that default was tight enough to
+  // silently reject real submits.
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // Liveness — no DB dependency.
   app.get('/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok', service: 'acespect-backend', timestamp: new Date().toISOString() });
+  });
+
+  // Readiness: the database answers and how quickly (for uptime monitors and the performance targets).
+  app.get('/health/ready', async (_req: Request, res: Response) => {
+    const t0 = Date.now();
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ status: 'ok', dbMs: Date.now() - t0, timestamp: new Date().toISOString() });
+    } catch {
+      res.status(503).json({ status: 'degraded', dbMs: Date.now() - t0 });
+    }
   });
 
   // API v1 — media is exempt from the general rate limiter: a single report
@@ -43,6 +67,7 @@ export function createApp() {
   app.use('/api/v1/review', reviewRouter);
   app.use('/api/v1/templates', templatesRouter);
   app.use('/api/v1/web', webRouter);
+  app.use('/api/v1/qc', qcRouter);
 
   // Fallbacks
   app.use(notFound);

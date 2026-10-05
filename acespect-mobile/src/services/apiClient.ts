@@ -14,6 +14,13 @@ import { tokenStorage } from './tokenStorage';
  */
 
 let onUnauthorized: (() => void) | null = null;
+
+/** The client a person with roles in several clients is working in; sent as X-Client-Id. */
+let activeClientId: string | null = null;
+export function setActiveClientId(id: string | null): void {
+  activeClientId = id;
+}
+export const getActiveClientId = (): string | null => activeClientId;
 export function setOnUnauthorized(cb: (() => void) | null): void {
   onUnauthorized = cb;
 }
@@ -25,6 +32,8 @@ export const api: AxiosInstance = axios.create({ baseURL: API_URL, timeout: 1500
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const token = await tokenStorage.getAccessToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  config.headers['X-App-Client'] = 'mobile';
+  if (activeClientId) config.headers['X-Client-Id'] = activeClientId;
   return config;
 });
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../theme';
+import { appendDictated, DictationMicButton } from './DictationMic';
 
 /**
  * Shared, theme-driven versions of the pill/chip/condition-list UI patterns
@@ -10,32 +11,63 @@ import { colors, radius, spacing, typography } from '../../theme';
  * without duplicating a private component per screen.
  */
 
-/** Single-select pill row. */
+/**
+ * Single-select pill row, with an optional "Other (specify)" escape hatch.
+ * Matches ChipMultiSelect's `__other__:<text>` encoding (same prefix the
+ * web report's `displayValue` already unwraps for both array and scalar
+ * values) so a single value of `__other__:<text>` round-trips identically
+ * whether it came from here or a multiselect.
+ */
 export function PillSelect({
   options,
   value,
   onChange,
+  allowOther,
 }: {
   options: { value: string; label: string }[];
   value: string | undefined;
   onChange: (v: string) => void;
+  allowOther?: boolean;
 }) {
+  const otherPrefix = '__other__:';
+  const otherActive = value === 'other' || value?.startsWith(otherPrefix);
+  const otherValue = value?.startsWith(otherPrefix) ? value.slice(otherPrefix.length) : '';
   return (
-    <View style={styles.wrap}>
-      {options.map((o) => {
-        const active = value === o.value;
-        return (
+    <View>
+      <View style={styles.wrap}>
+        {options.map((o) => {
+          const active = value === o.value;
+          return (
+            <Pressable
+              key={o.value}
+              onPress={() => onChange(o.value)}
+              style={[styles.pill, active && styles.pillActive]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: active }}
+            >
+              <Text style={[styles.pillText, active && styles.pillTextActive]}>{o.label}</Text>
+            </Pressable>
+          );
+        })}
+        {allowOther && (
           <Pressable
-            key={o.value}
-            onPress={() => onChange(o.value)}
-            style={[styles.pill, active && styles.pillActive]}
+            onPress={() => onChange('other')}
+            style={[styles.pill, otherActive && styles.pillActive]}
             accessibilityRole="radio"
-            accessibilityState={{ selected: active }}
+            accessibilityState={{ selected: otherActive }}
           >
-            <Text style={[styles.pillText, active && styles.pillTextActive]}>{o.label}</Text>
+            <Text style={[styles.pillText, otherActive && styles.pillTextActive]}>Other</Text>
           </Pressable>
-        );
-      })}
+        )}
+      </View>
+      {allowOther && otherActive && (
+        <PlainTextInput
+          placeholder="Please specify"
+          value={otherValue}
+          onChangeText={(text) => onChange(text ? `${otherPrefix}${text}` : 'other')}
+          style={{ marginTop: spacing.sm }}
+        />
+      )}
     </View>
   );
 }
@@ -154,7 +186,12 @@ export function ColorSelect({
   );
 }
 
-/** Plain text input matching the field-kit's visual language (used for text/numeric/textarea/"other"). */
+/**
+ * Plain text input matching the field-kit's visual language (used for
+ * text/numeric/textarea/"other"). Numeric inputs skip the mic -- dictating a
+ * number reliably needs word-to-digit parsing this doesn't do; every other
+ * use here is free text, so it always gets a dictation button.
+ */
 export function PlainTextInput({
   value,
   onChangeText,
@@ -172,17 +209,25 @@ export function PlainTextInput({
   maxLength?: number;
   style?: object;
 }) {
+  const dictate = keyboardType !== 'numeric';
   return (
-    <TextInput
-      style={[styles.input, multiline && styles.inputMultiline, style]}
-      placeholder={placeholder}
-      placeholderTextColor={colors.textMuted}
-      value={value}
-      onChangeText={onChangeText}
-      keyboardType={keyboardType ?? 'default'}
-      multiline={multiline}
-      maxLength={maxLength}
-    />
+    <View style={styles.inputWrap}>
+      <TextInput
+        style={[styles.input, multiline && styles.inputMultiline, dictate && styles.inputWithMic, style]}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType ?? 'default'}
+        multiline={multiline}
+        maxLength={maxLength}
+      />
+      {dictate && (
+        <View style={styles.inputMic}>
+          <DictationMicButton size="sm" onResult={(spoken) => onChangeText(appendDictated(value, spoken))} />
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -222,6 +267,7 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
   conditionText: { ...typography.bodySm, flex: 1 },
   fieldLabel: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.xs },
+  inputWrap: { position: 'relative' },
   input: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -233,4 +279,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   inputMultiline: { minHeight: 80, textAlignVertical: 'top' },
+  inputWithMic: { paddingRight: 40 },
+  inputMic: { position: 'absolute', top: spacing.xs, right: spacing.xs },
 });

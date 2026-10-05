@@ -1,7 +1,7 @@
 {
   "name": "acespect-backend",
   "version": "1.0.0",
-  "description": "ACE SPECT — building inspection backend (auth + API)",
+  "description": "ACE SPECT \u2014 building inspection backend (auth + API)",
   "main": "dist/server.js",
   "engines": {
     "node": ">=20"
@@ -16,7 +16,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "check:lifecycle": "tsx src/scripts/qc-lifecycle-check.ts",
+    "check:platform": "tsx src/scripts/qc-platform-check.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
@@ -25,14 +27,19 @@
     "bullmq": "^5.78.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "google-auth-library": "^10.7.0",
     "helmet": "^8.0.0",
     "ioredis": "^5.11.1",
+    "jose": "^6.2.12",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.2",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
+    "nodemailer": "^10.0.14",
+    "pdfkit": "^0.20.2",
     "puppeteer": "^25.11.0",
     "sharp": "^0.33.5",
     "zod": "^3.24.1"
@@ -46,6 +53,8 @@
     "@types/morgan": "^1.9.9",
     "@types/multer": "^2.1.0",
     "@types/node": "^22.10.5",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pdfkit": "^0.17.6",
     "prisma": "^6.2.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"

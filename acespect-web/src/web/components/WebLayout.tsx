@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router";
 import {
   LayoutDashboard, FileText, Users, Settings, LogOut,
-  Bell, BarChart3, ClipboardCheck,
+  Bell, BarChart3, ClipboardCheck, ShieldCheck, Bug,
 } from "lucide-react";
 import { AcespectLogo } from "../../components/AcespectLogo";
 import { useAppData } from "../data";
@@ -21,8 +21,10 @@ const ROLE_NAV: Record<Role, { to: string; icon: React.ElementType; label: strin
     { to: "/admin/dashboard",   icon: LayoutDashboard, label: "Dashboard" },
     { to: "/admin/inspections", icon: ClipboardCheck,  label: "Inspections" },
     { to: "/admin/templates",   icon: FileText,         label: "Templates" },
+    { to: "/qc",              icon: ShieldCheck,      label: "QC" },
     { to: "/admin/users",       icon: Users,            label: "Users" },
     { to: "/admin/reports",     icon: BarChart3,        label: "Reports" },
+    { to: "/admin/troubleshoot", icon: Bug,             label: "Troubleshoot" },
     { to: "/admin/settings",    icon: Settings,         label: "Settings" },
   ],
 };
@@ -290,6 +292,11 @@ export function GhostBtn({ children, onClick }: { children: React.ReactNode; onC
   );
 }
 
+/* ─── QC sub-nav: the QC area has its own sidebar now, so the old tab strip renders nothing ── */
+export function QcSubNav() {
+  return null;
+}
+
 /* ─── Table ──────────────────────────────────────────────────────── */
 export function TableCard({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
@@ -297,8 +304,8 @@ export function TableCard({ headers, children }: { headers: string[]; children: 
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: "#f8fafc" }}>
-            {headers.map(h => (
-              <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: "11px", fontWeight: 600, color: "#94a3b8", letterSpacing: "0.04em", textTransform: "uppercase", borderBottom: "1px solid #e5e7eb" }}>
+            {headers.map((h, i) => (
+              <th key={`${h}-${i}`} style={{ padding: "11px 16px", textAlign: "left", fontSize: "11px", fontWeight: 600, color: "#94a3b8", letterSpacing: "0.04em", textTransform: "uppercase", borderBottom: "1px solid #e5e7eb" }}>
                 {h}
               </th>
             ))}

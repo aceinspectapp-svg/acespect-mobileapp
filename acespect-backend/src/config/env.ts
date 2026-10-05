@@ -47,6 +47,33 @@ const schema = z.object({
   // rather than re-rendering the report a second time; see lib/reportPdf.ts.
   WEB_APP_URL: z.string().default('http://localhost:5173'),
 
+  // Outbound email for invitations, resets and notifications (REQ-NOT-001).
+  // Empty SMTP_URL = email is skipped (in-app notifications still work).
+  // Example: smtp://user:pass@smtp.example.com:587
+  SMTP_URL: z.string().default(''),
+  MAIL_FROM: z.string().default('ACE SPECT <no-reply@acespect.app>'),
+  // Optional SMS gateway for Safety Hazard alerts: a webhook that accepts
+  // POST { to, message }. Empty = SMS skipped. Needs a sub-processor
+  // assessment before use (REQ-TEN-004).
+  SMS_WEBHOOK_URL: z.string().default(''),
+  // Optional Expo push access token (higher rate limits); push works without it.
+  EXPO_ACCESS_TOKEN: z.string().default(''),
+  // Roles that must use MFA (comma separated: SA, CLIENT_ADMIN, PRIVATE_INSPECTOR, ...).
+  // The spec requires it for Super Admin, Client Admin and Private Inspector; the
+  // default is Client Admin only so existing admin and mobile inspector accounts
+  // are not locked out before they have enrolled. Clients can also require MFA
+  // for all their roles (client setting).
+  MFA_REQUIRED_ROLES: z.string().default('CLIENT_ADMIN'),
+  // Allowed Microsoft Entra (Azure AD) application IDs for SSO; empty = disabled.
+  MICROSOFT_CLIENT_IDS: z.string().default(''),
+  // Versions of the privacy collection notice and terms of use users accept at activation.
+  TERMS_VERSION: z.string().default('2026-10'),
+  PRIVACY_VERSION: z.string().default('2026-10'),
+  // Minutes a support-mode session lasts (REQ-TEN-008).
+  SUPPORT_SESSION_MINUTES: z.coerce.number().int().positive().default(60),
+  // Signed evidence links expire after this many minutes (REQ-TEN-002).
+  MEDIA_LINK_MINUTES: z.coerce.number().int().positive().default(15),
+
 });
 
 const parsed = schema.safeParse(process.env);

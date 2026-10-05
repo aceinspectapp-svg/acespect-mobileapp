@@ -17,6 +17,8 @@ interface AppData {
     patch: { name?: string; phone?: string | null; region?: string | null; licenseNumber?: string | null },
   ) => Promise<void>;
   login: (email: string, password: string) => Promise<AuthUser>;
+  /** Finish a sign-in that needed a second step (MFA, invitation, single sign-on) and load the data. */
+  completeSignIn: (user: AuthUser) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
   patchSection: (
@@ -125,6 +127,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [loadData],
   );
 
+  const completeSignIn = useCallback(
+    async (u: AuthUser) => {
+      setCurrentUser(u);
+      setLoading(true);
+      await loadData();
+      setLoading(false);
+    },
+    [loadData],
+  );
+
   const logout = useCallback(() => {
     clearSession();
     setCurrentUser(null);
@@ -209,6 +221,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     getUser: (id) => users.find((u) => u.id === id),
     patchUser,
     login,
+    completeSignIn,
     logout,
     refresh,
     patchSection,
