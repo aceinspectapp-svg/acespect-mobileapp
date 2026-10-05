@@ -1,5 +1,5 @@
 import { SCOPE_BLOCKS, SCOPE_TITLE, type ScopeBlock } from "../reportScope";
-import { reportTextStyle, reportTokens } from "./reportKit";
+import { PageTitle, reportTextStyle, reportTokens } from "./reportKit";
 
 const NUM_W = 40; // left gutter for clause numbers
 const LIST_LABEL_W = 26;
@@ -66,17 +66,7 @@ function Block({ block }: { block: ScopeBlock }) {
 export function ReportScope({ compact = false }: { compact?: boolean }) {
   return (
     <div style={reportTextStyle(compact, { normal: "12.5px", compact: "11px" })}>
-      <h2
-        style={{
-          textAlign: "center",
-          fontWeight: 700,
-          color: reportTokens.ink,
-          fontSize: compact ? "15px" : "20px",
-          margin: "8px 0 16px",
-        }}
-      >
-        {SCOPE_TITLE}
-      </h2>
+      <PageTitle compact={compact}>{SCOPE_TITLE}</PageTitle>
       {SCOPE_BLOCKS.map((b, i) => (
         <Block key={i} block={b} />
       ))}

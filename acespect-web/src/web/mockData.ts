@@ -69,6 +69,8 @@ export interface Inspection {
   overallProgress: number;
   sections: FormSection[];
   notes: string;
+  /** Link to the folder holding this job's photos (generated from the job number); null when photo storage isn't set up. */
+  photoArchiveUrl?: string | null;
 }
 
 /* ─── Inspection templates (admin-defined form structure) ──────────── */
