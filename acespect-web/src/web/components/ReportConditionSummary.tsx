@@ -1,5 +1,6 @@
 import type { ConditionSummaryRow } from "../templateFields";
-import { reportTextStyle, reportTokens } from "./reportKit";
+import { GRADE_LEGEND } from "../conditionGrades";
+import { PageTitle, reportTextStyle, reportTokens } from "./reportKit";
 
 /** One category's rows for the Condition Summary page -- `sectionName` is
  *  the category's own display name (e.g. "Driveway", "Elevations"), kept
@@ -9,6 +10,18 @@ import { reportTextStyle, reportTokens } from "./reportKit";
 export interface ConditionSummaryCategory {
   sectionName: string;
   rows: ConditionSummaryRow[];
+  /** The `id` of this category's section further down the report, so each topic here can link straight to it. */
+  anchorId?: string;
+}
+
+/** A topic's name as a link to its section (an in-page link on screen, a clickable internal link in the exported PDF); plain text when there is nothing to link to. */
+function TopicLink({ anchorId, children }: { anchorId?: string; children: React.ReactNode }) {
+  if (!anchorId) return <>{children}</>;
+  return (
+    <a href={`#${anchorId}`} style={{ color: reportTokens.accent, textDecoration: "underline", textUnderlineOffset: "2px" }}>
+      {children}
+    </a>
+  );
 }
 
 function ConditionPill({ color, label }: { color: string; label: string }) {
@@ -17,7 +30,7 @@ function ConditionPill({ color, label }: { color: string; label: string }) {
       style={{
         display: "inline-block",
         padding: "2px 10px",
-        borderRadius: "4px",
+        borderRadius: reportTokens.radius,
         background: color,
         color: "white",
         fontWeight: 700,
@@ -48,7 +61,7 @@ function ConditionPill({ color, label }: { color: string; label: string }) {
  * doesn't force an oversized unbreakable block.
  */
 function CategoryBlock({ category }: { category: ConditionSummaryCategory }) {
-  const { sectionName, rows } = category;
+  const { sectionName, rows, anchorId } = category;
   const showHeader = rows.length > 1;
   return (
     <>
@@ -64,7 +77,7 @@ function CategoryBlock({ category }: { category: ConditionSummaryCategory }) {
             }}
           >
             <div style={{ flex: "1 1 40%", paddingLeft: showHeader ? "14px" : 0, fontWeight: showHeader ? 400 : 700 }}>
-              {row.subLabel ?? sectionName}
+              <TopicLink anchorId={anchorId}>{row.subLabel ?? sectionName}</TopicLink>
             </div>
             <div style={{ flex: "0 0 108px" }}>
               <ConditionPill color={row.conditionColor} label={row.conditionLabel} />
@@ -76,7 +89,7 @@ function CategoryBlock({ category }: { category: ConditionSummaryCategory }) {
           return (
             <div key={i} style={{ breakInside: "avoid" }}>
               <div style={{ fontWeight: 700, color: reportTokens.ink, margin: "10px 0 2px", fontSize: "0.95em" }}>
-                {sectionName}
+                <TopicLink anchorId={anchorId}>{sectionName}</TopicLink>
               </div>
               {rowContent}
             </div>
@@ -89,6 +102,36 @@ function CategoryBlock({ category }: { category: ConditionSummaryCategory }) {
         );
       })}
     </>
+  );
+}
+
+/** What each grade in the table means, in the report's own wording (also printed in the Scope appendix). Kept in one block so it never splits across a page break. */
+function ConditionLegend() {
+  return (
+    <div style={{ breakInside: "avoid", marginTop: "22px" }}>
+      <div
+        style={{
+          fontWeight: 700,
+          fontSize: "0.78em",
+          textTransform: "uppercase",
+          letterSpacing: "0.03em",
+          color: reportTokens.inkMuted,
+          paddingBottom: "4px",
+          borderBottom: `1px solid ${reportTokens.border}`,
+          marginBottom: "6px",
+        }}
+      >
+        Condition grades
+      </div>
+      {GRADE_LEGEND.map((g) => (
+        <div key={g.label} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "3px 0" }}>
+          <div style={{ flex: "0 0 108px" }}>
+            <ConditionPill color={g.color} label={g.label} />
+          </div>
+          <div style={{ fontSize: "0.92em", color: reportTokens.ink }}>{g.meaning}</div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -110,18 +153,8 @@ export function ReportConditionSummary({
   if (categories.length === 0) return null;
   return (
     <div style={reportTextStyle(compact)}>
-      <h2
-        style={{
-          textAlign: "center",
-          fontWeight: 700,
-          color: reportTokens.ink,
-          fontSize: compact ? "15px" : "22px",
-          margin: "8px 0 4px",
-        }}
-      >
-        EXECUTIVE SUMMARY
-      </h2>
-      <p style={{ textAlign: "center", color: reportTokens.inkMuted, fontSize: "0.85em", margin: "0 0 20px" }}>
+      <PageTitle compact={compact}>Condition Summary</PageTitle>
+      <p style={{ textAlign: "left", color: reportTokens.inkMuted, fontSize: "0.85em", margin: "0 0 20px" }}>
         Condition summary — grade and any defect noted, by category
       </p>
       <div
@@ -144,6 +177,7 @@ export function ReportConditionSummary({
       {categories.map((c, i) => (
         <CategoryBlock key={i} category={c} />
       ))}
+      <ConditionLegend />
     </div>
   );
 }

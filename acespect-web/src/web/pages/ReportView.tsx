@@ -19,6 +19,9 @@ import { PhotoNumberProvider, reportTextStyle, reportTokens, SectionBand } from 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
 const slug = (s: Pick<FormSection, "id" | "key">): string => s.key ?? s.id;
 
+/** The `id` each report section carries, so the Condition Summary's topics can link straight to it. */
+const sectionAnchorId = (id: string): string => `section-${id}`;
+
 export function ReportView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -93,6 +96,13 @@ export function ReportView() {
     renderList.push({ type: "section", section: s });
   }
 
+  // Page order after the cover: the Description block first (Description and
+  // Overview, Photographs, Scope of Inspection and Comments), then the
+  // Condition Summary, then every other category. The Description section is
+  // pulled out of the list here so it can sit above the summary.
+  const descriptionItem = renderList.find((it) => it.type === "section" && slug(it.section).startsWith("description"));
+  const restList = renderList.filter((it) => it !== descriptionItem);
+
   // Executive Summary (Condition Summary page) -- one category per approved
   // section that actually has condition-graded rows (derived and stored at
   // save time, see templateFields.ts's ConditionSummaryRow); Description
@@ -101,6 +111,7 @@ export function ReportView() {
   const conditionSummaryCategories: ConditionSummaryCategory[] = bodySections
     .map((s) => ({
       sectionName: s.name,
+      anchorId: sectionAnchorId(s.id),
       rows: (s.fields as unknown as { conditionSummary?: ConditionSummaryRow[] }).conditionSummary ?? [],
     }))
     .filter((c) => c.rows.length > 0);
@@ -205,17 +216,6 @@ export function ReportView() {
         {/* Cover / front matter, generated from Job Information */}
         <ReportCover header={r} />
 
-        {/* Executive Summary (Condition Summary) -- its own dedicated page
-            right after the cover, before Description & Overview. Renders
-            nothing (including this wrapper) when there's nothing to
-            summarise yet, so an inspection with no approved sections never
-            prints a lone near-empty page. */}
-        {conditionSummaryCategories.length > 0 && (
-          <div className="report-page-break">
-            <ReportConditionSummary categories={conditionSummaryCategories} />
-          </div>
-        )}
-
         {/* Report body — approved section report text, written on approval.
             Wrapped in PhotoNumberProvider so every photo across the whole
             document gets one running "Photo N" count in render order,
@@ -224,9 +224,29 @@ export function ReportView() {
             report's per-item photo cross-referencing instead of one vague
             "Please refer to Photographs:" line repeated everywhere. */}
         <PhotoNumberProvider>
-          {renderList.length > 0 ? (
+          {/* 1-3. Description and Overview, Photographs, Scope of Inspection
+              and Comments -- all rendered by ReportDescription, straight after
+              the cover and ABOVE the Condition Summary. */}
+          {descriptionItem && descriptionItem.type === "section" && (
             <div className="report-page-break" style={{ marginTop: "40px" }}>
-              {renderList.map((item, i) =>
+              {renderSection(descriptionItem.section, 0)}
+            </div>
+          )}
+
+          {/* 4. Condition Summary (formerly "Executive Summary") -- its own
+              dedicated page after the Description block. Renders nothing
+              (including this wrapper) when there's nothing to summarise yet,
+              so an inspection with no approved sections never prints a lone
+              near-empty page. */}
+          {conditionSummaryCategories.length > 0 && (
+            <div className="report-page-break">
+              <ReportConditionSummary categories={conditionSummaryCategories} />
+            </div>
+          )}
+
+          {restList.length > 0 ? (
+            <div className="report-page-break" style={{ marginTop: "40px" }}>
+              {restList.map((item, i) =>
                 item.type === "banner" ? (
                   <SectionBand key={item.label} tone="peach" compact={false}>
                     {item.label}
@@ -237,13 +257,15 @@ export function ReportView() {
               )}
             </div>
           ) : (
-            <p
-              className="screen-only"
-              style={{ marginTop: "32px", fontStyle: "italic", color: reportTokens.inkFaint, fontSize: "13px" }}
-            >
-              No section report text has been approved yet — once the reviewer approves a section, its
-              report text appears here on the official report.
-            </p>
+            renderList.length === 0 && (
+              <p
+                className="screen-only"
+                style={{ marginTop: "32px", fontStyle: "italic", color: reportTokens.inkFaint, fontSize: "13px" }}
+              >
+                No section report text has been approved yet — once the reviewer approves a section, its
+                report text appears here on the official report.
+              </p>
+            )
           )}
 
           {/* SCOPE / Conditions always print, on their own fresh page,
@@ -270,7 +292,7 @@ export function ReportView() {
 
   function renderSection(s: (typeof bodySections)[number], i: number) {
     return (
-      <div key={s.id} style={{ marginTop: i === 0 ? 0 : "16px" }}>
+      <div key={s.id} id={sectionAnchorId(s.id)} style={{ marginTop: i === 0 ? 0 : "16px" }}>
         {slug(s).startsWith("description") ? (
           /* Description & Overview uses the full template layout */
           <ReportDescription inspection={inspection!} reportText={s.reportText} />

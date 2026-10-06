@@ -13,6 +13,7 @@ import {
   fetchActiveTemplate,
   flattenSectionToDraft,
   meetsAllRequireWhen,
+  listMissingItems,
   meetsAllRequiredFields,
 } from "../../templateFields";
 import type { FormSection } from "../../mockData";
@@ -82,6 +83,20 @@ export function InspectorFormEditor() {
     if (!template) return true;
     const answers = answerEdits[sectionKeyOf(section)] ?? (section.answers as AnswerTree | null | undefined) ?? {};
     return meetsAllRequireWhen(template.fields, answers) && meetsAllRequiredFields(template.fields, answers);
+  }
+
+  // Whether the section reads "Pending" (still being drafted, not marked
+  // complete) and exactly which required items are still unanswered -- shown
+  // on the section's row and, with red outlines, in its detail panel so an
+  // admin can tell the inspector what to finish instead of just "Pending".
+  function isSectionPending(section: FormSection): boolean {
+    return isDraft && section.status !== "complete";
+  }
+  function pendingItems(section: FormSection): string[] {
+    const template = templates[sectionKeyOf(section)];
+    if (!template || !isSectionPending(section)) return [];
+    const answers = answerEdits[sectionKeyOf(section)] ?? (section.answers as AnswerTree | null | undefined) ?? {};
+    return listMissingItems(template.fields, answers);
   }
 
   // Load each distinct section's active template once the inspection is
@@ -395,6 +410,17 @@ export function InspectorFormEditor() {
                           {section.damages.length > 0 ? `${section.damages.length} damage record${section.damages.length > 1 ? "s" : ""}` : "No damage recorded"}
                           {section.photos.length > 0 ? ` · ${section.photos.length} photos` : ""}
                         </p>
+                        {(() => {
+                          const items = pendingItems(section);
+                          if (items.length === 0) return null;
+                          const shown = items.slice(0, 3).join(", ");
+                          return (
+                            <p style={{ fontSize: "11px", color: "#dc2626", margin: "3px 0 0" }}>
+                              Pending: {shown}
+                              {items.length > 3 ? ` +${items.length - 3} more` : ""}
+                            </p>
+                          );
+                        })()}
                       </div>
                       {/* Once the inspection itself has been submitted, every
                           section reads as Complete regardless of its own
@@ -435,13 +461,29 @@ export function InspectorFormEditor() {
                       </div>
                       {template ? (
                         <div style={{ padding: "16px 18px" }}>
+                          {(() => {
+                            const items = pendingItems(selectedSection);
+                            if (items.length === 0) return null;
+                            return (
+                              <div style={{ border: "1.5px solid #dc2626", background: "#fef2f2", borderRadius: "8px", padding: "10px 12px", marginBottom: "14px" }}>
+                                <p style={{ fontSize: "12px", fontWeight: 700, color: "#b91c1c", margin: "0 0 4px" }}>
+                                  Still to complete ({items.length})
+                                </p>
+                                <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "12px", color: "#7f1d1d" }}>
+                                  {items.map((it, i) => (
+                                    <li key={i}>{it}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            );
+                          })()}
                           <PhotoUploadContext.Provider value={{ inspectionId: inspection.id, sectionKey: selectedKey }}>
                             <SectionFieldEditor
                               fields={template.fields}
                               scope={answerEdits[selectedKey] ?? (selectedSection.answers as AnswerTree | null | undefined) ?? {}}
                               onChange={(key, value) => setAnswer(selectedKey, key, value)}
                               readOnly={!isDraft}
-                              showMissing={isDraft && showMissing}
+                              showMissing={isDraft && (showMissing || isSectionPending(selectedSection))}
                             />
                           </PhotoUploadContext.Provider>
                         </div>

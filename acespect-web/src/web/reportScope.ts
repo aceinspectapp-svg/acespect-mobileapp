@@ -3,6 +3,8 @@
  * Notes & Post Project section of the report. Static boilerplate, stored as
  * structured blocks so it renders with consistent numbering/indentation.
  */
+import { GRADE_LEGEND } from "./conditionGrades";
+
 export type ScopeBlock =
   | { kind: "section"; n: string; title: string }
   | { kind: "clause"; n: string; text: string }
@@ -346,13 +348,8 @@ export const SCOPE_BLOCKS: ScopeBlock[] = [
   {
     kind: "list",
     intro: "Houspect has tried to categorise our gradings as:",
-    items: [
-      { label: "●", text: "New: Self-explanatory." },
-      { label: "●", text: "Satisfactory: Generally good condition." },
-      { label: "●", text: "Fair: Starting to look like it needs maintenance." },
-      { label: "●", text: "Average: Working but needs maintenance within 6 months." },
-      { label: "●", text: "Poor: Needs replacement." },
-    ],
+    // Same definitions as the Condition Summary's legend (conditionGrades.ts).
+    items: GRADE_LEGEND.map((g) => ({ label: "●", text: `${g.label}: ${g.meaning}` })),
   },
   {
     kind: "para",

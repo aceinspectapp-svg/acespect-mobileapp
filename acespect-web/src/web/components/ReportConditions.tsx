@@ -1,5 +1,5 @@
 import { CONDITIONS, CONDITIONS_TITLE, type ConditionClause } from "../reportConditions";
-import { reportTextStyle, reportTokens } from "./reportKit";
+import { PageTitle, reportTextStyle, reportTokens } from "./reportKit";
 
 // Wider hanging indent than Scope's clause numbers -- matches the reference,
 // where Conditions numbers sit further from the text than Scope's do.
@@ -26,18 +26,7 @@ function Clause({ c }: { c: ConditionClause }) {
 export function ReportConditions({ compact = false }: { compact?: boolean }) {
   return (
     <div style={reportTextStyle(compact, { normal: "12.5px", compact: "11px" })}>
-      <h2
-        style={{
-          textAlign: "center",
-          fontWeight: 700,
-          color: reportTokens.ink,
-          fontSize: compact ? "13px" : "16px",
-          margin: "8px 0 16px",
-          textDecoration: "underline",
-        }}
-      >
-        {CONDITIONS_TITLE}
-      </h2>
+      <PageTitle compact={compact}>{CONDITIONS_TITLE}</PageTitle>
       {CONDITIONS.map((c) => (
         <Clause key={c.n} c={c} />
       ))}

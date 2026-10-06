@@ -108,8 +108,9 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
             (larger type, less padding, not bold). */}
         <div
           style={{
-            textAlign: "center",
-            padding: compact ? "10px 0" : "12px 0",
+            textAlign: "left",
+            borderRadius: reportTokens.radius,
+            padding: compact ? "10px 12px" : "12px 16px",
             margin: compact ? "14px 0" : "20px 0",
             border: `1.5px solid ${reportTokens.ink}`,
           }}
