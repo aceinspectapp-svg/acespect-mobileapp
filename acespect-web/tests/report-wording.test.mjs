@@ -489,3 +489,38 @@ describe("Pool / Spa divided into parts (what seed-section-parts.ts publishes)",
     assert.equal(run({ pool: { present: "no" }, spa: { present: "no" } }).reportText, "There is no pool or spa to the property.");
   });
 });
+
+describe("each defect sentence is tagged so its own photos can sit under it", () => {
+  const defect = (location, photo) => ({ damageType: "cracking", sub_cracking: "fine", location, photos: [photo] });
+
+  it("numbers the defects across the whole section, in the same order as the saved defect list", () => {
+    const out = text("fences", {
+      items: {
+        front: { present: "yes", material: ["brick"], condition: "fair", damages: [defect("gate", "front-1.jpg"), defect("corner", "front-2.jpg")] },
+        left: { present: "yes", material: ["brick"], condition: "fair", damages: [defect("post", "left-1.jpg")] },
+      },
+    });
+    const tagged = [...out.reportText.matchAll(/DEFECT::(\d+)::At the ([a-z]+)/g)].map((m) => [Number(m[1]), m[2]]);
+    assert.deepEqual(tagged, [[0, "gate"], [1, "corner"], [2, "post"]]);
+    // the marker position is the position in the saved defect list, so it points at that defect's own photos
+    tagged.forEach(([i, where]) => assert.ok(out.damages[i].location.includes(where)));
+    assert.deepEqual(out.damages.map((d) => d.photos[0]), ["front-1.jpg", "front-2.jpg", "left-1.jpg"]);
+  });
+
+  it("leaves a defect from an absent part out of both the text and the list", () => {
+    const out = text("fences", {
+      items: {
+        front: { present: "no", damages: [defect("stale", "stale.jpg")] },
+        left: { present: "yes", material: ["brick"], condition: "fair", damages: [defect("post", "left-1.jpg")] },
+      },
+    });
+    assert.ok(out.reportText.includes("DEFECT::0::At the post"));
+    assert.equal(out.damages.length, 1);
+  });
+
+  it("keeps a multi-line note inside its own defect paragraph", () => {
+    const out = text("driveway", { present: "yes", locatedAt: "front_left", material: "concrete", condition: "fair", damages: [{ ...defect("slab", "a.jpg"), notes: "first line\nsecond line" }] });
+    assert.ok(out.reportText.includes("DEFECT::0::At the slab"));
+    assert.ok(out.reportText.includes("first line second line."));
+  });
+});

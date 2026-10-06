@@ -200,7 +200,11 @@ function damageWording(rawType: string, typeLabel: string, subLabel: string): { 
 }
 
 /**
- * One sentence set per damage/crack record. Sections whose damage-list has a
+ * One paragraph per damage/crack record, each tagged `DEFECT::<n>::` where n is
+ * the record's position in the instance's damage list (templateFields.ts turns
+ * it into the section-wide position). The report uses that tag to print the
+ * defect's own photos directly under its sentence (ReportSection.tsx).
+ * Sections whose damage-list has a
  * `damageType` field describe each record as whatever type was actually
  * recorded; sections whose damage-list has no `damageType` at all (Paving &
  * Paths, Fences, Retaining Walls in the original seed -- those only ever
@@ -214,7 +218,7 @@ function damageSentences(inst: AnswerTree, itemFields: TemplateField[]): string 
   const subFields = damageField.itemFields ?? [];
   const damageTypeField = subFields.find((f) => f.key === "damageType");
   return list
-    .map((d) => {
+    .map((d, defectIndex) => {
       const location = asString(d.location);
       const element = asString(d.element).trim();
       const width = Number(d.widthMm) || 0;
@@ -249,10 +253,11 @@ function damageSentences(inst: AnswerTree, itemFields: TemplateField[]): string 
         if (length > 0) bits.push(`approximately ${length}mm long`);
         parts.push(`The ${wording.noun} is ${bits.join(" and ")}.`);
       }
-      if (notes) parts.push(withPeriod(notes));
-      return parts.join(" ");
+      // A newline inside the notes would split this sentence from its marker.
+      if (notes) parts.push(withPeriod(notes.replace(/\s*\n+\s*/g, " ").trim()));
+      return `DEFECT::${defectIndex}::${parts.join(" ")}`;
     })
-    .join(" ");
+    .join("\n\n");
 }
 
 function obstructionsSentence(itemFields: TemplateField[], inst: AnswerTree, noun: string): string {

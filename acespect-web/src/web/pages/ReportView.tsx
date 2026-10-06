@@ -6,6 +6,7 @@ import { buildReportHeader, withExcludedPhotosRemoved } from "../report";
 import { useAppData } from "../data";
 import { API_BASE, getToken } from "../api";
 import { ReportCover } from "../components/ReportCover";
+import { sectionPhotoArchiveUrl } from "../photoArchive";
 import { ReportDescription } from "../components/ReportDescription";
 import { ReportScope } from "../components/ReportScope";
 import { ReportConditions } from "../components/ReportConditions";
@@ -328,7 +329,17 @@ export function ReportView() {
           /* Every inspection category: description → photographs → cracks (described + imaged).
              Filtered first so any photo the reviewer excluded never reaches the printed report. */
           <>
-            <ReportSection section={withExcludedPhotosRemoved(s)} hideDamageText={slug(s) in SECTION_SENTENCE_COMPOSERS} />
+            <ReportSection
+              section={withExcludedPhotosRemoved(s)}
+              hideDamageText={slug(s) in SECTION_SENTENCE_COMPOSERS}
+              archiveUrl={
+                // Only for sections that have photos at all (judged on the unfiltered section, so a section whose
+                // photos were all left out of the report still points to its archive).
+                s.photos.length > 0 || s.damages.some((d) => d.photos.length > 0)
+                  ? sectionPhotoArchiveUrl(inspection!.photoArchiveUrl, s.key)
+                  : null
+              }
+            />
             {slug(s).startsWith("pool") && <ReportPoolSpaDisclaimer />}
           </>
         )}

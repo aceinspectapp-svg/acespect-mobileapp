@@ -576,6 +576,7 @@ function walk(
       let composedCount = 0;
       let lastFloorLevel: string | undefined;
       for (const { label, scope: inst } of instances) {
+        const damageBase = damages.length; // where this instance's defects start in the section-wide list
         const sub = walk(field.itemFields ?? [], inst, [...ancestorLabels, label]);
         const notPresent = !!composed && isNotPresent(inst);
         // Stale damage records on an instance the inspector later marked as not present shouldn't reach the report.
@@ -610,7 +611,8 @@ function walk(
                 lastFloorLevel = floorRaw;
               }
             }
-            textParts.push(composedSentence);
+            // Defect paragraphs are tagged with their position in this instance's list; make that the section-wide position.
+            textParts.push(composedSentence.replace(/DEFECT::(\d+)::/g, (_m, n) => `DEFECT::${damageBase + Number(n)}::`));
             composedCount += 1;
           }
         } else if (sub.reportText) {

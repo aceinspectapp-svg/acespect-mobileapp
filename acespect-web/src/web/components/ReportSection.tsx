@@ -53,9 +53,13 @@ type ParsedItem =
   | { kind: "roomhead"; text: string }
   | { kind: "floorband"; text: string }
   | { kind: "cond"; color: string; label: string }
+  | { kind: "defect"; index: number; text: string }
   | { kind: "para"; text: string };
 
-function renderParsedItem(item: ParsedItem, compact: boolean, key: number | string) {
+// Matches reportSentences.ts's damageSentences -- one tagged paragraph per recorded defect, where `index` is that defect's position in the section's damage list, so its own photos can be printed right under its sentence.
+const DEFECT_RE = /^DEFECT::(\d+)::([\s\S]*)$/;
+
+function renderParsedItem(item: ParsedItem, compact: boolean, key: number | string, damages: DamageRecord[]) {
   switch (item.kind) {
     case "heading":
       return (
@@ -77,9 +81,59 @@ function renderParsedItem(item: ParsedItem, compact: boolean, key: number | stri
       );
     case "cond":
       return <ConditionTag key={key} color={item.color} label={item.label} />;
+    case "defect":
+      return <DefectBlock key={key} text={item.text} damage={damages[item.index]} compact={compact} />;
     case "para":
       return <Para key={key}>{item.text}</Para>;
   }
+}
+
+/**
+ * One defect: its sentence, then -- directly below it -- that defect's own
+ * photos (the "Photographs" field on its entry in the form), in the report's
+ * photo grid. Sentence, caption and photos are kept together across a page
+ * break. A defect with no photos is just the sentence.
+ */
+function DefectBlock({ text, damage, compact }: { text: string; damage?: DamageRecord; compact: boolean }) {
+  const photos = damage?.photos ?? [];
+  const numbering = usePhotoNumbering(photos.length);
+  const sentence = <Para style={{ margin: "0 0 6px" }}>{text}</Para>;
+  if (photos.length === 0) return <div style={{ margin: "0 0 10px" }}>{sentence}</div>;
+  return (
+    <div style={{ margin: "0 0 10px" }}>
+      <PhotoGrid
+        photos={photos}
+        compact={compact}
+        startNumber={numbering.start}
+        caption={
+          <>
+            {sentence}
+            <Para style={{ margin: "0 0 4px", fontSize: "0.92em", color: reportTokens.inkMuted }}>{numbering.label}</Para>
+          </>
+        }
+      />
+    </div>
+  );
+}
+
+/** The section's own general photos (not tied to a defect) -- printed after the defects, with their own photo numbers. */
+function GeneralPhotos({ photos, compact }: { photos: string[]; compact: boolean }) {
+  const numbering = usePhotoNumbering(photos.length);
+  if (photos.length === 0) return null;
+  return (
+    <div style={{ marginTop: "6px" }}>
+      <PhotoGrid
+        photos={photos}
+        compact={compact}
+        startNumber={numbering.start}
+        caption={
+          <Para style={{ margin: "0 0 4px", fontSize: "0.92em", color: reportTokens.inkMuted }}>
+            General photographs — {numbering.label.charAt(0).toLowerCase() + numbering.label.slice(1)}
+          </Para>
+        }
+      />
+    </div>
+  );
 }
 
 /**
@@ -142,6 +196,18 @@ function describeDamage(d: DamageRecord): string {
   return s;
 }
 
+/** "All photographs for Driveway (full archive): Click here" -- the reviewer selects only some photos for the report; this reaches the rest. */
+function ArchiveLink({ name, url }: { name: string; url: string }) {
+  return (
+    <Para style={{ margin: "0 0 6px", fontSize: "0.92em" }}>
+      Full photo archive for {name}:{" "}
+      <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline" }}>
+        Click here
+      </a>
+    </Para>
+  );
+}
+
 /** One crack/damage record: its sentence (optional), its own "Please refer to
  *  Photograph(s) N(-M):" line, and its photos -- a separate component (not
  *  inlined in a .map) because `usePhotoNumbering` is a hook, and each damage
@@ -167,7 +233,7 @@ function DamageBlock({
         // reference has gone missing rather than just turned the page.
         <div style={{ breakInside: "avoid" }}>
           <Para style={{ margin: "0 0 4px", fontSize: "0.92em", color: reportTokens.inkMuted }}>{numbering.label}</Para>
-          <PhotoGrid photos={damage.photos} compact={compact} startNumber={numbering.start} layout="grid" />
+          <PhotoGrid photos={damage.photos} compact={compact} startNumber={numbering.start} />
         </div>
       )}
     </div>
@@ -184,8 +250,11 @@ export function ReportSection({
   showHeading = true,
   compact = false,
   hideDamageText = false,
+  archiveUrl,
 }: {
   section: FormSection;
+  /** Link to this section's full photo archive (its own sub-folder in the job's photo folder) -- printed under the section title so the client can reach every photo the inspector uploaded, not just the ones the reviewer selected for the report. */
+  archiveUrl?: string | null;
   showHeading?: boolean;
   compact?: boolean;
   /** True for a section whose reportText already narrates each crack/damage inline (see reportSentences.ts) -- skip the sentence here so it isn't said twice, but still show that damage's photos. */
@@ -195,13 +264,6 @@ export function ReportSection({
     .split(/\n{2,}|\n/)
     .map((p) => p.trim())
     .filter(Boolean);
-
-  // Sequential "Photo N" numbering (see PhotoNumberContext) -- claimed here,
-  // in render order, so the label text ("Please refer to Photographs 9 to
-  // 12:") and the photos it refers to always get the same numbers, matching
-  // the reference report's per-item photo cross-referencing instead of one
-  // generic "Please refer to Photographs:" line per whole category.
-  const sectionPhotoNumbering = usePhotoNumbering(section.photos.length);
 
   // The section's own heading joins the same grouping pass as the parsed
   // paragraphs below (see groupForPagination) so it, too, can't be
@@ -213,34 +275,26 @@ export function ReportSection({
       if (condMatch) return { kind: "cond", color: condMatch[1], label: condMatch[2] };
       const roomMatch = p.match(ROOM_HEADING_RE);
       if (roomMatch) return { kind: "roomhead", text: roomMatch[1] };
+      const defectMatch = p.match(DEFECT_RE);
+      if (defectMatch) return { kind: "defect", index: Number(defectMatch[1]), text: defectMatch[2].trim() };
       if (FLOOR_HEADINGS.includes(p)) return { kind: "floorband", text: p };
       return { kind: "para", text: p };
     }),
   ];
   const groups = groupForPagination(items);
+  // Defects whose sentence carries no tag (a report saved before defects were paired with their photos) keep the older layout: their photos follow the text.
+  const taggedDefects = new Set(items.flatMap((it) => (it.kind === "defect" ? [it.index] : [])));
 
   return (
     <div style={reportTextStyle(compact)}>
-      {/* Sits directly under the heading in the reference report, in body
-          style (not a distinct grey label) -- matched here once per
-          section's general photos (cracks/damages get their own reference
-          below, next to their own photos) rather than repeated after every
-          paragraph the way the reference's own blank fill-in template does.
-          Rendered before the grouped heading/paragraphs below only when
-          there's no heading to sit under (showHeading false); otherwise it
-          has to come after the heading, so it's placed inline within the
-          first group instead -- see the render below. */}
-      {!showHeading && section.photos.length > 0 && <Para>{sectionPhotoNumbering.label}</Para>}
-
-      {/* Description */}
+      {/* Description -- with each defect's sentence followed by its own photos */}
       {groups.map((group, gi) => {
-        const rendered = group.map((item, ii) => renderParsedItem(item, compact, `${section.id}-${gi}-${ii}`));
-        // The section's photo-reference line belongs directly under the
-        // heading (matching the reference report), which is now the first
-        // item of the first group -- splice it in right after that heading
+        const rendered = group.map((item, ii) => renderParsedItem(item, compact, `${section.id}-${gi}-${ii}`, section.damages));
+        // The photo-archive link belongs directly under the heading, which is
+        // the first item of the first group -- splice it in right after it
         // instead of hoisting the whole group out of its breakInside wrapper.
-        if (gi === 0 && showHeading && section.photos.length > 0) {
-          rendered.splice(1, 0, <Para key={`${section.id}-photo-ref`}>{sectionPhotoNumbering.label}</Para>);
+        if (gi === 0 && showHeading && archiveUrl) {
+          rendered.splice(1, 0, <ArchiveLink key={`${section.id}-archive`} name={section.name} url={archiveUrl} />);
         }
         if (rendered.length === 1) return rendered[0];
         return (
@@ -250,17 +304,13 @@ export function ReportSection({
         );
       })}
 
-      {/* Photographs for the category -- a 2-column grid, since these are
-          routine documentation photos (not a single defect needing a large,
-          closely-readable image like each damage's own photo below). */}
-      {section.photos.length > 0 && (
-        <PhotoGrid photos={section.photos} compact={compact} startNumber={sectionPhotoNumbering.start} layout="grid" />
+      {/* Defects without a tagged sentence (older saved text): photos after the text, as before */}
+      {section.damages.map((d, i) =>
+        taggedDefects.has(i) ? null : <DamageBlock key={d.id} damage={d} compact={compact} hideDamageText={hideDamageText} />,
       )}
 
-      {/* Cracks / damages — described and imaged (text skipped when reportText already narrates it) */}
-      {section.damages.map((d) => (
-        <DamageBlock key={d.id} damage={d} compact={compact} hideDamageText={hideDamageText} />
-      ))}
+      {/* The section's general photographs come last, after every defect */}
+      <GeneralPhotos photos={section.photos} compact={compact} />
 
       {section.photos.length === 0 && section.damages.length === 0 && paras.length === 0 && (
         <p style={{ color: reportTokens.inkFaint, fontStyle: "italic" }}>No content recorded for this category.</p>

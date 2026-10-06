@@ -94,7 +94,7 @@ function render(reportText) {
       if (cond) return `[Condition tag: ${cond[1]}]`;
       const room = p.match(/^ROOMHEAD::(.+)$/);
       if (room) return `[Room heading: ${room[1]}]`;
-      return p;
+      return p.replace(/^DEFECT::\d+::/, "");
     })
     .join("\n");
 }
