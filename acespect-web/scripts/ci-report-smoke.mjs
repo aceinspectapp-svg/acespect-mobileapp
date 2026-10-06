@@ -73,7 +73,6 @@ const answers = {
   },
   driveway: {
     present: "yes", locatedAt: "Front left", material: "Concrete", condition: "Fair", crackingSummary: "Several minor cracks", obscuredBy: ["Vegetation"],
-    notes: "Resurfacing recommended within the next 2-3 years.",
     damages: [
       crack("centre of the driveway near the garage entrance", { element: "slab", sub_cracking: "Moderate", crackStartLocation: "the garage entrance", direction: "Horizontal", widthMm: 6, lengthMm: 850, notes: "Likely caused by tree root movement nearby." }),
       { location: "kerb", damageType: `${OTHER}Rotting edge`, widthMm: 4, photos: [P1] },
