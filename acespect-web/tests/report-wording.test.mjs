@@ -524,3 +524,51 @@ describe("each defect sentence is tagged so its own photos can sit under it", ()
     assert.ok(out.reportText.includes("first line second line."));
   });
 });
+
+describe("a typed 'Other' (stored inline as __other__:<text>) and a bare 'Other'", () => {
+  const desc = (answers) => reportText("description", answers);
+  const none = (s) => assert.ok(!s.includes("__other__"), `a raw __other__ leaked into: ${s}`);
+
+  it("prints the typed text in the property description", () => {
+    const out = desc({ foundations: "__other__:Raft slab", windows: ["aluminium", "__other__:uPVC"], roofCovering: ["__other__:Terracotta shingle"], roofDesign: "__other__:Skillion" });
+    none(out);
+    assert.ok(out.includes("on raft slab with a skillion roof and a covering of terracotta shingle"));
+    assert.ok(out.includes("Windows are constructed of aluminium and uPVC."));
+  });
+
+  it("says nothing for an 'Other' with nothing typed, rather than printing the word 'other'", () => {
+    assert.equal(desc({ foundations: "other" }), "");
+    assert.equal(desc({ windows: ["other"] }), "");
+    assert.equal(desc({ foundations: "__other__:" }), "");
+    assert.ok(desc({ windows: ["timber", "other"] }).includes("Windows are constructed of timber."));
+  });
+
+  it("prints typed materials and obstructions in a category", () => {
+    const out = reportText("fences", {
+      items: { front: { present: "yes", material: ["timber_palings", "__other__:Hardwood sleepers"], condition: "fair", obscuredBy: ["__other__:Parked trailer", "other"] } },
+    });
+    none(out);
+    assert.ok(out.includes("constructed of timber palings and hardwood sleepers and is in fair condition"));
+    assert.ok(out.includes("obscured by parked trailer."));
+  });
+
+  it("words a typed defect type, crack severity and direction", () => {
+    const base = { present: "yes", locatedAt: "front_left", material: "concrete", condition: "fair" };
+    const run = (d) => text("driveway", { ...base, damages: [{ location: "kerb", ...d }] });
+    const typed = run({ damageType: "__other__:Rotting edge", widthMm: 4 });
+    none(typed.reportText);
+    assert.ok(typed.reportText.includes("At the kerb, there is a rotting edge. The rotting edge is approximately 4mm wide."));
+    assert.equal(typed.fields.conditionSummary[0].defectNote, "Rotting edge at kerb");
+    assert.ok(run({ damageType: "cracking", sub_cracking: "__other__:Stress crack" }).reportText.includes("there is a stress crack."));
+    assert.ok(run({ damageType: "cracking", sub_cracking: "fine", direction: "__other__:diagonally down" }).reportText.includes("running diagonally down"));
+    assert.ok(run({ damageType: "other" }).reportText.includes("there is a defect."));
+    assert.ok(run({ damageType: "__other__:" }).reportText.includes("there is a defect."));
+  });
+
+  it("unwraps a typed 'Other' in the saved field data, and drops a bare one", () => {
+    assert.equal(text("description", { proposedWorksType: "__other__:Pipeline works" }).fields.proposedWorksType, "Pipeline works");
+    assert.ok(!("proposedWorksType" in text("description", { proposedWorksType: "other" }).fields));
+    const damage = text("driveway", { present: "yes", damages: [{ damageType: "__other__:Rotting edge", location: "kerb" }] }).damages[0];
+    assert.equal(damage.type, "Rotting edge");
+  });
+});

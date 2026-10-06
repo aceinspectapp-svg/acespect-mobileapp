@@ -1,5 +1,5 @@
 import type { AnswerTree, AnswerValue, TemplateField } from "./templateFields";
-import { asString, asStringArray, withPeriod } from "./templateFields";
+import { asString, asStringArray, otherAnswerText, withPeriod } from "./templateFields";
 import { gradeOf, shortConditionLabel } from "./conditionGrades";
 
 /**
@@ -42,16 +42,17 @@ function keyOf(itemFields: TemplateField[], inst: AnswerTree, keys: string[]): s
 }
 
 /**
- * An option's display label, except that a selected "Other" prints what the
- * inspector typed into that field's own "please specify" box (always named
- * `<key>Other`) rather than the literal word "Other". Falls back to the plain
- * label when "Other" was picked but the box was left blank.
+ * What an answer says in a sentence: the option's display label, or -- for an
+ * "Other" -- what the inspector typed. The forms store a typed Other inline as
+ * "__other__:<text>"; older templates had an "Other" option plus a separate
+ * "<key>Other" box instead. Both print the typed text. An "Other" with nothing
+ * typed returns "" (the caller leaves that clause out): the word "other" on
+ * its own is not an answer.
  */
 function labelFor(itemFields: TemplateField[], inst: AnswerTree, key: string, raw: string): string {
-  if (raw === "other") {
-    const custom = asString(inst[`${key}Other`]).trim();
-    if (custom) return custom;
-  }
+  const typed = otherAnswerText(raw);
+  if (typed !== undefined) return typed;
+  if (raw === "other") return asString(inst[`${key}Other`]).trim();
   return optionLabel(itemFields, key, raw);
 }
 
@@ -67,7 +68,7 @@ function many(itemFields: TemplateField[], inst: AnswerTree, keys: string[]): st
   const key = keyOf(itemFields, inst, keys);
   const answer = inst[key];
   const raws = typeof answer === "string" ? (answer ? [answer] : []) : asStringArray(answer);
-  return raws.map((raw) => labelFor(itemFields, inst, key, raw));
+  return raws.map((raw) => labelFor(itemFields, inst, key, raw)).filter(Boolean);
 }
 
 /**
@@ -189,6 +190,10 @@ function damageWording(rawType: string, typeLabel: string, subLabel: string): { 
   // The original seed's four types: "leaning" and "other" don't read naturally as bare nouns ("there is a leaning", "there is an other"), so they get a noun to sit on.
   if (rawType === "leaning") return { phrase: "a leaning defect", noun: "leaning defect", plural: false };
   if (rawType === "other") return { phrase: "a defect", noun: "defect", plural: false };
+  // A defect type the inspector typed themselves ("Other"): their own words are the noun.
+  if (rawType === "__custom__") return { phrase: `${article(typeLabel)} ${typeLabel}`, noun: typeLabel, plural: false };
+  // A typed crack severity that already says "crack" ("stress crack") must not become "a stress crack crack".
+  if (rawType === "cracking" && /\bcrack(s|ing)?$/i.test(subLabel)) return { phrase: `${article(subLabel)} ${subLabel}`, noun: "crack", plural: false };
   // The published templates' AS 4349.1 types: "Cracking" -> "a (severity) crack", the rest read as a description with the specific sub-type in brackets.
   const typed = DAMAGE_TYPE_PHRASES[rawType];
   if (typed) {
@@ -225,19 +230,32 @@ function damageSentences(inst: AnswerTree, itemFields: TemplateField[]): string 
       const length = Number(d.lengthMm) || 0;
       const notes = asString(d.notes);
       const rawType = asString(d.damageType);
-      const typeLabel = damageTypeField && rawType
-        ? lower(damageTypeField.options?.find((o) => o.value === rawType)?.label ?? rawType)
-        : "crack";
+      // An "Other" type is stored as "__other__:<text>" -- use what was typed ("" typed means nothing was said: a plain "defect").
+      const typedType = otherAnswerText(rawType);
+      const wordingType = typedType === undefined ? rawType : typedType ? "__custom__" : "other";
+      const typeLabel = typedType
+        ? lower(typedType)
+        : damageTypeField && rawType
+          ? lower(damageTypeField.options?.find((o) => o.value === rawType)?.label ?? rawType)
+          : "crack";
       const subField = subFields.find((f) => f.gate?.fieldKey === "damageType" && f.gate.equals === rawType);
       const subRaw = subField ? asString(d[subField.key]) : "";
       // "Hairline (≤0.1mm -- Damage Category 0)" -> "hairline": the bracketed category is report-internal detail, not sentence wording.
-      const subLabel = subRaw ? lower((subField?.options?.find((o) => o.value === subRaw)?.label ?? subRaw).split(" (")[0]) : "";
-      const wording = damageWording(rawType, typeLabel, subLabel);
+      const subTyped = otherAnswerText(subRaw);
+      const subLabel =
+        subTyped !== undefined
+          ? lower(subTyped)
+          : subRaw
+            ? lower((subField?.options?.find((o) => o.value === subRaw)?.label ?? subRaw).split(" (")[0])
+            : "";
+      const wording = damageWording(wordingType, typeLabel, subLabel);
 
       const extras: string[] = [];
       if (wording.noun === "crack") {
         const start = asString(d.crackStartLocation).trim();
-        const direction = DIRECTION_ADVERBS[asString(d.direction)];
+        const directionRaw = asString(d.direction);
+        const directionTyped = otherAnswerText(directionRaw);
+        const direction = directionTyped !== undefined ? lower(directionTyped) : DIRECTION_ADVERBS[directionRaw];
         if (start) extras.push(`starting from ${start}`);
         if (direction) extras.push(`running ${direction}`);
       }
