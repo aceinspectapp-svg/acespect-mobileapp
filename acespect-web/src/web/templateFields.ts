@@ -278,6 +278,19 @@ export function listMissingItems(templateFields: TemplateField[], scope: AnswerT
   return out;
 }
 
+/** How the forms store a typed "Other" answer inline: "__other__:<text>". */
+export const OTHER_PREFIX = "__other__:";
+
+/**
+ * What the inspector typed for an "Other" answer. `undefined` when `raw` is not
+ * an inline "Other" at all; `""` when it is but nothing was typed after the
+ * prefix. Used by the report wording only -- the form editors have their own
+ * handling (see `displayValue`).
+ */
+export function otherAnswerText(raw: string): string | undefined {
+  return raw.startsWith(OTHER_PREFIX) ? raw.slice(OTHER_PREFIX.length).trim() : undefined;
+}
+
 export function asAnswerTree(v: AnswerValue): AnswerTree {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as AnswerTree) : {};
 }
@@ -416,8 +429,13 @@ function buildDefectNote(damageField: TemplateField, inst: AnswerTree): string |
   const damageTypeField = (damageField.itemFields ?? []).find((f) => f.key === "damageType");
   const parts = list.map(({ scope: d }) => {
     const rawType = asString(d.damageType);
+    const typedType = otherAnswerText(rawType);
     const typeLabel =
-      damageTypeField && rawType ? damageTypeField.options?.find((o) => o.value === rawType)?.label ?? rawType : "Crack";
+      typedType !== undefined
+        ? typedType.charAt(0).toUpperCase() + typedType.slice(1) || "Defect"
+        : damageTypeField && rawType
+          ? damageTypeField.options?.find((o) => o.value === rawType)?.label ?? rawType
+          : "Crack";
     const location = asString(d.location);
     return location ? `${typeLabel} ${atLocation(location)}` : typeLabel;
   });
@@ -515,16 +533,16 @@ function walk(
       const damageTypeField = itemFields.find((f) => f.key === "damageType");
       for (const { scope: inst } of resolveInstances(field, value)) {
         const typeRaw = asString(inst.damageType);
-        const typeLabel = damageTypeField?.options?.find((o) => o.value === typeRaw)?.label || typeRaw;
+        const typeLabel = otherAnswerText(typeRaw) ?? (damageTypeField?.options?.find((o) => o.value === typeRaw)?.label || typeRaw);
         const subField = itemFields.find((f) => f.gate?.fieldKey === "damageType" && f.gate.equals === typeRaw);
         const subRaw = subField ? asString(inst[subField.key]) : "";
-        const subLabel = subField?.options?.find((o) => o.value === subRaw)?.label || subRaw;
+        const subLabel = otherAnswerText(subRaw) ?? (subField?.options?.find((o) => o.value === subRaw)?.label || subRaw);
 
         const locationParts = [asString(inst.location), asString(inst.element), asString(inst.crackStartLocation)];
         damages.push({
           type: [typeLabel, subLabel].filter(Boolean).join(" — ") || "Damage",
           location: [...ancestorLabels, ...locationParts.filter(Boolean)].join(" — "),
-          direction: asString(inst.direction),
+          direction: otherAnswerText(asString(inst.direction)) ?? asString(inst.direction),
           widthMm: Number(inst.widthMm) || 0,
           lengthMm: Number(inst.lengthMm) || 0,
           notes: asString(inst.notes),
@@ -576,6 +594,7 @@ function walk(
       let composedCount = 0;
       let lastFloorLevel: string | undefined;
       for (const { label, scope: inst } of instances) {
+        const damageBase = damages.length; // where this instance's defects start in the section-wide list
         const sub = walk(field.itemFields ?? [], inst, [...ancestorLabels, label]);
         const notPresent = !!composed && isNotPresent(inst);
         // Stale damage records on an instance the inspector later marked as not present shouldn't reach the report.
@@ -610,7 +629,8 @@ function walk(
                 lastFloorLevel = floorRaw;
               }
             }
-            textParts.push(composedSentence);
+            // Defect paragraphs are tagged with their position in this instance's list; make that the section-wide position.
+            textParts.push(composedSentence.replace(/DEFECT::(\d+)::/g, (_m, n) => `DEFECT::${damageBase + Number(n)}::`));
             composedCount += 1;
           }
         } else if (sub.reportText) {
@@ -649,10 +669,18 @@ function walk(
     // report; this generic fallback used to skip that step, so an unfilled-
     // in field with no sentence composer printed the raw snake_case key
     // straight into the report text instead of its label.
-    const toLabel = (raw: string) => field.options?.find((o) => o.value === raw)?.label ?? raw;
+    // An inline "Other" prints what was typed; a bare "Other" with nothing typed says nothing (the word "other" alone is not an answer).
+    const hasOtherOption = field.options?.some((o) => o.value === "other") ?? false;
+    const toLabel = (raw: string) => {
+      const typed = otherAnswerText(raw);
+      if (typed !== undefined) return typed;
+      if (raw === "other" && !hasOtherOption) return "";
+      return field.options?.find((o) => o.value === raw)?.label ?? raw;
+    };
     const strValue = Array.isArray(value)
-      ? value.filter((v) => typeof v === "string").map(toLabel).join(", ")
+      ? value.filter((v) => typeof v === "string").map(toLabel).filter(Boolean).join(", ")
       : toLabel(String(value));
+    if (!strValue) continue;
     fields[field.key] = strValue;
     // Notes & Post Project's own classification fields (not a finding, just
     // metadata) -- printing "Additional Damage Present?: No." etc. as a

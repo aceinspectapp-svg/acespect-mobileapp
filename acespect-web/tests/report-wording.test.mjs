@@ -489,3 +489,86 @@ describe("Pool / Spa divided into parts (what seed-section-parts.ts publishes)",
     assert.equal(run({ pool: { present: "no" }, spa: { present: "no" } }).reportText, "There is no pool or spa to the property.");
   });
 });
+
+describe("each defect sentence is tagged so its own photos can sit under it", () => {
+  const defect = (location, photo) => ({ damageType: "cracking", sub_cracking: "fine", location, photos: [photo] });
+
+  it("numbers the defects across the whole section, in the same order as the saved defect list", () => {
+    const out = text("fences", {
+      items: {
+        front: { present: "yes", material: ["brick"], condition: "fair", damages: [defect("gate", "front-1.jpg"), defect("corner", "front-2.jpg")] },
+        left: { present: "yes", material: ["brick"], condition: "fair", damages: [defect("post", "left-1.jpg")] },
+      },
+    });
+    const tagged = [...out.reportText.matchAll(/DEFECT::(\d+)::At the ([a-z]+)/g)].map((m) => [Number(m[1]), m[2]]);
+    assert.deepEqual(tagged, [[0, "gate"], [1, "corner"], [2, "post"]]);
+    // the marker position is the position in the saved defect list, so it points at that defect's own photos
+    tagged.forEach(([i, where]) => assert.ok(out.damages[i].location.includes(where)));
+    assert.deepEqual(out.damages.map((d) => d.photos[0]), ["front-1.jpg", "front-2.jpg", "left-1.jpg"]);
+  });
+
+  it("leaves a defect from an absent part out of both the text and the list", () => {
+    const out = text("fences", {
+      items: {
+        front: { present: "no", damages: [defect("stale", "stale.jpg")] },
+        left: { present: "yes", material: ["brick"], condition: "fair", damages: [defect("post", "left-1.jpg")] },
+      },
+    });
+    assert.ok(out.reportText.includes("DEFECT::0::At the post"));
+    assert.equal(out.damages.length, 1);
+  });
+
+  it("keeps a multi-line note inside its own defect paragraph", () => {
+    const out = text("driveway", { present: "yes", locatedAt: "front_left", material: "concrete", condition: "fair", damages: [{ ...defect("slab", "a.jpg"), notes: "first line\nsecond line" }] });
+    assert.ok(out.reportText.includes("DEFECT::0::At the slab"));
+    assert.ok(out.reportText.includes("first line second line."));
+  });
+});
+
+describe("a typed 'Other' (stored inline as __other__:<text>) and a bare 'Other'", () => {
+  const desc = (answers) => reportText("description", answers);
+  const none = (s) => assert.ok(!s.includes("__other__"), `a raw __other__ leaked into: ${s}`);
+
+  it("prints the typed text in the property description", () => {
+    const out = desc({ foundations: "__other__:Raft slab", windows: ["aluminium", "__other__:uPVC"], roofCovering: ["__other__:Terracotta shingle"], roofDesign: "__other__:Skillion" });
+    none(out);
+    assert.ok(out.includes("on raft slab with a skillion roof and a covering of terracotta shingle"));
+    assert.ok(out.includes("Windows are constructed of aluminium and uPVC."));
+  });
+
+  it("says nothing for an 'Other' with nothing typed, rather than printing the word 'other'", () => {
+    assert.equal(desc({ foundations: "other" }), "");
+    assert.equal(desc({ windows: ["other"] }), "");
+    assert.equal(desc({ foundations: "__other__:" }), "");
+    assert.ok(desc({ windows: ["timber", "other"] }).includes("Windows are constructed of timber."));
+  });
+
+  it("prints typed materials and obstructions in a category", () => {
+    const out = reportText("fences", {
+      items: { front: { present: "yes", material: ["timber_palings", "__other__:Hardwood sleepers"], condition: "fair", obscuredBy: ["__other__:Parked trailer", "other"] } },
+    });
+    none(out);
+    assert.ok(out.includes("constructed of timber palings and hardwood sleepers and is in fair condition"));
+    assert.ok(out.includes("obscured by parked trailer."));
+  });
+
+  it("words a typed defect type, crack severity and direction", () => {
+    const base = { present: "yes", locatedAt: "front_left", material: "concrete", condition: "fair" };
+    const run = (d) => text("driveway", { ...base, damages: [{ location: "kerb", ...d }] });
+    const typed = run({ damageType: "__other__:Rotting edge", widthMm: 4 });
+    none(typed.reportText);
+    assert.ok(typed.reportText.includes("At the kerb, there is a rotting edge. The rotting edge is approximately 4mm wide."));
+    assert.equal(typed.fields.conditionSummary[0].defectNote, "Rotting edge at kerb");
+    assert.ok(run({ damageType: "cracking", sub_cracking: "__other__:Stress crack" }).reportText.includes("there is a stress crack."));
+    assert.ok(run({ damageType: "cracking", sub_cracking: "fine", direction: "__other__:diagonally down" }).reportText.includes("running diagonally down"));
+    assert.ok(run({ damageType: "other" }).reportText.includes("there is a defect."));
+    assert.ok(run({ damageType: "__other__:" }).reportText.includes("there is a defect."));
+  });
+
+  it("unwraps a typed 'Other' in the saved field data, and drops a bare one", () => {
+    assert.equal(text("description", { proposedWorksType: "__other__:Pipeline works" }).fields.proposedWorksType, "Pipeline works");
+    assert.ok(!("proposedWorksType" in text("description", { proposedWorksType: "other" }).fields));
+    const damage = text("driveway", { present: "yes", damages: [{ damageType: "__other__:Rotting edge", location: "kerb" }] }).damages[0];
+    assert.equal(damage.type, "Rotting edge");
+  });
+});

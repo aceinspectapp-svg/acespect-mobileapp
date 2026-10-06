@@ -1,0 +1,83 @@
+name: Report checks
+
+# Guards the inspection report (the wording, the layout and the PDF) against every
+# change -- the forms, the QC platform, the database, dependencies -- not just edits
+# to the report code. It deliberately has no `paths:` filter: a form-template or
+# migration change is exactly the kind of change that can break the report.
+#
+#   wording  - type-check, then the report's unit + contract tests. The contract test
+#              runs every option of every field of the real published templates (and
+#              both kinds of "Other") through the wording and fails on any raw stored
+#              value, "__other__", or blank gap.
+#   pdf      - builds a full inspection against a throwaway Postgres, generates the real
+#              PDF through the same Puppeteer path the app uses, and checks what a reader
+#              would see (headings, the typed answers, photographs, no leaked markers).
+#
+# To make these block merges, mark "wording" and "pdf" as required status checks in the
+# repository's branch protection rules (Settings -> Branches).
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  wording:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: acespect-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: acespect-web/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit -p .
+      - run: npm test
+
+  pdf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: acespect
+          POSTGRES_PASSWORD: scratch
+          POSTGRES_DB: report_scratch
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U acespect" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://acespect:scratch@localhost:5432/report_scratch?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            acespect-backend/package-lock.json
+            acespect-web/package-lock.json
+      - name: PDF tools used to read the generated report
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - run: npm ci
+        working-directory: acespect-backend
+      - run: npm ci
+        working-directory: acespect-web
+      - name: Generate a report PDF and check it
+        run: scripts/ci/report-e2e.sh
+      - name: Keep the PDF when the check fails
+        if: failure()
+        run: |
+          mkdir -p report-smoke-output
+          cp "${TMPDIR:-/tmp}"/report-smoke-*/report.pdf report-smoke-output/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: report-smoke-pdf
+          path: report-smoke-output/
+          if-no-files-found: ignore

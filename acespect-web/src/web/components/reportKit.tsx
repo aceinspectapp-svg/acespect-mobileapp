@@ -1,5 +1,7 @@
-import { createContext, useContext, useRef, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useRef, type ReactNode } from "react";
 import { resolveMediaUrl } from "../api";
+import { COMPACT_PACK, PAGE_PACK, packPhotoRows } from "../photoLayout";
+import { useImageAspects } from "../useImageAspects";
 
 /**
  * Shared visual language for the generated inspection report — one modern,
@@ -289,80 +291,80 @@ export function MetaRow({
 }
 
 /**
- * Photo list — one photo per row (stacked), matching the reference report's
- * own layout (it never runs two across, unlike this grid used to for
- * Fences specifically once its content happened to be narrow enough).
- * Sized to the reference's own admin note: 5.9cm wide for a landscape
- * photo, 5.2cm for portrait. Every photo box is the same fixed 4:3 shape
- * (`aspect-ratio: 4 / 3`) so a grid row of mixed portrait/landscape photos
- * lines up neatly, like a real photo album, instead of leaving a ragged
- * gap under whichever photo happens to be shorter. Within that fixed box,
- * `object-fit: contain` on a tinted background letterboxes/pillarboxes a
- * photo that doesn't match the box's own shape (shown smaller, centred,
- * with even padding) rather than `object-fit: cover`, which used to crop a
- * portrait-shot photo down to a sliver -- these are evidence of a specific
- * defect, not decorative, so nothing may ever be cut off. Chromium's print
- * pipeline computes this the same way any browser does; no orientation
- * needs to be detected or stored up front. Each photo is a real hyperlink to its own full-size URL (matching
- * the reference report's convention of linking inserted photos), so it
- * opens full-size in a new tab on screen and survives as an actual
- * clickable link annotation in the exported PDF (Puppeteer/Chromium turns
- * an `<a>` around an image into a real PDF link, not just a picture).
- * Plain thin border only -- no rounded corners or shadow, which the
- * reference doesn't use either.
+ * The report's photo grid -- one reusable component for every group of photos
+ * that sits under a title (a category's own photos, each crack/damage's
+ * photos). It looks at each photo's real shape and packs them into tidy rows
+ * (see photoLayout.ts): three portraits side by side in one row, two
+ * portraits and a landscape in one row, two landscapes per row, a lone photo
+ * at a sensible size. All photos in a row share one height and the row fills
+ * the page width, so the edges line up; each photo is drawn at exactly its
+ * own shape, so nothing is ever cropped or stretched -- these are evidence of
+ * a specific defect, not decoration. Rows never split across a page break.
+ * Each photo is a real hyperlink to its own full-size URL (matching the
+ * reference report's convention), so it survives as a clickable link in the
+ * exported PDF. Plain thin border only, as in the reference.
+ *
+ * The shapes are read from the images themselves, so the layout settles a
+ * moment after load; while it hasn't, the grid carries `data-photo-grid-pending`
+ * and the PDF generator waits for that to clear before printing.
  */
 export function PhotoGrid({
   photos,
   compact,
   startNumber,
-  layout = "grid",
+  caption,
 }: {
   photos: string[];
   compact: boolean;
+  /** Text that introduces the photos (a defect's sentence, a "Please refer to Photographs…" line). Printed above the first row and kept on the same page as it, so a caption is never left alone at the bottom of a page. */
+  caption?: ReactNode;
   /** First number in this batch's sequential "Photo N" captions (see PhotoNumberContext) -- omitted outside the real printed report (e.g. the reviewer's isolated section preview), where a running count across the whole document doesn't make sense. */
   startNumber?: number;
-  /**
-   * "grid" (default, used everywhere in the report): a 2-column layout --
-   * every photo group (a category's general photos, and each crack/damage's
-   * own photos) renders this way, each photo noticeably larger than the old
-   * always-one-per-row layout since it fills half the page width instead of
-   * a fixed 5.9cm. "stack" (one large photo per row, full page width) is
-   * kept as an option for a case that genuinely needs a single oversized
-   * photo, but nothing currently uses it.
-   */
-  layout?: "stack" | "grid";
 }) {
+  const urls = photos.map((p) => resolveMediaUrl(p));
+  const { aspects, pending } = useImageAspects(urls);
+  const options = compact ? COMPACT_PACK : PAGE_PACK;
+  const rows = useMemo(() => packPhotoRows(aspects, options), [aspects.join(","), compact]);
   if (photos.length === 0) return null;
-  const widthCm = compact ? 4.6 : 7;
   return (
     <div
-      style={
-        layout === "grid"
-          ? { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px", margin: "6px 0 12px" }
-          : { display: "flex", flexDirection: "column", gap: "8px", margin: "6px 0 12px" }
-      }
+      data-photo-grid-pending={pending ? "" : undefined}
+      style={{ display: "flex", flexDirection: "column", gap: `${options.gap}cm`, margin: "6px 0 12px" }}
     >
-      {photos.map((url, i) => (
-        <div key={i} style={layout === "grid" ? undefined : { width: `${widthCm}cm` }}>
-          <a href={resolveMediaUrl(url)} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
-            <img
-              src={resolveMediaUrl(url)}
-              alt=""
-              style={{
-                width: "100%",
-                aspectRatio: "4 / 3",
-                objectFit: "contain",
-                background: "#f4f5f7",
-                border: `1px solid ${reportTokens.border}`,
-                display: "block",
-              }}
-            />
-          </a>
-          {startNumber !== undefined && (
-            <span style={{ display: "block", marginTop: "2px", fontSize: "0.82em", color: reportTokens.inkMuted }}>
-              Photo {startNumber + i}
-            </span>
-          )}
+      {rows.map((row, ri) => (
+        <div key={ri} style={{ breakInside: "avoid" }}>
+          {ri === 0 && caption}
+          <div style={{ display: "flex", gap: `${options.gap}cm`, alignItems: "flex-start" }}>
+          {row.indices.map((i) => (
+            <div
+              key={i}
+              style={
+                // Full row: widths share the row in proportion to each photo's shape, which makes every height equal.
+                // Short last row: each photo at the row's height, left-aligned.
+                row.full ? { flex: `${aspects[i]} 1 0`, minWidth: 0 } : { flex: "0 0 auto", width: `${aspects[i] * row.height}cm` }
+              }
+            >
+              <a href={urls[i]} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+                <img
+                  src={urls[i]}
+                  alt=""
+                  style={{
+                    width: "100%",
+                    aspectRatio: `${aspects[i]}`,
+                    objectFit: "cover",
+                    border: `1px solid ${reportTokens.border}`,
+                    display: "block",
+                  }}
+                />
+              </a>
+              {startNumber !== undefined && (
+                <span style={{ display: "block", marginTop: "2px", fontSize: "0.82em", color: reportTokens.inkMuted }}>
+                  Photo {startNumber + i}
+                </span>
+              )}
+            </div>
+          ))}
+          </div>
         </div>
       ))}
     </div>
