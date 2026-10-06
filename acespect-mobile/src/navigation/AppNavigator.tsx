@@ -27,8 +27,29 @@ import { QcNewDefectScreen } from '../screens/qc/NewDefectScreen';
 import { QcAccountScreen } from '../screens/qc/AccountScreen';
 import { QcProjectsScreen, QcProjectDocsScreen } from '../screens/qc/ProjectsScreen';
 import { QcNewInspectionScreen } from '../screens/qc/NewInspectionScreen';
+import { guarded } from '../components/qc/QcErrorBoundary';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
+
+/** QC screens are wrapped so a failure while drawing one shows a message instead of closing the app. */
+const G = {
+  QcHomeScreen: guarded(QcHomeScreen),
+  QcPropertyHomeScreen: guarded(QcPropertyHomeScreen),
+  QcDefectsListScreen: guarded(QcDefectsListScreen),
+  QcTasksListScreen: guarded(QcTasksListScreen),
+  QcTaskDetailScreen: guarded(QcTaskDetailScreen),
+  QcDefectDetailScreen: guarded(QcDefectDetailScreen),
+  QcInspectionsListScreen: guarded(QcInspectionsListScreen),
+  QcInspectionScreen: guarded(QcInspectionScreen),
+  QcInspectionCompleteScreen: guarded(QcInspectionCompleteScreen),
+  QcNotificationsScreen: guarded(QcNotificationsScreen),
+  QcMyDefectsScreen: guarded(QcMyDefectsScreen),
+  QcNewDefectScreen: guarded(QcNewDefectScreen),
+  QcAccountScreen: guarded(QcAccountScreen),
+  QcProjectsScreen: guarded(QcProjectsScreen),
+  QcProjectDocsScreen: guarded(QcProjectDocsScreen),
+  QcNewInspectionScreen: guarded(QcNewInspectionScreen),
+};
 
 export function AppNavigator() {
   return (
@@ -227,22 +248,22 @@ export function AppNavigator() {
 
       {/* ─── QC flow — "my tasks" only; config/creation/assignment live in
           acespect-web's admin QC section now. ─────────────────────────── */}
-      <Stack.Screen name="QcHome" component={QcHomeScreen} />
-      <Stack.Screen name="QcPropertyHome" component={QcPropertyHomeScreen} />
-      <Stack.Screen name="QcDefectsList" component={QcDefectsListScreen} />
-      <Stack.Screen name="QcTasksList" component={QcTasksListScreen} />
-      <Stack.Screen name="QcTaskDetail" component={QcTaskDetailScreen} />
-      <Stack.Screen name="QcDefectDetail" component={QcDefectDetailScreen} />
-      <Stack.Screen name="QcInspections" component={QcInspectionsListScreen} />
-      <Stack.Screen name="QcInspection" component={QcInspectionScreen} />
-      <Stack.Screen name="QcInspectionComplete" component={QcInspectionCompleteScreen} />
-      <Stack.Screen name="QcNotifications" component={QcNotificationsScreen} />
-      <Stack.Screen name="QcMyDefects" component={QcMyDefectsScreen} />
-      <Stack.Screen name="QcNewDefect" component={QcNewDefectScreen} />
-      <Stack.Screen name="QcAccount" component={QcAccountScreen} />
-      <Stack.Screen name="QcProjects" component={QcProjectsScreen} />
-      <Stack.Screen name="QcProjectDocs" component={QcProjectDocsScreen} />
-      <Stack.Screen name="QcNewInspection" component={QcNewInspectionScreen} />
+      <Stack.Screen name="QcHome" component={G.QcHomeScreen} />
+      <Stack.Screen name="QcPropertyHome" component={G.QcPropertyHomeScreen} />
+      <Stack.Screen name="QcDefectsList" component={G.QcDefectsListScreen} />
+      <Stack.Screen name="QcTasksList" component={G.QcTasksListScreen} />
+      <Stack.Screen name="QcTaskDetail" component={G.QcTaskDetailScreen} />
+      <Stack.Screen name="QcDefectDetail" component={G.QcDefectDetailScreen} />
+      <Stack.Screen name="QcInspections" component={G.QcInspectionsListScreen} />
+      <Stack.Screen name="QcInspection" component={G.QcInspectionScreen} />
+      <Stack.Screen name="QcInspectionComplete" component={G.QcInspectionCompleteScreen} />
+      <Stack.Screen name="QcNotifications" component={G.QcNotificationsScreen} />
+      <Stack.Screen name="QcMyDefects" component={G.QcMyDefectsScreen} />
+      <Stack.Screen name="QcNewDefect" component={G.QcNewDefectScreen} />
+      <Stack.Screen name="QcAccount" component={G.QcAccountScreen} />
+      <Stack.Screen name="QcProjects" component={G.QcProjectsScreen} />
+      <Stack.Screen name="QcProjectDocs" component={G.QcProjectDocsScreen} />
+      <Stack.Screen name="QcNewInspection" component={G.QcNewInspectionScreen} />
     </Stack.Navigator>
   );
 }
