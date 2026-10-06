@@ -73,6 +73,14 @@ export type AppStackParamList = {
   QcInspection: { inspectionId: string };
   QcInspectionComplete: { inspectionId: string };
   QcNotifications: undefined;
+  // The defects feed (every defect your role can see), raising a defect, the account screen,
+  // project documents and unplanned inspections.
+  QcMyDefects: { status?: string } | undefined;
+  QcNewDefect: { projectId?: string } | undefined;
+  QcAccount: undefined;
+  QcProjects: undefined;
+  QcProjectDocs: { projectId: string; name: string };
+  QcNewInspection: undefined;
 };
 
 export type AuthScreenProps<T extends keyof AuthStackParamList> =

@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { registerPushToken } from './qcPlatformApi';
 
 /**
@@ -11,6 +11,8 @@ import { registerPushToken } from './qcPlatformApi';
  */
 export async function registerForPush(): Promise<void> {
   if (Platform.OS === 'web') return;
+  // Expo Go removed remote push in SDK 53 and logs a loud error just for loading the module, so do not even try there.
+  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Notifications = require('expo-notifications') as typeof import('expo-notifications');

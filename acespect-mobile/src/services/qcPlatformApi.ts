@@ -83,6 +83,9 @@ export const startInspection = (id: string, body: Record<string, unknown>): Prom
 export const saveResult = (id: string, itemNumber: string, body: Record<string, unknown>) =>
   api.put<{ result: InspectionResult; raisedDefectIds?: string[]; stale?: boolean }>(`/qc/inspections/${id}/results/${encodeURIComponent(itemNumber)}`, body).then((r) => r.data);
 
+export const createAdHocInspection = (body: { projectId: string; propertyId?: string; type?: string; purpose?: string }): Promise<Inspection> =>
+  api.post<{ inspection: Inspection }>('/qc/inspections/adhoc', body).then((r) => r.data.inspection);
+
 export const completionCheck = (id: string) =>
   api.get<{ unanswered: string[]; draftDefects: Array<{ id: string; defectRef: string | null; title: string | null }>; notInspected: number; hasSignature: boolean; canComplete: boolean }>(`/qc/inspections/${id}/completion`).then((r) => r.data);
 

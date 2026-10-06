@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { mediaUri } from '../../config/api';
@@ -11,9 +11,26 @@ import { SeverityPill } from '../../components/qc/SeverityPill';
 import { StatusBadge } from '../../components/qc/StatusBadge';
 import { RefOption, SpecFields, cleanValues } from '../../components/qc/SpecFields';
 import { AppScreenProps } from '../../navigation/types';
+import { SyncBanner } from '../../components/qc/SyncBanner';
 import { useQcData } from '../../context/QcDataContext';
 import { useQcPhotoCapture } from '../../hooks/useQcPhotoCapture';
-import { QcAllowedAction, QcConfigBundle, QcDefectDetail, QcDefectEvent, QcPhoto, SpecForm } from '../../types/qc';
+import { useDefectSync } from '../../hooks/useDefectSync';
+import * as qcApi from '../../services/qcApi';
+import { runOrQueue } from '../../services/defectQueue';
+import { errorMessage } from '../../services/qcCache';
+import { QcAllowedAction, QcConfigBundle, QcDefectComment, QcDefectDetail, QcDefectEvent, QcPhoto, SpecForm } from '../../types/qc';
+
+const VISIBILITY_LABEL: Record<string, string> = { ALL: 'Everyone', CLIENT_INSPECTOR: 'Client and inspector', BUILDER_TRADE: 'Builder and trades', INSPECTOR_ONLY: 'Inspector only' };
+const VISIBILITY_BY_ROLE: Record<string, string[]> = {
+  SA: ['ALL', 'CLIENT_INSPECTOR', 'BUILDER_TRADE', 'INSPECTOR_ONLY'],
+  CLIENT_ADMIN: ['ALL', 'CLIENT_INSPECTOR'],
+  CLIENT_USER: ['ALL', 'CLIENT_INSPECTOR'],
+  MC_MANAGER: ['ALL', 'BUILDER_TRADE'],
+  MC_SITE_SUPERVISOR: ['ALL', 'BUILDER_TRADE'],
+  MC_PROJECT_MANAGER: ['ALL', 'BUILDER_TRADE'],
+  TRADE_USER: ['ALL', 'BUILDER_TRADE'],
+  PRIVATE_INSPECTOR: ['ALL', 'CLIENT_INSPECTOR', 'INSPECTOR_ONLY'],
+};
 
 const FLAG_LABEL: Record<string, string> = { urgent: 'Urgent', escalated: 'Escalated', overdue: 'Overdue' };
 
@@ -47,7 +64,7 @@ function f16Initial(d: QcDefectDetail['defect']): Record<string, unknown> {
  */
 export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDefectDetail'>) {
   const { defectId } = route.params;
-  const { getDefectDetail, updateDefect, addDefectPhotos, getConfig, getSpecForm } = useQcData();
+  const { getConfig, getSpecForm } = useQcData();
   const { takePhoto, pickFromLibrary } = useQcPhotoCapture();
 
   const [detail, setDetail] = useState<QcDefectDetail | null>(null);
@@ -58,17 +75,23 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [action, setAction] = useState<QcAllowedAction | null>(null);
+  const [stale, setStale] = useState(false);
+  const [commenting, setCommenting] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const d = await getDefectDetail(defectId);
-      setDetail(d);
-      setValues(f16Initial(d.defect));
+      const r = await qcApi.getDefectDetailCached(defectId);
+      setDetail(r.data);
+      setStale(r.stale);
+      setValues(f16Initial(r.data.defect));
       setDirty(false);
+      setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load defect');
+      setError(errorMessage(e, 'Failed to load defect'));
     }
-  }, [defectId, getDefectDetail]);
+  }, [defectId]);
+  const sync = useDefectSync(load);
+  const waitingHere = sync.entries.filter((e) => 'defectId' in e.op && e.op.defectId === defectId);
 
   useEffect(() => {
     load();
@@ -90,10 +113,14 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
     if (!defect || saving) return;
     setSaving(true);
     try {
-      await updateDefect(defect.id, cleanValues(values));
-      await load();
+      const patch = cleanValues(values);
+      const out = await runOrQueue(() => qcApi.updateDefect(defect.id, patch), { kind: 'update', defectId: defect.id, patch }, 'Defect details');
+      if (out.queued) {
+        setDirty(false);
+        Alert.alert('Saved on this phone', 'No connection right now. Your changes will be sent when you are back online.');
+      } else await load();
     } catch (e) {
-      Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
+      Alert.alert('Could not save', errorMessage(e, 'Please try again.'));
     } finally {
       setSaving(false);
     }
@@ -104,10 +131,12 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
     const picked = source === 'camera' ? await takePhoto() : await pickFromLibrary();
     if (!picked) return;
     try {
-      await addDefectPhotos(defect.id, picked.map((p) => p.uri));
-      await load();
+      const uris = picked.map((p) => p.uri);
+      const out = await runOrQueue(() => qcApi.addDefectPhotos(defect.id, uris), { kind: 'photos', defectId: defect.id, photoUris: uris }, 'Defect photos');
+      if (out.queued) Alert.alert('Saved on this phone', 'The photos will be sent when you are back online.');
+      else await load();
     } catch (e) {
-      Alert.alert('Could not upload photos', e instanceof Error ? e.message : 'Please try again.');
+      Alert.alert('Could not upload photos', errorMessage(e, 'Please try again.'));
     }
   }
 
@@ -121,6 +150,9 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
         onBack={() => navigation.goBack()}
         actions={defect?.isDraft && dirty ? [{ icon: 'checkmark-circle', accessibilityLabel: 'Save draft', onPress: () => void saveDraft() }] : []}
       />
+
+      <SyncBanner pending={waitingHere.length} failed={waitingHere.filter((e) => e.error).length} syncing={sync.syncing} onPress={() => void sync.syncNow()} />
+      {stale && <Text style={styles.staleNote}>Offline: showing what was loaded last.</Text>}
 
       {!detail && !error && (
         <View style={styles.centered}>
@@ -219,11 +251,31 @@ export function QcDefectDetailScreen({ navigation, route }: AppScreenProps<'QcDe
           )}
 
           <View style={styles.field}>
+            <View style={styles.commentHead}>
+              <Text style={styles.sectionTitle}>COMMENTS ({(detail.comments ?? []).length})</Text>
+              <Pressable onPress={() => setCommenting(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Add a comment">
+                <Text style={styles.link}>Add comment</Text>
+              </Pressable>
+            </View>
+            {(detail.comments ?? []).length === 0 && <Text style={styles.hint}>No comments yet.</Text>}
+            {[...(detail.comments ?? [])].reverse().map((c) => <CommentRow key={c.id} c={c} />)}
+          </View>
+
+          <View style={styles.field}>
             <Text style={styles.sectionTitle}>HISTORY ({detail.events.length})</Text>
             {detail.events.length === 0 && <Text style={styles.hint}>Nothing recorded yet.</Text>}
             {[...detail.events].reverse().map((e) => <EventRow key={e.id} e={e} />)}
           </View>
         </ScrollView>
+      )}
+
+      {commenting && defect && (
+        <CommentSheet
+          defectId={defect.id}
+          roleKey={detail?.actorRole ?? 'ALL'}
+          onClose={() => setCommenting(false)}
+          onDone={() => { setCommenting(false); void load(); }}
+        />
       )}
 
       {action && defect && (
@@ -266,6 +318,92 @@ function EventRow({ e }: { e: QcDefectEvent }) {
   );
 }
 
+function CommentRow({ c }: { c: QcDefectComment }) {
+  return (
+    <View style={styles.event}>
+      <Text style={styles.eventTitle}>{c.author.name ?? c.author.email}</Text>
+      <Text style={styles.eventMeta}>{c.authorRole.replace(/_/g, ' ').toLowerCase()} · {formatTime(c.createdAt)} · {VISIBILITY_LABEL[c.visibleTo] ?? c.visibleTo}</Text>
+      <Text style={styles.eventNote}>{c.text}</Text>
+      {c.attachments?.length > 0 && (
+        <View style={styles.photoRow}>
+          {c.attachments.map((u) => <Image key={u} source={{ uri: mediaUri(u) }} style={styles.photo} />)}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** A comment with an audience and optional photos. Queued on the phone when there is no signal. */
+function CommentSheet({ defectId, roleKey, onClose, onDone }: { defectId: string; roleKey: string; onClose: () => void; onDone: () => void }) {
+  const { takePhoto, pickFromLibrary } = useQcPhotoCapture();
+  const audiences = VISIBILITY_BY_ROLE[roleKey] ?? ['ALL'];
+  const [text, setText] = useState('');
+  const [visibleTo, setVisibleTo] = useState(audiences[0]!);
+  const [photos, setPhotos] = useState<QcPhoto[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function send() {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const uris = photos.map((p) => p.uri);
+      const out = await runOrQueue(
+        () => qcApi.postDefectComment(defectId, text.trim(), visibleTo, uris),
+        { kind: 'comment', defectId, text: text.trim(), visibleTo, photoUris: uris },
+        'Comment',
+      );
+      if (out.queued) Alert.alert('Saved on this phone', 'The comment will be sent when you are back online.');
+      onDone();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <PickerSheet visible title="Add a comment" onClose={onClose}>
+      <View style={styles.sheetBody}>
+        {!!error && <Text style={styles.errorText}>{error}</Text>}
+        <TextInput style={styles.commentInput} value={text} onChangeText={setText} placeholder="What do you want to say?" placeholderTextColor={colors.textMuted} multiline maxLength={4000} />
+        {audiences.length > 1 && (
+          <View>
+            <Text style={styles.sectionTitle}>WHO CAN SEE IT</Text>
+            <View style={styles.pillRow}>
+              {audiences.map((a) => (
+                <Pressable key={a} onPress={() => setVisibleTo(a)} style={[styles.audience, visibleTo === a && styles.audienceOn]} accessibilityRole="button" accessibilityState={{ selected: visibleTo === a }}>
+                  <Text style={[styles.audienceText, visibleTo === a && { color: colors.white }]}>{VISIBILITY_LABEL[a] ?? a}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+        <View style={styles.photoActions}>
+          <Button label="Add" variant="outline" leftIcon="images-outline" style={styles.photoBtn} onPress={async () => { const p = await pickFromLibrary(); if (p) setPhotos((x) => [...x, ...p]); }} />
+          <Button label="Capture" variant="outline" leftIcon="camera-outline" style={styles.photoBtn} onPress={async () => { const p = await takePhoto(); if (p) setPhotos((x) => [...x, ...p]); }} />
+        </View>
+        {photos.length > 0 && (
+          <View style={styles.photoRow}>
+            {photos.map((p) => (
+              <View key={p.id}>
+                <Image source={{ uri: p.uri }} style={styles.photo} />
+                <Pressable style={styles.photoRemove} hitSlop={6} onPress={() => setPhotos((x) => x.filter((y) => y.id !== p.id))} accessibilityLabel="Remove photo">
+                  <Ionicons name="close" size={12} color={colors.white} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+        <SafeAreaView edges={['bottom']}>
+          <Button label={busy ? 'Sending…' : 'Post comment'} disabled={!text.trim() || busy} onPress={() => void send()} />
+        </SafeAreaView>
+      </View>
+    </PickerSheet>
+  );
+}
+
 /** One lifecycle action: the fields come from the spec form (F16...F33), the rules are enforced by the server. */
 function ActionSheet({ defect, action, refOptions, onClose, onDone }: {
   defect: QcDefectDetail['defect'];
@@ -298,8 +436,19 @@ function ActionSheet({ defect, action, refOptions, onClose, onDone }: {
     setBusy(true);
     setError(null);
     try {
-      const next = await postDefectAction(defect.id, action.key, { ...cleanValues(values), ...extra }, photos.map((p) => p.uri), defect.updatedAt);
-      onDone(next);
+      const payload = { ...cleanValues(values), ...extra };
+      const uris = photos.map((p) => p.uri);
+      const out = await runOrQueue(
+        () => postDefectAction(defect.id, action.key, payload, uris, defect.updatedAt),
+        { kind: 'action', defectId: defect.id, action: action.key, payload, photoUris: uris },
+        action.label,
+      );
+      if (out.queued) {
+        Alert.alert('Saved on this phone', `"${action.label}" will be sent when you are back online.`);
+        onClose();
+      } else {
+        onDone(out.result);
+      }
     } catch (e) {
       const err = e as { response?: { data?: { error?: { code?: string; message?: string } } }; message?: string };
       const apiError = err.response?.data?.error;
@@ -394,4 +543,11 @@ const styles = StyleSheet.create({
   eventMeta: { ...typography.caption, color: colors.textMuted, marginTop: 1 },
   eventNote: { ...typography.bodySm, color: colors.textSecondary, marginTop: 3 },
   sheetBody: { padding: spacing.xl, gap: spacing.lg },
+  staleNote: { ...typography.caption, color: colors.warning, textAlign: 'center', marginTop: spacing.xs },
+  commentHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  link: { ...typography.bodySm, color: colors.accentBlueFg, fontWeight: '700' },
+  commentInput: { minHeight: 90, textAlignVertical: 'top', ...typography.body, color: colors.textPrimary, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
+  audience: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.chipBg },
+  audienceOn: { backgroundColor: colors.textPrimary },
+  audienceText: { ...typography.caption, fontWeight: '700', color: colors.chipFg },
 });

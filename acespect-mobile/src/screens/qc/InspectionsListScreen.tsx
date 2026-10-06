@@ -7,6 +7,7 @@ import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { AppScreenProps } from '../../navigation/types';
 import * as qc from '../../services/qcPlatformApi';
 import { flushQueue } from '../../services/inspectionQueue';
+import { useQcMe } from '../../hooks/useQcMe';
 
 const STATUS: Record<string, { label: string; fg: string; bg: string }> = {
   PLANNED: { label: 'Planned', fg: '#1e40af', bg: '#dbeafe' },
@@ -21,6 +22,7 @@ const when = (i: qc.Inspection) =>
 
 /** The inspector's own inspections: what is planned for them, what they have started, what is done. */
 export function QcInspectionsListScreen({ navigation }: AppScreenProps<'QcInspections'>) {
+  const { can } = useQcMe();
   const [items, setItems] = useState<qc.Inspection[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -45,7 +47,12 @@ export function QcInspectionsListScreen({ navigation }: AppScreenProps<'QcInspec
 
   return (
     <View style={styles.root}>
-      <InspectionHeader title="Inspections" subtitle="Assigned to you" onBack={() => navigation.goBack()} />
+      <InspectionHeader
+        title="Inspections"
+        subtitle="Assigned to you"
+        onBack={() => navigation.goBack()}
+        actions={can('inspections.adhoc') ? [{ icon: 'add-circle-outline', onPress: () => navigation.navigate('QcNewInspection'), accessibilityLabel: 'New inspection' }] : []}
+      />
       {loading && !items && <ActivityIndicator style={{ marginTop: spacing.xxxl }} color={colors.accentBlueFg} />}
       {!!error && <Text style={styles.error}>{error}</Text>}
       <FlatList
