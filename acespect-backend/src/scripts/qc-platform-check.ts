@@ -10,6 +10,7 @@ import { AddressInfo } from 'net';
 import sharp from 'sharp';
 import { createApp } from '../app';
 import { prisma } from '../lib/prisma';
+import { qcJobFolder } from '../lib/storage';
 import { totp } from '../utils/totp';
 import { getForm } from '../modules/qc/spec/qcSpec';
 import { runSlaScan } from '../modules/qc/qc.sla.service';
@@ -166,6 +167,18 @@ async function main() {
   const projectA = pA.body.project.id as string;
   const pB = await api('POST', '/qc/projects', { token: caB.token, body: projBody(mcBId, 'B') });
   const projectB = pB.body.project.id as string;
+  const folderA = await qcJobFolder(projectA);
+  const pa = await prisma.qcProject.findUniqueOrThrow({ where: { id: projectA }, select: { jobNumber: true } });
+  ok(folderA === pa.jobNumber, 'the folder is exactly the job number', { folderA, job: pa.jobNumber });
+  await prisma.qcProject.update({ where: { id: projectB }, data: { jobNumber: pa.jobNumber } });
+  const clashB = await qcJobFolder(projectB);
+  const clashA = await qcJobFolder(projectA);
+  ok(clashA !== clashB && clashB.startsWith(`${pa.jobNumber}_`) && clashA.startsWith(`${pa.jobNumber}_`), 'two projects with the same job number never share a folder', { clashA, clashB });
+  await prisma.qcProject.update({ where: { id: projectB }, data: { jobNumber: `J2${sfx}` } });
+  await prisma.qcProject.update({ where: { id: projectA }, data: { jobNumber: null } });
+  const noJob = await qcJobFolder(projectA);
+  ok(/_[0-9a-f]{8}$/.test(noJob), 'a project with no job number gets a folder that cannot collide', noJob);
+  await prisma.qcProject.update({ where: { id: projectA }, data: { jobNumber: pa.jobNumber } });
   const siteA = (await api('POST', '/qc/sites', { token: ca, body: { projectId: projectA, site_name: 'Stage 1', site_address: ADDR, site_contact_name: 'Sam', site_contact_mobile: '0444444444', site_induction_required: false } })).body.site.id as string;
   const lotBody = (ref: string) => ({ siteId: siteA, lot_reference: ref, lot_number: ref.replace(/\D/g, ''), dwelling_type: 'Detached house', ncc_building_class: opt('E09', 'ncc_building_class'), storeys: 2, floor_system: opt('E09', 'floor_system'), frame: opt('E09', 'frame'), wall_cladding: [opt('E09', 'wall_cladding')], roof_cover: opt('E09', 'roof_cover') });
   const lot1 = (await api('POST', '/qc/lots', { token: ca, body: lotBody('Lot 1') })).body.lot.id as string;
@@ -405,6 +418,10 @@ async function main() {
   const piDocs = await api('GET', `/qc/projects/${projectA}/documents`, { token: tokens.pi });
   const mgrDocs = await api('GET', `/qc/projects/${projectA}/documents`, { token: tokens.mgr });
   ok(piDocs.body.documents?.length === 1 && mgrDocs.body.documents?.length === 0, 'document visibility follows the chosen audiences', { pi: piDocs.body, mgr: mgrDocs.body });
+  const docLink = String(piDocs.body.documents?.[0]?.fileUrl ?? '');
+  ok(/[?&]s=/.test(docLink), 'a document comes back with a signed, expiring link', docLink);
+  const docOpen = await fetch(BASE.replace("/api/v1", "") + docLink);
+  ok(docOpen.status === 200, 'and that link opens the file', docOpen.status);
   const directMedia = await api('GET', docUpload.body.document.fileUrl.replace('/api/v1', ''), { raw: true });
   ok(directMedia.status === 403, 'a tenant file cannot be fetched without a signed link', directMedia.status);
 

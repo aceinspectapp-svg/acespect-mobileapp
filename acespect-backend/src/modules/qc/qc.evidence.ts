@@ -7,7 +7,7 @@
 import { createHash } from 'crypto';
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
-import { fetchPhotoStream, uploadDocument, uploadPhoto } from '../../lib/storage';
+import { fetchPhotoStream, qcJobFolder, uploadDocument, uploadPhoto } from '../../lib/storage';
 import { signMediaUrl } from '../../lib/mediaLinks';
 import { recordAudit } from '../../lib/audit';
 import { QcContext } from './qc.context';
@@ -20,6 +20,25 @@ export const PHASES = ['Identification', 'Progress', 'Before rectification', 'Af
 
 const sha256 = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 const kindOf = (mime: string) => (IMAGE.test(mime) ? 'PHOTO' : mime === 'application/pdf' ? 'PDF' : 'VIDEO');
+
+/** Where a defect's or inspection's files go: its project's job-number folder and a readable label (its reference). */
+async function placementFor(linkedType: string, linkedId: string, fallbackProjectId: string | null): Promise<{ job: string | null; label: string }> {
+  let projectId = fallbackProjectId;
+  let label = linkedId;
+  if (linkedType === 'Defect') {
+    const d = await prisma.qcDefect.findUnique({ where: { id: linkedId }, select: { defectRef: true, property: { select: { projectId: true } } } });
+    if (d) { projectId = d.property.projectId; label = d.defectRef ?? linkedId; }
+  } else if (linkedType === 'Inspection') {
+    const i = await prisma.qcInspection.findUnique({ where: { id: linkedId }, select: { ref: true, projectId: true } });
+    if (i) { projectId = i.projectId; label = i.ref ?? linkedId; }
+  }
+  return { job: projectId ? await qcJobFolder(projectId) : null, label };
+}
+
+/** Folder for a defect's photos taken outside the evidence screen (actions, comments, task updates). */
+export async function defectPlacement(defectId: string) {
+  return placementFor('Defect', defectId, null);
+}
 
 export interface EvidenceMeta {
   linkedType: string;
@@ -38,6 +57,7 @@ export async function uploadEvidence(ctx: QcContext, files: Express.Multer.File[
   if (files.length === 0) throw ApiError.badRequest('Attach at least one file');
   if (meta.phase && !PHASES.includes(meta.phase)) throw ApiError.badRequest('Choose the phase this evidence belongs to');
   const out = [];
+  const place = await placementFor(meta.linkedType, meta.linkedId, meta.projectId);
   if (meta.clientId) await assertWithinPlan(meta.clientId, 'storage', files.reduce((a, f) => a + f.size, 0));
   for (const file of files) {
     const mime = file.mimetype || 'application/octet-stream';
@@ -45,8 +65,8 @@ export async function uploadEvidence(ctx: QcContext, files: Express.Multer.File[
     if (file.size > MAX_EVIDENCE_BYTES) throw ApiError.badRequest(`${file.originalname} is larger than 50 MB`);
     const ext = (file.originalname.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
     const stored = IMAGE.test(mime)
-      ? await uploadPhoto(file.buffer, mime, ext, meta.linkedId, 'evidence', meta.clientId ?? undefined)
-      : await uploadDocument(file.buffer, mime, ext, `evidence/${meta.projectId ?? 'general'}`, meta.clientId ?? undefined);
+      ? await uploadPhoto(file.buffer, mime, ext, meta.linkedType === 'Defect' ? 'Defects' : meta.linkedType === 'Inspection' ? 'Inspections' : 'Evidence', place.label, meta.clientId ?? undefined, place.job ?? undefined)
+      : await uploadDocument(file.buffer, mime, ext, `Evidence/${place.label}`, meta.clientId ?? undefined, place.job ?? undefined);
     const row = await prisma.qcEvidence.create({
       data: {
         clientId: meta.clientId, projectId: meta.projectId, linkedType: meta.linkedType, linkedId: meta.linkedId, kind: kindOf(mime), phase: meta.phase ?? 'Identification',

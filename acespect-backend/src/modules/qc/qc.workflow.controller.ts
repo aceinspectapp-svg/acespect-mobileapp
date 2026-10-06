@@ -14,7 +14,7 @@ import * as proj from './qc.projects.service';
 import * as insp from './qc.inspections.service';
 import * as ev from './qc.evidence';
 import * as rep from './qc.reports.service';
-import { uploadDocument } from '../../lib/storage';
+import { qcJobFolder, uploadDocument } from '../../lib/storage';
 
 const q = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
 const id = (req: Request) => String(req.params.id ?? '');
@@ -106,7 +106,7 @@ export const qcWorkflowController = {
     if (!f) throw ApiError.badRequest('Attach the document file');
     const ext = (f.originalname.split('.').pop() || 'pdf').toLowerCase();
     const owner = await guardEntity(req, 'project', id(req));
-    const stored = await uploadDocument(f.buffer, f.mimetype, ext, `projects/${id(req)}`, owner.clientId ?? undefined);
+    const stored = await uploadDocument(f.buffer, f.mimetype, ext, 'Documents', owner.clientId ?? undefined, await qcJobFolder(id(req)));
     res.status(201).json({ document: await proj.addDocument(ctxOf(req), id(req), payloadOf(req), { url: stored.url, name: f.originalname, size: f.size, mime: f.mimetype }) });
   }),
   getPlan: asyncHandler(async (req, res) => {
