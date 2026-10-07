@@ -74,6 +74,18 @@ export const CONSTRUCTION_STAGE_SECTIONS: { key: string; name: string }[] = [
   { key: 'lu_summary', name: 'Lock Up: Statement & Notes' },
   { key: 'lu_previous_defects', name: 'Lock Up: Previous Defects' },
   { key: 'lu_client_issues', name: 'Lock Up: Client List of Issues' },
+  // Stage 4 -- Fixing (Pre-paint)
+  { key: 'fx_description', name: 'Fixing: Description & Overview' },
+  { key: 'fx_site_facilities', name: 'Fixing: Site & Facilities' },
+  { key: 'fx_walls_ceilings', name: 'Fixing: Plaster, Walls & Ceilings' },
+  { key: 'fx_stairs_floors', name: 'Fixing: Stairs & Floors' },
+  { key: 'fx_doors_windows', name: 'Fixing: Doors & Windows' },
+  { key: 'fx_fitout', name: 'Fixing: Skirtings, Cabinets & Painting' },
+  { key: 'fx_waterproofing', name: 'Fixing: Waterproofing' },
+  { key: 'fx_defects', name: 'Fixing: Defects' },
+  { key: 'fx_summary', name: 'Fixing: Statement & Notes' },
+  { key: 'fx_previous_defects', name: 'Fixing: Previous Defects' },
+  { key: 'fx_client_issues', name: 'Fixing: Client List of Issues' },
 ];
 
 /**

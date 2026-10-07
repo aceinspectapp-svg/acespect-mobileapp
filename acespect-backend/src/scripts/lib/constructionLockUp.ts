@@ -285,6 +285,11 @@ const previousDefects: Draft[] = attachedListFields({
   photosLabel: 'The previous stage Defects list (photos)',
 });
 
+// The Fixing form's header, Description, Site and Facilities and previous-defects block are word for word the same.
+export const LOCK_UP_DESCRIPTION = description;
+export const LOCK_UP_SITE_FACILITIES = siteFacilities;
+export const LOCK_UP_PREVIOUS_DEFECTS = previousDefects;
+
 export const LOCK_UP_SECTIONS: SectionDef[] = [
   { key: 'lu_description', name: 'Description & Overview', fields: numbered(description) },
   { key: 'lu_site_facilities', name: 'Site & Facilities', fields: numbered(siteFacilities) },

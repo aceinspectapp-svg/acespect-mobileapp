@@ -101,7 +101,26 @@ export const CONSTRUCTION_STAGES: ConstructionStage[] = [
       { id: 'lu_client_issues', title: 'Client List of Issues', group: 'Client List of Issues', icon: '📎' },
     ],
   },
-  { id: 'fixing', title: 'Fixing', subtitle: 'Linings, fit-out and fixtures', icon: 'construct-outline', available: false, sections: [] },
+  {
+    id: 'fixing',
+    title: 'Fixing',
+    subtitle: 'Stage 4 (Pre-paint) · Plaster, doors, windows, cabinets and waterproofing',
+    icon: 'construct-outline',
+    available: true,
+    sections: [
+      { id: 'fx_description', title: 'Description & Overview', group: 'Overview', icon: '🏠' },
+      { id: 'fx_site_facilities', title: 'Site & Facilities', group: 'Site', icon: '🚧' },
+      { id: 'fx_walls_ceilings', title: 'Plaster, Walls & Ceilings', group: 'Fixing Stage', icon: '🧱' },
+      { id: 'fx_stairs_floors', title: 'Stairs & Floors', group: 'Fixing Stage', icon: '🪜' },
+      { id: 'fx_doors_windows', title: 'Doors & Windows', group: 'Fixing Stage', icon: '🚪' },
+      { id: 'fx_fitout', title: 'Skirtings, Cabinets & Painting', group: 'Fixing Stage', icon: '🎨' },
+      { id: 'fx_waterproofing', title: 'Waterproofing', group: 'Fixing Stage', icon: '💧' },
+      { id: 'fx_defects', title: 'Defects', group: 'Defects, Statement & Notes', icon: '⚠️' },
+      { id: 'fx_summary', title: 'Statement & Notes', group: 'Defects, Statement & Notes', icon: '📝' },
+      { id: 'fx_previous_defects', title: 'Previous Defects', group: 'Previous Defects', icon: '🔁' },
+      { id: 'fx_client_issues', title: 'Client List of Issues', group: 'Client List of Issues', icon: '📎' },
+    ],
+  },
   { id: 'pci', title: 'PCI', subtitle: 'Practical Completion / Handover', icon: 'checkmark-done-outline', available: false, sections: [] },
 ];
 
