@@ -63,6 +63,17 @@ export const CONSTRUCTION_STAGE_SECTIONS: { key: string; name: string }[] = [
   { key: 'fr_summary', name: 'Frame: Statement & Notes' },
   { key: 'fr_previous_defects', name: 'Frame: Previous Defects' },
   { key: 'fr_client_issues', name: 'Frame: Client List of Issues' },
+  // Stage 3 -- Lock Up
+  { key: 'lu_description', name: 'Lock Up: Description & Overview' },
+  { key: 'lu_site_facilities', name: 'Lock Up: Site & Facilities' },
+  { key: 'lu_external_walls', name: 'Lock Up: External Walls' },
+  { key: 'lu_doors_windows', name: 'Lock Up: Doors & Windows' },
+  { key: 'lu_framework', name: 'Lock Up: Framework' },
+  { key: 'lu_roofing', name: 'Lock Up: Roofing' },
+  { key: 'lu_defects', name: 'Lock Up: Defects' },
+  { key: 'lu_summary', name: 'Lock Up: Statement & Notes' },
+  { key: 'lu_previous_defects', name: 'Lock Up: Previous Defects' },
+  { key: 'lu_client_issues', name: 'Lock Up: Client List of Issues' },
 ];
 
 /**

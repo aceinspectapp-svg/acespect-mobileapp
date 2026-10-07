@@ -67,6 +67,8 @@ export function jobInfoFields(existing: TemplateField[]): TemplateField[] {
     // The form's first line, before the header table.
     { key: 'reportEmailed', type: 'yesno', label: 'Email the Word report to Houspect (info@houspectvic.com.au)' },
     { key: 'photosInEgnyte', type: 'yesno', label: 'Photos loaded to Egnyte?' },
+    // The Lock Up form adds a "Total…" after that question.
+    { key: 'photosTotal', type: 'numeric', label: 'Total photos', gate: { fieldKey: 'constructionStage', equals: 'lock_up' } },
     // "V" is locked ahead of the number the inspector types (the paper form is pre-printed "V2").
     { key: 'jobNumber', type: 'text', label: 'Job No', prefix: 'V', required: true, placeholder: 'e.g. 2' },
     { key: 'inspectionDate', type: 'date', label: 'Inspection Date', required: true },
@@ -80,7 +82,8 @@ export function jobInfoFields(existing: TemplateField[]): TemplateField[] {
       key: c.key, type: 'pill-select', label: 'Stage', required: true, options: opts(...c.options),
       gate: { fieldKey: 'constructionStage', equals: c.stageId },
     })),
-    { key: 'comments', type: 'textarea', label: 'Comments', placeholder: 'Anything to flag about this job' },
+    // The Pre-Pour, Slab Down and Frame forms have a Comments box in the header; the Lock Up form does not.
+    { key: 'comments', type: 'textarea', label: 'Comments', placeholder: 'Anything to flag about this job', gate: { fieldKey: 'constructionStage', equalsAny: ['pre_pour', 'slab', 'framework'] } },
   ];
   return numbered(list);
 }
