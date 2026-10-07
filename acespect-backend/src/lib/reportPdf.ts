@@ -159,6 +159,13 @@ export async function generateInspectionReportPdf(
     // Past the "Loading…" / "Inspection not found." placeholder -- the real
     // document only exists once this class mounts.
     await page.waitForSelector('.report-page', { timeout: 15_000 });
+    // The photo grids lay themselves out from each photo's real shape, which is
+    // only known once the images have loaded -- print after that has settled
+    // (a grid marks itself data-photo-grid-pending until then). Bounded, so one
+    // photo that never loads can't stop the report from being produced.
+    await page
+      .waitForFunction("!document.querySelector('[data-photo-grid-pending]')", { timeout: 15_000 })
+      .catch(() => undefined);
 
     const pdf = await page.pdf({
       format: 'A4',
