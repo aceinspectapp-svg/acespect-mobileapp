@@ -57,6 +57,8 @@ const STAGE_CHOICES: { stageId: string; key: string; options: string[] }[] = [
   { stageId: 'pre_pour', key: 'stageOption', options: ['Pre-pour for slab', 'Base'] },
   { stageId: 'slab', key: 'stageOptionSlab', options: ['Slab Down', 'Base'] },
   { stageId: 'framework', key: 'stageOptionFrame', options: ['Frame'] },
+  // The PCI forms ask for the stage the job is at, with four statuses.
+  { stageId: 'pci', key: 'stageOptionPci', options: ['Practical Completion — appliances not yet installed', 'Handover — appliances installed or some installed', 'Off the Plan Handover — appliances are installed', 'Defects Liability — after handover and now occupied'] },
 ];
 
 export function jobInfoFields(existing: TemplateField[]): TemplateField[] {

@@ -15,6 +15,8 @@ export interface ConstructionStageSection {
   /** Hub group heading. */
   group: string;
   icon: string;
+  /** Only these property types get the section (the PCI forms differ for a house and an apartment). Omitted = both. */
+  propertyTypes?: string[];
 }
 
 export interface ConstructionStage {
@@ -121,10 +123,37 @@ export const CONSTRUCTION_STAGES: ConstructionStage[] = [
       { id: 'fx_client_issues', title: 'Client List of Issues', group: 'Client List of Issues', icon: '📎' },
     ],
   },
-  { id: 'pci', title: 'PCI', subtitle: 'Practical Completion / Handover', icon: 'checkmark-done-outline', available: false, sections: [] },
+  {
+    id: 'pci',
+    title: 'PCI',
+    subtitle: 'Stage 5 · Practical Completion / Handover checklist',
+    icon: 'checkmark-done-outline',
+    available: true,
+    sections: [
+      { id: 'pci_description', title: 'Description & Overview', group: 'Overview', icon: '🏠' },
+      { id: 'pci_site_facilities', title: 'Site & Facilities', group: 'Site', icon: '🚧', propertyTypes: ['residential_house'] },
+      { id: 'pci_roof', title: 'Roof', group: 'External', icon: '🏘️' },
+      { id: 'pci_walls_doors', title: 'Walls, Doors & Windows', group: 'External', icon: '🧱' },
+      { id: 'pci_garage_site', title: 'Garage, Balconies & Site', group: 'External', icon: '🚗', propertyTypes: ['residential_house'] },
+      { id: 'pci_garage_site', title: 'Balconies & Common Areas', group: 'External', icon: '🏢', propertyTypes: ['apartment'] },
+      { id: 'pci_internal', title: 'Rooms', group: 'Internal', icon: '🛋️' },
+      { id: 'pci_finishes', title: 'Finishes', group: 'Internal', icon: '🎨' },
+      { id: 'pci_services', title: 'Services & Other', group: 'Internal', icon: '🔌' },
+      { id: 'pci_typical_defects', title: 'Part 2: Identified Defects', group: 'Defects, Statement & Notes', icon: '🔎' },
+      { id: 'pci_defects', title: 'Defects', group: 'Defects, Statement & Notes', icon: '⚠️' },
+      { id: 'pci_summary', title: 'Statement & Notes', group: 'Defects, Statement & Notes', icon: '📝' },
+      { id: 'pci_previous_defects', title: 'Previous Defects', group: 'Previous Defects', icon: '🔁' },
+      { id: 'pci_client_issues', title: 'Client List of Issues', group: 'Client List of Issues', icon: '📎' },
+    ],
+  },
 ];
 
 export const CONSTRUCTION_STAGE_BY_ID: Record<string, ConstructionStage> = Object.fromEntries(CONSTRUCTION_STAGES.map((s) => [s.id, s]));
 
 /** Template section keys a stage uses, for pinning its templates when the inspection starts. */
-export const stageSectionKeys = (stageId: string | undefined): string[] => CONSTRUCTION_STAGE_BY_ID[stageId ?? '']?.sections.map((s) => s.id) ?? [];
+export const stageSectionKeys = (stageId: string | undefined, propertyTypeId?: string): string[] =>
+  [...new Set(stageSectionsFor(stageId, propertyTypeId).map((s) => s.id))];
+
+/** A stage's sections for one property type (most stages are the same for both). */
+export const stageSectionsFor = (stageId: string | undefined, propertyTypeId?: string): ConstructionStageSection[] =>
+  (CONSTRUCTION_STAGE_BY_ID[stageId ?? '']?.sections ?? []).filter((s) => !s.propertyTypes || !propertyTypeId || s.propertyTypes.includes(propertyTypeId));

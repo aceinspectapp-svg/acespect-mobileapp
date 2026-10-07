@@ -86,6 +86,20 @@ export const CONSTRUCTION_STAGE_SECTIONS: { key: string; name: string }[] = [
   { key: 'fx_summary', name: 'Fixing: Statement & Notes' },
   { key: 'fx_previous_defects', name: 'Fixing: Previous Defects' },
   { key: 'fx_client_issues', name: 'Fixing: Client List of Issues' },
+  // Stage 5 -- PCI / Handover (the House and Apartment forms differ; pci_site_facilities is House only)
+  { key: 'pci_description', name: 'PCI: Description & Overview' },
+  { key: 'pci_site_facilities', name: 'PCI: Site & Facilities' },
+  { key: 'pci_roof', name: 'PCI: Roof' },
+  { key: 'pci_walls_doors', name: 'PCI: Walls, Doors & Windows' },
+  { key: 'pci_garage_site', name: 'PCI: Garage, Balconies & Site / Common Areas' },
+  { key: 'pci_internal', name: 'PCI: Internal Rooms' },
+  { key: 'pci_finishes', name: 'PCI: Finishes' },
+  { key: 'pci_services', name: 'PCI: Services & Other' },
+  { key: 'pci_typical_defects', name: 'PCI: Identified Defects' },
+  { key: 'pci_defects', name: 'PCI: Defects' },
+  { key: 'pci_summary', name: 'PCI: Statement & Notes' },
+  { key: 'pci_previous_defects', name: 'PCI: Previous Defects' },
+  { key: 'pci_client_issues', name: 'PCI: Client List of Issues' },
 ];
 
 /**

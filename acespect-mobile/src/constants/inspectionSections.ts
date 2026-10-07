@@ -5,7 +5,7 @@
  * their screens are built.
  */
 import { AppStackParamList } from '../navigation/types';
-import { CONSTRUCTION_STAGE_BY_ID } from './constructionStages';
+import { CONSTRUCTION_STAGE_BY_ID, stageSectionsFor } from './constructionStages';
 
 export interface InspectionSectionItem {
   id: string;
@@ -273,12 +273,13 @@ export function getSectionGroupsForProperty(
 ): InspectionSectionGroup[] {
   // A Construction Stage inspection is laid out by its stage: Job Information, the stage's own sections, then sign-off.
   const stage = inspectionTypeId === 'construction_stage' ? CONSTRUCTION_STAGE_BY_ID[stageId ?? ''] : undefined;
-  if (stage && stage.sections.length > 0) {
+  const stageSections = stage ? stageSectionsFor(stage.id, propertyTypeId) : [];
+  if (stage && stageSections.length > 0) {
     const groups: InspectionSectionGroup[] = [
       { title: 'Job Information', sections: [{ id: 'job_information', number: 1, title: 'Job Information', route: 'JobInformation' }] },
     ];
     let n = 1;
-    for (const s of stage.sections) {
+    for (const s of stageSections) {
       n += 1;
       const item: InspectionSectionItem = { id: s.id, number: n, title: s.title, route: 'StageSection', routeParams: { sectionKey: s.id, sectionName: s.title, icon: s.icon, order: n } };
       const last = groups[groups.length - 1];

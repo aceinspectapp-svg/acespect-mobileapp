@@ -8,6 +8,7 @@
  *   Stage 2  Framework  fr_*   -- lib/constructionFrame.ts
  *   Stage 3  Lock Up    lu_*   -- lib/constructionLockUp.ts
  *   Stage 4  Fixing     fx_*   -- lib/constructionFixing.ts
+ *   Stage 5  PCI        pci_*  -- lib/constructionPci.ts (the House and Apartment forms differ, so each gets its own content)
  *
  *   npx tsx src/scripts/seed-construction-stages.ts     (idempotent: unchanged templates are skipped; also runs on every server start)
  */
@@ -19,6 +20,7 @@ import { SLAB_DOWN_SECTIONS } from './lib/constructionSlabDown';
 import { FRAME_SECTIONS } from './lib/constructionFrame';
 import { LOCK_UP_SECTIONS } from './lib/constructionLockUp';
 import { FIXING_SECTIONS } from './lib/constructionFixing';
+import { pciSections } from './lib/constructionPci';
 
 const STAGES: SectionDef[] = [...PRE_POUR_SECTIONS, ...SLAB_DOWN_SECTIONS, ...FRAME_SECTIONS, ...LOCK_UP_SECTIONS, ...FIXING_SECTIONS];
 
@@ -29,7 +31,7 @@ async function main() {
     const existing = await prisma.inspectionTemplate.findFirst({ where: { inspectionType: INSPECTION_TYPE, propertyType, sectionKey: 'job-info', status: 'PUBLISHED' }, orderBy: { version: 'desc' } });
     if (!existing) throw new Error(`no published Job Information template for ${INSPECTION_TYPE}/${propertyType} to build on`);
     await publish(admin.id, propertyType, 'job-info', existing.name, jobInfoFields(existing.fields as unknown as TemplateField[]));
-    for (const s of STAGES) await publish(admin.id, propertyType, s.key, s.name, s.fields);
+    for (const s of [...STAGES, ...pciSections(propertyType as 'residential_house' | 'apartment')]) await publish(admin.id, propertyType, s.key, s.name, s.fields);
   }
   await prisma.$disconnect();
 }
