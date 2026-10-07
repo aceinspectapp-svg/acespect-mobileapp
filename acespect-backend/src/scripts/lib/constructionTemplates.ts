@@ -56,6 +56,7 @@ export function check(key: string, label: string, choices: Choice[], group: stri
 const STAGE_CHOICES: { stageId: string; key: string; options: string[] }[] = [
   { stageId: 'pre_pour', key: 'stageOption', options: ['Pre-pour for slab', 'Base'] },
   { stageId: 'slab', key: 'stageOptionSlab', options: ['Slab Down', 'Base'] },
+  { stageId: 'framework', key: 'stageOptionFrame', options: ['Frame'] },
 ];
 
 export function jobInfoFields(existing: TemplateField[]): TemplateField[] {

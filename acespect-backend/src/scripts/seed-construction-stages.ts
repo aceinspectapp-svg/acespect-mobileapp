@@ -5,6 +5,7 @@
  *
  *   Stage A1 Pre-Pour   pp_*   -- lib/constructionPrePour.ts
  *   Stage 1  Slab Down  sd_*   -- lib/constructionSlabDown.ts
+ *   Stage 2  Framework  fr_*   -- lib/constructionFrame.ts
  *
  *   npx tsx src/scripts/seed-construction-stages.ts     (idempotent: unchanged templates are skipped; also runs on every server start)
  */
@@ -13,8 +14,9 @@ import { TemplateField } from '../modules/templates/templates.schemas';
 import { INSPECTION_TYPE, PROPERTY_TYPES, SectionDef, jobInfoFields, publish } from './lib/constructionTemplates';
 import { PRE_POUR_SECTIONS } from './lib/constructionPrePour';
 import { SLAB_DOWN_SECTIONS } from './lib/constructionSlabDown';
+import { FRAME_SECTIONS } from './lib/constructionFrame';
 
-const STAGES: SectionDef[] = [...PRE_POUR_SECTIONS, ...SLAB_DOWN_SECTIONS];
+const STAGES: SectionDef[] = [...PRE_POUR_SECTIONS, ...SLAB_DOWN_SECTIONS, ...FRAME_SECTIONS];
 
 async function main() {
   const admin = await prisma.user.findFirst({ where: { role: 'ADMIN' }, orderBy: { createdAt: 'asc' } });

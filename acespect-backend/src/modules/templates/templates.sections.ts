@@ -51,6 +51,18 @@ export const CONSTRUCTION_STAGE_SECTIONS: { key: string; name: string }[] = [
   { key: 'sd_summary', name: 'Slab Down: Statement & Notes' },
   { key: 'sd_previous_defects', name: 'Slab Down: Previous Defects' },
   { key: 'sd_client_issues', name: 'Slab Down: Client List of Issues' },
+  // Stage 2 -- Framework
+  { key: 'fr_description', name: 'Frame: Description & Overview' },
+  { key: 'fr_site_facilities', name: 'Frame: Site & Facilities' },
+  { key: 'fr_services', name: 'Frame: Plasterwork & Services' },
+  { key: 'fr_roof_frame', name: 'Frame: Roof Frame' },
+  { key: 'fr_wall_floor', name: 'Frame: Wall & Floor Frames' },
+  { key: 'fr_windows_doors', name: 'Frame: Windows & Doors' },
+  { key: 'fr_progress', name: 'Frame: General Works Progress' },
+  { key: 'fr_defects', name: 'Frame: Defects' },
+  { key: 'fr_summary', name: 'Frame: Statement & Notes' },
+  { key: 'fr_previous_defects', name: 'Frame: Previous Defects' },
+  { key: 'fr_client_issues', name: 'Frame: Client List of Issues' },
 ];
 
 /**
