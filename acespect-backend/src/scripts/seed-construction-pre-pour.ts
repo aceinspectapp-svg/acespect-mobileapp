@@ -1,9 +1,10 @@
 /**
  * Construction Stage inspections, stage A1: Pre-Pour (slab).
  *
- * Built from "Stage A1 Pre-Pour Inspector template, 4 Aug 2023". The paper form's "circle one" rows become tap choices,
- * coloured by meaning (green OK, red defect, amber see notes, grey not applicable). A choice that means a problem reveals
- * a note box and a photo button on that same row, so a defect is recorded where it is found instead of in a separate table.
+ * Built from "Stage A1 Pre-Pour Inspector template, 4 Aug 2023", following its headings and row order exactly. The paper
+ * form's "circle one" rows become tap choices, coloured by meaning (green OK, red defect, amber see notes, grey not
+ * applicable). Nothing is asked that the paper form does not ask: defects and notes go in the Defects list and the notes
+ * boxes, as on the form.
  *
  * One Construction Stage profile carries every stage; the sections of this stage use the key prefix "pp_" (see
  * templates.sections.ts). Job Information ("job-info") is shared by all stages. The same templates are published for
@@ -43,18 +44,13 @@ const warn = (label: string): Choice => ({ label, tone: 'warn' });
 const na = (label: string): Choice => ({ label, tone: 'na' });
 
 /**
- * One checklist row: a coloured tap choice. Any choice that is a problem (red or amber) reveals "what did you see" and
- * photos for that row. `group` puts the row under a heading.
+ * One checklist row from the paper form: a coloured tap choice, and (only where the form has a "Photos with
+ * measurements" box beside the row) a photo button. `group` puts the row under a heading.
  */
 function check(key: string, label: string, choices: Choice[], group: string, o: { required?: boolean; photosAlways?: string } = {}): Draft[] {
   const options: TemplateFieldOption[] = choices.map((c) => ({ value: slug(c.label), label: c.label, color: COLOR[c.tone] }));
-  const reveal = choices.filter((c) => c.tone === 'bad' || c.tone === 'warn').map((c) => slug(c.label));
   const rows: Draft[] = [{ key, type: 'pill-select', label, options, required: o.required ?? true, sectionLetter: group }];
   if (o.photosAlways) rows.push({ key: `${key}Photos`, type: 'photos', label: o.photosAlways, sectionLetter: group });
-  if (reveal.length) {
-    rows.push({ key: `${key}Note`, type: 'textarea', label: 'Describe the problem', placeholder: 'What is wrong and where', gate: { fieldKey: key, equalsAny: reveal }, sectionLetter: group });
-    if (!o.photosAlways) rows.push({ key: `${key}Photos`, type: 'photos', label: 'Photos', gate: { fieldKey: key, equalsAny: reveal }, sectionLetter: group });
-  }
   return rows;
 }
 
@@ -97,7 +93,6 @@ const description: Draft[] = [
   { key: 'ownersOnSite', type: 'yesno', label: 'Owners on site', required: true },
   { key: 'safetyIssues', type: 'yesno', label: 'Safety issues', required: true },
   { key: 'safetyDescribe', type: 'textarea', label: 'Describe safety matters', required: true, gate: { fieldKey: 'safetyIssues', equals: 'yes' } },
-  { key: 'safetyPhotos', type: 'photos', label: 'Safety photos', gate: { fieldKey: 'safetyIssues', equals: 'yes' } },
   {
     key: 'plansSpecs', type: 'chip-multiselect', label: 'Plans & specifications', required: true,
     options: [...opts('Full set of drawings', 'Working drawings', 'Schematics', 'List of specifications', 'Limited documents'), { value: 'other', label: 'Other' }],
@@ -126,15 +121,13 @@ function setbackBlock(side: 'front' | 'right' | 'rear' | 'left', title: string, 
     { key: `${side}Plan`, type: 'numeric', label: `${title} on plan`, unit: 'mm', required: true, sectionLetter: g },
     { key: `${side}Site`, type: 'numeric', label: `${title} on site (approx)`, unit: 'mm', required: true, sectionLetter: g },
     {
-      key: `${side}Result`, type: 'pill-select', label: `${title} — result`, required: true, sectionLetter: g,
+      key: `${side}Result`, type: 'pill-select', label: `${title} — result`, required: true, sectionLetter: g, allowOther: true,
       options: [
         { value: 'ok', label: 'OK', color: COLOR.ok },
         { value: 'variation_okay', label: 'Variation appears to be okay', color: COLOR.ok },
         { value: 'builder_to_recheck', label: 'Builder to re-check', color: COLOR.warn },
-        { value: 'other', label: 'Other', color: COLOR.warn },
       ],
     },
-    { key: `${side}Note`, type: 'textarea', label: `${title} — notes`, gate: { fieldKey: `${side}Result`, equalsAny: ['builder_to_recheck', 'other'] }, sectionLetter: g },
   ];
 }
 const measurements: Draft[] = [
@@ -192,13 +185,12 @@ const general: Draft[] = [
   ...check('siteDrainage', 'Any concerns re site drainage / ground falls?', [ok('No — OK'), bad('Yes — defect')], GEN),
   ...check('agiDrain', 'Recommend agi drain/s?', [ok('No'), warn('Yes — recommend, refer to notes')], GEN),
   ...check('garageKerb', 'Alignment of garage & kerb crossing per plan', OK_DEFECT, GEN),
-  { key: 'generalOther', type: 'textarea', label: 'Other', placeholder: 'Anything else worth recording', sectionLetter: GEN },
-  { key: 'generalOtherPhotos', type: 'photos', label: 'Photos', sectionLetter: GEN },
+  { key: 'generalOther', type: 'textarea', label: 'Other', placeholder: 'Any other point (the form has two blank rows)', sectionLetter: GEN },
 ];
 
 const defects: Draft[] = [
   {
-    key: 'defects', type: 'repeating-group', label: 'Defects (add any not already noted against a row)',
+    key: 'defects', type: 'repeating-group', label: 'Defects — describe the location and the problem',
     repeat: { presentation: 'strip', addable: true, addButtonLabel: 'Add a defect', titleFieldKey: 'location', itemNoun: 'defect', collapsible: true },
     itemFields: numbered([
       { key: 'location', type: 'text', label: 'Location / Room', required: true, placeholder: 'e.g. Front left corner' },
@@ -210,35 +202,39 @@ const defects: Draft[] = [
 
 const summary: Draft[] = [
   {
-    key: 'worksStatus', type: 'pill-select', label: 'The works are', required: true, sectionLetter: 'Your statements',
+    key: 'worksStatus', type: 'pill-select', label: 'The works are', required: true, sectionLetter: 'Complete these 3 statements',
     options: [{ value: 'complete', label: 'Complete', color: COLOR.ok }, { value: 'mostly_complete', label: 'Mostly complete, defects being rectified at time of inspection', color: COLOR.warn }],
     allowOther: true,
   },
-  { key: 'contactedSupervisor', type: 'yesno', label: 'I have contacted the slab / site supervisor regarding defects / concerns', required: true, sectionLetter: 'Your statements' },
-  { key: 'workmanshipSatisfactory', type: 'yesno', label: 'The workmanship of the Pre-pour stage is generally to a satisfactory industry standard, except for the defects noted', required: true, sectionLetter: 'Your statements' },
+  { key: 'contactedSupervisor', type: 'yesno', label: 'I have contacted the slab / site supervisor regarding defects / concerns', required: true, sectionLetter: 'Complete these 3 statements' },
+  { key: 'workmanshipSatisfactory', type: 'yesno', label: 'The workmanship of the Pre-pour stage is generally to a satisfactory industry standard, except for the defects noted above', required: true, sectionLetter: 'Complete these 3 statements' },
   {
-    key: 'notesToInclude', type: 'chip-multiselect', label: 'Notes to include in the report (tick any that apply)', sectionLetter: 'Notes',
+    key: 'notesToInclude', type: 'chip-multiselect', label: 'Notes — tick any you want to include', sectionLetter: 'Notes',
     options: [{ value: 'security_fencing', label: 'Security fencing needs reinstating' }, { value: 'ground_falls', label: 'Ground falls / water ponding at slab' }],
   },
   { key: 'securityFencingDetail', type: 'textarea', label: 'Security fencing is … and needs to be reinstated', gate: { fieldKey: 'notesToInclude', equalsAny: ['security_fencing'] }, sectionLetter: 'Notes' },
   { key: 'groundFallsDetail', type: 'textarea', label: 'Ground falls need to be graded away from the house / footings; water is ponding at slab …', gate: { fieldKey: 'notesToInclude', equalsAny: ['ground_falls'] }, sectionLetter: 'Notes' },
   { key: 'otherConcerns', type: 'textarea', label: 'Any other concerns', sectionLetter: 'Notes' },
-  { key: 'clientListStatus', type: 'pill-select', label: 'Client list of issues', options: opts('Attached', 'N/A'), required: true, sectionLetter: 'Client list of issues' },
+];
+
+const clientIssues: Draft[] = [
+  { key: 'clientListStatus', type: 'pill-select', label: 'Attach the client issues list with your comments / updates', options: opts('Attached', 'N/A'), required: true },
   {
-    key: 'clientListUpdates', type: 'textarea', label: 'Status of each client item — "Refer to Defect No …", "Checked and not a defect", "Rectified and no longer an issue" or "Could not inspect due to …"',
-    gate: { fieldKey: 'clientListStatus', equals: 'attached' }, sectionLetter: 'Client list of issues',
+    key: 'clientListUpdates', type: 'textarea', label: 'Status next to each item — "Refer to Defect No …", "Checked and not a defect", "Rectified and no longer an issue" or "Could not inspect due to …"',
+    gate: { fieldKey: 'clientListStatus', equals: 'attached' },
   },
-  { key: 'clientListPhotos', type: 'photos', label: 'Photos of the client list or items', gate: { fieldKey: 'clientListStatus', equals: 'attached' }, sectionLetter: 'Client list of issues' },
+  { key: 'clientListPhotos', type: 'photos', label: 'The client issues list (photos)', gate: { fieldKey: 'clientListStatus', equals: 'attached' } },
 ];
 
 const SECTIONS: { key: string; name: string; fields: TemplateField[] }[] = [
-  { key: 'pp_description', name: 'Pre-Pour: Description & Overview', fields: numbered(description) },
-  { key: 'pp_site_facilities', name: 'Pre-Pour: Site & Facilities', fields: numbered(siteFacilities) },
+  { key: 'pp_description', name: 'Description & Overview', fields: numbered(description) },
+  { key: 'pp_site_facilities', name: 'Site & Facilities', fields: numbered(siteFacilities) },
   { key: 'pp_measurements', name: 'Pre-Pour: Site & Slab Measurements', fields: numbered(measurements) },
-  { key: 'pp_formwork', name: 'Pre-Pour: Formwork & Services', fields: numbered(formwork) },
-  { key: 'pp_general', name: 'Pre-Pour: General', fields: numbered(general) },
-  { key: 'pp_defects', name: 'Pre-Pour: Defects', fields: numbered(defects) },
-  { key: 'pp_summary', name: 'Pre-Pour: Summary, Notes & Client Issues', fields: numbered(summary) },
+  { key: 'pp_formwork', name: 'Pre-Pour: Formwork & Measurements', fields: numbered(formwork) },
+  { key: 'pp_general', name: 'Pre-Pour: General Other', fields: numbered(general) },
+  { key: 'pp_defects', name: 'Defects', fields: numbered(defects) },
+  { key: 'pp_summary', name: 'Statements & Notes', fields: numbered(summary) },
+  { key: 'pp_client_issues', name: 'Client List of Issues', fields: numbered(clientIssues) },
 ];
 
 /** JSON with sorted keys, so the comparison does not depend on the key order Postgres hands back. */

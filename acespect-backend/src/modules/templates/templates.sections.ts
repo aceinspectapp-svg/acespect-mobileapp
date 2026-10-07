@@ -33,18 +33,24 @@ export const TEMPLATABLE_SECTION_KEYS: string[] = TEMPLATABLE_SECTIONS.map((s) =
  * (key "job-info") is shared by every stage.
  */
 export const CONSTRUCTION_STAGE_SECTIONS: { key: string; name: string }[] = [
-  // Stage A1 -- Pre-Pour (slab)
-  { key: 'pp_description', name: 'Pre-Pour: Description & Overview' },
-  { key: 'pp_site_facilities', name: 'Pre-Pour: Site & Facilities' },
+  // Stage A1 -- Pre-Pour (slab), in the order of the paper form's headings
+  { key: 'pp_description', name: 'Description & Overview' },
+  { key: 'pp_site_facilities', name: 'Site & Facilities' },
   { key: 'pp_measurements', name: 'Pre-Pour: Site & Slab Measurements' },
-  { key: 'pp_formwork', name: 'Pre-Pour: Formwork & Services' },
-  { key: 'pp_general', name: 'Pre-Pour: General' },
-  { key: 'pp_defects', name: 'Pre-Pour: Defects' },
-  { key: 'pp_summary', name: 'Pre-Pour: Summary, Notes & Client Issues' },
+  { key: 'pp_formwork', name: 'Pre-Pour: Formwork & Measurements' },
+  { key: 'pp_general', name: 'Pre-Pour: General Other' },
+  { key: 'pp_defects', name: 'Defects' },
+  { key: 'pp_summary', name: 'Statements & Notes' },
+  { key: 'pp_client_issues', name: 'Client List of Issues' },
 ];
 
-/** The sections that carry a template for one inspection type: the common ones, plus the stage sections for Construction Stage. */
+/**
+ * The sections that carry a template for one inspection type. Construction Stage has only Job Information plus its
+ * stage sections: the other eleven common sections (driveway, roof, internal ...) are never opened in a stage
+ * inspection, so they are not offered for it.
+ */
 export function templatableSectionsFor(inspectionType: string): { key: string; name: string }[] {
-  return inspectionType === 'construction_stage' ? [...TEMPLATABLE_SECTIONS, ...CONSTRUCTION_STAGE_SECTIONS] : TEMPLATABLE_SECTIONS;
+  if (inspectionType !== 'construction_stage') return TEMPLATABLE_SECTIONS;
+  return [...TEMPLATABLE_SECTIONS.filter((s) => s.key === 'job-info'), ...CONSTRUCTION_STAGE_SECTIONS];
 }
 export const templatableKeysFor = (inspectionType: string): string[] => templatableSectionsFor(inspectionType).map((s) => s.key);
