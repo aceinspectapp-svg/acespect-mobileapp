@@ -110,11 +110,19 @@ export function isNotPresent(inst: AnswerTree): boolean {
  * uses. "Satisfactory with typical wear and tear" reads as just "satisfactory"
  * since every template sentence adds the wear-and-tear wording itself.
  */
-export function conditionOf(itemFields: TemplateField[], inst: AnswerTree): { word: string; tag?: string } {
-  const key = keyOf(itemFields, inst, ["condition", "generalCondition", "wallsCondition"]);
+export function conditionOf(
+  itemFields: TemplateField[],
+  inst: AnswerTree,
+  keys: string[] = ["condition", "generalCondition", "wallsCondition"],
+): { word: string; tag?: string } {
+  const key = keyOf(itemFields, inst, keys);
   const raw = asString(inst[key]);
   if (!raw) return { word: "" };
+  // A grade typed as "Other" is the inspector's own word for the condition; a bare "Other" says nothing.
+  const typed = otherAnswerText(raw);
+  if (typed !== undefined) return { word: lower(typed) };
   const option = itemFields.find((f) => f.key === key)?.options?.find((o) => o.value === raw);
+  if (raw === "other" && !option) return { word: "" };
   const grade = gradeOf(option);
   if (grade) return { word: grade.word, tag: `COND::${grade.color}::${grade.label}` };
   return { word: lower(shortConditionLabel(option?.label ?? raw)) };
@@ -140,7 +148,7 @@ export function damageOverviewSentence(itemFields: TemplateField[], inst: Answer
 
 /** A typed location starting with its own preposition ("above the front window", "near the meter box") used to get a second one stacked in front of it ("At the above the front window..."); this detects that case so the lead-in can drop "At the" and just capitalise the typed text instead ("Above the front window, there is..."), while a plain noun-phrase location ("centre of the driveway") still gets "At the" as before. */
 export const LOCATION_STARTS_WITH_PREPOSITION_RE =
-  /^(above|below|near|beside|under|over|behind|within|along|across|adjacent to|between|next to|around|at|in|on)\b/i;
+  /^(above|below|near|beside|under|over|behind|within|along|across|adjacent to|between|next to|around|at|in|on|outside|inside|opposite|beyond)\b/i;
 
 /** "at the centre of the driveway" / "above the front window" -- a location phrase that reads right after a noun ("Cracking at ..."), for the one-line Executive Summary notes. */
 export function atLocation(location: string): string {
@@ -201,8 +209,14 @@ export function damageWording(rawType: string, typeLabel: string, subLabel: stri
  * Paths, Fences, Retaining Walls in the original seed -- those only ever
  * track cracks) keep "crack" as a fixed default.
  */
-export function damageSentences(inst: AnswerTree, itemFields: TemplateField[]): string {
-  const damageKey = keyOf(itemFields, inst, ["damages", "cracks"]);
+export function damageSentences(
+  inst: AnswerTree,
+  itemFields: TemplateField[],
+  // A report type whose section holds several defect lists names the one to write, and where its defects start in the
+  // instance's combined list (the order the lists come in the template) so each sentence finds its own photos.
+  options: { key?: string; indexOffset?: number } = {},
+): string {
+  const damageKey = options.key ?? keyOf(itemFields, inst, ["damages", "cracks"]);
   const damageField = itemFields.find((f) => f.key === damageKey);
   const list = Array.isArray(inst[damageKey]) ? (inst[damageKey] as AnswerTree[]) : [];
   if (!damageField || list.length === 0) return "";
@@ -259,7 +273,7 @@ export function damageSentences(inst: AnswerTree, itemFields: TemplateField[]): 
       }
       // A newline inside the notes would split this sentence from its marker.
       if (notes) parts.push(withPeriod(notes.replace(/\s*\n+\s*/g, " ").trim()));
-      return `DEFECT::${defectIndex}::${parts.join(" ")}`;
+      return `DEFECT::${(options.indexOffset ?? 0) + defectIndex}::${parts.join(" ")}`;
     })
     .join("\n\n");
 }

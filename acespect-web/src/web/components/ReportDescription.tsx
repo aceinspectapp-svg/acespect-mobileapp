@@ -2,6 +2,8 @@ import type { Inspection } from "../mockData";
 import { DESCRIPTION_PHOTO_PLACEHOLDER, PHOTOGRAPHS_NOTE } from "../report";
 import { Note, Para, Placeholder, reportTextStyle, reportTokens, SectionBand, usePhotoNumbering } from "./reportKit";
 import { resolveMediaUrl } from "../api";
+import { reportProfileOf } from "../wording/profile";
+import { wordingFor } from "../wording/registry";
 
 /** Every photo that actually appears in the printed report -- general section photos plus each damage/crack's own -- matching what the reader can actually count, for the "full download of N photographs" disclosure. */
 function countReportPhotos(inspection: Inspection): number {
@@ -52,7 +54,7 @@ export function ReportDescription({
   // siteDirection, scopeForInspection, ...) live in this section's own
   // `fields` -- populated by the generic per-field fallback in
   // templateFields.ts since they're deliberately excluded from the
-  // composed property-description paragraph (see reportSentences.ts's
+  // composed property-description paragraph (see the report type's wording (src/web/wording/)
   // `description` composer). Reading them here lets this block show the
   // reference report's actual filled-in sentence instead of an unfilled
   // "[direction] / [compass point]" placeholder whenever the inspector has
@@ -76,6 +78,12 @@ export function ReportDescription({
   const siteSide = str(f.siteSide);
   const siteDirection = str(f.siteDirection);
   const hasProjectWorksInfo = !!(projectSiteAddress && siteSide && siteDirection);
+  // A report type can word these two sentences itself (Public Assets does); the others keep the standard ones below.
+  const surveyParts = (inspection.sections.find((s) => (s.key ?? s.id) === "elevations")?.answers as { parts?: unknown } | null | undefined)?.parts;
+  const ownBlocks = wordingFor(reportProfileOf(inspection.type, inspection.propertyType)).descriptionBlocks?.({
+    fields: f,
+    areaCount: Array.isArray(surveyParts) ? surveyParts.length : 0,
+  });
 
   const scopeForInspection = str(f.scopeForInspection);
   const scopeDetail = str(f.scopeDetail) || str(f.scopePartDetail);
@@ -136,7 +144,9 @@ export function ReportDescription({
       {photoArchiveUrl && <Note>{PHOTOGRAPHS_NOTE}</Note>}
 
       <SectionBand compact={compact}>Scope of Inspection and Comments</SectionBand>
-      {hasProjectWorksInfo ? (
+      {ownBlocks?.works ? (
+        <Para>{ownBlocks.works}</Para>
+      ) : hasProjectWorksInfo ? (
         <Para>
           The project works are to the property at {projectSiteAddress}, which is at the {lower(siteSide)} -
           approximately {lower(siteDirection)} - of the site of this inspection.
@@ -147,7 +157,9 @@ export function ReportDescription({
           [compass point] – of the site of this inspection.
         </Placeholder>
       )}
-      {scopeSentence ? (
+      {ownBlocks?.scope ? (
+        <Para>{ownBlocks.scope}</Para>
+      ) : scopeSentence ? (
         <Para>{scopeSentence}</Para>
       ) : (
         <Placeholder>

@@ -1,4 +1,4 @@
-import type { AnswerTree, TemplateField } from "../templateFields";
+import type { AnswerTree, ConditionSummaryRow, TemplateField } from "../templateFields";
 import type { Composer } from "./shared";
 import type { ReportProfile } from "./profile";
 
@@ -32,6 +32,15 @@ export interface ReportWording {
   noSummarySections: string[];
   /** Sections where a fixed slot marked "not present" gets its own sentence ("There is no front fence."). */
   absentSlotSections: string[];
+  /** Condition Summary rows for one item of a section, when a report type grades several categories per item. Undefined: the standard single row. */
+  summaryRows?(sectionKey: string, inst: AnswerTree, itemFields: TemplateField[], label: string): ConditionSummaryRow[] | undefined;
+  /** Extra values worked out from a section's answers and stored with its fields (e.g. the list of labels a sentence needs). */
+  derivedFields?(sectionKey: string, scope: AnswerTree, templateFields: TemplateField[]): Record<string, unknown>;
+  /**
+   * The two Description-page sentences this report type words itself -- where the project works are and what the scope is.
+   * A report type that leaves this out keeps the standard sentences.
+   */
+  descriptionBlocks?(input: { fields: Record<string, unknown>; areaCount: number }): { works?: string; scope?: string };
 }
 
 /** No wording: every section falls back to the generic "Label: value." lines. */

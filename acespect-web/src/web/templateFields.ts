@@ -403,7 +403,7 @@ function niceInstanceLabel(itemFields: TemplateField[], inst: AnswerTree, fallba
  * "no damageType field -> default to Crack" fallback for the sections
  * (Paving & Paths, Fences, Retaining Walls) that only ever track cracks.
  */
-function buildDefectNote(damageField: TemplateField, inst: AnswerTree): string | undefined {
+export function buildDefectNote(damageField: TemplateField, inst: AnswerTree): string | undefined {
   const list = resolveInstances(damageField, inst[damageField.key]);
   if (list.length === 0) return undefined;
   const damageTypeField = (damageField.itemFields ?? []).find((f) => f.key === "damageType");
@@ -592,12 +592,17 @@ function walk(
         }
         if (composed && (notPresent || !Object.values(inst).some(isAnswered))) continue;
         if (composed) {
-          const row = conditionSummaryRow(
-            field.itemFields ?? [],
-            inst,
-            instances.length > 1 ? niceInstanceLabel(field.itemFields ?? [], inst, label) : undefined,
-          );
-          if (row) conditionSummaryRows.push(row);
+          // A report type whose items carry several graded categories (Public Assets) writes its own summary rows.
+          const ownRows = wording.summaryRows?.(composed, inst, field.itemFields ?? [], label);
+          if (ownRows) conditionSummaryRows.push(...ownRows);
+          else {
+            const row = conditionSummaryRow(
+              field.itemFields ?? [],
+              inst,
+              instances.length > 1 ? niceInstanceLabel(field.itemFields ?? [], inst, label) : undefined,
+            );
+            if (row) conditionSummaryRows.push(row);
+          }
         }
         const composedSentence = composed ? composeSection(wording, composed, inst, field.itemFields ?? [], label) : undefined;
         // `undefined` means "no composer registered for this section" (fall
@@ -697,6 +702,8 @@ function walk(
     const absence = wording.absence[sectionKey];
     if (absence) textParts.push(absence);
   }
+
+  if (ancestorLabels.length === 0 && sectionKey && wording.derivedFields) Object.assign(fields, wording.derivedFields(sectionKey, scope, templateFields));
 
   if (isFlatComposedSection) {
     const composed = composeSection(wording, sectionKey!, scope, templateFields, "");

@@ -81,6 +81,7 @@ const problems = (out, raw) => {
   if (out.includes("__other__")) found.push("raw __other__");
   if (/\bundefined\b|\[object Object\]|NaN/.test(out)) found.push("undefined / NaN");
   if (/ \.(\s|$)|of \.|in {2,}\w|, ,|\(\)/.test(out.replace(/\n/g, " "))) found.push("blank gap");
+  if (/\bitem\d+\b/.test(out)) found.push("raw option code (itemN)");
   for (const r of raw) if (out.includes(r)) found.push(`raw value "${r}"`);
   return found;
 };
