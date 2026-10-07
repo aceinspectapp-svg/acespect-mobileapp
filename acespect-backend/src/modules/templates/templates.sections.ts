@@ -34,14 +34,23 @@ export const TEMPLATABLE_SECTION_KEYS: string[] = TEMPLATABLE_SECTIONS.map((s) =
  */
 export const CONSTRUCTION_STAGE_SECTIONS: { key: string; name: string }[] = [
   // Stage A1 -- Pre-Pour (slab), in the order of the paper form's headings
-  { key: 'pp_description', name: 'Description & Overview' },
-  { key: 'pp_site_facilities', name: 'Site & Facilities' },
+  { key: 'pp_description', name: 'Pre-Pour: Description & Overview' },
+  { key: 'pp_site_facilities', name: 'Pre-Pour: Site & Facilities' },
   { key: 'pp_measurements', name: 'Pre-Pour: Site & Slab Measurements' },
   { key: 'pp_formwork', name: 'Pre-Pour: Formwork & Measurements' },
   { key: 'pp_general', name: 'Pre-Pour: General Other' },
-  { key: 'pp_defects', name: 'Defects' },
-  { key: 'pp_summary', name: 'Statements & Notes' },
-  { key: 'pp_client_issues', name: 'Client List of Issues' },
+  { key: 'pp_defects', name: 'Pre-Pour: Defects' },
+  { key: 'pp_summary', name: 'Pre-Pour: Statements & Notes' },
+  { key: 'pp_client_issues', name: 'Pre-Pour: Client List of Issues' },
+  // Stage 1 -- Slab Down
+  { key: 'sd_description', name: 'Slab Down: Description & Overview' },
+  { key: 'sd_site_facilities', name: 'Slab Down: Site & Facilities' },
+  { key: 'sd_measurements', name: 'Slab Down: Site & Slab Measurements' },
+  { key: 'sd_quality', name: 'Slab Down: Slab Quality' },
+  { key: 'sd_defects', name: 'Slab Down: Defects' },
+  { key: 'sd_summary', name: 'Slab Down: Statement & Notes' },
+  { key: 'sd_previous_defects', name: 'Slab Down: Previous Defects' },
+  { key: 'sd_client_issues', name: 'Slab Down: Client List of Issues' },
 ];
 
 /**

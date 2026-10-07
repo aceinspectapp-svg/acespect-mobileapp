@@ -113,6 +113,8 @@ export function JobInformationScreen({
     const inspectorName = user?.name || user?.email || '';
     setAnswers((prev) => {
       const next = { ...prev };
+      // Which stage this is -- the template's Stage choices are gated on it, so each stage shows its own two options.
+      if (selection.stageId) next.constructionStage = selection.stageId;
       for (const f of template.fields) {
         if (next[f.key] !== undefined) continue;
         if (f.type === 'date') next[f.key] = todayIso;
