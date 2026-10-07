@@ -66,10 +66,7 @@ export function jobInfoFields(existing: TemplateField[]): TemplateField[] {
   const weatherOther = existing.find((f) => f.key === 'weatherOther');
   if (!weather) throw new Error('The existing Job Information template has no weather field to reuse');
   const list: Draft[] = [
-    // The form's first line, before the header table.
-    { key: 'reportEmailed', type: 'yesno', label: 'Email the Word report to Houspect (info@houspectvic.com.au)' },
-    { key: 'photosInEgnyte', type: 'yesno', label: 'Photos loaded to Egnyte?' },
-    // The Lock Up and Fixing forms add a "Total…" after that question.
+    // The Lock Up and Fixing forms have a "Total photos" box in the header.
     { key: 'photosTotal', type: 'numeric', label: 'Total photos', gate: { fieldKey: 'constructionStage', equalsAny: ['lock_up', 'fixing'] } },
     // "V" is locked ahead of the number the inspector types (the paper form is pre-printed "V2").
     { key: 'jobNumber', type: 'text', label: 'Job No', prefix: 'V', required: true, placeholder: 'e.g. 2' },
