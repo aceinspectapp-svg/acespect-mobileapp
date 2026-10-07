@@ -52,7 +52,7 @@ describe("published templates: Driveway (flat, present yes/no)", () => {
   });
 
   it("states the absence when there is no driveway", () => {
-    assert.equal(reportText("driveway", { present: "no" }), "There is no driveway to the property.");
+    assert.equal(reportText("driveway", { present: "no" }), "There is no driveway.");
   });
 
   it("prints what was typed for 'Other', not the word 'other'", () => {
@@ -119,7 +119,7 @@ describe("published templates: fixed-slot sections (Paving, Fences, Garage)", ()
       areas: { front: { present: "yes", material: ["concrete"], condition: "fair" } },
     });
     assert.equal(paragraphs(out).filter((p) => p.startsWith("There is paving")).length, 1);
-    assert.ok(out.includes("There is paving to the front, constructed of concrete. It is in fair condition with typical wear and tear."));
+    assert.ok(out.includes("There is paving to the front of the block, constructed of concrete. It is in fair condition with typical wear and tear."));
   });
 
   it("states the absence when every slot is marked not present", () => {
@@ -187,7 +187,7 @@ describe("published templates: Retaining Walls and Pool / Spa", () => {
       condition: "fair",
     });
     assert.ok(out.includes("There is a pool/spa located at the rear of the property, constructed of fibreglass, which is generally in fair state of repair."));
-    assert.ok(out.includes("The surrounding area is paved with tiles."));
+    assert.ok(out.includes("The surrounds are paved with tiles."));
     assert.ok(out.includes("The pool fence is constructed of glass panels and does not appear to be safe."));
   });
 
@@ -456,7 +456,7 @@ describe("Driveway divided into parts (what seed-driveway-parts.ts publishes)", 
     const some = run({ front_left: part("concrete", "fair"), rear: { present: "no" } });
     assert.ok(!some.reportText.includes("rear"));
     assert.equal(some.fields.conditionSummary.length, 1);
-    assert.equal(run({ front_left: { present: "no" }, rear: { present: "no" } }).reportText, "There is no driveway to the property.");
+    assert.equal(run({ front_left: { present: "no" }, rear: { present: "no" } }).reportText, "There is no driveway.");
   });
 });
 
@@ -570,5 +570,60 @@ describe("a typed 'Other' (stored inline as __other__:<text>) and a bare 'Other'
     assert.ok(!("proposedWorksType" in text("description", { proposedWorksType: "other" }).fields));
     const damage = text("driveway", { present: "yes", damages: [{ damageType: "__other__:Rotting edge", location: "kerb" }] }).damages[0];
     assert.equal(damage.type, "Rotting edge");
+  });
+});
+
+describe("House wording aligned to the reference document", () => {
+  it("names the left and right sides 'left-hand' / 'right-hand' for paving and fences", () => {
+    const paving = reportText("paving_paths", { areas: { left: { present: "yes", material: ["pavers"], condition: "fair" }, rear: { present: "yes", material: ["concrete"], condition: "fair" } } });
+    assert.ok(paving.includes("There is paving to the left-hand side of the block, constructed of pavers."));
+    assert.ok(paving.includes("There is paving to the rear of the block, constructed of concrete."));
+    const fences = reportText("fences", { items: { left: { present: "yes", material: ["brick"], condition: "fair" } } });
+    assert.ok(fences.includes("The left-hand fence is constructed of brick and is in fair condition with typical weathering."));
+  });
+
+  it("says 'There is no front fence.' for a side marked absent, in order, only while another side has a fence", () => {
+    const some = reportText("fences", {
+      items: { front: { present: "no" }, left: { present: "yes", material: ["brick"], condition: "fair" }, rear: { present: "no" }, right: { present: "no" } },
+    });
+    assert.deepEqual(paragraphs(some).filter((p) => !p.startsWith("COND::")), [
+      "There is no front fence.",
+      "The left-hand fence is constructed of brick and is in fair condition with typical weathering.",
+      "There is no rear fence.",
+      "There is no right-hand fence.",
+    ]);
+    const none = reportText("fences", { items: { front: { present: "no" }, left: { present: "no" } } });
+    assert.equal(none, "There are no fences surrounding this property.");
+  });
+
+  it("says walls and hardstand were obscured for a garage or shed, but keeps 'structure' for a carport", () => {
+    const run = (key, name) =>
+      reportText("garage_carport_sheds", { structures: { [key]: { present: "yes", attachment: "attached_to_house", walls: ["brick"], condition: "fair", wallsCondition: "fair", obscuredBy: ["stored_goods"] } } });
+    assert.ok(run("garage").includes("Sections of the walls and hardstand were obscured by stored goods."));
+    assert.ok(run("shed").includes("Sections of the walls and hardstand were obscured by stored goods."));
+    assert.ok(run("carport").includes("Sections of the structure were obscured by stored goods."));
+  });
+
+  it("reads 'Satisfactory and in typical condition.' for a satisfactory elevation or room, other grades keep 'It is in ...'", () => {
+    const side = (condition) => reportText("elevations", { sides: { front: { orientation: "north", condition, damageSummary: "no_visible_significant_damage", obscuredBy: ["vegetation"] } } });
+    assert.ok(side("satisfactory").includes("Satisfactory and in typical condition. There were no signs of notable damage. Sections were obscured by vegetation."));
+    assert.ok(side("poor").includes("It is in poor condition."));
+    assert.ok(!side("poor").includes("typical condition"));
+    const room = (generalCondition) => reportText("internal_areas", { rooms: { kitchen: { present: "yes", floorLevel: "ground_floor", generalCondition, obscuredBy: ["furniture"] } } });
+    assert.ok(room("satisfactory").includes("Satisfactory and in typical condition. Sections were obscured by furniture."));
+    assert.ok(room("fair").includes("It is in fair condition."));
+  });
+
+  it("describes a party wall in its own paragraph", () => {
+    const out = reportText("elevations", { sides: { left: { orientation: "west", condition: "satisfactory", partyWall: "yes", partyWallNumber: "12" } } });
+    assert.ok(paragraphs(out).includes("The left elevation is a party wall abutting the next property at No. 12. To the sections observed, it appears to be in satisfactory and typical condition."));
+    const fair = reportText("elevations", { sides: { left: { orientation: "west", condition: "fair", partyWall: "yes", partyWallNumber: "Unit 2" } } });
+    assert.ok(fair.includes("abutting the next property at Unit 2. To the sections observed, it appears to be in fair condition."));
+  });
+
+  it("prints the cracking summary only for the answer the inspector chose", () => {
+    const run = (crackingSummary) => reportText("driveway", { present: "yes", locatedAt: "front_left", material: "concrete", condition: "fair", crackingSummary });
+    assert.ok(run("several_minor_cracks").includes("Several minor cracks observed."));
+    assert.ok(!/crack/i.test(run("no_visible_significant_cracking").replace(/cracking observed\./i, "")));
   });
 });

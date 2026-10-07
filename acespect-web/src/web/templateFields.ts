@@ -592,6 +592,8 @@ function walk(
       // Condition Summary rows (see ConditionSummaryRow / conditionSummaryRow above).
       const conditionSummaryRows: ConditionSummaryRow[] = [];
       let composedCount = 0;
+      // "There is no front fence." lines for sides marked not present -- kept only if some other side does have a fence.
+      const absentLines: { at: number; text: string }[] = [];
       let lastFloorLevel: string | undefined;
       for (const { label, scope: inst } of instances) {
         const damageBase = damages.length; // where this instance's defects start in the section-wide list
@@ -603,6 +605,10 @@ function walk(
         // An instance marked not present (Is there a garage? No), or a fixed
         // slot the inspector never touched, contributes nothing -- no
         // sentence, no floor banner, no summary row.
+        if (composed === "fences" && notPresent && isAnswered(inst.present)) {
+          const absent = composeSectionSentence(composed, inst, field.itemFields ?? [], label);
+          if (absent) absentLines.push({ at: textParts.length, text: absent });
+        }
         if (composed && (notPresent || !Object.values(inst).some(isAnswered))) continue;
         if (composed) {
           const row = conditionSummaryRow(
@@ -648,6 +654,9 @@ function walk(
       if (composed && composedCount === 0) {
         const absence = absenceSentence(composed);
         if (absence) textParts.push(absence);
+      } else if (absentLines.length > 0) {
+        // Back to front, so each insertion point is still where it was recorded.
+        for (const { at, text } of [...absentLines].reverse()) textParts.splice(at, 0, text);
       }
       fields[field.key] = labels.join(", ");
       // Written even when empty for a graded section: the backend merges `fields`

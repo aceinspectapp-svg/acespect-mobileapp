@@ -281,7 +281,19 @@ function damageSentences(inst: AnswerTree, itemFields: TemplateField[]): string 
 function obstructionsSentence(itemFields: TemplateField[], inst: AnswerTree, noun: string): string {
   const labels = many(itemFields, inst, ["obstructions", "obscuredBy", "obstruction"]).map(lower);
   if (labels.length === 0) return "";
-  return ` Sections of the ${noun} were obscured by ${joinList(labels)}.`;
+  return ` Sections ${noun ? `of the ${noun} ` : ""}were obscured by ${joinList(labels)}.`;
+}
+
+/** "Satisfactory and in typical condition." for the one grade the reference wording covers; any other grade keeps the plain "It is in {grade} condition." */
+function typicalCondition(word: string): string {
+  if (!word) return "";
+  return word === "satisfactory" ? "Satisfactory and in typical condition." : `It is in ${word} condition.`;
+}
+
+/** A fixed Front / Left / Rear / Right tab as the report says it: "left-hand", "right-hand", "front", "rear". */
+function handedSide(label: string): string {
+  const l = lower(label).trim();
+  return l === "left" ? "left-hand" : l === "right" ? "right-hand" : l;
 }
 
 /** "Cladding: paint is flaking from sections and timber is cracked." -- for the published templates' observation checklists, whose option labels are already complete phrases. */
@@ -315,7 +327,7 @@ const driveway: Composer = (inst, itemFields, label) => {
   // A driveway divided into parts (Front left / Front right / Rear / Side) is called with the part's name as `label` and
   // has no "Located at" question of its own; the older single-item form is called with no label.
   const part = label && itemFields.some((f) => f.key === "present") ? label : "";
-  if (isNotPresent(inst)) return part ? "" : "There is no driveway to the property.";
+  if (isNotPresent(inst)) return part ? "" : "There is no driveway.";
   const location = one(itemFields, inst, ["location", "locatedAt"]) || part;
   const material = one(itemFields, inst, ["material"]);
   const cond = conditionOf(itemFields, inst);
@@ -351,7 +363,12 @@ const pavingPaths: Composer = (inst, itemFields, label) => {
   const cond = conditionOf(itemFields, inst);
   // A fixed-instance template (Front / Left / Rear / Right) names the area by its tab; the original seed had a free-text name instead.
   const isFixedArea = itemFields.some((f) => f.key === "present");
-  const where = name ? `to the ${lower(name)}` : isFixedArea && label ? `to the ${lower(label)}` : "to the block";
+  const side = isFixedArea && label ? handedSide(label) : "";
+  const where = name
+    ? `to the ${lower(name)}`
+    : side
+      ? `to the ${side}${/-hand$/.test(side) ? " side" : ""} of the block`
+      : "to the block";
   const parts: string[] = [];
   if (cond.tag) parts.push(cond.tag);
   const first =
@@ -374,9 +391,10 @@ const pavingPaths: Composer = (inst, itemFields, label) => {
 };
 
 const fences: Composer = (inst, itemFields, label) => {
-  if (isNotPresent(inst)) return "";
   const isFixedSide = itemFields.some((f) => f.key === "present");
-  const location = one(itemFields, inst, ["location"]) || (isFixedSide ? label : "");
+  // One side ticked "not present": the report says so ("There is no front fence.") -- the walk drops these lines when no side has a fence, and the section's own "There are no fences surrounding this property." stands in instead.
+  if (isNotPresent(inst)) return isFixedSide && label ? `There is no ${handedSide(label)} fence.` : "";
+  const location = one(itemFields, inst, ["location"]) || (isFixedSide ? handedSide(label) : "");
   const structure = many(itemFields, inst, ["structureType", "material"]).map(lower);
   const cond = conditionOf(itemFields, inst);
   const parts: string[] = [];
@@ -447,7 +465,7 @@ const garageCarportSheds: Composer = (inst, itemFields, label) => {
   parts.push(
     `There is ${article(lowerName)} ${lowerName} ${attachPhrase}${position ? ` at the ${lower(position)}` : ""}${constructionText}${
       cond.word ? `, and is generally in ${cond.word} state of repair.` : "."
-    }${obstructionsSentence(itemFields, inst, "structure")}${observationLine(itemFields, inst, ["cladding"], "Cladding")}${observationLine(
+    }${obstructionsSentence(itemFields, inst, /carport/i.test(name) ? "structure" : "walls and hardstand")}${observationLine(itemFields, inst, ["cladding"], "Cladding")}${observationLine(
       itemFields,
       inst,
       ["windowsDoors"],
@@ -478,7 +496,7 @@ const poolSpa: Composer = (inst, itemFields, label) => {
       poolType ? `, ${article(lowerPoolType)} ${lowerPoolType}` : ""
     }${construction.length ? `, constructed of ${joinList(construction)}` : ""}${
       cond.word ? `, which is generally in ${cond.word} state of repair` : ""
-    }.${paving.length ? ` The surrounding area is paved with ${joinList(paving)}.` : ""}${obstructionsSentence(itemFields, inst, "pool/spa area")}`,
+    }.${paving.length ? ` The surrounds are paved with ${joinList(paving)}.` : ""}${obstructionsSentence(itemFields, inst, "pool/spa area")}`,
   );
   if (fenceType.length || fenceSafety) {
     // "Compliant" needs "appears to be ___"; the published templates' own options are already full phrases ("Appears to be okay", "No, does not appear to be safe").
@@ -516,17 +534,16 @@ const elevations: Composer = (inst, itemFields, label) => {
   const partial = many(itemFields, inst, ["partialInspection"]).map(lower);
   const parts: string[] = [];
   if (cond.tag) parts.push(cond.tag);
+  const overview = damageOverviewSentence(itemFields, inst);
   parts.push(
     `The ${lower(label)} elevation${orientation ? ` generally faces ${compassPhrase(orientation)}` : ""}.${
-      cond.word ? ` It is in ${cond.word} condition.` : ""
-    }${damageOverviewSentence(itemFields, inst) ? ` ${damageOverviewSentence(itemFields, inst)}` : ""}${
-      partyWall ? ` It is a party wall${partyWallNumber ? ` (${partyWallNumber})` : ""}.` : ""
-    }${partial.length ? ` Partial inspection only: ${joinList(partial)}.` : ""}${
+      cond.word ? ` ${typicalCondition(cond.word)}` : ""
+    }${overview ? ` ${overview}` : ""}${partial.length ? ` Partial inspection only: ${joinList(partial)}.` : ""}${
       claddingObs.length ? ` ${capitalize(joinList(claddingObs))} noted to the cladding.` : ""
     }${windowDoorObs.length ? ` ${capitalize(joinList(windowDoorObs))} noted to windows/doors.` : ""}${obstructionsSentence(
       itemFields,
       inst,
-      "elevation",
+      "",
     )}${observationLine(itemFields, inst, ["cladding"], "Cladding")}${observationLine(
       itemFields,
       inst,
@@ -534,6 +551,14 @@ const elevations: Composer = (inst, itemFields, label) => {
       "Windows and doors",
     )}${observationLine(itemFields, inst, ["eaves"], "Eaves")}${observationLine(itemFields, inst, ["downpipesGutters"], "Downpipes and gutters")}`,
   );
+  if (partyWall) {
+    const at = /^\d/.test(partyWallNumber) ? `No. ${partyWallNumber}` : partyWallNumber;
+    parts.push(
+      `The ${lower(label)} elevation is a party wall abutting the next property${at ? ` at ${at}` : ""}.${
+        cond.word ? ` To the sections observed, it appears to be in ${cond.word === "satisfactory" ? "satisfactory and typical" : cond.word} condition.` : ""
+      }`,
+    );
+  }
   return tail(parts, itemFields, inst);
 };
 
@@ -585,10 +610,10 @@ const internalAreas: Composer = (inst, itemFields, rawLabel) => {
   parts.push(`ROOMHEAD::${label}`);
   if (cond.tag) parts.push(cond.tag);
   const damageOverview = damageOverviewSentence(itemFields, inst);
-  const text = `${[cond.word ? `It is in ${cond.word} condition.` : "", damageOverview].filter(Boolean).join(" ")}${obstructionsSentence(
+  const text = `${[typicalCondition(cond.word), damageOverview].filter(Boolean).join(" ")}${obstructionsSentence(
     itemFields,
     inst,
-    "room",
+    "",
   )}${moisture.length ? ` ${capitalize(joinList(moisture))} noted.` : ""}${yesNo(inst, "withEnsuite") ? " It has an ensuite." : ""}`.trim();
   if (text) parts.push(text);
   return tail(parts, itemFields, inst);
@@ -777,9 +802,9 @@ export function composeSectionSentence(
  * than a reported fact).
  */
 const ABSENCE_SENTENCES: Record<string, string> = {
-  driveway: "There is no driveway to the property.",
+  driveway: "There is no driveway.",
   paving_paths: "There is no paving to the property.",
-  fences: "There are no fences to the property.",
+  fences: "There are no fences surrounding this property.",
   retaining_walls: "There are no retaining walls to the property.",
   garage_carport_sheds: "There is no garage, carport or shed to the property.",
   pool_spa: "There is no pool or spa to the property.",
