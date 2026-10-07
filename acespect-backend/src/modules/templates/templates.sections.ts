@@ -25,3 +25,26 @@ export const TEMPLATABLE_SECTIONS: { key: string; name: string }[] = [
 ];
 
 export const TEMPLATABLE_SECTION_KEYS: string[] = TEMPLATABLE_SECTIONS.map((s) => s.key);
+
+/**
+ * Construction Stage inspections are one profile (inspectionType "construction_stage") whose form depends on the stage
+ * chosen at the start (Pre-Pour, Slab, Framework, Lock-up, Fixing, PCI). Each stage owns its own section keys, prefixed
+ * with a short stage code, so one profile can carry all six stages' templates without them colliding. Job Information
+ * (key "job-info") is shared by every stage.
+ */
+export const CONSTRUCTION_STAGE_SECTIONS: { key: string; name: string }[] = [
+  // Stage A1 -- Pre-Pour (slab)
+  { key: 'pp_description', name: 'Pre-Pour: Description & Overview' },
+  { key: 'pp_site_facilities', name: 'Pre-Pour: Site & Facilities' },
+  { key: 'pp_measurements', name: 'Pre-Pour: Site & Slab Measurements' },
+  { key: 'pp_formwork', name: 'Pre-Pour: Formwork & Services' },
+  { key: 'pp_general', name: 'Pre-Pour: General' },
+  { key: 'pp_defects', name: 'Pre-Pour: Defects' },
+  { key: 'pp_summary', name: 'Pre-Pour: Summary, Notes & Client Issues' },
+];
+
+/** The sections that carry a template for one inspection type: the common ones, plus the stage sections for Construction Stage. */
+export function templatableSectionsFor(inspectionType: string): { key: string; name: string }[] {
+  return inspectionType === 'construction_stage' ? [...TEMPLATABLE_SECTIONS, ...CONSTRUCTION_STAGE_SECTIONS] : TEMPLATABLE_SECTIONS;
+}
+export const templatableKeysFor = (inspectionType: string): string[] => templatableSectionsFor(inspectionType).map((s) => s.key);

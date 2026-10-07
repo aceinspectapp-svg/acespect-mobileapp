@@ -13,6 +13,8 @@ export type InspectionTypeId =
   | 'construction_stage'
   | 'investigations';
 
+export type ConstructionStageId = 'pre_pour' | 'slab' | 'framework' | 'lock_up' | 'fixing' | 'pci';
+
 export type PropertyTypeId =
   | 'residential_house'
   | 'apartment'
@@ -49,4 +51,6 @@ export interface PropertyType {
 export interface InspectionDraftSelection {
   inspectionTypeId: InspectionTypeId;
   propertyTypeId: PropertyTypeId;
+  /** Construction Stage inspections only: which of the six stages this one is. */
+  stageId?: ConstructionStageId;
 }

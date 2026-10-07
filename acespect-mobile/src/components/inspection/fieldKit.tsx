@@ -24,7 +24,7 @@ export function PillSelect({
   onChange,
   allowOther,
 }: {
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; color?: string }[];
   value: string | undefined;
   onChange: (v: string) => void;
   allowOther?: boolean;
@@ -41,11 +41,11 @@ export function PillSelect({
             <Pressable
               key={o.value}
               onPress={() => onChange(o.value)}
-              style={[styles.pill, active && styles.pillActive]}
+              style={[styles.pill, o.color && { borderColor: `${o.color}55` }, active && styles.pillActive, active && o.color && { backgroundColor: o.color, borderColor: o.color }]}
               accessibilityRole="radio"
               accessibilityState={{ selected: active }}
             >
-              <Text style={[styles.pillText, active && styles.pillTextActive]}>{o.label}</Text>
+              <Text style={[styles.pillText, o.color && !active && { color: o.color }, active && styles.pillTextActive, active && o.color && { color: colors.white }]}>{o.label}</Text>
             </Pressable>
           );
         })}

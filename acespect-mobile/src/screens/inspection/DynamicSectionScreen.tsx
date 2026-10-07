@@ -134,7 +134,7 @@ export function DynamicSectionScreen({
       propertyType: PROPERTY_LABELS[selection.propertyTypeId] ?? selection.propertyTypeId,
     });
     // Snapshot every section's template up front -- see pinAllSectionTemplates.
-    pinAllSectionTemplates(draft, selection.inspectionTypeId, selection.propertyTypeId);
+    pinAllSectionTemplates(draft, selection.inspectionTypeId, selection.propertyTypeId, selection.stageId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

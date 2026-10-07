@@ -5,6 +5,7 @@
  * their screens are built.
  */
 import { AppStackParamList } from '../navigation/types';
+import { CONSTRUCTION_STAGE_BY_ID } from './constructionStages';
 
 export interface InspectionSectionItem {
   id: string;
@@ -12,6 +13,8 @@ export interface InspectionSectionItem {
   title: string;
   /** Navigable target when a screen exists; undefined = not built yet. */
   route?: keyof AppStackParamList;
+  /** Params for `route` (a stage section opens the shared StageSection screen with its own key). */
+  routeParams?: Record<string, unknown>;
 }
 
 export interface InspectionSectionGroup {
@@ -266,7 +269,25 @@ export function getSectionTitle(
 export function getSectionGroupsForProperty(
   propertyTypeId?: string,
   inspectionTypeId?: string,
+  stageId?: string,
 ): InspectionSectionGroup[] {
+  // A Construction Stage inspection is laid out by its stage: Job Information, the stage's own sections, then sign-off.
+  const stage = inspectionTypeId === 'construction_stage' ? CONSTRUCTION_STAGE_BY_ID[stageId ?? ''] : undefined;
+  if (stage && stage.sections.length > 0) {
+    const groups: InspectionSectionGroup[] = [
+      { title: 'Job Information', sections: [{ id: 'job_information', number: 1, title: 'Job Information', route: 'JobInformation' }] },
+    ];
+    let n = 1;
+    for (const s of stage.sections) {
+      n += 1;
+      const item: InspectionSectionItem = { id: s.id, number: n, title: s.title, route: 'StageSection', routeParams: { sectionKey: s.id, sectionName: s.title, icon: s.icon, order: n } };
+      const last = groups[groups.length - 1];
+      if (last && last.title === s.group) last.sections.push(item);
+      else groups.push({ title: s.group, sections: [item] });
+    }
+    groups.push({ title: 'Review & Submit', sections: [{ id: 'report_signoff', number: n + 1, title: 'Report Summary & Sign-Off', route: 'ReportSummary' }] });
+    return groups;
+  }
   const cfg = configFor(inspectionTypeId, propertyTypeId);
   if (!cfg) return INSPECTION_SECTION_GROUPS;
 

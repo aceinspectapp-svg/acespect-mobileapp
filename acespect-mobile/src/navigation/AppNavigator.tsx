@@ -101,6 +101,22 @@ export function AppNavigator() {
           />
         )}
       </Stack.Screen>
+      <Stack.Screen name="StageSection">
+        {({ navigation, route }) => (
+          <DynamicSectionScreen
+            key={route.params.sectionKey}
+            sectionKey={route.params.sectionKey}
+            sectionName={route.params.sectionName}
+            icon={route.params.icon}
+            order={route.params.order}
+            onBack={() => navigation.goBack()}
+            onComplete={() =>
+              navigation.navigate({ name: 'InspectionSections', params: { completedId: route.params.sectionKey }, merge: true })
+            }
+            onGoHome={() => navigation.popToTop()}
+          />
+        )}
+      </Stack.Screen>
       <Stack.Screen name="Fences">
         {({ navigation }) => (
           <DynamicSectionScreen

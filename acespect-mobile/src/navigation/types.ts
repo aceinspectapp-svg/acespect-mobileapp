@@ -34,6 +34,8 @@ export type AppStackParamList = {
   // when a finished section navigates back to update progress.
   InspectionSections: { data: JobSetupData; completedId?: string };
   // Individual section screens.
+  // One shared screen for every section of a Construction Stage inspection; the key picks the template.
+  StageSection: { sectionKey: string; sectionName: string; icon: string; order: number };
   DrivewaySection: undefined;
   PavingPaths: undefined;
   Fences: undefined;

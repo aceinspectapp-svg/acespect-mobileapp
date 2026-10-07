@@ -3,7 +3,7 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
 import { templatesService } from './templates.service';
 import { serializeTemplate } from './templates.serializers';
-import { TEMPLATABLE_SECTION_KEYS } from './templates.sections';
+import { templatableKeysFor } from './templates.sections';
 
 function requireLineage(req: Request): { inspectionType: string; propertyType: string; sectionKey: string } {
   const { inspectionType, propertyType, sectionKey } = req.params;
@@ -59,7 +59,7 @@ export const templatesController = {
     if (typeof inspectionType !== 'string' || typeof propertyType !== 'string') {
       throw ApiError.badRequest('inspectionType and propertyType query params are required');
     }
-    const summary = await templatesService.summary(inspectionType, propertyType, TEMPLATABLE_SECTION_KEYS);
+    const summary = await templatesService.summary(inspectionType, propertyType, templatableKeysFor(inspectionType));
     res.status(200).json({ summary });
   }),
 

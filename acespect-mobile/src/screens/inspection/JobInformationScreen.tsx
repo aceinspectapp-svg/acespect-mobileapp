@@ -20,6 +20,7 @@ import { pinAllSectionTemplates } from '../../utils/pinAllSectionTemplates';
 import { FieldListRenderer } from '../../components/inspection/fieldRenderers';
 import { isGateSatisfied, type AnswerTree, type AnswerValue } from '../../components/inspection/fieldRenderers/types';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
+import { CONSTRUCTION_STAGE_BY_ID } from '../../constants/constructionStages';
 
 const SECTION_KEY = 'job-info';
 
@@ -64,12 +65,13 @@ export function JobInformationScreen({
       propertyTypeId: selection.propertyTypeId,
       inspectionType: typeDef?.title ?? selection.inspectionTypeId,
       propertyType: PROPERTY_LABELS[selection.propertyTypeId] ?? selection.propertyTypeId,
+      ...(selection.stageId ? { stageId: selection.stageId, stage: CONSTRUCTION_STAGE_BY_ID[selection.stageId]?.title ?? selection.stageId } : {}),
     });
     // Snapshot every section's template up front, not just this one -- so a
     // section not yet visited in this inspection can't pick up a version
     // published (or accepted elsewhere) after this inspection started. See
     // pinAllSectionTemplates for why lazy per-section fetching isn't enough.
-    pinAllSectionTemplates(draft, selection.inspectionTypeId, selection.propertyTypeId);
+    pinAllSectionTemplates(draft, selection.inspectionTypeId, selection.propertyTypeId, selection.stageId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -199,6 +201,11 @@ export function JobInformationScreen({
     }
 
     if (!canContinue) return;
+    // A stage inspection has no separate Step 2 (its Description is one of the stage's own sections): go to the hub.
+    if (selection.stageId) {
+      navigation.navigate('InspectionSections', { data });
+      return;
+    }
     navigation.navigate('InspectionSetupStep2', { data });
   };
 
@@ -208,7 +215,7 @@ export function JobInformationScreen({
 
       <InspectionHeader
         title="Job Information"
-        subtitle="Inspection Setup · Step 1 of 2"
+        subtitle={selection.stageId ? `${CONSTRUCTION_STAGE_BY_ID[selection.stageId]?.title ?? "Stage"} inspection` : "Inspection Setup · Step 1 of 2"}
         onBack={() => navigation.goBack()}
         actions={[
           {

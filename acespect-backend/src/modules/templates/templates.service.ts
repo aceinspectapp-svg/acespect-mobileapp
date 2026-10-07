@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { CreateTemplateInput, UpdateTemplateInput } from './templates.schemas';
-import { TEMPLATABLE_SECTION_KEYS } from './templates.sections';
+import { templatableKeysFor } from './templates.sections';
 
 interface Lineage {
   inspectionType: string;
@@ -110,7 +110,7 @@ async function listPendingUpdates(inspectorId: string) {
 
 /** Inspector accepts every pending update in one profile at once. */
 async function acceptProfileUpdates(inspectorId: string, { inspectionType, propertyType }: ProfileKey) {
-  for (const sectionKey of TEMPLATABLE_SECTION_KEYS) {
+  for (const sectionKey of templatableKeysFor(inspectionType)) {
     const latest = await prisma.inspectionTemplate.findFirst({
       where: { inspectionType, propertyType, sectionKey, status: 'PUBLISHED' },
       orderBy: { version: 'desc' },
@@ -139,7 +139,7 @@ async function getAdoption({ inspectionType, propertyType }: ProfileKey) {
   });
 
   const latestBySection = new Map<string, { id: string; version: number } | null>();
-  for (const sectionKey of TEMPLATABLE_SECTION_KEYS) {
+  for (const sectionKey of templatableKeysFor(inspectionType)) {
     const latest = await prisma.inspectionTemplate.findFirst({
       where: { inspectionType, propertyType, sectionKey, status: 'PUBLISHED' },
       orderBy: { version: 'desc' },
@@ -161,7 +161,7 @@ async function getAdoption({ inspectionType, propertyType }: ProfileKey) {
 
   return inspectors.map((inspector) => {
     const mine = byInspector.get(inspector.id) ?? [];
-    const sections = TEMPLATABLE_SECTION_KEYS.map((sectionKey) => {
+    const sections = templatableKeysFor(inspectionType).map((sectionKey) => {
       const latest = latestBySection.get(sectionKey) ?? null;
       const acc = mine.find((a) => a.sectionKey === sectionKey);
       return {

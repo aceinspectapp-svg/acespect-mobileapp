@@ -43,6 +43,9 @@ export interface DraftTop {
    *  the wizard's InspectionDraftSelection (today: Job Information). */
   inspectionTypeId?: string;
   propertyTypeId?: string;
+  /** Construction Stage inspections: the chosen stage's id (e.g. "pre_pour") and its display name. */
+  stageId?: string;
+  stage?: string;
   /** This draft's own id, generated the moment it starts (well before
    *  submit) — used as the Egnyte inspection folder for every photo
    *  uploaded along the way, and sent as `id` at submit time so the created

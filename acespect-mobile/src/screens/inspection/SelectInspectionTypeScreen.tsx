@@ -10,9 +10,11 @@ import { colors, radius, spacing, typography } from '../../theme';
 import { Button, Stepper } from '../../components/ui';
 import { InspectionTypeCard } from '../../components/inspection/InspectionTypeCard';
 import { PropertyTypeRow } from '../../components/inspection/PropertyTypeRow';
+import { StageRow } from '../../components/inspection/StageRow';
+import { CONSTRUCTION_STAGES, CONSTRUCTION_STAGE_BY_ID } from '../../constants/constructionStages';
 import { ConfirmStartModal } from '../../components/inspection/ConfirmStartModal';
 import { INSPECTION_TYPES, PROPERTY_TYPES } from '../../constants/inspectionData';
-import { InspectionTypeId, PropertyTypeId } from '../../types/inspection';
+import { ConstructionStageId, InspectionTypeId, PropertyTypeId } from '../../types/inspection';
 import { AppScreenProps } from '../../navigation/types';
 import { getAssignedJobs } from '../../services/inspectionApi';
 import { useAuth } from '../../context/AuthContext';
@@ -39,12 +41,20 @@ const STEPS = [
   { label: 'Property Type' },
   { label: 'Begin' },
 ];
+// A Construction Stage inspection adds one step: which of the six stages.
+const STAGE_STEPS = [
+  { label: 'Inspection Type' },
+  { label: 'Property Type' },
+  { label: 'Stage' },
+  { label: 'Begin' },
+];
 
 export function SelectInspectionTypeScreen({
   navigation,
 }: AppScreenProps<'SelectInspectionType'>) {
   const [typeId, setTypeId] = useState<InspectionTypeId | null>(null);
   const [propertyId, setPropertyId] = useState<PropertyTypeId | null>(null);
+  const [stageId, setStageId] = useState<ConstructionStageId | null>(null);
   const [confirmVisible, setConfirmVisible] = useState(false);
 
   // Post-Dilapidation jobs admin has pushed to this inspector. Failure is
@@ -163,6 +173,7 @@ export function SelectInspectionTypeScreen({
   // Auto-scroll to the Property Type section once an inspection type is picked.
   const scrollRef = useRef<ScrollView>(null);
   const propertyY = useRef(0);
+  const stageY = useRef(0);
 
   const selectedType = useMemo(
     () => INSPECTION_TYPES.find((t) => t.id === typeId) ?? null,
@@ -175,8 +186,11 @@ export function SelectInspectionTypeScreen({
     [selectedType],
   );
 
+  const needsStage = typeId === 'construction_stage';
+
   const onSelectType = (id: InspectionTypeId) => {
     setTypeId(id);
+    if (id !== 'construction_stage') setStageId(null);
     // Drop an incompatible property selection when the type changes.
     setPropertyId((prev) => {
       const next = INSPECTION_TYPES.find((t) => t.id === id);
@@ -191,8 +205,14 @@ export function SelectInspectionTypeScreen({
   };
 
   // Stepper position derives from how far the selection has progressed.
-  const currentStep = !typeId ? 0 : !propertyId ? 1 : 2;
-  const canBegin = !!typeId && !!propertyId;
+  const currentStep = !typeId ? 0 : !propertyId ? 1 : needsStage ? (!stageId ? 2 : 3) : 2;
+  const canBegin = !!typeId && !!propertyId && (!needsStage || (!!stageId && !!CONSTRUCTION_STAGE_BY_ID[stageId]?.available));
+
+  const onSelectProperty = (id: PropertyTypeId) => {
+    setPropertyId(id);
+    // Bring the stage picker into view so the inspector can carry straight on.
+    if (needsStage) setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, stageY.current - 16), animated: true }), 180);
+  };
 
   // Inspector has acknowledged the pre-start checklist — proceed into setup.
   // The draft (sections/answers/photos/templates) lives in a handful of
@@ -208,7 +228,7 @@ export function SelectInspectionTypeScreen({
     const proceed = () => {
       draft.reset();
       navigation.navigate('JobInformation', {
-        selection: { inspectionTypeId: typeId!, propertyTypeId: propertyId! },
+        selection: { inspectionTypeId: typeId!, propertyTypeId: propertyId!, ...(needsStage && stageId ? { stageId } : {}) },
       });
     };
     if (resumableDraft) {
@@ -286,7 +306,7 @@ export function SelectInspectionTypeScreen({
             Choose the type of inspection and property category
           </Text>
           <View style={styles.stepperWrap}>
-            <Stepper steps={STEPS} current={currentStep} />
+            <Stepper steps={needsStage ? STAGE_STEPS : STEPS} current={currentStep} />
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -424,11 +444,22 @@ export function SelectInspectionTypeScreen({
                 property={property}
                 selected={propertyId === property.id}
                 disabled={disabled}
-                onPress={() => setPropertyId(property.id)}
+                onPress={() => onSelectProperty(property.id)}
               />
             );
           })}
         </View>
+
+        {needsStage && (
+          <View onLayout={(e) => { stageY.current = e.nativeEvent.layout.y; }} style={!propertyId ? styles.waiting : undefined}>
+            <View style={{ height: spacing.md }} />
+            <SectionHeader index={3} title="CONSTRUCTION STAGE" />
+            {!propertyId && <Text style={styles.waitingHint}>Choose a property type first</Text>}
+            {propertyId && CONSTRUCTION_STAGES.map((stage, i) => (
+              <StageRow key={stage.id} stage={stage} index={i} selected={stageId === stage.id} onPress={() => setStageId(stage.id)} />
+            ))}
+          </View>
+        )}
       </ScrollView>
 
       {/* Sticky footer CTA */}
@@ -440,7 +471,7 @@ export function SelectInspectionTypeScreen({
         />
         {!canBegin && (
           <Text style={styles.footerHint}>
-            {!typeId ? 'Select an inspection type to continue' : 'Select a property type to continue'}
+            {!typeId ? 'Select an inspection type to continue' : !propertyId ? 'Select a property type to continue' : 'Select the construction stage to continue'}
           </Text>
         )}
       </SafeAreaView>
@@ -533,6 +564,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  waiting: { opacity: 0.5 },
+  waitingHint: { ...typography.caption, color: colors.textMuted, marginBottom: spacing.md },
   footerHint: {
     ...typography.caption,
     color: colors.accentBlueFg,

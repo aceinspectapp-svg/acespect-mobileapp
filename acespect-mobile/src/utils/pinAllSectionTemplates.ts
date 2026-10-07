@@ -1,4 +1,5 @@
 import { ActiveTemplate, getActiveTemplateCached } from '../services/templateApi';
+import { stageSectionKeys } from '../constants/constructionStages';
 
 /**
  * Mirrors acespect-backend's `templates.sections.ts` TEMPLATABLE_SECTION_KEYS
@@ -49,8 +50,10 @@ export function pinAllSectionTemplates(
   draft: DraftLike,
   inspectionTypeId: string,
   propertyTypeId: string,
+  stageId?: string,
 ): void {
-  for (const sectionKey of TEMPLATABLE_SECTION_KEYS) {
+  // A Construction Stage inspection also pins every section of the chosen stage.
+  for (const sectionKey of [...TEMPLATABLE_SECTION_KEYS, ...stageSectionKeys(stageId)]) {
     const pinKey = `${inspectionTypeId}:${propertyTypeId}:${sectionKey}`;
     if (draft.getActiveTemplate(pinKey)) continue;
     getActiveTemplateCached(inspectionTypeId, propertyTypeId, sectionKey)
