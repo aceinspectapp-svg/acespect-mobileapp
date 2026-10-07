@@ -1,6 +1,6 @@
 /**
  * The report's New / Satisfactory / Fair / Average / Poor grading, shared by
- * the inline "Condition: ..." tags (reportSentences.ts) and the Executive
+ * the inline "Condition: ..." tags (the report type's wording (src/web/wording/)) and the Executive
  * Summary rows (templateFields.ts).
  *
  * Some templates define a `color` on each condition option and some don't --

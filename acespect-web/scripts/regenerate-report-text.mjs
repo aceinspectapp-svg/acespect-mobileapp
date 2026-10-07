@@ -55,6 +55,7 @@ const slug = (v) => SLUGS[v] ?? String(v ?? "").trim().toLowerCase().replace(/[\
 const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const server = await createServer({ root: webRoot, server: { middlewareMode: true }, logLevel: "error" });
 const { flattenSectionToDraft } = await server.ssrLoadModule("/src/web/templateFields.ts");
+const { reportProfileOf } = await server.ssrLoadModule("/src/web/wording/profile.ts");
 
 const templateCache = new Map();
 async function templateFor(inspection, sectionKey) {
@@ -96,7 +97,7 @@ for (const id of targets) {
       skipped += 1; // no answers (never filled in) or no template for this profile
       continue;
     }
-    const derived = flattenSectionToDraft(template.fields, section.answers, key);
+    const derived = flattenSectionToDraft(template.fields, section.answers, key, reportProfileOf(inspection.type, inspection.propertyType));
     const summaryChanged = canonical(derived.fields.conditionSummary ?? []) !== canonical(section.fields?.conditionSummary ?? []);
     if (derived.reportText === (section.reportText ?? "") && !summaryChanged) {
       unchanged += 1;

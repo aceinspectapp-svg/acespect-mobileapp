@@ -21,10 +21,12 @@ const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const server = await createServer({ root: webRoot, server: { middlewareMode: true }, logLevel: "error" });
 after(() => server.close());
 const { flattenSectionToDraft } = await server.ssrLoadModule("/src/web/templateFields.ts");
+const { WORDING_BY_PROFILE } = await server.ssrLoadModule("/src/web/wording/registry.ts");
 
 const snapshot = JSON.parse(readFileSync(resolve(webRoot, "../acespect-backend/prisma/templates-snapshot.json"), "utf8"));
-const SECTIONS = ["description", "driveway", "paving_paths", "fences", "retaining_walls", "garage_carport_sheds", "pool_spa", "elevations", "roof_chimneys", "internal_areas", "notes"];
-const templateOf = (k) => snapshot.find((t) => t.inspectionType === "dilapidation" && t.propertyType === "residential_house" && t.sectionKey === k).fields;
+// Every report type that has its own (final) wording, and the sections that wording writes.
+const FINAL_TYPES = Object.values(WORDING_BY_PROFILE).filter((w) => w.status === "final");
+const templateOf = (profile, k) => snapshot.find((t) => t.inspectionType === profile.inspectionType && t.propertyType === profile.propertyType && t.sectionKey === k)?.fields;
 
 const SELECT = new Set(["pill-select", "select-tiles", "color-select"]);
 const MULTI = new Set(["chip-multiselect", "tile-multiselect"]);
@@ -83,10 +85,11 @@ const problems = (out, raw) => {
   return found;
 };
 
-describe("report contract: no raw answer values or blank gaps, for every option of every field", () => {
-  for (const sectionKey of SECTIONS) {
+for (const wording of FINAL_TYPES) describe(`report contract (${wording.profile.inspectionType} / ${wording.profile.propertyType}): no raw answer values or blank gaps, for every option of every field`, () => {
+  for (const sectionKey of Object.keys(wording.composers)) {
     it(sectionKey, () => {
-      const fields = templateOf(sectionKey);
+      const fields = templateOf(wording.profile, sectionKey);
+      if (!fields) return; // this report type's form has no such section
       const fields2 = choiceFields(fields);
       const damageSubs = [];
       const walkSubs = (fs) => fs.forEach((f) => { if (f.key.startsWith("sub_")) damageSubs.push(f); if (f.itemFields) walkSubs(f.itemFields); });
@@ -102,7 +105,7 @@ describe("report contract: no raw answer values or blank gaps, for every option 
           const value = MULTI.has(field.type) ? [v] : v;
           const answers = fill(fields);
           setEverywhere(answers, field.key, value, damageSubs);
-          const draft = flattenSectionToDraft(fields, answers, sectionKey);
+          const draft = flattenSectionToDraft(fields, answers, sectionKey, wording.profile);
           const out = `${draft.reportText}\n${JSON.stringify(draft.fields)}`;
           tried += 1;
           const bad = problems(out, rawValues);

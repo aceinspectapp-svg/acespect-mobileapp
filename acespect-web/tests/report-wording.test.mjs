@@ -1,6 +1,6 @@
 // Run with: npm test   (Node's built-in test runner -- no extra dependencies)
 //
-// Exercises the real report-sentence logic (src/web/reportSentences.ts +
+// Exercises the real report-sentence logic (src/web/wording/ +
 // templateFields.ts) loaded through Vite, against:
 //   * the published Dilapidation / Residential House templates, read from the
 //     backend's template snapshot -- what inspectors actually fill in; and
@@ -19,7 +19,10 @@ const server = await createServer({ root: webRoot, server: { middlewareMode: tru
 after(() => server.close());
 
 const { flattenSectionToDraft } = await server.ssrLoadModule("/src/web/templateFields.ts");
-const { composeSectionSentence } = await server.ssrLoadModule("/src/web/reportSentences.ts");
+const { wordingFor } = await server.ssrLoadModule("/src/web/wording/registry.ts");
+const { composeSection } = await server.ssrLoadModule("/src/web/wording/types.ts");
+const HOUSE = { inspectionType: "dilapidation", propertyType: "residential_house" };
+const composeSectionSentence = (key, inst, fields, label) => composeSection(wordingFor(HOUSE), key, inst, fields, label);
 const { listMissingItems } = await server.ssrLoadModule("/src/web/templateFields.ts");
 
 const snapshot = JSON.parse(
@@ -30,7 +33,7 @@ const template = (sectionKey) =>
     (t) => t.inspectionType === "dilapidation" && t.propertyType === "residential_house" && t.sectionKey === sectionKey,
   ).fields;
 
-const text = (sectionKey, answers) => flattenSectionToDraft(template(sectionKey), answers, sectionKey);
+const text = (sectionKey, answers) => flattenSectionToDraft(template(sectionKey), answers, sectionKey, HOUSE);
 const reportText = (sectionKey, answers) => text(sectionKey, answers).reportText;
 const paragraphs = (t) => t.split("\n\n");
 
@@ -440,7 +443,7 @@ describe("Driveway divided into parts (what seed-driveway-parts.ts publishes)", 
       itemFields: flat.filter((f) => f.key !== "locatedAt"),
     },
   ];
-  const run = (parts) => flattenSectionToDraft(partsTemplate, { parts }, "driveway");
+  const run = (parts) => flattenSectionToDraft(partsTemplate, { parts }, "driveway", HOUSE);
   const part = (material, condition) => ({ present: "yes", material, condition });
 
   it("gives every part its own condition label and paragraph", () => {
@@ -469,7 +472,7 @@ describe("Pool / Spa divided into parts (what seed-section-parts.ts publishes)",
       itemFields: flat,
     },
   ];
-  const run = (parts) => flattenSectionToDraft(partsTemplate, { parts }, "pool_spa");
+  const run = (parts) => flattenSectionToDraft(partsTemplate, { parts }, "pool_spa", HOUSE);
 
   it("gives the pool and the spa their own label and paragraph", () => {
     const { reportText, fields } = run({

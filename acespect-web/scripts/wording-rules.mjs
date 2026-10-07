@@ -21,7 +21,9 @@ const template = (k) =>
 
 const server = await createServer({ root: webRoot, server: { middlewareMode: true }, logLevel: "error" });
 const { flattenSectionToDraft } = await server.ssrLoadModule("/src/web/templateFields.ts");
-const { absenceSentence } = await server.ssrLoadModule("/src/web/reportSentences.ts");
+const { wordingFor } = await server.ssrLoadModule("/src/web/wording/registry.ts");
+const HOUSE = { inspectionType: "dilapidation", propertyType: "residential_house" };
+const absenceSentence = (key) => wordingFor(HOUSE).absence[key];
 
 const SECTIONS = [
   { key: "description", title: "Description & Overview" },
@@ -136,7 +138,7 @@ function derive(sec) {
     Object.assign(inst, overrides.inst ?? {});
     return groupField ? { ...top, [sec.group]: sec.list ? [inst] : { [sec.slot]: inst } } : top;
   };
-  const run = (answers) => render(flattenSectionToDraft(fields, answers, sec.key).reportText);
+  const run = (answers) => render(flattenSectionToDraft(fields, answers, sec.key, HOUSE).reportText);
 
   const pattern = run(build());
   const clauses = [];

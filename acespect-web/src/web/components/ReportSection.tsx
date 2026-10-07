@@ -1,14 +1,14 @@
 import type { DamageRecord, FormSection } from "../mockData";
 import { Heading, Para, PhotoGrid, reportTextStyle, reportTokens, SectionBand, usePhotoNumbering } from "./reportKit";
 
-// Internal Areas' floor headings (see reportSentences.ts's internal_areas
+// Internal Areas' floor headings (see the report type's wording (src/web/wording/) internal_areas
 // composer) are injected as plain uppercase lines within the section's flat
 // reportText, not as a separate structured field -- matched here by their
 // fixed, known text so they can render as the reference's own tan/khaki
 // bar instead of an ordinary paragraph.
 const FLOOR_HEADINGS = ["GROUND FLOOR", "FIRST FLOOR", "SECOND FLOOR", "BASEMENT"];
 
-// Matches reportSentences.ts's `conditionTag()` -- a composer-emitted
+// Matches the report type's wording (src/web/wording/) `conditionTag()` -- a composer-emitted
 // "COND::#hex::Label" paragraph standing in for a structured condition tag,
 // since reportText is stored as flat text rather than JSON. Applying the
 // report's own New/Satisfactory/Fair/Average/Poor grading inline (not just
@@ -16,7 +16,7 @@ const FLOOR_HEADINGS = ["GROUND FLOOR", "FIRST FLOOR", "SECOND FLOOR", "BASEMENT
 // reference report actually does either -- this is a deliberate improvement.
 const CONDITION_TAG_RE = /^COND::(#[0-9a-fA-F]{6})::(.+)$/;
 
-// Matches reportSentences.ts's internal_areas composer -- each room's name
+// Matches the report type's wording (src/web/wording/) internal_areas composer -- each room's name
 // comes through as its own "ROOMHEAD::Bedroom 4" paragraph so it can render
 // as a bold heading (matching the reference report's own per-room style)
 // instead of being folded into the sentence itself ("Bedroom 4 is in...").
@@ -56,7 +56,7 @@ type ParsedItem =
   | { kind: "defect"; index: number; text: string }
   | { kind: "para"; text: string };
 
-// Matches reportSentences.ts's damageSentences -- one tagged paragraph per recorded defect, where `index` is that defect's position in the section's damage list, so its own photos can be printed right under its sentence.
+// Matches the report type's wording (src/web/wording/) damageSentences -- one tagged paragraph per recorded defect, where `index` is that defect's position in the section's damage list, so its own photos can be printed right under its sentence.
 const DEFECT_RE = /^DEFECT::(\d+)::([\s\S]*)$/;
 
 function renderParsedItem(item: ParsedItem, compact: boolean, key: number | string, damages: DamageRecord[]) {
@@ -257,7 +257,7 @@ export function ReportSection({
   archiveUrl?: string | null;
   showHeading?: boolean;
   compact?: boolean;
-  /** True for a section whose reportText already narrates each crack/damage inline (see reportSentences.ts) -- skip the sentence here so it isn't said twice, but still show that damage's photos. */
+  /** True for a section whose reportText already narrates each crack/damage inline (see the report type's wording (src/web/wording/)) -- skip the sentence here so it isn't said twice, but still show that damage's photos. */
   hideDamageText?: boolean;
 }) {
   const paras = section.reportText

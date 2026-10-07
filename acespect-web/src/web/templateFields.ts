@@ -1,13 +1,8 @@
 import { API_BASE, getToken } from "./api";
-import {
-  absenceSentence,
-  atLocation,
-  composeInternalAreasLeadIn,
-  composeSectionSentence,
-  floorHeading,
-  INTERNAL_AREAS_LEAD_IN_KEYS,
-  isNotPresent,
-} from "./reportSentences";
+import { atLocation, isNotPresent } from "./wording/shared";
+import { toSlug, type ReportProfile } from "./wording/profile";
+import { wordingFor } from "./wording/registry";
+import { composeSection, type ReportWording } from "./wording/types";
 import { gradeOf } from "./conditionGrades";
 
 /**
@@ -104,21 +99,6 @@ export interface AnswerTree {
  * added later without needing this file touched, and is a no-op if a slug
  * was already passed in.
  */
-const TYPE_LABEL_TO_SLUG: Record<string, string> = {
-  "Dilapidation": "dilapidation",
-  "Pre-Purchase": "pre_purchase",
-  "Construction Stage": "construction_stage",
-  "Investigations": "investigations",
-  "Residential House": "residential_house",
-  "Apartment": "apartment",
-  "Commercial Properties": "commercial_properties",
-  "Public Assets": "public_assets",
-};
-
-function toSlug(value: string): string {
-  return TYPE_LABEL_TO_SLUG[value] ?? value.trim().toLowerCase().replace(/[\s-]+/g, "_");
-}
-
 /** The current published template for a profile + section; null if none exists (not every section key is templatable). */
 export async function fetchActiveTemplate(
   inspectionType: string,
@@ -419,7 +399,7 @@ function niceInstanceLabel(itemFields: TemplateField[], inst: AnswerTree, fallba
 /**
  * One line per damage/defect recorded against this instance (e.g. "Crack at
  * ceiling cornice, northeast corner"), joined for the Condition Summary's
- * one-line notes column. Mirrors reportSentences.ts's damageSentences()
+ * one-line notes column. Mirrors the report type's wording (src/web/wording/) damageSentences()
  * "no damageType field -> default to Crack" fallback for the sections
  * (Paving & Paths, Fences, Retaining Walls) that only ever track cracks.
  */
@@ -449,7 +429,7 @@ function conditionSummaryRow(
   subLabel: string | undefined,
 ): ConditionSummaryRow | undefined {
   if (isNotPresent(inst)) return undefined;
-  // Every composer in reportSentences.ts reads its grade from a field keyed
+  // Every composer in the wording reads its grade from a field keyed
   // "condition" (most sections), "generalCondition" (Roof, Internal Areas) or
   // "wallsCondition" (Garage) -- checking those exact names first, rather than
   // just "the first color-select field", matters because Pool/Spa also has an
@@ -480,7 +460,7 @@ function conditionSummaryRow(
  * Derives the flattened report `fields`, the flat `damages[]` array, and a
  * summary `reportText` from a raw answer tree -- the same walk
  * acespect-mobile's flattenSectionToDraft does, except that when `sectionKey`
- * matches one of `reportSentences.ts`'s composers, each top-level instance's
+ * matches one of the report type's composers, each top-level instance's
  * paragraph is built with that exact Houspect-Victoria wording instead of
  * the generic "Label: value." fallback below. Run on save (web inspector
  * editor only -- mobile has its own copy of this function, untouched) so
@@ -489,16 +469,19 @@ function conditionSummaryRow(
 export function flattenSectionToDraft(
   templateFields: TemplateField[],
   answers: AnswerTree,
-  sectionKey?: string,
+  sectionKey: string | undefined,
+  profile: ReportProfile,
 ): FlattenedSection {
-  return walk(templateFields, answers, [], sectionKey);
+  // The report type is resolved first; the sentences come from that report type's own wording, never from the section name alone.
+  return walk(templateFields, answers, [], sectionKey, wordingFor(profile));
 }
 
 function walk(
   templateFields: TemplateField[],
   scope: AnswerTree,
   ancestorLabels: string[],
-  sectionKey?: string,
+  sectionKey: string | undefined,
+  wording: ReportWording,
 ): FlattenedSection {
   const fields: Record<string, unknown> = {};
   const damages: FlattenedSection["damages"] = [];
@@ -509,18 +492,15 @@ function walk(
   // every field its own "Label: value." line, rendering as a bullet-style
   // list instead of the reference report's flowing prose paragraph. Route
   // this section's flat fields through its own composer instead, same as
-  // every other section already does via SECTION_SENTENCE_COMPOSERS.
+  // every other section already does via the report type's wording.
   // Driveway and Pool / Spa are flat too in the published templates (a single
   // "is there one?" yes/no with its fields beneath it, no repeating-group),
   // while the original seed wrapped them in a one-item list -- so they only
   // take this path when the template has no top-level repeating-group.
-  const isFlatComposedSection =
-    ancestorLabels.length === 0 &&
-    (sectionKey === "description" ||
-      ((sectionKey === "driveway" || sectionKey === "pool_spa") && !templateFields.some((f) => f.type === "repeating-group")));
-  const isInternalAreas = ancestorLabels.length === 0 && sectionKey === "internal_areas";
-  if (isInternalAreas) {
-    const leadIn = composeInternalAreasLeadIn(scope, templateFields);
+  const isFlatComposedSection = ancestorLabels.length === 0 && !!sectionKey && wording.isFlatComposed(sectionKey, templateFields);
+  const leadInSpec = ancestorLabels.length === 0 && sectionKey && wording.leadIn?.sectionKey === sectionKey ? wording.leadIn : undefined;
+  if (leadInSpec) {
+    const leadIn = leadInSpec.compose(scope, templateFields);
     if (leadIn) textParts.push(leadIn);
   }
 
@@ -558,14 +538,15 @@ function walk(
       // Only the section's own top-level repeating field (not one nested
       // inside another repeating-group) stands for "this whole section is
       // one instance-per-paragraph list" -- that's what every composer in
-      // reportSentences.ts assumes.
+      // the composers assume.
       const composed = ancestorLabels.length === 0 ? sectionKey : undefined;
       // Houspect Victoria's template groups Internal Areas rooms under a
       // floor heading (Ground Floor / First Floor / ...) rather than
       // mentioning the floor in each room's own sentence -- inject a
       // heading line whenever the floor changes as instances are walked.
       const floorLevelField = (field.itemFields ?? []).find((f) => f.key === "floorLevel");
-      if (composed === "internal_areas" && floorLevelField) {
+      const floorGrouped = composed && wording.floorGrouped?.sectionKey === composed ? wording.floorGrouped : undefined;
+      if (floorGrouped && floorLevelField) {
         // Room order is fixed by the template (Front Entry, Living Room,
         // Dining, Kitchen, Bedroom, Bathroom, Laundry, Toilet, Stairwell,
         // Other) -- it has nothing to do with which physical floor each
@@ -597,7 +578,7 @@ function walk(
       let lastFloorLevel: string | undefined;
       for (const { label, scope: inst } of instances) {
         const damageBase = damages.length; // where this instance's defects start in the section-wide list
-        const sub = walk(field.itemFields ?? [], inst, [...ancestorLabels, label]);
+        const sub = walk(field.itemFields ?? [], inst, [...ancestorLabels, label], undefined, wording);
         const notPresent = !!composed && isNotPresent(inst);
         // Stale damage records on an instance the inspector later marked as not present shouldn't reach the report.
         if (!notPresent) damages.push(...sub.damages);
@@ -605,8 +586,8 @@ function walk(
         // An instance marked not present (Is there a garage? No), or a fixed
         // slot the inspector never touched, contributes nothing -- no
         // sentence, no floor banner, no summary row.
-        if (composed === "fences" && notPresent && isAnswered(inst.present)) {
-          const absent = composeSectionSentence(composed, inst, field.itemFields ?? [], label);
+        if (composed && wording.absentSlotSections.includes(composed) && notPresent && isAnswered(inst.present)) {
+          const absent = composeSection(wording, composed, inst, field.itemFields ?? [], label);
           if (absent) absentLines.push({ at: textParts.length, text: absent });
         }
         if (composed && (notPresent || !Object.values(inst).some(isAnswered))) continue;
@@ -618,7 +599,7 @@ function walk(
           );
           if (row) conditionSummaryRows.push(row);
         }
-        const composedSentence = composed ? composeSectionSentence(composed, inst, field.itemFields ?? [], label) : undefined;
+        const composedSentence = composed ? composeSection(wording, composed, inst, field.itemFields ?? [], label) : undefined;
         // `undefined` means "no composer registered for this section" (fall
         // back to the generic label/value text); an empty string means "a
         // composer ran and deliberately has nothing to say" (e.g. the
@@ -628,10 +609,10 @@ function walk(
         if (composedSentence !== undefined) {
           if (composedSentence) {
             // The floor banner goes in only once this room is known to print something.
-            if (composed === "internal_areas" && floorLevelField) {
+            if (floorGrouped && floorLevelField) {
               const floorRaw = asString(inst.floorLevel);
               if (floorRaw && floorRaw !== lastFloorLevel) {
-                textParts.push(floorHeading(floorLevelField.options?.find((o) => o.value === floorRaw)?.label ?? floorRaw));
+                textParts.push(floorGrouped.heading(floorLevelField.options?.find((o) => o.value === floorRaw)?.label ?? floorRaw));
                 lastFloorLevel = floorRaw;
               }
             }
@@ -652,7 +633,7 @@ function walk(
       // it properly instead, matching the reference report's own "There is no
       // driveway." convention.
       if (composed && composedCount === 0) {
-        const absence = absenceSentence(composed);
+        const absence = wording.absence[composed];
         if (absence) textParts.push(absence);
       } else if (absentLines.length > 0) {
         // Back to front, so each insertion point is still where it was recorded.
@@ -696,15 +677,15 @@ function walk(
     // bullet line would defeat the point of hiding the whole section when
     // there's nothing notable (see the `notes` composer and ReportView.tsx).
     // Still recorded in `fields` above for the reviewer's editing view.
-    const isNotesMetadata = sectionKey === "notes" && (field.key === "postProject" || field.key === "hasDamage");
+    const isNotesMetadata = !!sectionKey && (wording.metadataFields[sectionKey]?.includes(field.key) ?? false);
     // Still recorded in `fields` above (so the reviewer's Field Data view
     // keeps every answer editable) -- just not echoed as its own bullet line
     // when a whole-section composer is about to produce real prose instead.
     // The "Is there a ...?" yes/no of a section that has an absence sentence is
     // folded into the prose (or the absence sentence) instead of a bullet line,
     // and Internal Areas' section-level answers are composed by its lead-in.
-    const isPresenceFlag = field.key === "present" && !!sectionKey && absenceSentence(sectionKey) !== undefined;
-    const isLeadInField = isInternalAreas && INTERNAL_AREAS_LEAD_IN_KEYS.has(field.key);
+    const isPresenceFlag = field.key === "present" && !!sectionKey && wording.absence[sectionKey] !== undefined;
+    const isLeadInField = !!leadInSpec && leadInSpec.keys.has(field.key);
     if (!isFlatComposedSection && !isNotesMetadata && !isPresenceFlag && !isLeadInField) {
       textParts.push(`${field.label}: ${withPeriod(strValue)}`);
     }
@@ -713,16 +694,17 @@ function walk(
   // A whole section answered "No" at its top level (Are there any retaining
   // walls? No) -- everything beneath it is gated away, so state the fact.
   if (!isFlatComposedSection && ancestorLabels.length === 0 && sectionKey && asString(scope.present) === "no") {
-    const absence = absenceSentence(sectionKey);
+    const absence = wording.absence[sectionKey];
     if (absence) textParts.push(absence);
   }
 
   if (isFlatComposedSection) {
-    const composed = composeSectionSentence(sectionKey!, scope, templateFields, "");
-    // Driveway / Pool are a single instance, so the whole section is one summary row (no sub-label).
-    const row = sectionKey === "description" ? undefined : conditionSummaryRow(templateFields, scope, undefined);
+    const composed = composeSection(wording, sectionKey!, scope, templateFields, "");
+    // A flat section is a single instance, so the whole section is one summary row (no sub-label) -- unless this report type gives that section no summary row at all.
+    const noSummary = wording.noSummarySections.includes(sectionKey!);
+    const row = noSummary ? undefined : conditionSummaryRow(templateFields, scope, undefined);
     if (row) fields.conditionSummary = [row];
-    else if (sectionKey !== "description" && templateFields.some((f) => f.type === "color-select")) fields.conditionSummary = [];
+    else if (!noSummary && templateFields.some((f) => f.type === "color-select")) fields.conditionSummary = [];
     return { fields, damages, reportText: composed ?? textParts.join("\n\n") };
   }
 
