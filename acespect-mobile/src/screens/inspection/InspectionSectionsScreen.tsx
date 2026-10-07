@@ -208,6 +208,7 @@ export function InspectionSectionsScreen({
         {/* Inspector-added extras — a pergola, granny flat, spare room found
             on site, anything the fixed 13 sections don't cover. Not counted
             in the "X of 13" total above; each gets its own status dot. */}
+        {inspectionTypeId !== 'construction_stage' && (
         <View>
           <Text style={styles.groupTitle}>ADDITIONAL</Text>
           {customSections.map((s) => (
@@ -244,6 +245,7 @@ export function InspectionSectionsScreen({
             <Text style={styles.addRowText}>Add extra structure / room</Text>
           </Pressable>
         </View>
+        )}
       </ScrollView>
 
       {/* Sticky footer */}

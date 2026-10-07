@@ -288,6 +288,11 @@ export function getSectionGroupsForProperty(
     groups.push({ title: 'Review & Submit', sections: [{ id: 'report_signoff', number: n + 1, title: 'Report Summary & Sign-Off', route: 'ReportSummary' }] });
     return groups;
   }
+  // A Construction Stage inspection always belongs to one stage; without one there is nothing to survey yet, and it must
+  // never fall back to the house-survey sections (roof, chimneys, internal ...).
+  if (inspectionTypeId === 'construction_stage') {
+    return [{ title: 'Job Information', sections: [{ id: 'job_information', number: 1, title: 'Job Information', route: 'JobInformation' }] }];
+  }
   const cfg = configFor(inspectionTypeId, propertyTypeId);
   if (!cfg) return INSPECTION_SECTION_GROUPS;
 

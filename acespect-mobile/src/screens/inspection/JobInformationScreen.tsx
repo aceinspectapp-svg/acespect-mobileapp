@@ -24,6 +24,12 @@ import { CONSTRUCTION_STAGE_BY_ID } from '../../constants/constructionStages';
 
 const SECTION_KEY = 'job-info';
 
+/** "Test Inspector" -> "TI" -- the stage forms ask for the inspector's initials, not their full name. */
+function initialsOf(name: string): string {
+  const words = name.replace(/@.*$/, '').split(/[\s._-]+/).filter(Boolean);
+  return words.slice(0, 3).map((w) => w[0]!.toUpperCase()).join('');
+}
+
 /** Narrows an answer to a plain string -- safe wherever the field is known
  * by construction to be single-valued (text/date/select-tiles/yesno; not
  * chip-multiselect or anything nested), same idea as leafRenderers' own
@@ -118,7 +124,7 @@ export function JobInformationScreen({
       for (const f of template.fields) {
         if (next[f.key] !== undefined) continue;
         if (f.type === 'date') next[f.key] = todayIso;
-        else if (f.key === 'assignedInspector') next[f.key] = inspectorName;
+        else if (f.key === 'assignedInspector') next[f.key] = selection.stageId ? initialsOf(inspectorName) : inspectorName;
         else next[f.key] = '';
       }
       draft.setAnswers(SECTION_KEY, next);

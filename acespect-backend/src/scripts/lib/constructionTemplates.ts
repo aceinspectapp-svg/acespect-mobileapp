@@ -63,6 +63,9 @@ export function jobInfoFields(existing: TemplateField[]): TemplateField[] {
   const weatherOther = existing.find((f) => f.key === 'weatherOther');
   if (!weather) throw new Error('The existing Job Information template has no weather field to reuse');
   const list: Draft[] = [
+    // The form's first line, before the header table.
+    { key: 'reportEmailed', type: 'yesno', label: 'Email the Word report to Houspect (info@houspectvic.com.au)' },
+    { key: 'photosInEgnyte', type: 'yesno', label: 'Photos loaded to Egnyte?' },
     // "V" is locked ahead of the number the inspector types (the paper form is pre-printed "V2").
     { key: 'jobNumber', type: 'text', label: 'Job No', prefix: 'V', required: true, placeholder: 'e.g. 2' },
     { key: 'inspectionDate', type: 'date', label: 'Inspection Date', required: true },
