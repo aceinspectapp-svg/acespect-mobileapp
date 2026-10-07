@@ -168,7 +168,7 @@ const summary: Draft[] = [
 const previousDefects: Draft[] = attachedListFields({
   key: 'previousDefects',
   label: 'Attach the previous stage Defects list with updates',
-  updatesLabel: 'Status next to each previous defect — "Done and satisfactory", "Not done" or "Could not inspect due to …"',
+  updatesLabel: 'Status next to each previous report defect — "Done and satisfactory", "Not done" or "Could not inspect due to …"',
   photosLabel: 'The previous stage Defects list (photos)',
 });
 

@@ -82,7 +82,10 @@ export function SelectInspectionTypeScreen({
   useFocusEffect(
     useCallback(() => {
       getTemplateUpdates()
-        .then((updates) => {
+        .then((all) => {
+          // Construction Stage forms are published one stage at a time and are taken up automatically when an inspection
+          // starts (see onConfirmStart), so they never ask the inspector to approve an update.
+          const updates = all.filter((u) => u.inspectionType !== 'construction_stage');
           setTemplateUpdates(updates);
           promptForNewUpdates(updates);
         })
@@ -225,7 +228,9 @@ export function SelectInspectionTypeScreen({
   // heads-up before it's discarded -- resuming it is what the banner's for.
   const onConfirmStart = () => {
     setConfirmVisible(false);
-    const proceed = () => {
+    const proceed = async () => {
+      // Start on the newest Construction Stage forms (Job Information carries each stage's own Stage choices).
+      if (typeId === 'construction_stage' && propertyId) await acceptProfileTemplateUpdates('construction_stage', propertyId).catch(() => undefined);
       draft.reset();
       navigation.navigate('JobInformation', {
         selection: { inspectionTypeId: typeId!, propertyTypeId: propertyId!, ...(needsStage && stageId ? { stageId } : {}) },
@@ -242,14 +247,14 @@ export function SelectInspectionTypeScreen({
             style: 'destructive',
             onPress: () => {
               setResumableDraft(null);
-              proceed();
+              void proceed();
             },
           },
         ],
       );
       return;
     }
-    proceed();
+    void proceed();
   };
 
   const { signOut } = useAuth();
