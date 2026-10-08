@@ -18,6 +18,7 @@ import {
 } from "../../templateFields";
 import type { FormSection } from "../../mockData";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
+import { reportProfileOf } from "../../wording/profile";
 import { api } from "../../api";
 
 // Sections are deleted + recreated wholesale on every draft save (see
@@ -177,7 +178,7 @@ export function InspectorFormEditor() {
       const sKey = sectionKeyOf(s);
       const template = templates[sKey];
       const answers = answerEdits[sKey] ?? (s.answers as AnswerTree | null | undefined) ?? undefined;
-      const derived = template && answers ? flattenSectionToDraft(template.fields, answers, sKey) : null;
+      const derived = template && answers ? flattenSectionToDraft(template.fields, answers, sKey, reportProfileOf(inspection!.type, inspection!.propertyType)) : null;
       return {
         key: sKey,
         name: s.name,

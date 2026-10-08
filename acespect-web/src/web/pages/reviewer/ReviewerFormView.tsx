@@ -23,6 +23,7 @@ import { buildReportHeader, DEFAULT_PURPOSE, withExcludedPhotosRemoved } from ".
 import { SectionFieldEditor, PhotoUploadContext } from "../../components/SectionFieldEditor";
 import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSectionToDraft, fetchActiveTemplate, listMissingItems } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
+import { reportProfileOf } from "../../wording/profile";
 import { api, resolveMediaUrl } from "../../api";
 
 /* ─── helpers ─────────────────────────────────────────────────────── */
@@ -892,7 +893,7 @@ export function ReviewerFormView() {
     const answers = answerEdits[section.id];
     const template = templates[section.key ?? section.id];
     if (!answers || !template) return;
-    const derived = flattenSectionToDraft(template.fields, answers, section.key ?? section.id);
+    const derived = flattenSectionToDraft(template.fields, answers, section.key ?? section.id, reportProfileOf(inspection!.type, inspection!.propertyType));
     setSavingAnswersFor(section.id);
     try {
       await patchSection(inspection!.id, section.id, {

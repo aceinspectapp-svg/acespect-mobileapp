@@ -21,10 +21,12 @@ const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const server = await createServer({ root: webRoot, server: { middlewareMode: true }, logLevel: "error" });
 after(() => server.close());
 const { flattenSectionToDraft } = await server.ssrLoadModule("/src/web/templateFields.ts");
+const { WORDING_BY_PROFILE } = await server.ssrLoadModule("/src/web/wording/registry.ts");
 
 const snapshot = JSON.parse(readFileSync(resolve(webRoot, "../acespect-backend/prisma/templates-snapshot.json"), "utf8"));
-const SECTIONS = ["description", "driveway", "paving_paths", "fences", "retaining_walls", "garage_carport_sheds", "pool_spa", "elevations", "roof_chimneys", "internal_areas", "notes"];
-const templateOf = (k) => snapshot.find((t) => t.inspectionType === "dilapidation" && t.propertyType === "residential_house" && t.sectionKey === k).fields;
+// Every report type that has its own (final) wording, and the sections that wording writes.
+const FINAL_TYPES = Object.values(WORDING_BY_PROFILE).filter((w) => w.status === "final");
+const templateOf = (profile, k) => snapshot.find((t) => t.inspectionType === profile.inspectionType && t.propertyType === profile.propertyType && t.sectionKey === k)?.fields;
 
 const SELECT = new Set(["pill-select", "select-tiles", "color-select"]);
 const MULTI = new Set(["chip-multiselect", "tile-multiselect"]);
@@ -48,30 +50,40 @@ function fill(fields) {
   return a;
 }
 
-// every field that offers a choice, with the path of group keys to reach it
+// every field that offers a choice, with the path of groups / lists it sits in and the fields beside it
 function choiceFields(fields, path = []) {
   const out = [];
   for (const f of fields) {
-    if ((SELECT.has(f.type) || MULTI.has(f.type)) && f.options?.length) out.push({ field: f, path });
+    if ((SELECT.has(f.type) || MULTI.has(f.type)) && f.options?.length) out.push({ field: f, path, siblings: fields });
     if (f.itemFields) out.push(...choiceFields(f.itemFields, [...path, f.key]));
   }
   return out;
 }
 
-// set `key` to `value` in every object of the answer tree that has that key (every instance / defect entry)
-function setEverywhere(node, key, value, damageSubs) {
-  if (Array.isArray(node)) return node.forEach((n) => setEverywhere(n, key, value, damageSubs));
-  if (!node || typeof node !== "object") return;
-  if (key in node) {
+// walk down the answer tree along `path` (through lists and records of fixed instances) and call `cb` on every object reached
+function atPath(node, path, cb) {
+  if (!path.length) return cb(node);
+  const child = node?.[path[0]];
+  if (Array.isArray(child)) child.forEach((c) => atPath(c, path.slice(1), cb));
+  else if (child && typeof child === "object") {
+    const vals = Object.values(child);
+    if (vals.length && vals.every((v) => v && typeof v === "object" && !Array.isArray(v))) vals.forEach((c) => atPath(c, path.slice(1), cb));
+    else atPath(child, path.slice(1), cb);
+  }
+}
+
+// set one field, only where it lives (not in other lists that happen to use the same name)
+function setAt(answers, path, key, value, siblings) {
+  atPath(answers, path, (node) => {
+    if (!node || typeof node !== "object" || !(key in node)) return;
     node[key] = value;
     // changing a defect type: answer that type's own sub-type question too
     if (key === "damageType") {
-      for (const sub of damageSubs) {
+      for (const sub of siblings.filter((f) => f.key.startsWith("sub_"))) {
         if (sub.gate?.equals === (typeof value === "string" ? value : "")) node[sub.key] = sub.options?.[0]?.value;
       }
     }
-  }
-  Object.values(node).forEach((n) => setEverywhere(n, key, value, damageSubs));
+  });
 }
 
 const problems = (out, raw) => {
@@ -79,21 +91,20 @@ const problems = (out, raw) => {
   if (out.includes("__other__")) found.push("raw __other__");
   if (/\bundefined\b|\[object Object\]|NaN/.test(out)) found.push("undefined / NaN");
   if (/ \.(\s|$)|of \.|in {2,}\w|, ,|\(\)/.test(out.replace(/\n/g, " "))) found.push("blank gap");
+  if (/\bitem\d+\b/.test(out)) found.push("raw option code (itemN)");
   for (const r of raw) if (out.includes(r)) found.push(`raw value "${r}"`);
   return found;
 };
 
-describe("report contract: no raw answer values or blank gaps, for every option of every field", () => {
-  for (const sectionKey of SECTIONS) {
+for (const wording of FINAL_TYPES) describe(`report contract (${wording.profile.inspectionType} / ${wording.profile.propertyType}): no raw answer values or blank gaps, for every option of every field`, () => {
+  for (const sectionKey of Object.keys(wording.composers)) {
     it(sectionKey, () => {
-      const fields = templateOf(sectionKey);
+      const fields = templateOf(wording.profile, sectionKey);
+      if (!fields) return; // this report type's form has no such section
       const fields2 = choiceFields(fields);
-      const damageSubs = [];
-      const walkSubs = (fs) => fs.forEach((f) => { if (f.key.startsWith("sub_")) damageSubs.push(f); if (f.itemFields) walkSubs(f.itemFields); });
-      walkSubs(fields);
       let tried = 0;
       const failures = [];
-      for (const { field } of fields2) {
+      for (const { field, path, siblings } of fields2) {
         // the stored codes (front_left, timber_palings) must never reach the reader; a typed Other
         // only exists on fields the template marks allowOther
         const rawValues = field.options.map((o) => o.value).filter((v) => v.includes("_"));
@@ -101,8 +112,8 @@ describe("report contract: no raw answer values or blank gaps, for every option 
         for (const v of variants) {
           const value = MULTI.has(field.type) ? [v] : v;
           const answers = fill(fields);
-          setEverywhere(answers, field.key, value, damageSubs);
-          const draft = flattenSectionToDraft(fields, answers, sectionKey);
+          setAt(answers, path, field.key, value, siblings);
+          const draft = flattenSectionToDraft(fields, answers, sectionKey, wording.profile);
           const out = `${draft.reportText}\n${JSON.stringify(draft.fields)}`;
           tried += 1;
           const bad = problems(out, rawValues);

@@ -23,6 +23,7 @@ const template = (k) =>
 
 const server = await createServer({ root: webRoot, server: { middlewareMode: true }, logLevel: "error" });
 const { flattenSectionToDraft } = await server.ssrLoadModule("/src/web/templateFields.ts");
+const HOUSE = { inspectionType: "dilapidation", propertyType: "residential_house" };
 
 const SAMPLE = "Typed example";
 
@@ -97,7 +98,7 @@ function runSection(sec) {
     const stripped = JSON.parse(JSON.stringify(raw, (_k, v) => (v === "__blank__" ? undefined : v)));
     return convert(tpl.fields, stripped);
   };
-  const outputFor = (topPatch, instPatch) => render(flattenSectionToDraft(tpl.fields, answersFor(topPatch, instPatch), sec.key).reportText);
+  const outputFor = (topPatch, instPatch) => render(flattenSectionToDraft(tpl.fields, answersFor(topPatch, instPatch), sec.key, HOUSE).reportText);
   const baseline = outputFor({}, {});
 
   const groups = [];
@@ -176,7 +177,7 @@ function damageRows() {
   const base = { present: "yes", condition: "Fair" };
   const run = (d) => {
     const answers = convert(tpl.fields, { ...base, damages: [d] });
-    const text = flattenSectionToDraft(tpl.fields, answers, "pool_spa").reportText;
+    const text = flattenSectionToDraft(tpl.fields, answers, "pool_spa", HOUSE).reportText;
     return render(text).split("\n").filter((p) => /there (is|are)\b/i.test(p) || /^The .* is approximately/.test(p)).join("\n");
   };
   const loc = "centre of the pool deck";
@@ -207,7 +208,7 @@ function notesRows() {
   const tpl = template("notes");
   const movement = tpl.fields.find((f) => f.key === "movement");
   const rows = [];
-  const run = (answers) => render(flattenSectionToDraft(tpl.fields, convert(tpl.fields, answers), "notes").reportText) || "(nothing is printed -- the NOTES heading is hidden if there is nothing else)";
+  const run = (answers) => render(flattenSectionToDraft(tpl.fields, convert(tpl.fields, answers), "notes", HOUSE).reportText) || "(nothing is printed -- the NOTES heading is hidden if there is nothing else)";
   for (const item of movement.repeat.fixedInstances) {
     rows.push({ situation: `Checklist: ${item.label}`, option: "No", sentence: run({ movement: { [item.key]: { value: "no" } } }) });
     rows.push({ situation: `Checklist: ${item.label}`, option: `Yes, detail typed: "${SAMPLE}"`, sentence: run({ movement: { [item.key]: { value: "yes", note: SAMPLE } } }) });
