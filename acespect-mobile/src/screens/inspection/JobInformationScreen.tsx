@@ -431,6 +431,7 @@ export function JobInformationScreen({
               done={systemStatus.offlineSave.ready}
             />
           </SectionCard>
+          <View style={{ height: keyboardScroll.extraBottom }} />
         </ScrollView>
         </ScrollIntoViewContext.Provider>
       )}

@@ -373,6 +373,7 @@ export function DynamicSectionScreen({
                 />
               </SectionCard>
             )}
+            <View style={{ height: keyboardScroll.extraBottom }} />
           </ScrollView>
           </ScrollIntoViewContext.Provider>
         )}
