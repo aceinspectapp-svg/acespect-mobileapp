@@ -20,7 +20,7 @@ const snapshot = JSON.parse(readFileSync(resolve(webRoot, "../acespect-backend/p
 const snapshotProfiles = [...new Set(snapshot.map((t) => `${t.inspectionType}/${t.propertyType}`))].sort();
 
 // The report types whose own wording has been supplied. Add a type here when its wording document has been turned into its own file.
-const FINAL = ["dilapidation/commercial_properties", "dilapidation/public_assets", "dilapidation/residential_house"];
+const FINAL = ["dilapidation/apartment", "dilapidation/commercial_properties", "dilapidation/public_assets", "dilapidation/residential_house"];
 
 describe("report types", () => {
   it("has a wording entry for every report type that has templates, and no others", () => {

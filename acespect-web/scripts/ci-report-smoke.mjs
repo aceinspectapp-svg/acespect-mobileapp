@@ -31,6 +31,7 @@ const SNAP = JSON.parse(readFileSync(resolve(here, "../../acespect-backend/prism
 const HOUSE = { inspectionType: "dilapidation", propertyType: "residential_house" };
 const PUBLIC_ASSETS = { inspectionType: "dilapidation", propertyType: "public_assets" };
 const COMMERCIAL = { inspectionType: "dilapidation", propertyType: "commercial_properties" };
+const APARTMENT = { inspectionType: "dilapidation", propertyType: "apartment" };
 const tpl = (k, p = HOUSE) => SNAP.find((t) => t.inspectionType === p.inspectionType && t.propertyType === p.propertyType && t.sectionKey === k);
 
 // Photos are served by the web app itself, so the test needs no network access.
@@ -216,6 +217,27 @@ const commercialAnswers = {
   },
 };
 
+// An apartment: the unit and building checklist, with the grouped sections.
+const apartmentAnswers = {
+  "job-info": { jobNumber: "HV-26-CI04", inspectionDate: "2026-10-03", assignedInspector: "CI Inspector", clientName: "CI Apartment Client", inspectionAddress: "1 Smoke Test Road, Box Hill VIC 3128", weather: ["Dry"] },
+  description: {
+    buildingType: "Apartment Block", constructedYear: "2010", storeys: "4", slope: "Flat", cladding: "Brick veneer", foundations: "Concrete slab", roofDesign: "Flat", roofCovering: "Membrane", windows: "Aluminium frame",
+    worksType: "Excavation", projectAddr: "3 Smoke Test Road", direction: "Left", scopeType: "External & Internal (full)", limitations: "no", safetyIssues: "yes", safetyIssuesNotes: "Loose balustrade on level 2",
+  },
+  driveway: { items: [{ location: "Front", material: "Concrete", condition: "Fair", obstructions: ["Parked Vehicle"], notableDamage: "yes", safetyHazard: "no", damages: [crack("near the ramp", { notes: "" })] }] },
+  elevations: {
+    elev_overview_elevations: "All accessible faces", elev_overview_partyWall: "yes", elev_overview_claddingCond: "Fair", elev_overview_comments: "Access from balconies only",
+    ext_walls_material: "Brick", ext_walls_rendered: "yes", ext_walls_condition: "Fair", ext_walls_majorCracking: "no", ext_walls_damages: [crack("east wall", { notes: "" })],
+    front_door_material: "Timber", front_door_condition: "Satisfactory with typical wear and tear", front_door_requires: "Re-painting", front_door_deadlocks: "yes",
+  },
+  internal_areas: {
+    int_roof_applicable: "no", int_roof_naReason: "Roof cavity not accessible", int_roof_comments: "Roof space is common property",
+    ceilings_material: "Plasterboard", ceilings_cornices: "Cove", ceilings_condition: "Fair", ceilings_adequatelyFixed: "yes", ceilings_damages: [crack("ceiling above the kitchen", { notes: "" })],
+    plumbing_waterSupplyOn: "yes", plumbing_waterLeaks: "no",
+  },
+  notes: { structural_structurallySound: "no", structural_describe: "Differential settlement at the north wall", post_project_describe: "No access to the plant room" },
+};
+
 // One report type, end to end: submit, compose the wording, approve, download the PDF, read what the reader would see.
 async function runCase(c) {
   console.log(`\n== ${c.name}`);
@@ -321,6 +343,25 @@ pdfs.push(await runCase({
     "This elevation is on the boundary and could not be inspected.",
     "The most significant items are",
     "Satisfactory and typical condition. Water stains observed. Sections were obscured by sarking.",
+  ],
+  minPages: 6, minImages: 4,
+}));
+
+pdfs.push(await runCase({
+  name: "Dilapidation / Apartment",
+  profile: APARTMENT, inspectionTitle: "Dilapidation", propertyTitle: "Apartment", jobNo: "HV-26-CI04", client: "CI Apartment Client",
+  answers: apartmentAnswers, photoSections: ["driveway", "elevations", "internal_areas"],
+  headings: ["Description and Overview", "Condition Summary", "External walls", "Ceilings", "Front door"],
+  phrases: [
+    "The property is an apartment block, with 4 storeys on a flat block of land",
+    "The proposed works are excavation.",
+    "The scope for inspection is external and internal to all structures.",
+    "This elevation is on the boundary and could not be inspected.",
+    "External walls constructed of brick.",
+    "The front door requires re-painting.",
+    "Roof space: not applicable",
+    "The most significant items are",
+    "Notable damage was observed.",
   ],
   minPages: 6, minImages: 4,
 }));
