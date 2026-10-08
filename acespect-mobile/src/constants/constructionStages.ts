@@ -152,7 +152,7 @@ export const CONSTRUCTION_STAGES: ConstructionStage[] = [
   {
     id: 'slab_frame',
     title: 'Slab + Frame',
-    subtitle: 'Stages 1 & 2 in one visit · Slab measurements and quality, then the frame',
+    subtitle: 'Stages 2 & 3 in one visit · Slab measurements and quality, then the frame',
     icon: 'layers-outline',
     available: true,
     combo: true,
@@ -176,7 +176,7 @@ export const CONSTRUCTION_STAGES: ConstructionStage[] = [
   {
     id: 'lock_fix',
     title: 'Lock-Up + Fixing',
-    subtitle: 'Stages 3 & 4 in one visit · External walls, roofing, then plaster to waterproofing',
+    subtitle: 'Stages 4 & 5 in one visit · External walls, roofing, then plaster to waterproofing',
     icon: 'layers-outline',
     available: true,
     combo: true,
