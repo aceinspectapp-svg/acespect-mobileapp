@@ -32,6 +32,8 @@ import {
   optionLabel,
   tail,
   typicalCondition,
+  proposedWorksParagraph,
+  scopeAndSafetyParagraphs,
   yesNo,
 } from "./shared";
 import type { ReportWording } from "./types";
@@ -457,7 +459,8 @@ const description: Composer = (inst, itemFields) => {
 
   if (windows.length) parts.push(`Windows are constructed of ${joinList(windows)}.`);
 
-  return parts.join(" ");
+  // The scope and safety answers follow the property description, each as its own paragraph.
+  return [parts.join(" "), proposedWorksParagraph(itemFields, inst), ...scopeAndSafetyParagraphs(inst)].filter(Boolean).join("\n\n");
 };
 
 /**
@@ -504,7 +507,7 @@ const notes: Composer = (inst, itemFields, label) => {
 
 
 /** The sentences for Dilapidation / Residential House. */
-const COMPOSERS: Record<string, Composer> = {
+export const residentialHouseComposers: Record<string, Composer> = {
   description,
   notes,
   driveway,
@@ -531,7 +534,7 @@ const ABSENCE: Record<string, string> = {
 export const dilapidationResidentialHouse: ReportWording = {
   profile: { inspectionType: "dilapidation", propertyType: "residential_house" },
   status: "final",
-  composers: COMPOSERS,
+  composers: residentialHouseComposers,
   absence: ABSENCE,
   // Description is flat (no repeating group). Driveway and Pool / Spa are flat in the published templates, but the original seed wrapped them in a one-item list.
   isFlatComposed: (sectionKey, templateFields) =>

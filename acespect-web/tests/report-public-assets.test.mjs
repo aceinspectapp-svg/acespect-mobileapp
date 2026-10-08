@@ -81,6 +81,8 @@ describe("Public Assets: Description and Overview", () => {
     const fields = draft("description", desc).fields;
     const blocks = wordingFor(PA).descriptionBlocks({ fields, areaCount: 2 });
     assert.equal(blocks.works, "The project works are to the property at 123 Test Street.");
+    const placed = wordingFor(PA).descriptionBlocks({ fields: { ...fields, siteSide: "Front", siteDirection: "NE" }, areaCount: 2 });
+    assert.equal(placed.works, "The project works are to the property at 123 Test Street, which is at the front - approximately north-east - of the site of this inspection.");
     assert.equal(blocks.scope, "The scope for inspection is public assets including footpaths, utility pit covers, kerb and channel and road surfaces to the following two areas:");
     assert.equal(wordingFor(PA).descriptionBlocks({ fields, areaCount: 0 }).scope, "The scope for inspection is public assets including footpaths, utility pit covers, kerb and channel and road surfaces");
   });
@@ -184,6 +186,25 @@ describe("Public Assets: Condition Summary", () => {
   it("notes the defects recorded against the category", () => {
     assert.ok(rows[0].defectNote.includes("outside no. 7"));
     assert.equal(rows[1].defectNote, undefined);
+  });
+});
+
+describe("Public Assets: every answer on the website form is printed", () => {
+  it("prints the safety, access and scope-limitation answers on the Description", () => {
+    const p = paragraphs(draft("description", { proposedWorksType: "Road", safetyAssessed: "yes", safetyAssessedNotes: "Traffic management in place", scopeLimitations: "yes", scopeLimitationsNotes: "Part of the lane was fenced off" }).reportText);
+    assert.ok(p.includes("All safety and access matters were assessed on site. Traffic management in place."));
+    assert.ok(p.includes("Limitations to the scope of the inspection: Part of the lane was fenced off."));
+  });
+
+  it("says which way the road runs, and each asset's start point, direction and size", () => {
+    const part = {
+      partName: "Part A", runsDirection: "South to north", surveyStart: "South end", surveyDirection: "North", surveyEnd: "North end",
+      itemsPresent: ["Kerb and Channel"], kerbs_material: ["Concrete"], kerbs_condition: "Fair", kerbs_summary: "Several minor cracks",
+      kerbs_assets: [{ assetType: "Utility pit cover", count: "1", condition: "Fair", location: "no. 7", startDirection: "the driveway, heading north", widthMm: 600, lengthMm: 900 }],
+    };
+    const p = paragraphs(draft("elevations", { parts: [part] }).reportText);
+    assert.ok(p.includes("The road / lane runs south to north."));
+    assert.ok(p.includes("There is a utility pit cover at no. 7. It is in fair condition with typical wear and tear. Start point and direction: the driveway, heading north. It is approximately 600mm wide and approximately 900mm long."));
   });
 });
 

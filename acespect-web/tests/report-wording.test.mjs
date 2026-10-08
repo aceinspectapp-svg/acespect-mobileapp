@@ -630,3 +630,22 @@ describe("House wording aligned to the reference document", () => {
     assert.ok(!/crack/i.test(run("no_visible_significant_cracking").replace(/cracking observed\./i, "")));
   });
 });
+
+describe("House: scope, safety and additional damage answers are printed", () => {
+  it("prints scope changes, limitations and safety issues on the Description, and nothing for a plain 'No'", () => {
+    const p = paragraphs(
+      text("description", { constructionIs: "single_storey_house", scopeChanges: "Rear shed added", scopeLimitations: "yes", scopeLimitationsNotes: "Roof space not accessible", safetyIssues: "yes", safetyIssuesNotes: "Loose paving at the entry" }).reportText,
+    );
+    assert.ok(p.includes("Changes to the scope: Rear shed added."));
+    assert.ok(p.includes("Limitations to the scope of the inspection: Roof space not accessible."));
+    assert.ok(p.includes("Safety issues: Loose paving at the entry."));
+    assert.ok(!/limitations|safety/i.test(text("description", { constructionIs: "single_storey_house", scopeLimitations: "no", safetyIssues: "no" }).reportText));
+  });
+
+  it("writes Notes' additional damage records as sentences, not just saved data", () => {
+    const out = text("notes", { damages: [{ location: "garden wall", damageType: "cracking", sub_cracking: "moderate", widthMm: 6, lengthMm: 900 }] });
+    const defect = paragraphs(out.reportText).find((x) => x.includes("garden wall"));
+    assert.ok(defect && !defect.includes("DEFECT::") && defect.includes("approximately 6mm wide and approximately 900mm long"), "plain text, no marker: Notes is a plain list");
+    assert.equal(out.damages.length, 1);
+  });
+});

@@ -11,7 +11,7 @@ import type { ConditionSummaryRow } from "../templateFields";
 import { asString, buildDefectNote, isGateSatisfied, withPeriod } from "../templateFields";
 import { gradeOf } from "../conditionGrades";
 import type { Composer } from "./shared";
-import { conditionOf, damageSentences, joinList, lower, many, observedSentence, one } from "./shared";
+import { conditionOf, damageSentences, defectOffsets, joinList, lower, many, observedSentence, one, scopeAndSafetyParagraphs } from "./shared";
 import type { ReportWording } from "./types";
 
 // ---- Description and Overview --------------------------------------------------------------
@@ -19,7 +19,9 @@ import type { ReportWording } from "./types";
 /** "The inspection is for Public Assets to the {development site}." */
 const description: Composer = (inst, itemFields) => {
   const worksType = lower(one(itemFields, inst, ["proposedWorksType"]));
-  return worksType ? `The inspection is for Public Assets to the ${worksType}.` : "The inspection is for Public Assets.";
+  const lead = worksType ? `The inspection is for Public Assets to the ${worksType}.` : "The inspection is for Public Assets.";
+  // What was recorded about the scope and about safety follows, each as its own paragraph.
+  return [lead, ...scopeAndSafetyParagraphs(inst)].join("\n\n");
 };
 
 const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
@@ -35,15 +37,25 @@ function derivedFields(sectionKey: string, scope: AnswerTree, templateFields: Te
 /** The two sentences the Description page words for this report type. */
 function descriptionBlocks({ fields, areaCount }: { fields: Record<string, unknown>; areaCount: number }): { works?: string; scope?: string } {
   const address = typeof fields.projectSiteAddress === "string" ? fields.projectSiteAddress.trim() : "";
+  const text = (v: unknown): string => (typeof v === "string" ? clean(v) : "");
+  const side = text(fields.siteSide);
+  const direction = text(fields.siteDirection);
   const items = Array.isArray(fields.scopeItems) ? (fields.scopeItems as string[]) : [];
   const areas = areaCount > 0 ? ` to the following ${numberWord(areaCount)} area${areaCount === 1 ? "" : "s"}:` : "";
   return {
-    works: address ? `The project works are to the property at ${address}.` : undefined,
+    // Where the project works are in relation to the site, when the inspector gave a side and a direction.
+    works: address
+      ? side && direction
+        ? `The project works are to the property at ${address}, which is at the ${lower(side)} - approximately ${COMPASS[direction] ?? lower(direction)} - of the site of this inspection.`
+        : `The project works are to the property at ${address}.`
+      : undefined,
     scope: items.length ? `The scope for inspection is public assets including ${joinList(items)}${areas}` : undefined,
   };
 }
 
 // ---- Survey parts ---------------------------------------------------------------------------
+
+const COMPASS: Record<string, string> = { NE: "north-east", NW: "north-west", SE: "south-east", SW: "south-west" };
 
 /** A choice the form offers as "Other" with no box to type in says nothing. */
 const clean = (label: string): string => (/^other$/i.test(label.trim()) ? "" : label.trim());
@@ -134,23 +146,13 @@ function assetSentence(assetFields: TemplateField[], asset: AnswerTree): string 
   const cond = conditionOf(assetFields, asset, ["condition"]);
   const state = cond.word ? ` ${count === 1 ? "It is" : "They are"} in ${cond.word} condition with typical wear and tear.` : "";
   const lead = count === 1 ? `There is ${articleFor(singular)} ${singular}${at}.` : `There are ${numberWord(count)} ${plural}${at}.`;
-  return `${lead}${state}`;
-}
-
-/**
- * Where each defect list's sentences start in the Part's combined defect list -- the walk collects them in
- * template order, only for lists the inspector actually reached (their gate is satisfied).
- */
-function defectOffsets(itemFields: TemplateField[], inst: AnswerTree): Record<string, number> {
-  const offsets: Record<string, number> = {};
-  let next = 0;
-  for (const field of itemFields) {
-    if (field.type !== "damage-list" || !isGateSatisfied(field, inst)) continue;
-    offsets[field.key] = next;
-    const list = inst[field.key];
-    next += Array.isArray(list) ? list.length : 0;
-  }
-  return offsets;
+  // Where the asset's run starts and which way it goes, and its size, as the inspector recorded them.
+  const start = asString(asset.startDirection).trim();
+  const width = Number(asset.widthMm) || 0;
+  const length = Number(asset.lengthMm) || 0;
+  const sizeBits = [width > 0 ? `approximately ${width}mm wide` : "", length > 0 ? `approximately ${length}mm long` : ""].filter(Boolean);
+  const extra = [start ? `Start point and direction: ${withPeriod(start)}` : "", sizeBits.length ? `${count === 1 ? "It is" : "They are each"} ${sizeBits.join(" and ")}.` : ""].filter(Boolean).join(" ");
+  return `${lead}${state}${extra ? ` ${extra}` : ""}`;
 }
 
 const surveyPart: Composer = (inst, itemFields, label) => {
@@ -170,6 +172,9 @@ const surveyPart: Composer = (inst, itemFields, label) => {
   const endRef = asString(inst.endRef).trim();
   const from = start ? `the ${lower(start)}${startRef ? ` at ${startRef}` : ""}` : startRef;
   const to = end ? `the ${lower(end)}${endRef ? ` at ${endRef}` : ""}` : endRef;
+  // Which way the road or lane runs.
+  const runs = clean(one(itemFields, inst, ["runsDirection"]));
+  if (runs) blocks.push(`The road / lane runs ${lower(runs)}.`);
   const walkPieces: string[] = [];
   if (from) walkPieces.push(`commenced from ${from}`);
   const proceeded = [heading ? `proceeded ${lower(heading)}` : to ? "proceeded" : "", to ? `to ${to}` : ""].filter(Boolean).join(" ");

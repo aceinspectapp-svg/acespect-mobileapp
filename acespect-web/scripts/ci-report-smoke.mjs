@@ -30,6 +30,7 @@ if (!EMAIL || !PASSWORD) {
 const SNAP = JSON.parse(readFileSync(resolve(here, "../../acespect-backend/prisma/templates-snapshot.json"), "utf8"));
 const HOUSE = { inspectionType: "dilapidation", propertyType: "residential_house" };
 const PUBLIC_ASSETS = { inspectionType: "dilapidation", propertyType: "public_assets" };
+const COMMERCIAL = { inspectionType: "dilapidation", propertyType: "commercial_properties" };
 const tpl = (k, p = HOUSE) => SNAP.find((t) => t.inspectionType === p.inspectionType && t.propertyType === p.propertyType && t.sectionKey === k);
 
 // Photos are served by the web app itself, so the test needs no network access.
@@ -141,6 +142,7 @@ const houseAnswers = {
     movement: { bouncy_floors: { value: "yes", note: "the hallway near the kitchen" }, doors_binding: { value: "no" }, loose_bricks: { value: "yes", note: "the rear chimney" } },
     noAccess: [{ area: "roof space", reason: "no manhole access" }],
     additionalNotes: "Owner mentioned recent storm damage to the rear fence, unrelated to project works.",
+    damages: [crack("garden wall", { notes: "" })],
   },
 };
 
@@ -187,6 +189,30 @@ const publicAssetsAnswers = {
         lanesurface_assets: [{ assetType: "Stormwater cover", count: "1", condition: "Fair", location: "the lane entry" }],
       },
     ],
+  },
+};
+
+// A commercial / industrial site: the lean one-line wording, offices and warehouse areas.
+const SAT = "Satisfactory with typical wear and tear";
+const commercialAnswers = {
+  "job-info": { jobNumber: "HV-26-CI03", inspectionDate: "2026-10-03", assignedInspector: "CI Inspector", clientName: "CI Commercial Client", inspectionAddress: "1 Smoke Test Road, Box Hill VIC 3128", weather: ["Dry"] },
+  description: {
+    constructionIs: ["Warehouse"], constructedYear: "1990", streetFrontage: "North", blockSlope: "Mostly flat", wallCladdingGround: ["Concrete panels"], foundations: "Concrete slab",
+    roofDesign: "Pitched", roofCovering: ["Colorbond"], windows: "Aluminium", proposedWorksType: "Development site", projectSiteAddress: "3 Smoke Test Road", siteSide: "Front", siteDirection: "North",
+  },
+  driveway: { present: "yes", locatedAt: "Front left", material: "Concrete", condition: "Fair", crackingSummary: "Several minor cracks", obscuredBy: ["Vegetation"], damages: [crack("near the gate", { notes: "" })] },
+  paving_paths: { areas: { front: { present: "yes", material: ["Concrete"], condition: SAT, obscuredBy: ["Vegetation"] }, left: { present: "no" }, rear: { present: "yes", material: ["Pavers"], condition: "Poor", damages: [crack("the loading apron", { notes: "" })] } } },
+  fences: { items: { front: { present: "no" }, left: { present: "yes", material: ["Brick"], condition: SAT, obscuredBy: ["Vegetation"] }, rear: { present: "yes", material: ["Metal sheets"], condition: "Poor", worstItem: "Rusted posts and leaning panels near the gate" } } },
+  garage_carport_sheds: { structures: { garage: { present: "yes", attachment: "Separate to building", position: "Front", walls: ["Brick"], wallsCondition: SAT, roof: ["Metal"], floor: ["Concrete hardstand"], obscuredBy: ["Shelving", "Stored goods"] }, loading_dock: { present: "no" } } },
+  elevations: { sides: { front: { orientation: "North", condition: SAT, damageSummary: "No visible significant damage", obscuredBy: ["Vegetation"] }, left: { orientation: "West", partyWall: "yes", partyWallNumber: "12", condition: "Fair", damageSummary: "Several minor gaps and cracks", damages: [crack("above the window", { notes: "" })] } } },
+  pool_spa: { areas: { reception_foyer: { present: "yes", floorLevel: "Ground floor", generalCondition: SAT, damageSummary: "No visible significant damage" }, offices: { present: "yes", floorLevel: "1st floor", generalCondition: "Fair", damageSummary: "Several minor cracks and gaps", damages: [crack("ceiling cornice", { notes: "" })] } } },
+  notes: { postProject: "yes", additionalNotes: "", damages: [crack("rear loading bay", { notes: "" })] },
+  internal_areas: {
+    gen_renovationsInProgress: "no", gen_safetyAdvisories: "no", gen_roomsNotAccessed: "Plant room (locked)", gen_movementObserved: "no",
+    wh_floorLevel: "Ground floor", wh_obscuredBy: ["Shelving", "Pallets"], wh_generalCondition: "Fair", wh_damageSummary: "Several minor gaps and cracks", wh_damages: [crack("north wall, grid C", { notes: "" })],
+    prod_floorLevel: "Ground floor", prod_generalCondition: SAT, prod_damageSummary: "No visible significant damage",
+    hard_floorLevel: "Ground floor", hard_generalCondition: "Poor", hard_damageSummary: "Multiple items of damage throughout", hard_damages: [crack("slab", { widthMm: 8, lengthMm: 2000, notes: "" })],
+    roofin_generalCondition: SAT, roofin_damageSummary: ["Water stains"], roofin_sarking: "yes",
   },
 };
 
@@ -275,6 +301,28 @@ pdfs.push(await runCase({
     "hardwood sleepers", "stacked pallets",
   ],
   minPages: 4, minImages: 4,
+}));
+
+pdfs.push(await runCase({
+  name: "Dilapidation / Commercial Properties",
+  profile: COMMERCIAL, inspectionTitle: "Dilapidation", propertyTitle: "Commercial Properties", jobNo: "HV-26-CI03", client: "CI Commercial Client",
+  answers: commercialAnswers, photoSections: ["driveway", "paving_paths", "fences", "garage_carport_sheds", "elevations", "pool_spa", "internal_areas"],
+  headings: ["Description and Overview", "Condition Summary", "Reception / Foyer", "Warehouse", "Underside Roof Covering & Frame"],
+  phrases: [
+    "The property is a warehouse, facing north on a mostly flat block of land",
+    "The driveway is to the front left of the block and is constructed of concrete.",
+    "Driveway: Several minor cracks. Sections were obscured by vegetation.",
+    "The left fence is constructed of brick.",
+    "It is located on the ground floor.",
+    "There is no paving to the left-hand side of property.",
+    "There is no front fence.",
+    "Left Fence: Satisfactory.",
+    "Sections of the walls and hardstand were obscured by shelving and stored goods.",
+    "This elevation is on the boundary and could not be inspected.",
+    "The most significant items are",
+    "Satisfactory and typical condition. Water stains observed. Sections were obscured by sarking.",
+  ],
+  minPages: 6, minImages: 4,
 }));
 
 if (failures.length) {

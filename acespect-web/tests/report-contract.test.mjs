@@ -50,30 +50,40 @@ function fill(fields) {
   return a;
 }
 
-// every field that offers a choice, with the path of group keys to reach it
+// every field that offers a choice, with the path of groups / lists it sits in and the fields beside it
 function choiceFields(fields, path = []) {
   const out = [];
   for (const f of fields) {
-    if ((SELECT.has(f.type) || MULTI.has(f.type)) && f.options?.length) out.push({ field: f, path });
+    if ((SELECT.has(f.type) || MULTI.has(f.type)) && f.options?.length) out.push({ field: f, path, siblings: fields });
     if (f.itemFields) out.push(...choiceFields(f.itemFields, [...path, f.key]));
   }
   return out;
 }
 
-// set `key` to `value` in every object of the answer tree that has that key (every instance / defect entry)
-function setEverywhere(node, key, value, damageSubs) {
-  if (Array.isArray(node)) return node.forEach((n) => setEverywhere(n, key, value, damageSubs));
-  if (!node || typeof node !== "object") return;
-  if (key in node) {
+// walk down the answer tree along `path` (through lists and records of fixed instances) and call `cb` on every object reached
+function atPath(node, path, cb) {
+  if (!path.length) return cb(node);
+  const child = node?.[path[0]];
+  if (Array.isArray(child)) child.forEach((c) => atPath(c, path.slice(1), cb));
+  else if (child && typeof child === "object") {
+    const vals = Object.values(child);
+    if (vals.length && vals.every((v) => v && typeof v === "object" && !Array.isArray(v))) vals.forEach((c) => atPath(c, path.slice(1), cb));
+    else atPath(child, path.slice(1), cb);
+  }
+}
+
+// set one field, only where it lives (not in other lists that happen to use the same name)
+function setAt(answers, path, key, value, siblings) {
+  atPath(answers, path, (node) => {
+    if (!node || typeof node !== "object" || !(key in node)) return;
     node[key] = value;
     // changing a defect type: answer that type's own sub-type question too
     if (key === "damageType") {
-      for (const sub of damageSubs) {
+      for (const sub of siblings.filter((f) => f.key.startsWith("sub_"))) {
         if (sub.gate?.equals === (typeof value === "string" ? value : "")) node[sub.key] = sub.options?.[0]?.value;
       }
     }
-  }
-  Object.values(node).forEach((n) => setEverywhere(n, key, value, damageSubs));
+  });
 }
 
 const problems = (out, raw) => {
@@ -92,12 +102,9 @@ for (const wording of FINAL_TYPES) describe(`report contract (${wording.profile.
       const fields = templateOf(wording.profile, sectionKey);
       if (!fields) return; // this report type's form has no such section
       const fields2 = choiceFields(fields);
-      const damageSubs = [];
-      const walkSubs = (fs) => fs.forEach((f) => { if (f.key.startsWith("sub_")) damageSubs.push(f); if (f.itemFields) walkSubs(f.itemFields); });
-      walkSubs(fields);
       let tried = 0;
       const failures = [];
-      for (const { field } of fields2) {
+      for (const { field, path, siblings } of fields2) {
         // the stored codes (front_left, timber_palings) must never reach the reader; a typed Other
         // only exists on fields the template marks allowOther
         const rawValues = field.options.map((o) => o.value).filter((v) => v.includes("_"));
@@ -105,7 +112,7 @@ for (const wording of FINAL_TYPES) describe(`report contract (${wording.profile.
         for (const v of variants) {
           const value = MULTI.has(field.type) ? [v] : v;
           const answers = fill(fields);
-          setEverywhere(answers, field.key, value, damageSubs);
+          setAt(answers, path, field.key, value, siblings);
           const draft = flattenSectionToDraft(fields, answers, sectionKey, wording.profile);
           const out = `${draft.reportText}\n${JSON.stringify(draft.fields)}`;
           tried += 1;

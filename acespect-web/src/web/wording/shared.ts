@@ -1,5 +1,5 @@
 import type { AnswerTree, AnswerValue, TemplateField } from "../templateFields";
-import { asString, asStringArray, otherAnswerText, withPeriod } from "../templateFields";
+import { asString, asStringArray, isGateSatisfied, otherAnswerText, withPeriod } from "../templateFields";
 import { gradeOf, shortConditionLabel } from "../conditionGrades";
 
 /**
@@ -160,6 +160,8 @@ export function damageLeadIn(location: string, plural: boolean): string {
   const be = plural ? "there are" : "there is";
   if (!location) return capitalize(be);
   if (LOCATION_STARTS_WITH_PREPOSITION_RE.test(location)) return `${capitalize(location)}, ${be}`;
+  // "the loading apron" already has its article: "At the loading apron", not "At the the loading apron".
+  if (/^the\s/i.test(location)) return `At ${location}, ${be}`;
   return `At the ${location}, ${be}`;
 }
 
@@ -321,5 +323,52 @@ export function tail(parts: string[], itemFields: TemplateField[], inst: AnswerT
   const notes = asString(inst.notes);
   if (notes) parts.push(withPeriod(notes));
   return parts.join("\n\n");
+}
+
+/**
+ * Where each defect list's sentences start in the Part's combined defect list -- the walk collects them in
+ * template order, only for lists the inspector actually reached (their gate is satisfied).
+ */
+export function defectOffsets(itemFields: TemplateField[], inst: AnswerTree): Record<string, number> {
+  const offsets: Record<string, number> = {};
+  let next = 0;
+  for (const field of itemFields) {
+    if (field.type !== "damage-list" || !isGateSatisfied(field, inst)) continue;
+    offsets[field.key] = next;
+    const list = inst[field.key];
+    next += Array.isArray(list) ? list.length : 0;
+  }
+  return offsets;
+}
+
+/**
+ * What the inspector recorded about the scope and about safety on the Description form, as sentences -- scope changes,
+ * limitations to the scope, safety issues (and, for Public Assets, whether safety and access were assessed). Nothing
+ * is said for an answer of "No" with nothing to add.
+ */
+export function scopeAndSafetyParagraphs(inst: AnswerTree): string[] {
+  const out: string[] = [];
+  const changes = asString(inst.scopeChanges).trim();
+  if (changes) out.push(`Changes to the scope: ${withPeriod(changes.replace(/\s*\n+\s*/g, " "))}`);
+  if (yesNo(inst, "scopeLimitations")) {
+    const notes = asString(inst.scopeLimitationsNotes).trim();
+    out.push(notes ? `Limitations to the scope of the inspection: ${withPeriod(notes.replace(/\s*\n+\s*/g, " "))}` : "There were limitations to the scope of the inspection.");
+  }
+  if (inst.safetyAssessed !== undefined && asString(inst.safetyAssessed) !== "") {
+    const notes = asString(inst.safetyAssessedNotes).trim();
+    const said = yesNo(inst, "safetyAssessed") ? "All safety and access matters were assessed on site." : "Safety and access matters were not assessed on site.";
+    out.push(notes ? `${said} ${withPeriod(notes.replace(/\s*\n+\s*/g, " "))}` : said);
+  }
+  if (yesNo(inst, "safetyIssues")) {
+    const notes = asString(inst.safetyIssuesNotes).trim();
+    out.push(notes ? `Safety issues: ${withPeriod(notes.replace(/\s*\n+\s*/g, " "))}` : "There were safety issues at the property.");
+  }
+  return out;
+}
+
+/** "The proposed works are to the development site." -- the form's "The proposed works are to" answer. */
+export function proposedWorksParagraph(itemFields: TemplateField[], inst: AnswerTree): string {
+  const type = lower(one(itemFields, inst, ["proposedWorksType"]));
+  return type ? `The proposed works are to the ${type}.` : "";
 }
 

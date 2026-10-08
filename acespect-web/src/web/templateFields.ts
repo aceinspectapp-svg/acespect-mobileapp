@@ -1,5 +1,5 @@
 import { API_BASE, getToken } from "./api";
-import { atLocation, isNotPresent } from "./wording/shared";
+import { atLocation, damageSentences, isNotPresent } from "./wording/shared";
 import { toSlug, type ReportProfile } from "./wording/profile";
 import { wordingFor } from "./wording/registry";
 import { composeSection, type ReportWording } from "./wording/types";
@@ -511,6 +511,7 @@ function walk(
     if (field.type === "damage-list") {
       const itemFields = field.itemFields ?? [];
       const damageTypeField = itemFields.find((f) => f.key === "damageType");
+      const firstIndex = damages.length;
       for (const { scope: inst } of resolveInstances(field, value)) {
         const typeRaw = asString(inst.damageType);
         const typeLabel = otherAnswerText(typeRaw) ?? (damageTypeField?.options?.find((o) => o.value === typeRaw)?.label || typeRaw);
@@ -528,6 +529,14 @@ function walk(
           notes: asString(inst.notes),
           photos: asStringArray(inst.photos),
         });
+      }
+      // A defect list that sits at the top of a section the wording writes item by item (Notes' "Additional damage
+      // records") is not narrated by any item -- write its sentences here, so they are printed, not just saved.
+      if (ancestorLabels.length === 0 && sectionKey && wording.composers[sectionKey] && !isFlatComposedSection) {
+        let text = damageSentences(scope, templateFields, { key: field.key, indexOffset: firstIndex });
+        // The Notes section prints as a plain numbered list (ReportView), which has no place for a defect's photos: plain sentences there.
+        if (sectionKey.startsWith("notes")) text = text.replace(/DEFECT::\d+::/g, "");
+        if (text) textParts.push(text);
       }
       continue;
     }
@@ -709,8 +718,11 @@ function walk(
     const composed = composeSection(wording, sectionKey!, scope, templateFields, "");
     // A flat section is a single instance, so the whole section is one summary row (no sub-label) -- unless this report type gives that section no summary row at all.
     const noSummary = wording.noSummarySections.includes(sectionKey!);
-    const row = noSummary ? undefined : conditionSummaryRow(templateFields, scope, undefined);
-    if (row) fields.conditionSummary = [row];
+    // A flat section can hold several graded areas (Warehouse & Production); that report type then writes its own rows.
+    const ownRows = noSummary ? undefined : wording.summaryRows?.(sectionKey!, scope, templateFields, "");
+    const row = noSummary || ownRows ? undefined : conditionSummaryRow(templateFields, scope, undefined);
+    if (ownRows) fields.conditionSummary = ownRows;
+    else if (row) fields.conditionSummary = [row];
     else if (!noSummary && templateFields.some((f) => f.type === "color-select")) fields.conditionSummary = [];
     return { fields, damages, reportText: composed ?? textParts.join("\n\n") };
   }
