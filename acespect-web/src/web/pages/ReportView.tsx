@@ -13,7 +13,8 @@ import { ReportConditions } from "../components/ReportConditions";
 import { ReportSection } from "../components/ReportSection";
 import { ReportConditionSummary, type ConditionSummaryCategory } from "../components/ReportConditionSummary";
 import { ReportPoolSpaDisclaimer } from "../components/ReportPoolSpaDisclaimer";
-import { SECTION_SENTENCE_COMPOSERS } from "../reportSentences";
+import { reportProfileOf } from "../wording/profile";
+import { wordingFor } from "../wording/registry";
 import type { ConditionSummaryRow } from "../templateFields";
 import { PhotoNumberProvider, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 
@@ -28,6 +29,8 @@ export function ReportView() {
   const navigate = useNavigate();
   const { getInspectionById, getUser, loading } = useAppData();
   const inspection = id ? getInspectionById(id) : undefined;
+  // The report type decides which wording applies (see wording/registry.ts).
+  const reportWording = wordingFor(reportProfileOf(inspection?.type ?? "", inspection?.propertyType ?? ""));
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
@@ -274,7 +277,7 @@ export function ReportView() {
               previously these only rendered as a side effect of iterating
               into the "notes" section inside renderList, so a genuinely
               empty Notes section (the `notes` composer now produces no text
-              at all when nothing was notable -- see reportSentences.ts) would
+              at all when nothing was notable -- see the report type's wording (src/web/wording/)) would
               have silently dropped this entire legal appendix along with it. */}
           <div className="report-page-break">
             <ReportScope />
@@ -303,7 +306,7 @@ export function ReportView() {
              name and plain paragraphs). SCOPE/Conditions are NOT rendered
              here -- they always print unconditionally further down in this
              file, regardless of whether this section exists or has content.
-             The `notes` composer (reportSentences.ts) only produces text for
+             The `notes` composer (the report type's wording (src/web/wording/)) only produces text for
              genuinely notable findings -- a checklist item answered "No"
              contributes nothing -- so an inspection with nothing notable
              ends up with empty reportText, and `bodySections`' own filter
@@ -331,7 +334,7 @@ export function ReportView() {
           <>
             <ReportSection
               section={withExcludedPhotosRemoved(s)}
-              hideDamageText={slug(s) in SECTION_SENTENCE_COMPOSERS}
+              hideDamageText={slug(s) in reportWording.composers}
               archiveUrl={
                 // Only for sections that have photos at all (judged on the unfiltered section, so a section whose
                 // photos were all left out of the report still points to its archive).
