@@ -45,7 +45,9 @@ export const MEAS = 'Photos with measurements';
  */
 export function check(key: string, label: string, choices: Choice[], group: string, o: { required?: boolean; photosAlways?: string } = {}): Draft[] {
   const options: TemplateFieldOption[] = choices.map((c) => ({ value: slug(c.label), label: c.label, color: COLOR[c.tone] }));
-  const rows: Draft[] = [{ key, type: 'pill-select', label, options, required: o.required ?? true, sectionLetter: group }];
+  // A red (defect) choice opens the defect-details form under the row in the app.
+  const defectOn = choices.filter((c) => c.tone === 'bad').map((c) => slug(c.label));
+  const rows: Draft[] = [{ key, type: 'pill-select', label, options, required: o.required ?? true, sectionLetter: group, ...(defectOn.length ? { defectOn } : {}) }];
   if (o.photosAlways) rows.push({ key: `${key}Photos`, type: 'photos', label: o.photosAlways, sectionLetter: group });
   return rows;
 }

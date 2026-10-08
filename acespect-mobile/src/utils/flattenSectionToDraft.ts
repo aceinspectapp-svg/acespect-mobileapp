@@ -2,6 +2,7 @@ import type { TemplateField } from '../services/templateApi';
 import type { DraftDamage } from '../context/InspectionDraftContext';
 import type { AnswerTree, AnswerValue } from '../components/inspection/fieldRenderers/types';
 import { isGateSatisfied, isRepeatRequirementMet } from '../components/inspection/fieldRenderers/types';
+import { CATEGORY_OPTIONS, DEFECT_DETAIL_FIELDS, SEVERITY_OPTIONS, defectScope, isDefectOpen } from '../components/inspection/fieldRenderers/defectDetail';
 
 interface FlattenResult {
   fields: Record<string, unknown>;
@@ -115,6 +116,20 @@ function walk(templateFields: TemplateField[], scope: AnswerTree, ancestorLabels
       continue;
     }
 
+    // A checklist row answered "Defect": its defect-details form becomes one recorded defect.
+    if (isDefectOpen(field, scope)) {
+      const d = defectScope(field, scope);
+      const sev = SEVERITY_OPTIONS.find((o) => o.value === asString(d.severity))?.label ?? '';
+      const cat = CATEGORY_OPTIONS.find((o) => o.value === asString(d.category))?.label ?? '';
+      const code = asString(d.constructionCode).trim();
+      damages.push({
+        type: asString(d.defectType).trim() || field.label,
+        location: [...ancestorLabels, asString(d.location).trim()].filter(Boolean).join(' — '),
+        notes: [field.label, sev && `Severity: ${sev}`, cat && `Category: ${cat}`, code && `Construction code: ${code}`].filter(Boolean).join(' · '),
+        photos: asStringArray(d.photos),
+      });
+    }
+
     if (field.type === 'photos') {
       // Not folded into `fields` (photo capture is a capability, not a
       // display value) -- the mobile PhotosFieldRenderer already registers
@@ -192,6 +207,12 @@ export function meetsAllRequiredFields(templateFields: TemplateField[], scope: A
     }
   }
   if (!ungrouped.every((f) => isFilled(scope[f.key]))) return false;
+  // A row answered "Defect" also needs its defect details (every field but the construction code).
+  for (const f of templateFields) {
+    if (!isGateSatisfied(f, scope) || !isDefectOpen(f, scope)) continue;
+    const d = defectScope(f, scope);
+    if (!DEFECT_DETAIL_FIELDS.every((df) => !df.required || isFilled(d[df.key]))) return false;
+  }
   for (const fields of grouped.values()) {
     if (!fields.some((f) => isFilled(scope[f.key]))) return false;
   }

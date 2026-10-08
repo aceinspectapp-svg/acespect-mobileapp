@@ -119,6 +119,9 @@ const baseFieldShape = {
   prefix: z.string().max(20).optional(),
   options: z.array(templateFieldOptionSchema).max(30).optional(),
   allowOther: z.boolean().optional(),
+  // pill-select rows only: the option values (the red "Defect" choices) that open the mobile app's defect-details form
+  // under the row (location, defect type, construction code, photos, severity, category).
+  defectOn: z.array(z.string().max(120)).max(10).optional(),
   gate: fieldGateSchema.optional(),
   repeat: repeatConfigSchema.optional(),
   // Despite the name (kept for backward compatibility with early single-letter
@@ -187,6 +190,7 @@ export interface TemplateField {
   prefix?: string;
   options?: TemplateFieldOption[];
   allowOther?: boolean;
+  defectOn?: string[];
   gate?: FieldGate;
   repeat?: RepeatConfig;
   itemFields?: TemplateField[];

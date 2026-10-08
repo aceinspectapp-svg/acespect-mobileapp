@@ -57,6 +57,8 @@ export interface TemplateField {
   label: string;
   type: TemplateFieldType;
   order: number;
+  /** pill-select rows only: the option values (the red "Defect" choices) that open the defect-details form under the row -- location, defect type, construction code, photos, severity and category. */
+  defectOn?: string[];
   required?: boolean;
   /** Fields sharing a requiredGroup are "either/or" required -- satisfied once any one of them has an answer. Ignored unless `required` is also set. */
   requiredGroup?: string;
