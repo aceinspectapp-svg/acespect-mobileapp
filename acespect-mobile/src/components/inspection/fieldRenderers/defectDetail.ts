@@ -12,32 +12,37 @@ import type { AnswerTree, AnswerValue } from './types';
 export const DEFECT_SUFFIX = '__defect';
 export const defectKey = (fieldKey: string) => `${fieldKey}${DEFECT_SUFFIX}`;
 
-const RED = '#E63329';
-const ORANGE = '#E8702A';
-const AMBER = '#E8A33D';
-const SLATE = '#5B6B82';
-
-/** Severity and category wording is fixed by the Houspect defect scheme. */
-export const SEVERITY_OPTIONS = [
-  { value: 'safety_hazard', label: 'Safety Hazard', color: RED },
-  { value: 'major_defect', label: 'Major Defect', color: ORANGE },
-  { value: 'minor_defect', label: 'Minor Defect', color: AMBER },
-  { value: 'monitor_serviceability', label: 'Monitor/Serviceability', color: SLATE },
-];
+/** Category and severity wording is fixed by the Houspect defect form; both can have several ticks. */
 export const CATEGORY_OPTIONS = [
-  { value: 'variations_from_plans', label: 'Variations from plans' },
-  { value: 'poor_workmanship', label: 'Poor workmanship' },
-  { value: 'not_compliant', label: 'Not compliant' },
+  { value: 'non_compliant_plans_specs', label: 'Non-compliant with approved plans/specs' },
+  { value: 'non_compliant_ncc_as', label: 'Non-compliant with NCC/AS' },
+  { value: 'workmanship_outside_tolerance', label: 'Workmanship outside tolerance' },
+  { value: 'material_product_defect', label: 'Material/product defect' },
+  { value: 'damage', label: 'Damage' },
+  { value: 'incomplete_work', label: 'Incomplete work' },
+  { value: 'design_documentation_conflict', label: 'Design/documentation conflict' },
+  { value: 'unable_to_inspect_concealed', label: 'Unable to inspect/concealed' },
+];
+export const SEVERITY_OPTIONS = [
+  { value: 'major', label: 'Major' },
+  { value: 'minor', label: 'Minor' },
+  { value: 'cosmetic', label: 'Cosmetic' },
+  { value: 'structural', label: 'Structural' },
+  { value: 'safety', label: 'Safety' },
+  { value: 'weatherproofing', label: 'Weatherproofing' },
+  { value: 'durability', label: 'Durability' },
+  { value: 'serviceability', label: 'Serviceability' },
+  { value: 'amenity', label: 'Amenity' },
 ];
 
-/** Every field is required except the construction code. */
+/** Location, category, severity and photographs are required; comments and the construction code are optional. */
 export const DEFECT_DETAIL_FIELDS: TemplateField[] = [
-  { key: 'location', label: 'Location', type: 'text', order: 0, required: true, placeholder: 'e.g. Front left corner, Bed 2' },
-  { key: 'defectType', label: 'Defect type', type: 'text', order: 1, required: true, placeholder: 'e.g. Cracked tile, gap at window seal' },
-  { key: 'constructionCode', label: 'Construction code (optional)', type: 'text', order: 2, placeholder: 'e.g. NCC / AS clause' },
+  { key: 'location', label: 'Location — level, room/zone, grid reference, element (footing, bearer, truss, flashing, etc.)', type: 'text', order: 0, required: true, placeholder: 'e.g. Level 1, Bed 2, grid B3, bearer' },
+  { key: 'category', label: 'Defect category (tick all that apply)', type: 'chip-multiselect', order: 1, required: true, options: CATEGORY_OPTIONS },
+  { key: 'severity', label: 'Defect severity (tick all that apply)', type: 'chip-multiselect', order: 2, required: true, options: SEVERITY_OPTIONS },
   { key: 'photos', label: 'Photographs', type: 'photos', order: 3, required: true },
-  { key: 'severity', label: 'Severity', type: 'pill-select', order: 4, required: true, options: SEVERITY_OPTIONS },
-  { key: 'category', label: 'Defect category', type: 'pill-select', order: 5, required: true, options: CATEGORY_OPTIONS },
+  { key: 'comments', label: 'Comments (optional)', type: 'textarea', order: 4 },
+  { key: 'constructionCode', label: 'Construction code (optional)', type: 'text', order: 5, placeholder: 'e.g. NCC / AS clause' },
 ];
 
 /** True when this row is currently answered with one of its defect choices. */

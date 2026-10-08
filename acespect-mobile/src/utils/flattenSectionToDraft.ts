@@ -119,13 +119,17 @@ function walk(templateFields: TemplateField[], scope: AnswerTree, ancestorLabels
     // A checklist row answered "Defect": its defect-details form becomes one recorded defect.
     if (isDefectOpen(field, scope)) {
       const d = defectScope(field, scope);
-      const sev = SEVERITY_OPTIONS.find((o) => o.value === asString(d.severity))?.label ?? '';
-      const cat = CATEGORY_OPTIONS.find((o) => o.value === asString(d.category))?.label ?? '';
+      // Several ticks are allowed; an answer saved by an earlier build may still be a single string.
+      const labels = (opts: { value: string; label: string }[], v: AnswerValue) =>
+        (Array.isArray(v) ? (v as string[]) : typeof v === 'string' && v ? [v] : []).map((x) => opts.find((o) => o.value === x)?.label ?? x);
+      const cat = labels(CATEGORY_OPTIONS, d.category);
+      const sev = labels(SEVERITY_OPTIONS, d.severity);
+      const comments = asString(d.comments).trim();
       const code = asString(d.constructionCode).trim();
       damages.push({
-        type: asString(d.defectType).trim() || field.label,
+        type: cat.join(', ') || 'Defect',
         location: [...ancestorLabels, asString(d.location).trim()].filter(Boolean).join(' — '),
-        notes: [field.label, sev && `Severity: ${sev}`, cat && `Category: ${cat}`, code && `Construction code: ${code}`].filter(Boolean).join(' · '),
+        notes: [field.label, sev.length && `Severity: ${sev.join(', ')}`, comments && `Comments: ${comments}`, code && `Construction code: ${code}`].filter(Boolean).join(' · '),
         photos: asStringArray(d.photos),
       });
     }
