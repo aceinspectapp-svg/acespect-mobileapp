@@ -29,7 +29,6 @@ export function StageRow({ stage, index, selected, onPress }: StageRowProps) {
       </View>
       <View style={styles.text}>
         <Text style={[styles.title, disabled && styles.titleDisabled]}>{stage.title}</Text>
-        <Text style={[styles.sub, disabled && styles.titleDisabled]} numberOfLines={2}>{stage.subtitle}</Text>
       </View>
       {disabled ? (
         <View style={styles.soon}>
