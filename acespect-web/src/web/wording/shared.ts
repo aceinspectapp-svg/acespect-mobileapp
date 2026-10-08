@@ -281,7 +281,7 @@ export function damageSentences(
 }
 
 export function obstructionsSentence(itemFields: TemplateField[], inst: AnswerTree, noun: string): string {
-  const labels = many(itemFields, inst, ["obstructions", "obscuredBy", "obstruction"]).map(lower);
+  const labels = many(itemFields, inst, ["obstructions", "obscuredBy", "obstruction"]).map(lower).map((l) => l.replace(/\bcar\/s\b/g, "cars"));
   if (labels.length === 0) return "";
   return ` Sections ${noun ? `of the ${noun} ` : ""}were obscured by ${joinList(labels)}.`;
 }

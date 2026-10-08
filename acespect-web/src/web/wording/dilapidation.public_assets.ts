@@ -86,7 +86,8 @@ type Category = {
 function overview(subject: string, verb: "is" | "are") {
   return ({ material, condition, wear }: { material: string; condition: string; wear: string }): string => {
     const made = material ? `constructed of ${material}` : "";
-    const state = condition ? `in ${condition} condition with ${wear}` : "";
+    // "with typical wear and tear" belongs to the satisfactory choice only: a fair, average or poor asset is just stated as such.
+    const state = condition ? `in ${condition} condition${condition === "satisfactory" ? ` with ${wear}` : ""}` : "";
     const body = [made, state].filter(Boolean).join(" and ");
     return body ? `${subject} ${verb} ${body}.` : "";
   };
@@ -132,6 +133,31 @@ function countOf(label: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** What the inspector ticked is wrong with an asset ("Crack / subsidence / gap / chipping / leaning / damage ... or OK"); OK says nothing. */
+function defectKindSentence(kind: string, count: number): string {
+  const one = count === 1;
+  switch (lower(kind)) {
+    case "crack":
+      return one ? "It has a crack." : "They have cracks.";
+    case "subsidence":
+      return one ? "It has subsidence." : "They have subsidence.";
+    case "gap":
+      return one ? "It has a gap." : "They have gaps.";
+    case "chipping":
+      return one ? "It has chipping." : "They have chipping.";
+    case "leaning":
+      return one ? "It is leaning." : "They are leaning.";
+    case "damage":
+      return one ? "It is damaged." : "They are damaged.";
+    case "rust":
+      return one ? "It is rusted." : "They are rusted.";
+    case "graffiti":
+      return one ? "It has graffiti." : "They have graffiti.";
+    default:
+      return "";
+  }
+}
+
 /** One street asset: "There is a utility pit cover at the corner. It is in satisfactory condition with typical wear and tear." */
 function assetSentence(assetFields: TemplateField[], asset: AnswerTree): string {
   const count = countOf(one(assetFields, asset, ["count"]));
@@ -144,7 +170,8 @@ function assetSentence(assetFields: TemplateField[], asset: AnswerTree): string 
   const location = asString(asset.location).trim();
   const at = location ? ` at ${location}` : "";
   const cond = conditionOf(assetFields, asset, ["condition"]);
-  const state = cond.word ? ` ${count === 1 ? "It is" : "They are"} in ${cond.word} condition with typical wear and tear.` : "";
+  const state = cond.word ? ` ${count === 1 ? "It is" : "They are"} in ${cond.word} condition${cond.word === "satisfactory" ? " with typical wear and tear" : ""}.` : "";
+  const defect = defectKindSentence(one(assetFields, asset, ["defectKind"]), count);
   const lead = count === 1 ? `There is ${articleFor(singular)} ${singular}${at}.` : `There are ${numberWord(count)} ${plural}${at}.`;
   // Where the asset's run starts and which way it goes, and its size, as the inspector recorded them.
   const start = asString(asset.startDirection).trim();
@@ -152,7 +179,7 @@ function assetSentence(assetFields: TemplateField[], asset: AnswerTree): string 
   const length = Number(asset.lengthMm) || 0;
   const sizeBits = [width > 0 ? `approximately ${width}mm wide` : "", length > 0 ? `approximately ${length}mm long` : ""].filter(Boolean);
   const extra = [start ? `Start point and direction: ${withPeriod(start)}` : "", sizeBits.length ? `${count === 1 ? "It is" : "They are each"} ${sizeBits.join(" and ")}.` : ""].filter(Boolean).join(" ");
-  return `${lead}${state}${extra ? ` ${extra}` : ""}`;
+  return `${lead}${state}${defect ? ` ${defect}` : ""}${extra ? ` ${extra}` : ""}`;
 }
 
 const surveyPart: Composer = (inst, itemFields, label) => {
@@ -213,7 +240,8 @@ const surveyPart: Composer = (inst, itemFields, label) => {
     const summary = clean(one(itemFields, inst, [`${p}_summary`])).replace(/\s*\/\s*/g, " or ");
     const defectKey = `${p}_damages`;
     const anyDefects = hasDefects(defectKey);
-    const summarySentence = summary ? observedSentence(summary) : "";
+    // The overview is said only when it records an issue: "No significant cracking / damage" says nothing -- a good asset is just reported as good.
+    const summarySentence = summary && !/^no\b/i.test(summary) ? observedSentence(summary) : "";
     if (summarySentence || anyDefects) blocks.push([summarySentence, anyDefects ? "The most significant items are:" : ""].filter(Boolean).join(" "));
     const defectText = defects(defectKey);
     if (defectText) blocks.push(defectText);

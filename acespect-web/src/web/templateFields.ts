@@ -289,6 +289,8 @@ export function withPeriod(s: string): string {
   return /[.!?]$/.test(s) ? s : `${s}.`;
 }
 
+const INSTANCE_KEY = "__instanceKey";
+
 export function resolveInstances(
   field: TemplateField,
   value: AnswerValue,
@@ -313,12 +315,16 @@ export function resolveInstances(
   // with no data yet gets a freshly-allocated `{}` below, which is never
   // reference-equal to anything already in `record`, so that reverse lookup
   // silently fails (and the edit is dropped) for any instance not yet started.
-  const out = fixed.map((f) => ({ key: f.key, label: named(record[f.key] ?? {}, f.label), scope: record[f.key] ?? {} }));
+  // `__instanceKey` is synthetic (nothing writes it back): it lets an itemField gate on WHICH instance it is asked in, e.g.
+  // gate {fieldKey:"__instanceKey", equalsAny:["bedroom","bedroom_2"]} shows a field on those two rooms only. The mobile app
+  // does the same for its instance tabs.
+  const withKey = (scope: AnswerTree, key: string): AnswerTree => ({ ...scope, [INSTANCE_KEY]: key });
+  const out = fixed.map((f) => ({ key: f.key, label: named(record[f.key] ?? {}, f.label), scope: withKey(record[f.key] ?? {}, f.key) }));
   let extra = 0;
   for (const [key, scope] of Object.entries(record)) {
     if (seen.has(key)) continue;
     extra += 1;
-    out.push({ key, label: named(scope, `${field.label} ${fixed.length + extra}`), scope });
+    out.push({ key, label: named(scope, `${field.label} ${fixed.length + extra}`), scope: withKey(scope, key) });
   }
   return out;
 }
@@ -533,7 +539,7 @@ function walk(
       // A defect list that sits at the top of a section the wording writes item by item (Notes' "Additional damage
       // records") is not narrated by any item -- write its sentences here, so they are printed, not just saved.
       if (ancestorLabels.length === 0 && sectionKey && wording.composers[sectionKey] && !isFlatComposedSection) {
-        let text = damageSentences(scope, templateFields, { key: field.key, indexOffset: firstIndex });
+        let text = (wording.damageSentences ?? damageSentences)(scope, templateFields, { key: field.key, indexOffset: firstIndex });
         // The Notes section prints as a plain numbered list (ReportView), which has no place for a defect's photos: plain sentences there.
         if (sectionKey.startsWith("notes")) text = text.replace(/DEFECT::\d+::/g, "");
         if (text) textParts.push(text);
@@ -599,7 +605,7 @@ function walk(
           const absent = composeSection(wording, composed, inst, field.itemFields ?? [], label);
           if (absent) absentLines.push({ at: textParts.length, text: absent });
         }
-        if (composed && (notPresent || !Object.values(inst).some(isAnswered))) continue;
+        if (composed && (notPresent || !Object.entries(inst).some(([k, v]) => k !== INSTANCE_KEY && isAnswered(v)))) continue;
         if (composed) {
           // A report type whose items carry several graded categories (Public Assets) writes its own summary rows.
           const ownRows = wording.summaryRows?.(composed, inst, field.itemFields ?? [], label);

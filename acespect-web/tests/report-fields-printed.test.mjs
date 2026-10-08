@@ -76,6 +76,14 @@ const render = (fields, answers, sectionKey, profile) => {
 };
 
 
+// Answers the REAL Houspect report does not print (see "Dilapidation Residential Example Apr 2025.pdf"): the kind of works
+// is only used to choose the project-works sentence ("... to the property at X" or "... are the X"), never printed.
+const NOT_PRINTED_BY_DESIGN = {
+  "dilapidation/residential_house": ["description: proposedWorksTypeOther"],
+  "dilapidation/commercial_properties": ["description: proposedWorksTypeOther"],
+  "dilapidation/apartment": ["description: proposedWorksTypeOther"],
+};
+
 function unprintedFields(w) {
   const profile = w.profile;
   const unprinted = [];
@@ -126,7 +134,8 @@ function unprintedFields(w) {
 describe("every answer on the website form is printed", () => {
   for (const w of Object.values(WORDING_BY_PROFILE).filter((x) => x.status === "final")) {
     it(`${w.profile.inspectionType} / ${w.profile.propertyType}`, () => {
-      assert.deepEqual(unprintedFields(w), []);
+      const skip = NOT_PRINTED_BY_DESIGN[`${w.profile.inspectionType}/${w.profile.propertyType}`] ?? [];
+      assert.deepEqual(unprintedFields(w).filter((x) => !skip.some((s) => x.startsWith(s))), []);
     });
   }
 });
