@@ -41,7 +41,7 @@ const STEPS = [
   { label: 'Property Type' },
   { label: 'Begin' },
 ];
-// A Construction Stage inspection adds one step: which of the six stages.
+// A Construction Stage inspection adds one step: which of the six stages (or a combined two-stage inspection).
 const STAGE_STEPS = [
   { label: 'Inspection Type' },
   { label: 'Property Type' },
@@ -461,7 +461,10 @@ export function SelectInspectionTypeScreen({
             <SectionHeader index={3} title="CONSTRUCTION STAGE" />
             {!propertyId && <Text style={styles.waitingHint}>Choose a property type first</Text>}
             {propertyId && CONSTRUCTION_STAGES.map((stage, i) => (
-              <StageRow key={stage.id} stage={stage} index={i} selected={stageId === stage.id} onPress={() => setStageId(stage.id)} />
+              <React.Fragment key={stage.id}>
+                {stage.combo && !CONSTRUCTION_STAGES[i - 1]?.combo && <Text style={styles.comboHint}>Doing two stages in one visit? Use a combined inspection</Text>}
+                <StageRow stage={stage} index={i} selected={stageId === stage.id} onPress={() => setStageId(stage.id)} />
+              </React.Fragment>
             ))}
           </View>
         )}
@@ -571,6 +574,7 @@ const styles = StyleSheet.create({
   },
   waiting: { opacity: 0.5 },
   waitingHint: { ...typography.caption, color: colors.textMuted, marginBottom: spacing.md },
+  comboHint: { ...typography.caption, color: colors.textMuted, marginTop: spacing.sm, marginBottom: spacing.md },
   footerHint: {
     ...typography.caption,
     color: colors.accentBlueFg,

@@ -25,6 +25,9 @@ export interface ConstructionStage {
   subtitle: string;
   icon: string;
   available: boolean;
+  /** A combined inspection (two stages in one visit): shown after the six stages, with this short badge instead of a number. */
+  combo?: boolean;
+  badge?: string;
   /** Sections between Job Information and Report Summary & Sign-Off, in order. */
   sections: ConstructionStageSection[];
 }
@@ -144,6 +147,55 @@ export const CONSTRUCTION_STAGES: ConstructionStage[] = [
       { id: 'pci_summary', title: 'Statement & Notes', group: 'Defects, Statement & Notes', icon: '📝' },
       { id: 'pci_previous_defects', title: 'Previous Defects', group: 'Previous Defects', icon: '🔁' },
       { id: 'pci_client_issues', title: 'Client List of Issues', group: 'Client List of Issues', icon: '📎' },
+    ],
+  },
+  {
+    id: 'slab_frame',
+    title: 'Slab + Frame',
+    subtitle: 'Stages 1 & 2 in one visit · Slab measurements and quality, then the frame',
+    icon: 'layers-outline',
+    available: true,
+    combo: true,
+    badge: '1+2',
+    sections: [
+      { id: 'sf_description', title: 'Description & Overview', group: 'Overview', icon: '🏠' },
+      { id: 'sf_site_facilities', title: 'Site & Facilities', group: 'Site', icon: '🚧' },
+      { id: 'sf_measurements', title: 'Site & Slab Measurements', group: 'Slab Down', icon: '📏' },
+      { id: 'sf_quality', title: 'Slab Quality', group: 'Slab Down', icon: '🧱' },
+      { id: 'sf_services', title: 'Plasterwork & Services', group: 'Frame Stage', icon: '🔌' },
+      { id: 'sf_roof_frame', title: 'Roof Frame', group: 'Frame Stage', icon: '🏘️' },
+      { id: 'sf_wall_floor', title: 'Wall & Floor Frames', group: 'Frame Stage', icon: '🪵' },
+      { id: 'sf_windows_doors', title: 'Windows & Doors', group: 'Frame Stage', icon: '🚪' },
+      { id: 'sf_progress', title: 'General Works Progress', group: 'Frame Stage', icon: '📈' },
+      { id: 'sf_defects', title: 'Defects', group: 'Defects, Statement & Notes', icon: '⚠️' },
+      { id: 'sf_summary', title: 'Statement & Notes', group: 'Defects, Statement & Notes', icon: '📝' },
+      { id: 'sf_previous_defects', title: 'Previous Defects', group: 'Previous Defects', icon: '🔁' },
+      { id: 'sf_client_issues', title: 'Client List of Issues', group: 'Client List of Issues', icon: '📎' },
+    ],
+  },
+  {
+    id: 'lock_fix',
+    title: 'Lock-Up + Fixing',
+    subtitle: 'Stages 3 & 4 in one visit · External walls, roofing, then plaster to waterproofing',
+    icon: 'layers-outline',
+    available: true,
+    combo: true,
+    badge: '3+4',
+    sections: [
+      { id: 'lf_description', title: 'Description & Overview', group: 'Overview', icon: '🏠' },
+      { id: 'lf_site_facilities', title: 'Site & Facilities', group: 'Site', icon: '🚧' },
+      { id: 'lf_external_walls', title: 'External Walls', group: 'Lock Up Stage', icon: '🧱' },
+      { id: 'lf_roofing', title: 'Roofing', group: 'Lock Up Stage', icon: '🏘️' },
+      { id: 'lf_walls_ceilings', title: 'Plaster, Walls & Ceilings', group: 'Fixing Stage', icon: '🧱' },
+      { id: 'lf_stairs_floors', title: 'Stairs & Floors', group: 'Fixing Stage', icon: '🪜' },
+      { id: 'lf_doors_windows', title: 'Doors & Windows (Lock Up & Fixing)', group: 'Fixing Stage', icon: '🚪' },
+      { id: 'lf_fitout', title: 'Skirtings, Cabinets & Painting', group: 'Fixing Stage', icon: '🎨' },
+      { id: 'lf_waterproofing', title: 'Waterproofing', group: 'Fixing Stage', icon: '💧' },
+      { id: 'lf_services', title: 'Services to Frame Construction', group: 'Fixing Stage', icon: '🔌' },
+      { id: 'lf_defects', title: 'Defects', group: 'Defects, Statement & Notes', icon: '⚠️' },
+      { id: 'lf_summary', title: 'Statement & Notes', group: 'Defects, Statement & Notes', icon: '📝' },
+      { id: 'lf_previous_defects', title: 'Previous Defects', group: 'Previous Defects', icon: '🔁' },
+      { id: 'lf_client_issues', title: 'Client List of Issues', group: 'Client List of Issues', icon: '📎' },
     ],
   },
 ];

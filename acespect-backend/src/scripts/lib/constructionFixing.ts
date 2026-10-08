@@ -220,6 +220,13 @@ const summary: Draft[] = [
   { key: 'otherConcerns', type: 'textarea', label: 'Any other concerns', sectionLetter: 'Notes' },
 ];
 
+// The Lock Up & Fixing combo form repeats the Fixing stage's parts word for word.
+export const FIXING_WALLS_CEILINGS = wallsCeilings;
+export const FIXING_STAIRS_FLOORS = stairsFloors;
+export const FIXING_DOORS_WINDOWS = doorsWindows;
+export const FIXING_FIT_OUT = fitOut;
+export const FIXING_WATERPROOFING = waterproofing;
+
 export const FIXING_SECTIONS: SectionDef[] = [
   { key: 'fx_description', name: 'Description & Overview', fields: numbered(LOCK_UP_DESCRIPTION) },
   { key: 'fx_site_facilities', name: 'Site & Facilities', fields: numbered(LOCK_UP_SITE_FACILITIES) },

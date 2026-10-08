@@ -57,6 +57,8 @@ const STAGE_CHOICES: { stageId: string; key: string; options: string[] }[] = [
   { stageId: 'pre_pour', key: 'stageOption', options: ['Pre-pour for slab', 'Base'] },
   { stageId: 'slab', key: 'stageOptionSlab', options: ['Slab Down', 'Base'] },
   { stageId: 'framework', key: 'stageOptionFrame', options: ['Frame'] },
+  // The Slab & Frame combo form: "Slab and Frame / Slab only as Frame not ready".
+  { stageId: 'slab_frame', key: 'stageOptionSlabFrame', options: ['Slab and Frame', 'Slab only as Frame not ready'] },
   // The PCI forms ask for the stage the job is at, with four statuses.
   { stageId: 'pci', key: 'stageOptionPci', options: ['Practical Completion — appliances not yet installed', 'Handover — appliances installed or some installed', 'Off the Plan Handover — appliances are installed', 'Defects Liability — after handover and now occupied'] },
 ];
@@ -79,8 +81,8 @@ export function jobInfoFields(existing: TemplateField[]): TemplateField[] {
       key: c.key, type: 'pill-select', label: 'Stage', required: true, options: opts(...c.options),
       gate: { fieldKey: 'constructionStage', equals: c.stageId },
     })),
-    // The Pre-Pour, Slab Down and Frame forms have a Comments box in the header; the Lock Up and Fixing forms do not.
-    { key: 'comments', type: 'textarea', label: 'Comments', placeholder: 'Anything to flag about this job', gate: { fieldKey: 'constructionStage', equalsAny: ['pre_pour', 'slab', 'framework'] } },
+    // The Pre-Pour, Slab Down, Frame and Slab & Frame forms have a Comments box in the header; the Lock Up and Fixing forms do not.
+    { key: 'comments', type: 'textarea', label: 'Comments', placeholder: 'Anything to flag about this job', gate: { fieldKey: 'constructionStage', equalsAny: ['pre_pour', 'slab', 'framework', 'slab_frame'] } },
   ];
   return numbered(list);
 }

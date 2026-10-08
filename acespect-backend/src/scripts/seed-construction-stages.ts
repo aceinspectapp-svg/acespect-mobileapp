@@ -8,6 +8,8 @@
  *   Stage 2  Framework  fr_*   -- lib/constructionFrame.ts
  *   Stage 3  Lock Up    lu_*   -- lib/constructionLockUp.ts
  *   Stage 4  Fixing     fx_*   -- lib/constructionFixing.ts
+ *   Combo    Slab & Frame       sf_*  -- lib/constructionCombos.ts
+ *   Combo    Lock Up & Fixing   lf_*  -- lib/constructionCombos.ts
  *   Stage 5  PCI        pci_*  -- lib/constructionPci.ts (the House and Apartment forms differ, so each gets its own content)
  *
  *   npx tsx src/scripts/seed-construction-stages.ts     (idempotent: unchanged templates are skipped; also runs on every server start)
@@ -21,8 +23,9 @@ import { FRAME_SECTIONS } from './lib/constructionFrame';
 import { LOCK_UP_SECTIONS } from './lib/constructionLockUp';
 import { FIXING_SECTIONS } from './lib/constructionFixing';
 import { pciSections } from './lib/constructionPci';
+import { LOCK_FIX_SECTIONS, SLAB_FRAME_SECTIONS } from './lib/constructionCombos';
 
-const STAGES: SectionDef[] = [...PRE_POUR_SECTIONS, ...SLAB_DOWN_SECTIONS, ...FRAME_SECTIONS, ...LOCK_UP_SECTIONS, ...FIXING_SECTIONS];
+const STAGES: SectionDef[] = [...PRE_POUR_SECTIONS, ...SLAB_DOWN_SECTIONS, ...FRAME_SECTIONS, ...LOCK_UP_SECTIONS, ...FIXING_SECTIONS, ...SLAB_FRAME_SECTIONS, ...LOCK_FIX_SECTIONS];
 
 async function main() {
   const admin = await prisma.user.findFirst({ where: { role: 'ADMIN' }, orderBy: { createdAt: 'asc' } });

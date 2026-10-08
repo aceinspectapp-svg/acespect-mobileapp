@@ -13,7 +13,7 @@ export type InspectionTypeId =
   | 'construction_stage'
   | 'investigations';
 
-export type ConstructionStageId = 'pre_pour' | 'slab' | 'framework' | 'lock_up' | 'fixing' | 'pci';
+export type ConstructionStageId = 'pre_pour' | 'slab' | 'framework' | 'lock_up' | 'fixing' | 'pci' | 'slab_frame' | 'lock_fix';
 
 export type PropertyTypeId =
   | 'residential_house'

@@ -25,7 +25,7 @@ export function StageRow({ stage, index, selected, onPress }: StageRowProps) {
       style={({ pressed }) => [styles.row, selected && styles.rowSelected, disabled && styles.rowDisabled, pressed && !disabled && styles.pressed]}
     >
       <View style={[styles.num, selected && styles.numSelected, disabled && styles.numDisabled]}>
-        <Text style={[styles.numText, (selected || disabled) && { color: selected ? colors.white : colors.disabledFg }]}>{index + 1}</Text>
+        <Text style={[styles.numText, (selected || disabled) && { color: selected ? colors.white : colors.disabledFg }]}>{stage.badge ?? index + 1}</Text>
       </View>
       <View style={styles.text}>
         <Text style={[styles.title, disabled && styles.titleDisabled]}>{stage.title}</Text>
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   rowSelected: { borderColor: colors.accentBlueFg, backgroundColor: colors.accentBlue },
   rowDisabled: { opacity: 0.6 },
   pressed: { opacity: 0.92 },
-  num: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center' },
+  num: { minWidth: 32, height: 32, paddingHorizontal: 6, borderRadius: 16, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center' },
   numSelected: { backgroundColor: colors.accentBlueFg },
   numDisabled: { backgroundColor: colors.disabledBg },
   numText: { ...typography.bodySm, fontWeight: '800', color: colors.textSecondary },

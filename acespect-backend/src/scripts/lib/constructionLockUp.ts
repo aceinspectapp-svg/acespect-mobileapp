@@ -290,6 +290,11 @@ export const LOCK_UP_DESCRIPTION = description;
 export const LOCK_UP_SITE_FACILITIES = siteFacilities;
 export const LOCK_UP_PREVIOUS_DEFECTS = previousDefects;
 
+// The Lock Up & Fixing combo form repeats the External Walls and Roofing parts word for word.
+export const LOCK_UP_EXTERNAL_WALLS = externalWalls;
+export const LOCK_UP_ROOFING = roofing;
+export const LOCK_UP_SERVICE_ROWS = ROUGH_IN;
+
 export const LOCK_UP_SECTIONS: SectionDef[] = [
   { key: 'lu_description', name: 'Description & Overview', fields: numbered(description) },
   { key: 'lu_site_facilities', name: 'Site & Facilities', fields: numbered(siteFacilities) },

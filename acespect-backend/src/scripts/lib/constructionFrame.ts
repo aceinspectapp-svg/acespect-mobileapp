@@ -172,6 +172,13 @@ const previousDefects: Draft[] = attachedListFields({
   photosLabel: 'The previous stage Defects list (photos)',
 });
 
+// The Slab & Frame combo form repeats the Frame stage's parts word for word.
+export const FRAME_SERVICES = services;
+export const FRAME_ROOF = roofFrame;
+export const FRAME_WALL_FLOOR = wallFloor;
+export const FRAME_WINDOWS_DOORS = windowsDoors;
+export const FRAME_PROGRESS = progress;
+
 export const FRAME_SECTIONS: SectionDef[] = [
   { key: 'fr_description', name: 'Description & Overview', fields: numbered(descriptionFields({ previousDefectsList: true })) },
   { key: 'fr_site_facilities', name: 'Site & Facilities', fields: numbered(siteFacilitiesFields) },

@@ -78,6 +78,10 @@ const quality: Draft[] = [
   { key: 'qualityOther', type: 'textarea', label: 'Other', placeholder: 'Any other point (the form has two blank rows)', sectionLetter: Q },
 ];
 
+// The Slab & Frame combo form repeats these two parts word for word.
+export const SLAB_MEASUREMENTS = measurements;
+export const SLAB_QUALITY = quality;
+
 const summary: Draft[] = [
   { key: 'workmanshipSatisfactory', type: 'yesno', label: 'The workmanship of the Slab Down stage is generally to a satisfactory industry standard, except for the defects noted above', required: true, sectionLetter: 'Statement' },
   {
