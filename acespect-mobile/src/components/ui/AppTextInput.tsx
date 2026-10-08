@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useContext, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../theme';
+import { ScrollIntoViewContext } from './KeyboardScroll';
 
 interface AppTextInputProps extends TextInputProps {
   label?: string;
@@ -42,6 +43,8 @@ export function AppTextInput({
 }: AppTextInputProps) {
   const [focused, setFocused] = useState(false);
   const [hidden, setHidden] = useState(password);
+  const inputRef = useRef<TextInput>(null);
+  const { ensureVisible } = useContext(ScrollIntoViewContext);
 
   return (
     <View style={styles.wrapper}>
@@ -69,19 +72,25 @@ export function AppTextInput({
         )}
         {!!prefix && <Text style={styles.prefixText}>{prefix}</Text>}
         <TextInput
+          ref={inputRef}
           style={[styles.input, readOnly && styles.inputReadOnly, style]}
           placeholderTextColor={colors.textMuted}
           secureTextEntry={hidden}
           editable={!readOnly}
+          {...rest}
           onFocus={(e) => {
             setFocused(true);
+            ensureVisible(inputRef.current);
             rest.onFocus?.(e);
           }}
           onBlur={(e) => {
             setFocused(false);
             rest.onBlur?.(e);
           }}
-          {...rest}
+          onContentSizeChange={(e) => {
+            if (focused && rest.multiline) ensureVisible(inputRef.current);
+            rest.onContentSizeChange?.(e);
+          }}
         />
         {password ? (
           <Ionicons

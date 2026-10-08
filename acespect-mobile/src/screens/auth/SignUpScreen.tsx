@@ -86,7 +86,7 @@ export function SignUpScreen({ navigation }: AuthScreenProps<'SignUp'>) {
       <SafeAreaView edges={['top']} style={styles.safe}>
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
         >
           <ScrollView
             contentContainerStyle={styles.content}

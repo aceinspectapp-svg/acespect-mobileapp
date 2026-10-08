@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollIntoViewContext, useKeyboardAwareScroll } from '../../components/ui/KeyboardScroll';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,6 +48,7 @@ export function JobInformationScreen({
   const systemStatus = useSystemStatus();
   const { user } = useAuth();
 
+  const keyboardScroll = useKeyboardAwareScroll();
   const [template, setTemplate] = useState<ActiveTemplate | null>(null);
   const [loadError, setLoadError] = useState(false);
   // Generic answers keyed by field.key — replaces the old fixed `details` shape
@@ -248,7 +250,7 @@ export function JobInformationScreen({
           both shift up as one when a text field is focused. */}
       <KeyboardAvoidingView
         style={styles.keyboardAvoider}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
       {!template ? (
@@ -275,7 +277,12 @@ export function JobInformationScreen({
           )}
         </View>
       ) : (
+        <ScrollIntoViewContext.Provider value={keyboardScroll.value}>
         <ScrollView
+          ref={keyboardScroll.scrollRef}
+          onScroll={keyboardScroll.onScroll}
+          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
           style={styles.body}
           contentContainerStyle={styles.bodyContent}
           showsVerticalScrollIndicator={false}
@@ -425,6 +432,7 @@ export function JobInformationScreen({
             />
           </SectionCard>
         </ScrollView>
+        </ScrollIntoViewContext.Provider>
       )}
 
       {/* Sticky footer */}

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollIntoViewContext, useKeyboardAwareScroll } from '../../components/ui/KeyboardScroll';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { colors, radius, spacing, typography } from '../../theme';
@@ -84,6 +85,7 @@ export function DynamicSectionScreen({
   selection,
 }: DynamicSectionScreenProps) {
   const draft = useInspectionDraft();
+  const keyboardScroll = useKeyboardAwareScroll();
   const [template, setTemplate] = useState<ActiveTemplate | null>(null);
   const [loadError, setLoadError] = useState(false);
   // Restore whatever was already filled in for this section -- a fresh {}
@@ -299,7 +301,7 @@ export function DynamicSectionScreen({
           both shift up as one when a text field is focused. */}
       <KeyboardAvoidingView
         style={styles.keyboardAvoider}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {!template ? (
@@ -314,7 +316,8 @@ export function DynamicSectionScreen({
             )}
           </View>
         ) : (
-          <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+          <ScrollIntoViewContext.Provider value={keyboardScroll.value}>
+          <ScrollView ref={keyboardScroll.scrollRef} onScroll={keyboardScroll.onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
             {isPostDilapidation && baselineSection && (
               <View style={styles.baselineCard}>
                 <Text style={styles.baselineLabel}>PREVIOUSLY RECORDED</Text>
@@ -371,6 +374,7 @@ export function DynamicSectionScreen({
               </SectionCard>
             )}
           </ScrollView>
+          </ScrollIntoViewContext.Provider>
         )}
 
         <SafeAreaView edges={['bottom']} style={styles.footer}>

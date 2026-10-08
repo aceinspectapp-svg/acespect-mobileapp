@@ -46,7 +46,7 @@ export function AddCustomSectionScreen({ navigation }: AppScreenProps<'AddCustom
       <InspectionHeader title="Add Extra Structure" onBack={() => navigation.goBack()} />
       <KeyboardAvoidingView
         style={styles.keyboardAvoider}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <View style={styles.body}>

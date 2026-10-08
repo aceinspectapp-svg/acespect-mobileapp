@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollIntoViewContext } from '../ui/KeyboardScroll';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../theme';
 import { appendDictated, DictationMicButton } from './DictationMic';
@@ -210,9 +211,16 @@ export function PlainTextInput({
   style?: object;
 }) {
   const dictate = keyboardType !== 'numeric';
+  const inputRef = React.useRef<TextInput>(null);
+  const focusedRef = React.useRef(false);
+  const { ensureVisible } = React.useContext(ScrollIntoViewContext);
   return (
     <View style={styles.inputWrap}>
       <TextInput
+        ref={inputRef}
+        onFocus={() => { focusedRef.current = true; ensureVisible(inputRef.current); }}
+        onBlur={() => { focusedRef.current = false; }}
+        onContentSizeChange={() => { if (focusedRef.current && multiline) ensureVisible(inputRef.current); }}
         style={[styles.input, multiline && styles.inputMultiline, dictate && styles.inputWithMic, style]}
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
