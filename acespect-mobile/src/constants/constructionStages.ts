@@ -156,7 +156,7 @@ export const CONSTRUCTION_STAGES: ConstructionStage[] = [
     icon: 'layers-outline',
     available: true,
     combo: true,
-    badge: '1+2',
+    badge: '2+3',
     sections: [
       { id: 'sf_description', title: 'Description & Overview', group: 'Overview', icon: '🏠' },
       { id: 'sf_site_facilities', title: 'Site & Facilities', group: 'Site', icon: '🚧' },
@@ -180,7 +180,7 @@ export const CONSTRUCTION_STAGES: ConstructionStage[] = [
     icon: 'layers-outline',
     available: true,
     combo: true,
-    badge: '3+4',
+    badge: '4+5',
     sections: [
       { id: 'lf_description', title: 'Description & Overview', group: 'Overview', icon: '🏠' },
       { id: 'lf_site_facilities', title: 'Site & Facilities', group: 'Site', icon: '🚧' },
