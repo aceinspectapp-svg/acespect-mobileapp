@@ -290,7 +290,8 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, status
   const firstCombo = asString(a.firstCladdingCombo).trim();
   if (ground.length || first.length) {
     const g = ground.map((x) => (x === "combination of" ? groundCombo || x : x));
-    const fl = first.map((x) => (x === "combination of" ? firstCombo || x : x));
+    const firstOther = asString(a.firstCladdingOther).trim();
+    const fl = first.map((x) => (x === "combination of" ? firstCombo || x : x === "other" ? firstOther || x : x));
     out.push(`Wall cladding is constructed of ${joinList(g)}${fl.length ? ` to the ground floor and ${joinList(fl)} to the first floor` : ""}.`);
   }
 
@@ -340,6 +341,7 @@ const SECTION_KIND = (key: string): "description" | "site" | "defects" | "summar
   if (/_description$/.test(key)) return "description";
   if (/_site_facilities$/.test(key)) return "site";
   if (/_typical_defects$/.test(key)) return "typical";
+  if (/_previous_defects$/.test(key)) return "previous";
   if (/_defects$/.test(key)) return "defects";
   if (/_summary$/.test(key)) return "summary";
   if (/_previous_defects$/.test(key)) return "previous";
@@ -652,7 +654,12 @@ function buildNotes(stage: StageId, sections: SectionInput[], defectCount: numbe
     if (summary.workmanshipSatisfactory === "yes") notes.push(`${meta.workmanshipLead} is generally to a satisfactory industry standard, except for the defects noted above.`);
     else if (summary.workmanshipSatisfactory === "no") notes.push(`${meta.workmanshipLead} is not generally to a satisfactory industry standard. Refer to the defects noted above.`);
   }
-  if (stage === "pre_pour" && defectCount > 0) notes.push("The inspector contacted the slab/site supervisor regarding defects/concerns, and they are to be attended to prior to the concrete pour.");
+  if (summary && stage === "pre_pour") {
+    const works = sections.find((x) => x.key.endsWith("_summary"))?.fields.find((f) => f.key === "worksStatus");
+    const w = works && typeof summary.worksStatus === "string" && summary.worksStatus ? chosen(works, summary.worksStatus).label : "";
+    if (w) notes.push(`The works are ${lower(w)}.`);
+    if (summary.contactedSupervisor === "yes") notes.push("The inspector contacted the slab/site supervisor regarding defects/concerns, and they are to be attended to prior to the concrete pour.");
+  }
   if (stage === "pci") {
     const a = pciAppliances(status);
     if (a) notes.push(a);
@@ -667,7 +674,10 @@ function buildNotes(stage: StageId, sections: SectionInput[], defectCount: numbe
       return f && typeof v === "string" ? chosen(f, v) : null;
     };
     const fence = pick("securityFencing");
-    if (fence && (fence.tone === "warn" || fence.tone === "bad")) notes.push("Sections of the security fence are not in position and need to be re-instated.");
+    const fenceTicked = summary ? asStringArray(summary.notesToInclude).includes("security_fencing") : false;
+    const fenceDetail = summary ? asString(summary.securityFencingDetail).trim() : "";
+    if (fenceTicked && fenceDetail) notes.push(`Security fencing is ${fenceDetail.replace(/[.\s]+$/, "")} and needs to be reinstated.`);
+    else if (fenceTicked || (fence && (fence.tone === "warn" || fence.tone === "bad"))) notes.push("Sections of the security fence are not in position and need to be re-instated.");
     const rubbish = pick("rubbishDangerous");
     const managed = pick("siteManaged");
     const finalClean = pick("finalSiteClean");
