@@ -123,7 +123,8 @@ export const inspectionsController = {
       jobNo: inspection.jobNo ?? '',
     });
 
-    const fileName = `${inspection.jobNo || id}-dilapidation-report.pdf`.replace(/[^a-z0-9.-]+/gi, '-');
+    const kind = /construction/i.test(inspection.inspectionType ?? '') ? 'construction' : 'dilapidation';
+    const fileName = `${inspection.jobNo || id}-${kind}-report.pdf`.replace(/[^a-z0-9.-]+/gi, '-');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(pdf);

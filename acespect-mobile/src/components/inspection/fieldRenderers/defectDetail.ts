@@ -42,7 +42,7 @@ export const DEFECT_DETAIL_FIELDS: TemplateField[] = [
   { key: 'severity', label: 'Defect severity (tick all that apply)', type: 'chip-multiselect', order: 2, required: true, options: SEVERITY_OPTIONS },
   { key: 'photos', label: 'Photographs', type: 'photos', order: 3, required: true },
   { key: 'comments', label: 'Comments (optional)', type: 'textarea', order: 4 },
-  { key: 'constructionCode', label: 'Construction code (optional)', type: 'text', order: 5, placeholder: 'e.g. NCC / AS clause' },
+  { key: 'constructionCode', label: 'Construction code (optional)', type: 'text', order: 5, placeholder: 'e.g. 2.04 (Guide to Standards and Tolerances)' },
 ];
 
 /** True when this row is currently answered with one of its defect choices. */

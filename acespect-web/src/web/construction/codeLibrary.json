@@ -1,0 +1,1405 @@
+{
+ "codes": {
+  "1.01": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Cracking in Concrete Paving",
+   "text": [
+    "Cracking in Concrete Paving, states ‘Cracking in concrete is common and is not always attributable to unsatisfactory workmanship. Common causes of cracking includes shrinkage stress, stress due to trees, commercial or heavy vehicle traffic, soil movement due to changes in the moisture content due to garden watering or drainage problems.",
+    "Cracking not attributable to the workmanship of the builder (e.g. trees planted too close to paving, commercial or heavy traffic, use of sprinkler system, etc) is not a defect.",
+    "Cracking in concrete verandahs, garages, carports, paving, patios, driveways etc. where the builder did not make allowances for shrinkage or general movement of the concrete (e.g. slip joints where required around penetrations such as verandah posts, pipes, etc), shall be assessed in accordance with table 1.01 and is defective where the limits in that table are exceeded.",
+    "TABLE 1.01 CRACKS IN CONCRETE PAVING",
+    "Condition",
+    "Measure",
+    "Limit",
+    "Cracking",
+    "Crack width",
+    "Less than or = to 1.5mm",
+    "Subsidence",
+    "Heave or slump under 3 m long straight edge (See Note 2 below)",
+    "Less than or = to 15mm",
+    "Stepping",
+    "Relative Surface level of adjacent paving elements within the expanse of the main pavement",
+    "Less than or = to 5mm",
+    "Taken from AS 3727 – Guide to residential pavements, Table: 1 Performance criteria. Reproduced with permission from SAI Global Ltd under Licence 1407-c122",
+    "Notes to Table 1.01",
+    "The straight edge is centred over the defect and supported at its ends by equal height spacers. The heave or slump is then measured relative to this straight edge.",
+    "The stepping criteria apply only to steps within the main pavement. It shall not be applied where the main pavement abuts other structures such as edging, drainage pits, service pits, minor pavements (such as a pathway adjacent to a driveway) and pavements constructed with materials of a different type.",
+    "The performance criteria in Table 1.01 apply within the first 12 months after construction of the pavement.",
+    "The builder may be responsible for works after 12 months if not constructed in accordance with the standard (AS3727).",
+    "The 12-month period has been adopted as being long enough for a pavement to be subjected to in-service conditions and prior to undue influence of changing environmental conditions such as the effect of tree roots."
+   ]
+  },
+  "1.02": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Finish to External Paving",
+   "text": [
+    "Finish to External Paving, ‘Concrete paving finish is defective if it is not consistent in colour, texture and general appearance. Minor variations in finish may occur and may not be considered to be defective.”"
+   ]
+  },
+  "1.03": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Surface drainage",
+   "text": [
+    "Surface drainage. The paving/landscaping should direct surface water away from the building.",
+    "Surface water drainage is defective if it is not in accordance with the requirements of the Building Code of Australia.”"
+   ]
+  },
+  "2.01": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Foundation and site drainage – maintenance after occupation",
+   "text": [
+    "Foundation and site drainage – maintenance after occupation, states; “The builder is not responsible for foundation movements caused by activities that were not documented at the time of entering into the contract or as variation to that contract, or that are undertaken by the owner. These include paving, landscaping, planting trees and drainage works after the site is handed over to the owner.",
+    "The builder is not responsible for foundation movements caused by the owner’s failure to maintain drainage systems after the site is handed over to the owner.",
+    "Refer to the CSIRO publication Guide to Home Owners on Foundation Maintenance and Footing Performance.”"
+   ]
+  },
+  "2.02": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Footings and slabs",
+   "text": [
+    "Footings and slabs “Slabs and footings are defective if they fail because they are not designed and constructed in accordance with the Building Code of Australia or AS2870.",
+    "Slab and footing failures are defects where foundation movement is caused by factors that were present during construction, (e.g. poor founding materials excessive wetting and drying of site, number, type, proximity and maturity of trees/shrubs or lack of site drainage). Slab and footing movement should be assessed in accordance with Table 2.10 (Cracks in concrete slabs) and Table 3.02 (Damage to masonry walls).”"
+   ]
+  },
+  "2.03": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Setting out the site",
+   "text": [
+    "Setting out the site. “A building set out is defective where the set out has failed to comply with the requirements of the approved drawings, the allotment Certificate of Title, planning or development approval, relevant planning overlays and schemes, and building regulations.",
+    "Building work must not encroach over an allotment boundary unless authorised/approved to do so. A builder must ensure footings, gutters and any other part of the building work does not encroach an allotment boundary unless authorised/approved to do so.”"
+   ]
+  },
+  "2.04": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "External building dimensions",
+   "text": [
+    "External building dimensions. “Departures from documented external dimensions of buildings are defects if they exceed L/200 where L is the documented overall length of wall, or 5 millimetres, whichever is the greater.”"
+   ]
+  },
+  "2.05": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Measuring internal building dimensions",
+   "text": [
+    "Measuring internal building dimensions. “Unless shown otherwise, dimensions shown on drawings for internal walls always refer to the structure’s dimensions. Structure means masonry and timber framing and does not include finishes such as plasterboard, render and skirtings. The internal room sizes will be different when thickness of internal finish materials are taken into account."
+   ]
+  },
+  "2.06": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Building dimensions",
+   "text": [
+    "Building dimensions. ‘Departures from documented set out for service rooms such as bathrooms, toilets, laundries, kitchens, etc. are defects if they exceed L/200 or 5 millimetres, whichever is the greater, where L is the documented dimension.",
+    "‘Departures from documented set out for habitable rooms and areas such as bedrooms, dining rooms, lounge and living rooms, family rooms, studies, halls, entries and stairways are defects if they exceed L/100 or 5 millimetres, whichever is the greater, where L is the documented dimension.",
+    "“Departures from documented set out for external elements such as garages, car ports, verandahs, decks, patios, etc. are defects if they exceed L/100 or 5 millimetres, whichever is the greater, where L is the documented dimension.”",
+    "The set out is defective where a specific fixture or feature is required to be accommodated, and such documented dimensions to accommodate that fixture or feature are not provided.",
+    "Ceiling heights shall be in accordance with the requirements of the Building Code of Australia, unless a greater height is specified in the contract."
+   ]
+  },
+  "2.07": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Finished Floor Levels",
+   "text": [
+    "Finished Floor Levels. “Finished Floor Levels 9FFL) or Reduced Levels (RL) are defective where they do not comply with specified planning and/or building requirements.",
+    "In other cases, FFL or RL are defective where;",
+    "they depart from the documented RL or RRL by more than 40 millimetres; or",
+    "floors are documented to be on the same plane but are constructed on different planes; or",
+    "the building work is an extension or additional and new floor levels do not match the existing building floor levels.”"
+   ]
+  },
+  "2.08": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Levelness of concrete floors",
+   "text": [
+    "Levelness of concrete floors. Except where documented otherwise, new floors are defective if within the first 24 months of handover they differ in level by more than 10 mm in any room or area, or more than 4 mm in any 2 metre length. The overall deviation of floor level to entire building footprint shall not exceed 20 millimetres."
+   ]
+  },
+  "2.09": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Dimensions of building elements",
+   "text": [
+    "Dimensions of building elements. “Deviations from the documented height or cross-sectional dimension of building elements such as beams and posts are defective if they exceed L/200 where L is the documented dimension or 5 millimetres, whichever is the greater.”"
+   ]
+  },
+  "2.10": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Cracks in concrete slabs",
+   "text": [
+    "Cracks in concrete slabs. “Refer to Table 2.10 for descriptions of categories of cracks.",
+    "Cracks to slabs are defective where they are Category 3 and 4.",
+    "Category 1 and 2 cracks to slabs are to be monitored for a period of 12 months.",
+    "At the end of the monitor period, cracks are defective if they are greater than Category 2 and attributed to the actions of the builder.”",
+    "Description of typical damage",
+    "Approx. crack width limit in floor",
+    "Change in offset from 3m straight edge placed over defect",
+    "Crack category",
+    "Hairline cracks, insignificant movement of slab from level",
+    "< 0.3 mm",
+    "< 8 mm",
+    "0 Negligible",
+    "Fine but noticeable cracks. Slab reasonably level",
+    "< 1.0 mm",
+    "< 10 mm",
+    "1 Very slight",
+    "Distinct cracks. Slab noticeably curved or changed in level",
+    "< 2.0 mm",
+    "< 15 mm",
+    "2 Slight",
+    "Wide cracks. Obvious curvature or change in level",
+    "2 to 4 mm",
+    "15 to 25 mm",
+    "3 Moderate",
+    "Gaps in slab. Disturbing curvature or change in level",
+    "4 to 10 mm",
+    "> 25 mm",
+    "4 Severe",
+    "Based on AS2870 Residential slabs and footings – Construction Table C2: Classification of damage to concrete floors",
+    "Notes to Table 2.10",
+    "The straightedge is centred where possible over the defect, and supported at its ends by equal height spacers. The change in offset is then measured relative to this straightedge, which is not necessarily horizontal.",
+    "Local deviation of slope, from the horizontal or vertical, or more than 1:100 will normally be clearly visible. Overall deviations in excess of 1:150 is undesirable.",
+    "Account should be taken of the past history of damage in order to assess whether it is stable or likely to increase."
+   ]
+  },
+  "2.11": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Finish to concrete slabs",
+   "text": [
+    "Finish to concrete slabs ‘The finish to a concrete slab is defective if it is not suitable for the documented applied finishes such as tiles, polished concrete, carpet or sheet flooring, including set downs where required’"
+   ]
+  },
+  "2.12": {
+   "section": "FOOTINGS, SLABS AND SETTING OUT",
+   "title": "Repairs to exposed concrete slabs",
+   "text": [
+    "Repairs to exposed concrete slabs ‘Repairs, where failure has been due to cracking and/or movement, may involve the removal of the affected area. The repair is defective if it does not, as closely as practicable, match the existing work in appearance, colour and texture. Minor variations in finish may not be considered to be defective.’"
+   ]
+  },
+  "3.01": {
+   "section": "MASONRY",
+   "title": "Masonry types",
+   "text": [
+    "Masonry types",
+    "This section includes tolerances for generally-used types of masonry, including:",
+    "a) clay and concrete brick construction",
+    "b) clay and concrete brick veneer construction",
+    "c) concrete block construction.",
+    "The tolerances for the above may not always be appropriate for some types of masonry",
+    "construction, such as pre-fabricated masonry panels, aerated concrete blocks, irregular",
+    "cut stone, rustic finish masonry with irregular edges and appearance, etc. In these cases, parties must obtain the manufacturer’s advice."
+   ]
+  },
+  "3.02": {
+   "section": "MASONRY",
+   "title": "Damage to Masonry Walls",
+   "text": [
+    "Damage to Masonry Walls:",
+    "Refer to Table 3.02 for descriptions of categories of damage.",
+    "Category 3 or greater damage to walls is a defect and requires investigation, stabilisation, monitoring and rectification work, which may include breaking out and replacing sections of the wall.",
+    "Category 2 cracks to walls are to be monitored for a period of 12 months. At the end of the monitoring period, a crack rated category 2 or above is a defect and requires rectification. Category 2 damage is a defect and requires repair work such as repointing.",
+    "TABLE 3.02 DAMAGE TO WALLS CAUSED BY MOVEMENT OF SLABS AND FOOTINGS OR OTHER CAUSES.",
+    "Description of typical damage and required repair:",
+    "Crack width limit",
+    "Damage category",
+    "Hairline cracks",
+    "< 0.1 mm",
+    "0 Negligible",
+    "Fine cracks that do not need repair",
+    "< 1mm",
+    "1 Very slight",
+    "Cracks noticeable but easily filled. Doors and windows stick slightly.",
+    "< 5mm",
+    "2 Slight",
+    "Cracks can be repaired and possibly a small amount of wall will need to be replaced. Doors and windows stick. Service pipes can fracture. Weather tightness often impaired",
+    "5 mm to 15 mm (or a number of cracks 3 mm or more in one group)",
+    "3 Moderate",
+    "Extensive repair work involving breaking-out and replacing sections but also depends on walls, especially over doors and windows. Window and doorframes distort. Walls lean or bulge noticeably, some loss of bearing in beams, Service pipes disrupted",
+    "15 mm to 25 mm but also depends on number of cracks.",
+    "4 Severe",
+    "Based on AS2870 Residential slabs and footings – Construction Table C1: Classification of damage with reference to walls.",
+    "Notes to Table 3.02",
+    "Where the cracking occurs in easily repaired plasterboard or similar clad-framed partitions. The crack width limits may be increased by 50 percent for each damage category.",
+    "Crack width is the main factor by which damage to walls is categorised. The width may be supplemented by other factors, including serviceability in assessing category of damage.",
+    "In assessing the degree of damage, account shall be taken of the location in the building or structure where it occurs, and also of the function of the building or structure."
+   ]
+  },
+  "3.03": {
+   "section": "MASONRY",
+   "title": "Movement; control joints in masonry walls",
+   "text": [
+    "Movement; control joints in masonry walls. “Where required, control joints are defective if not installed as required by the Building Code of Australia or in accordance with the contract documents.",
+    "Control joints are defective if they do not extend through the full thickness of masonry skin.",
+    "Where required, control joints are defective if they are not sealed in accordance with AS3700.",
+    "Unless documented otherwise, flexible mastic or sealant is defective if it does not match as close as practicable the colour of the adjacent surface, and has not been used in accordance with the manufacturer’s installation instructions.”"
+   ]
+  },
+  "3.04": {
+   "section": "MASONRY",
+   "title": "Masonry construction",
+   "text": [
+    "Masonry construction.",
+    "Masonry is defective if it exceeds the tolerances set out in Table 3.04.",
+    "A. Horizontal position of any masonry element documented or shown in plan at its base or at each storey level. 15mm for Structural tolerance or 15mm for Non-structural tolerance.",
+    "B. Relative displacement between loadbearing walls in adjacent stories intended to be in vertical alignment. 10mm for Structural tolerance or 10mm for Non-structural tolerance.",
+    "C. Maximum deviation from plumb within a storey from a vertical line through the base of the member. The lesser of 10mm per 3 metres of height or 0.05 times the thickness of the leaf for Structural tolerance or 10mm for Non-structural tolerance.",
+    "D. Maximum deviation from plumb in total height of the building (from the base) is 25mm for Structural tolerance or 25mm for Non-structural tolerance.",
+    "E. Maximum horizontal or vertical deviation of surface from plane surface (bow) in any 2 metre length is 5mm for Structural tolerance or 3mm for Non-structural tolerance.",
+    "F. Deviation (step) of any exposed brick surface from any adjacent exposed brick masonry surface. The bow provision of Item E also applies. Not applicable to Structural, or maximum tolerance of 2 millimetres for Non-structural.",
+    "G. Deviation of bed joint from horizontal or from the level documented or shown in elevation is 10mm in any 10 metre length and 15mm in total for both Structural and Non-structural.",
+    "I. Minimum thickness of a perpend is 5mm for both Structural and Non-structural.",
+    "J. Deviation from documented thickness (ie Drawings) of perpend: 10mm maximum for structural tolerance or 5mm maximum for Non-structural tolerance.",
+    "K. Maximum difference in perpend in any wall is No Limit for Structural or 8mm for Non-structural tolerance. Note: The maximum difference in width of perpends in any wall must not exceed 8mm.",
+    "L. Deviation from documented width of cavity minimum width as required by the BCA is 15mm for Structural and 15mm for Non-structural tolerance.",
+    "Table 3.04 is taken from AS3700 – Masonry structures Table 12.1: Tolerances in masonry construction.",
+    "Notes to Table 3.04",
+    "Items H, I, J and K are not applicable to thin-bed mortar joints.",
+    "Items I and J are not applicable when perpend joints are not filled with mortar as is the case with some horizontally cored masonry that is not required to resist horizontal bending.",
+    "Items E, F and I only apply to the true, fair or finish face of single skin masonry.",
+    "For structural tolerances in masonry refer to the Building Code of Australia",
+    "The tolerances within the table apply to each separate masonry panel face.",
+    "The nominal size of the mortar joints is to be 10mm unless specified elsewhere."
+   ]
+  },
+  "3.05": {
+   "section": "MASONRY",
+   "title": "Blending and matching of masonry – repair work",
+   "text": [
+    "Blending and matching of masonry – repair work:",
+    "“If matching masonry in alteration and repair work is not reasonably possible, builders should use a practical approach and where possible a physical joint, door, window, downpipes or other similar separating materials should be incorporated to ‘break’ the visual impact.",
+    "Mortar repairs are defective if they do not match the existing mortar as closely as practicable.",
+    "A perfect colour match may not be possible and differences may diminish over time.",
+    "Some variation of masonry features such as colour, texture and pattern are to be expected between batches.”"
+   ]
+  },
+  "3.06": {
+   "section": "MASONRY",
+   "title": "Blending and matching of masonry – new work",
+   "text": [
+    "Blending and matching of masonry – new work:",
+    "“To avoid inconsistency in appearance, where practicable masonry units for the building should be obtained from the same batch.”",
+    "Masonry areas that vary in colour are defective if the units are not mixed and/or distributed in accordance with the manufacturer’s installation instructions.",
+    "Display panels and display homes may be taken as representative of the range of variations to be expected.”"
+   ]
+  },
+  "3.07": {
+   "section": "MASONRY",
+   "title": "Masonry Facing",
+   "text": [
+    "Masonry Facing. ‘Unless documented otherwise, masonry is defective if it is not laid with true, fair or finish face outwards.",
+    "Unless documented otherwise, masonry is defective if they are not cleaned and free of excess mortar.’"
+   ]
+  },
+  "3.08": {
+   "section": "MASONRY",
+   "title": "Mortar for masonry",
+   "text": [
+    "Mortar for masonry. ‘Mortar is defective if it is not in accordance with the requirements of the Building Code of Australia or the contract specifications.’"
+   ]
+  },
+  "3.09": {
+   "section": "MASONRY",
+   "title": "Voids and Holes in Mortar",
+   "text": [
+    "Voids and Holes in Mortar. ‘Voids and holes in mortar in masonry walls, excepting weepholes and vents, are defects if they are visible from a normal viewing position’."
+   ]
+  },
+  "3.10": {
+   "section": "MASONRY",
+   "title": "Cracked masonry unit",
+   "text": [
+    "Cracked masonry unit. “It is characteristic of some masonry units to have surface cracks or crazing as part of the manufacturing process. These are not defects unless they result in the complete fracture of the unit.",
+    "Masonry units that are damaged, cracked or otherwise visually inconsistent with the overall characteristics of the masonry units are defective.”",
+    "3.11, Cleaning, Mortar Smears & Stains states; ‘Stains, mortar smears and damage caused by cleaning are defects if they are visible from a normal viewing position.’"
+   ]
+  },
+  "3.12": {
+   "section": "MASONRY",
+   "title": "Masonry inside garages and similar spaces and under applied finishes",
+   "text": [
+    "Masonry inside garages and similar spaces and under applied finishes. “Structural masonry that is visible inside a garage or similar space or through an applied finish is defective if it does not comply with the tolerances in column 1 of table 3.04. However, these tolerances do not apply to the non-face side of single skin masonry.",
+    "Non-structural masonry that is visible inside a garage or similar space or through an applied finish is defective if it does not comply with the tolerances in column 2 of table 3.04. However, these tolerances do not apply to the non-face side of single skin masonry.",
+    "When there is an applied finish such as render, where the joints are not intended to be visible, masonry need not be saw cut and ¼ or ¾ units may be used in lieu of full masonry units.”"
+   ]
+  },
+  "3.13": {
+   "section": "MASONRY",
+   "title": "Vertical alignment of perpend joints",
+   "text": [
+    "Vertical alignment of perpend joints. “A line of masonry perpends is defective if it exceeds a maximum deviation from vertical alignment of 20 millimetres per 2 metres height of wall, measured from centre to centre of perpend joints.”",
+    "Horizontal alignment of bed joints"
+   ]
+  },
+  "3.14": {
+   "section": "MASONRY",
+   "title": "Horizontal alignment of bed joints",
+   "text": [
+    "Horizontal alignment of bed joints. “Bed joints in walls, including adjacent isolated piers and either side of openings and control joints, are defective if they are not on the same horizontal plane, or do not comply with item G of table 3.04 of this Guide.”",
+    "Masonry Facing"
+   ]
+  },
+  "3.15": {
+   "section": "MASONRY",
+   "title": "Base bed joint and base row of masonry",
+   "text": [
+    "Base bed joint and base row of masonry. “Exposed base bed joints above the finished ground level are defective if they exceed 20 millimetres in thickness.",
+    "Base bed joints that are not exposed above the finished ground level are defective if they are greater than 40 millimetres.",
+    "Split masonry units and units on edge used in the base row or units are defective if they are exposed.”"
+   ]
+  },
+  "3.16": {
+   "section": "MASONRY",
+   "title": "Masonry that overhangs concrete slabs",
+   "text": [
+    "Masonry that overhangs concrete slabs. “A masonry course is defective if it is laid on a concrete slab or strip footing so as to project over the edge of the slab or footing by more than 15mm.",
+    "Damp proof courses"
+   ]
+  },
+  "3.17": {
+   "section": "MASONRY",
+   "title": "Damp proof courses",
+   "text": [
+    "Damp proof courses. “Damp proof courses are defective if they are not installed in accordance with the Building Code of Australia.”"
+   ]
+  },
+  "3.18": {
+   "section": "MASONRY",
+   "title": "Raking of joints",
+   "text": [
+    "Raking of joints. “Unless documented otherwise, mortar joints in masonry units are defective if they are raked out to a depth of more than 10 millimetres or are not consistent in depth throughout.”",
+    "Brick sills and clearances:"
+   ]
+  },
+  "3.19": {
+   "section": "MASONRY",
+   "title": "Brick sills, sill tiles and shrinkage allowance for timber framing",
+   "text": [
+    "Brick sills, sill tiles and shrinkage allowance for timber framing. “Window frames, sill tiles and sill bricks are defective if they are distorted or dislodged.",
+    "Eaves where the soffit and the masonry meet are defective if they are not installed with the minimum clearances set out in Table 3.19.",
+    "Brick sills are defective if they are not laid with a consistent slope to each elevation and adequate slope to provide drainage away from the opening. Refer also to Diagram 3.19."
+   ]
+  },
+  "4.01": {
+   "section": "FRAMING",
+   "title": "Verticality or plumbness of stumps or piles",
+   "text": [
+    "Verticality or plumbness of stumps or piles. “Stumps or piles are defective if they deviate from vertical by more than:",
+    "a) 10 mm for stumps or piles up to 1 m in height",
+    "b) L/100 for stumps or piles up to 2 m in height",
+    "c) 20 mm for stumps or piles greater than 2 m in height.",
+    "Refer to Diagram 4.01.",
+    "(Reviewer Note: 4.02 may be applicable to posts at porches and alfresco areas. Otherwise delete)"
+   ]
+  },
+  "4.02": {
+   "section": "FRAMING",
+   "title": "Verticality or plumbness of steel and timber frames and exposed posts",
+   "text": [
+    "Verticality or plumbness of steel and timber frames and exposed posts. “Posts and wall frames are defective if they deviate from vertical by more than 5 mm over a 1.8 m height.”"
+   ]
+  },
+  "4.03": {
+   "section": "FRAMING",
+   "title": "Straightness of steel and timber frame surfaces",
+   "text": [
+    "Straightness of steel and timber frame surfaces. “Frames are defective if they deviate from plane (horizontal or vertical bow) by more than 4 mm in any 2 m length of wall.”"
+   ]
+  },
+  "4.04": {
+   "section": "FRAMING",
+   "title": "Packing under bearers",
+   "text": [
+    "Packing under bearers. “Packing to stumps or piers under bearers is defective if it is not made of durable, non-compressible materials, such as engineered plastic packers, or does not provide the minimum bearing area required by AS 1684, is more than a total thickness of 20 mm, or is not fixed in a proper and workmanlike manner.”"
+   ]
+  },
+  "4.05": {
+   "section": "FRAMING",
+   "title": "Timber shrinkage",
+   "text": [
+    "Timber shrinkage. “Timber is defective if it has shrunk more than 10 per cent for unseasoned timber, or three per cent for seasoned timber.”"
+   ]
+  },
+  "4.06": {
+   "section": "FRAMING",
+   "title": "Treads and risers in timber stairs",
+   "text": [
+    "Treads and risers in timber stairs. “Timber stairs are defective if they do not comply with the requirements of the Building Code of Australia. The finished riser and going dimensions after installation of floor finishes nominated in the contract are defective if they do not result in consistent riser and going dimensions as required by the BCA.",
+    "A tolerance of up to 5 mm consistent throughout the flight of the stair from the nominated",
+    "dimensions in the approved documents is considered acceptable. This tolerance shall not be applied to allow for poor construction practice.”"
+   ]
+  },
+  "4.7": {
+   "section": "MASONRY",
+   "title": "PREVENTION OF MOISTURE PENETRATION",
+   "text": [
+    "PREVENTION OF MOISTURE PENETRATION",
+    "4.7.1 Cavities",
+    "In cavity walls and masonry veneer walls, cavities with a width of at least 40 mm, which",
+    "are properly detailed and constructed, shall be regarded as being resistant to the passage of moisture from the exposed face through to the inner, unexposed face of the wall.  Where insulating material is placed in a cavity, appropriate measures shall be taken to ensure that the moisture resistance of the wall is maintained.",
+    "Width of cavity",
+    "3.3.4.2: In brick veneer and cavity masonry construction, a cavity must be provided between the inner and outer walls as follows:",
+    "(a) Brick veneer - not less than 25 mm width.",
+    "(b) Cavity masonry - not less than 35 mm nor more than 65 mm width.",
+    "(c) The minimum cavity width specified in (a) and (b) is to be maintained between",
+    "the outer masonry leaf and any services, insulation, sheet bracing or other element located in the cavity."
+   ]
+  },
+  "4.07": {
+   "section": "FRAMING",
+   "title": "Fixing stud walls to concrete slabs",
+   "text": [
+    "Fixing stud walls to concrete slabs. “Bottom plates are defective if they are not fixed to concrete slabs in accordance with",
+    "AS 1684.",
+    "Depending on the manufacturer’s requirements for the concrete nail/masonry anchor used and the required uplift pull-out force and wind category, the distance of the fixing from the edge of the slab is required to be between 50 mm and 70 mm for standard 20 MPa concrete.",
+    "The fixing point cannot be less than five times the diameter of the fastener from the edge",
+    "of the timber plate which equates to 25 mm for a 5 mm diameter nail and 50 mm for",
+    "a 10 mm diameter masonry anchor.",
+    "(Reviewer Note 1: 4.08 can be used if inspector reports overhang defects, or even when there are minor overhangs (even if they are within tolerances) so as to inform the client. Please keep the text for 4.08 and the diagram together on the one page if possible."
+   ]
+  },
+  "4.08": {
+   "section": "FRAMING",
+   "title": "Bottom plates that overhang concrete slabs",
+   "text": [
+    "Bottom plates that overhang concrete slabs. “Bottom plates that are less than 90 mm wide and overhang concrete slabs are defective.",
+    "Bottom plates that are 90 mm wide or greater and overhang concrete slabs by more than 10 mm are defective.",
+    "Minimum cavity widths as required by the Building Code of Australia shall be maintained."
+   ]
+  },
+  "5.01": {
+   "section": "WALL CLADDING",
+   "title": "Leaks in wall cladding",
+   "text": [
+    "Leaks in wall cladding ‘Completed wall cladding and accessories are defective if they leak under normal weather conditions and are due to the builder’s workmanship, cause unhealthy or dangerous conditions, loss of amenity for occupants, undue dampness or deterioration of building elements.’"
+   ]
+  },
+  "5.02": {
+   "section": "WALL CLADDING",
+   "title": "Wall Cladding",
+   "text": [
+    "Wall Cladding ‘Staining, folds, splits, dents, open joints between panels, cracking and other distortions in wall cladding are defects if they are visible from a normal viewing position at ground level or an upper floor level.",
+    "Any unintended corrosion of metal wall cladding is defective unless it is due to lack of maintenance by the owner."
+   ]
+  },
+  "6.01": {
+   "section": "ROOFING",
+   "title": "leaks in roofing, flashings and accessories",
+   "text": [
+    "leaks in roofing, flashings and accessories ‘Roofing, including flashings and accessories, is defective if it leaks under normal weather conditions and is due to the builder’s workmanship, causes unhealthy or dangerous conditions, loss of amenity for occupants, undue dampness or deterioration of building elements.’"
+   ]
+  },
+  "6.1": {
+   "section": "FRAMING",
+   "title": "GENERAL",
+   "text": [
+    "GENERAL",
+    "6.1.1 Application",
+    "This Section sets out the requirements for the construction of conventional stud-framed walls and shall be used in conjunction with Span Tables 7 to 20 (single-or upper-storey construction), 36 to 48 (lower-storey construction), or 51A and 53 (verandahs and posts) of the Supplements.",
+    "6.1.2 Wall frame members",
+    "Walls shall be framed with studs, plates, noggings, bracing, lintels, and similar members, as typically shown in Figure 6.1 and as outlined in this Section.",
+    "FIGURE 6.1 WALL FRAME MEMBERS",
+    "6.1.3 Bracing",
+    "Temporary and permanent bracing shall be provided to stud walls to resist horizontal forces applied to the building. Appropriate connections shall also be provided to transfer these forces through the framework and subfloor structure to the building foundation (see Section 8)."
+   ]
+  },
+  "6.02": {
+   "section": "ROOFING",
+   "title": "Roof cladding",
+   "text": [
+    "Roof cladding ‘Staining, folds, splits, dents, open joints between panels, cracking and other distortions in roof cladding are defects if they are visible from a normal viewing position at ground level or an upper floor level. Any corrosion of roof cladding is a defect unless it is caused by a lack of maintenance or damaged by the owner’"
+   ]
+  },
+  "6.2": {
+   "section": "FRAMING",
+   "title": "BUILDING PRACTICE",
+   "text": [
+    "BUILDING PRACTICE",
+    "6.2.1 Studs",
+    "6.2.1.1 Straightening of studs (crippling)",
+    "Common studs may be straightened by ‘crippling’ with saw cuts and cleats (see Figure 6.2). Up to 20% of common studs, including those in bracing walls, may be crippled.",
+    "Studs at the sides of openings and studs supporting concentration of load shall not be crippled.",
+    "NOTE: Studs may be planed provided the minimum size remaining is not less than the minimum design size required; for example, a stud of 90 mm depth may be planed down to 70 mm depth if the minimum design depth required is 70 mm.",
+    "FIGURE 6.2 STUD CRIPPLING",
+    "6.2.1.2 Common studs",
+    "Common studs shall be evenly spaced to suit loads, lining and cladding fixing.",
+    "Large size studs may be made up by nail-laminating together two or more smaller-sized studs (see Clause 2.4).",
+    "6.2.1.3 Wall junctions",
+    "Studs at wall junctions and intersections shall be in accordance with one of the details shown in Figure 6.3. Studs shall be not less in size than common studs. All junctions shall have sufficient studs, which shall be located so as to allow adequate fixing of linings.",
+    "All intersecting walls shall be fixed at their junction with blocks or noggings fixed to each wall with 2/75 mm nails. Blocks or noggings shall be installed at 900 mm max. centres.",
+    "FIGURE 6.3 TYPICAL WALL JUNCTIONS"
+   ]
+  },
+  "6.03": {
+   "section": "ROOFING",
+   "title": "Roof tiles",
+   "text": [
+    "Roof tiles ‘Roof tiles are defective if they do not conform to the manufacturer’s sample. Irregularities in tiles are defects if they are visible from a normal viewing position at ground or upper floor levels.",
+    "Minor surface marks or blemishes arising from the tile manufacturing process are not defective. Cracked or broken roof tiles are defective if caused by the builder’s workmanship."
+   ]
+  },
+  "6.04": {
+   "section": "ROOFING",
+   "title": "Roof tile pointing",
+   "text": [
+    "Roof tile pointing ‘Unless documented otherwise, the absence of pointing where required is a defect. Pointing is defective if it becomes dislodged or washed out.",
+    "‘The pointing is defective if it is not uniform in colour, texture and trowelled off to provide a neat appearance. The rectification of pointing shall match the existing colour and texture as close as practicable.",
+    "Minor cracking of pointing is not defective."
+   ]
+  },
+  "6.05": {
+   "section": "ROOFING",
+   "title": "Overhang of roofing (tiles and sheet roofing)",
+   "text": [
+    "Overhang of roofing (tiles and sheet roofing). ‘Tiled roofing is defective if tiles overhang the inside face of the gutter by less than 35 mm or by more than 65 mm.’",
+    "‘Sheet roofing is defective if it overhangs the inside face of the gutter by less than 50 mm or by more than 65 mm.’"
+   ]
+  },
+  "6.06": {
+   "section": "ROOFING",
+   "title": "Cutting of roof tiles",
+   "text": [
+    "Cutting of roof tiles. ‘Tiles are defective if they are not cut neatly to present a straight line at ridges, hips, verges and valleys."
+   ]
+  },
+  "6.07": {
+   "section": "ROOFING",
+   "title": "Dry valley construction",
+   "text": [
+    "Dry valley construction ‘Dry valleys, where they are documented, are defective if they are not constructed in accordance with the Building Code of Australia or any relevant instructions from roofing tile associations or the manufacturer’s installation instructions.’"
+   ]
+  },
+  "6.08": {
+   "section": "ROOFING",
+   "title": "Undulating tile roof lines",
+   "text": [
+    "Undulating tile roof lines ‘Undulations in the line of roof tiles are defective if the variation exceeds 20 mm in any 4 m length measured in the roof plane.’"
+   ]
+  },
+  "6.09": {
+   "section": "ROOFING",
+   "title": "Alignment of trusses",
+   "text": [
+    "Alignment of trusses ‘Trusses or chords of trusses that bow more than the lesser of L/200 or 50 mm are defective; where L is the length of the truss or chord.’"
+   ]
+  },
+  "6.10": {
+   "section": "ROOFING",
+   "title": "Verticality or plumbness of trusses",
+   "text": [
+    "Verticality or plumbness of trusses ‘Trusses or parts of trusses that are erected with a vertical deviation more than the lessor of H/50 or 50 mm are defective; where H is the height of the truss.’"
+   ]
+  },
+  "7.01": {
+   "section": "ROOFING",
+   "title": "Plumbing work",
+   "text": [
+    "Plumbing work ‘Plumbing work is defective if it does not comply with the relevant plumbing regulations and the contract documents.",
+    "‘The builder shall provide the owner with a compliance certificate from the plumber when a certificate is required to be issued.’"
+   ]
+  },
+  "7.02": {
+   "section": "ROOFING",
+   "title": "Positioning of gutters",
+   "text": [
+    "Positioning of gutters ‘Unless documented otherwise, installation of gutters is defective if the fascia, when viewed from the normal viewing position, is:",
+    "a) visible above a gutter,",
+    "b) not concealed by a flashing finished to match the gutter."
+   ]
+  },
+  "7.03": {
+   "section": "ROOFING",
+   "title": "Water retention in gutters",
+   "text": [
+    "Water retention in gutters ‘Gutters are defective if they retain a depth of more than 10 mm of water.’"
+   ]
+  },
+  "7.04": {
+   "section": "ROOFING",
+   "title": "Joints in gutters",
+   "text": [
+    "Joints in gutters ‘Unless documented otherwise, gutters are defective if they have joints lapped less than 25 mm. Laps that are not in the direction of flow to outlet, are defective.’",
+    "Joints that leak are defective."
+   ]
+  },
+  "7.05": {
+   "section": "ROOFING",
+   "title": "Fixing of gutters and downpipes",
+   "text": [
+    "Fixing of gutters and downpipes ‘Gutters and downpipes are defective if they are not securely fixed.’"
+   ]
+  },
+  "7.06": {
+   "section": "ROOFING",
+   "title": "Flashings",
+   "text": [
+    "Flashings ‘Flashings are defective if they are not provided in accordance with the requirements of the Building Code of Australia",
+    "‘Wall and step flashings, and sloping flashings cut into walls are defective if they do not incorporate weathering folds, anti-capillary breaks and sealing, or do not enter the masonry walls by at least 15 mm as shown in Diagram 7.06(A) and Diagram 7.06(B)’",
+    "‘Pressure flashings are defective if they are not fixed on appropriate surfaces, or are not fixed in accordance with Diagram 7.06(C)’"
+   ]
+  },
+  "7.07": {
+   "section": "ROOFING",
+   "title": "Water hammer",
+   "text": [
+    "Water hammer; ‘Water hammer is defective if it is caused by the builder’s workmanship.’"
+   ]
+  },
+  "7.08": {
+   "section": "ROOFING",
+   "title": "Pipe penetrations through external walls and inside cupboards",
+   "text": [
+    "Pipe penetrations through external walls and inside cupboards ‘Plumbing holes are defective if they are not:",
+    "properly grouted as appropriate",
+    "fitted through neat minimal size penetrations (in the case of cabinet work)",
+    "fitted with tight fitting cover plates or collars with penetrations kept to the smallest size practicable."
+   ]
+  },
+  "7.09": {
+   "section": "ROOFING",
+   "title": "Water supply fixtures, are defective if they are not located to discharge clearly into the",
+   "text": [
+    "Water supply fixtures, are defective if they are not located to discharge clearly into the vessels such as baths, basins, sinks, troughs or the like.”"
+   ]
+  },
+  "7.10": {
+   "section": "ROOFING",
+   "title": "Water drainage from baths, basins, sinks, troughs or the like are defective if they retain",
+   "text": [
+    "Water drainage from baths, basins, sinks, troughs or the like are defective if they retain a pool of water after they have drained, with the exception of water retention due to surface tension.”"
+   ]
+  },
+  "7.11": {
+   "section": "ROOFING",
+   "title": "Parapet flashings/cappings are defective if a minimum fall of three degrees is not provide",
+   "text": [
+    "Parapet flashings/cappings are defective if a minimum fall of three degrees is not provided across the width of the flashing to divert water runoff from dripping down the fascia and causing unsightly staining.”"
+   ]
+  },
+  "8.01": {
+   "section": "WINDOWS AND DOORS",
+   "title": "Installation of external windows and doors",
+   "text": [
+    "Installation of external windows and doors: “Unless documented otherwise, external windows and doors are defective if they are not installed and flashed to the manufacturer’s installation instructions.”"
+   ]
+  },
+  "8.02": {
+   "section": "WINDOWS AND DOORS",
+   "title": "Weather-tightness of windows, doors and window and door frames",
+   "text": [
+    "Weather-tightness of windows, doors and window and door frames: “Window and door frame installations are defective if, due to the builder’s workmanship, they leak or cause unhealthy or dangerous conditions, loss of amenity for occupants, undue dampness or deterioration of building elements.",
+    "Windows and doors are defective if, when closed, they allow entry of water.",
+    "Water entry through doors is not defective if they are not intended to prevent water entry. For example, vehicle access doors.",
+    "Windows and doors are defective if they are not sealed in accordance with the requirements of the Building Code of Australia, where required."
+   ]
+  },
+  "8.03": {
+   "section": "WINDOWS AND DOORS",
+   "title": "Door furniture",
+   "text": [
+    "Door furniture. “During the documented maintenance period after completion, handles, locks and latches are defective if they do not operate as intended by the manufacturer. If the maintenance period is not documented, three months is the assumed time period after completion. After the end of the maintenance period, failure is not a defect unless it is caused by the builder’s workmanship or a faulty product supplied by the builder.”"
+   ]
+  },
+  "8.04": {
+   "section": "WINDOWS AND DOORS",
+   "title": "Internal Door Clearance",
+   "text": [
+    "Internal Door Clearance: “Unless documented otherwise, the installation of doors is defective if, within three months of completion;",
+    "clearances between door leaves and frames and between adjacent door leaves are not uniform",
+    "clearance between door leaves, or between a door leaf and the frame, is less than 2 mm or greater than 5 mm in width.",
+    "Unless additional clearance is required for removable toilet doors or air ventilation, a clearance between the door and the floor finish is defective if it is greater than 20 mm after installation of the floor covering.",
+    "Note: Clearances under doors will generally be determined by the nominated floor coverings."
+   ]
+  },
+  "8.05": {
+   "section": "WINDOWS AND DOORS",
+   "title": "Distortion of doors”",
+   "text": [
+    "Distortion of doors” “Door leaves are defective if, within three months of completion, they twist or bend greater than the limits listed in Table 8.05.”",
+    "TABLE 8.05 DISTORTION OF DOORS",
+    "Limit",
+    "Twisting measured diagonally across door",
+    "5 millimetres",
+    "Bending in door heights up to 2150 millimetres high",
+    "4 millimetres",
+    "Bending in door heights between 2150 and 2400 millimetres high",
+    "6 millimetres",
+    "Bending in door heights over 2400 millimetres high",
+    "7 millimetres",
+    "Bending in door widths up to 1020 millimetres wide",
+    "2 millimetres",
+    "Surface (face) misalignment, at the meeting edges of double swing or French doors, when the doors are fully closed",
+    "5 millimetres"
+   ]
+  },
+  "8.06": {
+   "section": "WINDOWS AND DOORS",
+   "title": "Sealing of door edges",
+   "text": [
+    "Sealing of door edges: “Door leaves are defective if they do not have all sides, top and bottom edges that are sealed/painted in accordance with the manufacturer’s specifications.”"
+   ]
+  },
+  "8.07": {
+   "section": "WINDOWS AND DOORS",
+   "title": "Operation of windows and doors",
+   "text": [
+    "Operation of windows and doors: “The installation of doors and windows is defective if, within three months of completion, they;",
+    "a) bind or jam as a result of the builder’s workmanship",
+    "b) do not operate as intended by the manufacturer.”"
+   ]
+  },
+  "8.08": {
+   "section": "WINDOWS AND DOORS",
+   "title": "Bowed window heads, sills and jambs",
+   "text": [
+    "Bowed window heads, sills and jambs: “Window frames are defective if they are distorted to the extent that the function of the window is adversely affected.",
+    "Refer also to 3.19 Brick sills, sill tiles and shrinkage allowance for timber framing.”"
+   ]
+  },
+  "9.03": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Matching and repairing existing rendered surfaces",
+   "text": [
+    "Matching and repairing existing rendered surfaces",
+    "The builder must try to match existing work.",
+    "In some instances this may not be possible as the original finish may have significantly aged or the material composition may be impossible to determine without expensive research.",
+    "When matching an existing finish, a practical approach must be adopted, and where possible a physical joint, a door, a window, a downpipe or other similar separator should be incorporated to lessen the visual impact of the new work. Where this is not possible, the whole of that wall from corner to corner should be re-finished.",
+    "Where appropriate, defective work such as cracking should be monitored for 12 months or any other agreed period, before determining what, if any, remedial work is required."
+   ]
+  },
+  "9.04": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Cracking and other blemishes in external rendered surfaces on masonry substrate",
+   "text": [
+    "Cracking and other blemishes in external rendered surfaces on masonry substrate: “Assess crack categories and defects in external rendered surfaces on masonry substrate in accordance with clause 3.02.",
+    "Obvious spot rust marks, due to the composition of the material and other blemishes, are defects if they are visible from a normal viewing position."
+   ]
+  },
+  "9.05": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Repairs to external applied finishes",
+   "text": [
+    "Repairs to external applied finishes: “Repairs to surfaces that have been rendered are defective if they do not match the colour and texture of the remaining wall or adjacent area as close as practicable."
+   ]
+  },
+  "9.06": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Movement; Control joints – provision and cracking",
+   "text": [
+    "Movement; Control joints – provision and cracking: “Unless documented otherwise, cracks in external rendered surfaces are determined in accordance with Item 3.02 (Damage to Masonry) are defective if recommended control joints have not been installed."
+   ]
+  },
+  "9.07": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Covering movement control joints and damp proof courses",
+   "text": [
+    "Covering movement control joints and damp proof courses: “Mouldings and inflexible covering strips are defective if they are installed across movement control joints and are fixed or restrained on both sides.",
+    "Applied finishes are defective if they impede the performance of any damp proof course or sub-floor ventilation required in accordance with the Building Code of Australia.",
+    "With the exception of paint and recommended mastic sealants, render or other applied finishes are defective if they cover movement control joints.",
+    "Unless documented otherwise, flexible mastic or sealant is defective if it does not match as close as practicable the colour of the adjacent surface and has not been used in accordance with the manufacturer’s installation instructions."
+   ]
+  },
+  "9.08": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Cracking in applied finishes used over lightweight substrate",
+   "text": [
+    "Cracking in applied finishes used over lightweight substrate: “Cracks or open joints in external finishes applied to lightweight substrate are defective if they exist at handover or exceed 1 millimetre in width within the first 24 months and can be seen from a normal viewing position.",
+    "Cracks or open joints in finishes applied to lightweight sheet substrate are defective if they allow the ingress of water."
+   ]
+  },
+  "9.09": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Rendered surfaces",
+   "text": [
+    "Rendered surfaces: “Rendered or hand plastered surfaces are defective if they do not conform to the documented surface, sample or description.”"
+   ]
+  },
+  "9.10": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Cracking in external mouldings",
+   "text": [
+    "Cracking in external mouldings: “Cracks in mouldings and/or other architectural features, including joints between those feature and adjacent surfaces, are defective if they exist at handover or exceed 2 millimetres within the first 24 months and can be seen from a normal viewing position.”"
+   ]
+  },
+  "9.11": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Plasterboard sheeting",
+   "text": [
+    "Plasterboard sheeting. “The installation and jointing of plasterboard sheeting systems is defective if it does not conform to AS/NZ2589 (Gypsum linings in residential and light commercial construction – Application and finishing – Gypsum plasterboard) and the manufacturer’s installation instructions.”"
+   ]
+  },
+  "9.12": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Other sheeting systems",
+   "text": [
+    "Other sheeting systems. “Defects in the installation of other sheeting systems, such as fibre cement sheeting, shall be assessed in the same manner as plasterboard sheeting.”"
+   ]
+  },
+  "9.13": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Level of finish for plasterboard",
+   "text": [
+    "Level of finish for plasterboard: “Unless documented otherwise, a plasterboard finish is defective if Level 4 finish (as defined in Table below) is not provided.”",
+    "Notes; This is generally the accepted level of finish for domestic construction. Critical lighting occurs when the light source is nearly parallel to the wall or ceiling surface. Non-critical lighting occurs when the light that strikes that surface is diffused and not parallel to that surface."
+   ]
+  },
+  "9.14": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Cracking in plasterboard, hard plaster and plaster elements: Cracking in walls, ceilings a",
+   "text": [
+    "Cracking in plasterboard, hard plaster and plaster elements: Cracking in walls, ceilings and bulkheads is defective if it exists at handover or exceeds 1 mm in width within the first 24 months of completion and can be seen from a normal viewing position.",
+    "Cracking in recessed and butt joints is defective if it exists at handover or exceeds 1 mm in width within the first 24 months of completion and can be seen from a normal viewing position."
+   ]
+  },
+  "9.15": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Cracking in cornices: Cracking of cornice joints such as butt joints and mitres, and at ju",
+   "text": [
+    "Cracking in cornices: Cracking of cornice joints such as butt joints and mitres, and at junctions with walls and ceilings is defective if it exists at handover or exceeds 1 mm in width within the first 24 months of completion and can be seen from a normal viewing position."
+   ]
+  },
+  "9.16": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Cracking at junctions of dissimilar materials: Cracking at junctions between dissimilar ma",
+   "text": [
+    "Cracking at junctions of dissimilar materials: Cracking at junctions between dissimilar materials is defective if it exists at handover or exceeds 1 mm in width within the first 24 months of completion and can be seen from a normal viewing position.",
+    "After the first 12 months, cracking that exceeds 2 mm is considered defective."
+   ]
+  },
+  "9.17": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Straightness and alignment of plaster cornices: Plaster cornices are defective if they dev",
+   "text": [
+    "Straightness and alignment of plaster cornices: Plaster cornices are defective if they deviate from a straight line greater than 4 millimetres over a length of up to 2 metres and are visible from a normal viewing position."
+   ]
+  },
+  "9.18": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Peaking or jointing in plasterboard: Plaster peaking or jointing is defective if it is vis",
+   "text": [
+    "Peaking or jointing in plasterboard: Plaster peaking or jointing is defective if it is visible from the normal viewing position.",
+    "9.19, Nail popping in plasterboard: Nail popping in sheeting is defective if it exists at handover or occurs within the first 24 months of completion and can be seen from a normal viewing position.",
+    "10 INTERNAL FIXING"
+   ]
+  },
+  "9.19": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Nail popping in plasterboard: Nail popping in sheeting is defective if it exists at handov",
+   "text": [
+    "Nail popping in plasterboard: Nail popping in sheeting is defective if it exists at handover or occurs within the first 24 months of completion and can be seen from a normal viewing position.",
+    "(Reviewer Note: 10.01, 10.04, 10.08 and 10.09 are good general guidelines to include in most Fixing reports (or combo Lock up and Fixing), but balance this with the fact that caulking may not yet have been started, and some of these codes may be best held over for the PCI report)",
+    "10 INTERNAL FIXING"
+   ]
+  },
+  "10.01": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Gaps associated with internal fixing: Unless documented otherwise, gaps between mouldings ",
+   "text": [
+    "Gaps associated with internal fixing: Unless documented otherwise, gaps between mouldings or between mouldings and other fixtures, at mitre or butt joints, or at junctions with a wall or other surfaces are defective if they exist at handover, exceed 1 millimetre in width, occur within the first 12 months of completion and are visible from a normal viewing position.",
+    "After the first 12 months, gaps are defective if they exceed 2 millimetres in width and are visible from a normal viewing position.",
+    "Gaps between skirting and flooring are defective if they exceed 2 millimetres within the first 24 months after handover and are visible from a normal viewing position."
+   ]
+  },
+  "10.02": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Joints in fixing or internal mouldings",
+   "text": [
+    "Joints in fixing or internal mouldings: “Unless documented otherwise, the faces of architraves and skirting are defective if they are not aligned and flush at mitres and butt joints and the misalignment can be seen from a normal viewing position.”"
+   ]
+  },
+  "10.03": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Architrave quirks",
+   "text": [
+    "Architrave quirks: “The width of the quirk (setback from the edge) of each length of an architrave is defective if it is not consistent and where the irregularity can be seen from a normal viewing position.”"
+   ]
+  },
+  "10.04": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Bench tops, cabinet doors and drawer fronts",
+   "text": [
+    "Bench tops, cabinet doors and drawer fronts: “Unless otherwise specified, cabinet door and drawer fronts are defective if they are not aligned, or do not have consistent gaps between them at handover, and can be seen from the normal viewing position.",
+    "Where the time limit for defects in cabinet doors, drawer fronts and similar joinery is not documented it is to be taken as six months from completion.”"
+   ]
+  },
+  "10.05": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Natural materials”",
+   "text": [
+    "Natural materials” “Materials such as timber, granite and marble are natural products that may have blemishes and variations in pattern and colour that are natural characteristics of the material.",
+    "Stone materials are often brittle and may be easily cracked. Polished stone surfaces can be porous and subject to staining.”",
+    "Any cracking, displacement, pitting or similar blemishes in natural stone, marble or similar materials are defective if they are caused by the builder and can be seen from a normal viewing position.”"
+   ]
+  },
+  "10.06": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Manufactured material",
+   "text": [
+    "Manufactured material. Any cracking, displacement, pitting or similar blemishes in surfaces of manufactured materials are defective if they are caused by the builder and can be seen from a normal viewing position.”",
+    "Manufactured materials are defective if they are not installed in accordance with the manufacturer’s requirements."
+   ]
+  },
+  "10.07": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Rectification of defective natural materials and manufactured materials",
+   "text": [
+    "Rectification of defective natural materials and manufactured materials: “The rectification of surfaces is defective if the rectification work does not reasonably match the adjacent areas. If reasonable matching is not possible, the entire surface shall be replaced.”"
+   ]
+  },
+  "10.08": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Joints in timber, stone and laminated bench tops",
+   "text": [
+    "Joints in timber, stone and laminated bench tops: “Bench tops of timber, laminate, natural stone or similar materials are defective if within 6 months of handover they have joints that are not uniform, close-fitted, aligned and in the same plane.",
+    "These requirements also apply to vertical surfaces of similar material and finish.",
+    "Joints are defective if they are not sealed or flush-filled with a suitable flexible sealant of matching colour at the time of handover.”"
+   ]
+  },
+  "10.09": {
+   "section": "PLASTERING AND RENDERING",
+   "title": "Sealing around benches and items installed in benches",
+   "text": [
+    "Sealing around benches and items installed in benches: “Where required, junctions between bench tops and adjoining surfaces are defective if they are not sealed with a suitable flexible sealant of matching or agreed colour.",
+    "Seals around items such as sinks, hand basins or the like are defective if the joint leaks, or they are not installed in accordance with the manufacturer’s installation requirements.”"
+   ]
+  },
+  "11.01": {
+   "section": "FLOOR AND WALL TILING",
+   "title": "Floor and wall tiling",
+   "text": [
+    "Floor and wall tiling. “Unless documented otherwise, tiling work and materials are defective if the do not comply with AS 3958.1 and AS 3958.2 of the manufacturer’s installation instructions for the materials selected.",
+    "The builder is responsible for tilings that fails because of defective building work in framing or slab construction, including tiling not laid by the builder.",
+    "Where the builder has to match tiles that are no longer available, a practical approach must be adopted. The use of a slightly different tiles is not defective if it is used with the written agreement of the owner.",
+    "Where non-matching tiles have to be used, a joint location such as the aluminium channel of a shower screen, a separating doorway, an intersecting wall, a change in wall direction or similar should be selected to separate the different tiles.”"
+   ]
+  },
+  "11.02": {
+   "section": "FLOOR AND WALL TILING",
+   "title": "Floor and wall tiling where the builder supplies the tiles",
+   "text": [
+    "Floor and wall tiling where the builder supplies the tiles. “Where the supply and laying of tiles is by the builder, the failure of the tiles, substrate, adhesive or grout is defective.”"
+   ]
+  },
+  "11.03": {
+   "section": "FLOOR AND WALL TILING",
+   "title": "Floor and wall tiling where the owner supplies the tiles for laying by the builder",
+   "text": [
+    "Floor and wall tiling where the owner supplies the tiles for laying by the builder. “Faulty installation of tiles is defective if caused by the builder’s workmanship.”",
+    "“Any fault in the tiles is the responsibility of the owner, except where faults in the tiles should have been apparent to the builder at the time of laying, and these faults were not brought to the owner’s attention.”"
+   ]
+  },
+  "11.04": {
+   "section": "FLOOR AND WALL TILING",
+   "title": "Floor and wall tiling where the owner supplies and lays the tiles",
+   "text": [
+    "Floor and wall tiling where the owner supplies and lays the tiles. “The owner is responsible for checking adequacy of the substrate before laying the tiles. Any failure of tiles, adhesive or grout, where the owner supplies and lays the tiles, is the responsibility of the owner.”"
+   ]
+  },
+  "11.05": {
+   "section": "FLOOR AND WALL TILING",
+   "title": "Cracked, pitted, chipped, scratched or loose tiles",
+   "text": [
+    "Cracked, pitted, chipped, scratched or loose tiles, “Tiles are defective if they are cracked, pitted, chipped, scratched or loose at handover.",
+    "After handover, tiles are defective where the builder’s workmanship causes the tiles to become cracked, pitted, chipped or loose within 24 months.”"
+   ]
+  },
+  "11.06": {
+   "section": "FLOOR AND WALL TILING",
+   "title": "Grouting and joints",
+   "text": [
+    "Grouting and joints, states; “Grouting is defective if it is not carried out in accordance with the requirements of Clause 5.7 of AS 3958.1.",
+    "Joints are defective if they are not, as far as is practicable, of consistent width and can",
+    "be seen from a normal viewing position.",
+    "Finished grout is defective if it is not uniform in colour, smooth, without voids, pinholes",
+    "or low spots.",
+    "The top surface of the grout may be tooled to provide a contoured depression of no deeper than 1 mm for up to 6 mm wide joint and up to 2 mm for a 6-10 mm wide joint (clause 5.7(e) of AS 3958.1).",
+    "Joint widths for floor tiles should not exceed 3 mm for pressed tiles and 6 mm",
+    "for extruded tiles (clause 4.6(c)(i) of AS 3958.1).",
+    "Joint widths for wall tiles should not exceed 1.5 mm for pressed tiles and 6 mm for extruded tiles (clause 5.4.6(c)(ii) of AS 3958.1).",
+    "Joint alignment should be consistent throughout the installation within a tolerance of 4 mm in 2 m8 (clause 5.4.6(d) of AS 3958.1).",
+    "Grout is defective if it becomes loose within 24 months of handover."
+   ]
+  },
+  "11.07": {
+   "section": "FLOOR AND WALL TILING",
+   "title": "Flexible sealant to junctions",
+   "text": [
+    "Flexible sealant to junctions. “Flexible or waterproof sealants to junctions are defective if they are not installed when required by the Building Code of Australia and AS 3958.1, or in accordance with the manufacturer’s installation requirements."
+   ]
+  },
+  "11.08": {
+   "section": "FLOOR AND WALL TILING",
+   "title": "Uneven tiling",
+   "text": [
+    "Uneven tiling. ‘Except where tiles have distortions inherent in the manufacture, tiling is defective if it has joints that are not uniform, of even width, aligned or in the same plane’.",
+    "Large tiles could present problems when required to fall and drain to floor outlet."
+   ]
+  },
+  "11.09": {
+   "section": "FLOOR AND WALL TILING",
+   "title": "Lippage (stepping) between tiles",
+   "text": [
+    "Lippage (stepping) between tiles. “Lippage is inherent in all installation methods and may also be unavoidable due to the tile tolerances. Lippage may also be unavoidable where tiles larger than 150mm by 150mm are graded to a waste outlet, unless traverse cuts are incorporated.",
+    "When measured with a straightedge, tiling is defective if the finished surface of the tiling is not flat and true to within a tolerance of +/- 4mm in 2metres from the required plane.",
+    "Tiling is defective if the lippage between the two adjacent tiles exceeds 2mm. In the case of tiles where the surface has been ground flat, for example polished tiles, tiling is defective if the lippage exceeds 1.5mm; for joint widths of 3mm or less the lippage should not exceed 1mm."
+   ]
+  },
+  "11.10": {
+   "section": "FLOOR AND WALL TILING",
+   "title": "Movement joints",
+   "text": [
+    "Movement joints. “Tiled floors are defective if intermediate movement joints are not inserted at evenly spaced positions at approximately 4.5 metre centres or at locations where stress might reasonably be expected in:a) internal floors where any dimension exceeds 9 metres or 6 metres if subjected to sunlight (clause 5.4.5.2 (b) (i) of AS 3958.1).b) external floor where any dimension exceeds 4.5 metres (clause 5.4.5.2 (b) (ii) of AS 3958.1).”"
+   ]
+  },
+  "12.01": {
+   "section": "PAINTING",
+   "title": "Standard of painting",
+   "text": [
+    "Standard of painting. “Coatings used are to be suitable for the relevant conditions and relevant wear and tear.",
+    "Painting is defective if it does not comply with the manufacturer’s installation instructions or AS/NZS 2311.”"
+   ]
+  },
+  "12.02": {
+   "section": "PAINTING",
+   "title": "Surface finish of paintwork",
+   "text": [
+    "Surface finish of paintwork: “Paintwork is defective if the application has blemishes such as paint runs, paint sags, wrinkling, dust, bare or starved painted areas, colour variations, surface cracks, irregular and coarse brush marks, sanding marks, blistering, non-uniformity of gloss level and other irregularities in the surface that are visible from a normal viewing position.",
+    "Painting is defective if the application results in excessive over-painting of fittings, trims, skirtings, architraves, glazing and other finished edges.”"
+   ]
+  },
+  "12.03": {
+   "section": "PAINTING",
+   "title": "Nail and screw fixings",
+   "text": [
+    "Nail and screw fixings: “Fillings or unfilled depressions caused by fixings are defects in painted or stained surfaces if they can be seen from the normal viewing position.”"
+   ]
+  },
+  "12.04": {
+   "section": "PAINTING",
+   "title": "Natural characteristics and mechanical imperfections/damage",
+   "text": [
+    "Natural characteristics and mechanical imperfections/damage. “Unless the contract specifies otherwise, natural characteristics such as gum pockets, surface splits or sap bleeding are defective if they can be seen from a normal viewing position.”",
+    "Mechanical imperfections/damage, holes and any other unfilled depressions are defective if they can be seen from a normal viewing position.”"
+   ]
+  },
+  "12.05": {
+   "section": "PAINTING",
+   "title": "Paint durability",
+   "text": [
+    "Paint durability. “Unless documented otherwise, coatings are defective if they fail by lifting, blistering, flaking, fading, etc,. within the minimum period shown in Table 12.05."
+   ]
+  },
+  "13.01": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "General",
+   "text": [
+    "General. “Flashings are defective if they are not installed in accordance with the requirements of the Building Code of Australia",
+    "Shower recesses, decks and balconies mainly fail because of poorly installed waterproofing membranes and incorrect detailing. The greatest care should be taken to ensure the horizontal surface falls, flashing up-stands, vertical joints and drainage systems are installed exactly as specified for the particular system.”",
+    "Internal wet areas"
+   ]
+  },
+  "13.02": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Wet areas",
+   "text": [
+    "Wet areas. “Waterproofing of wet areas is defective if not installed with the requirements of the Building Code of Australia and AS 3740.”"
+   ]
+  },
+  "13.03": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Shower recess and components",
+   "text": [
+    "Shower recess and components. “Shower recess and components are defective if they crack, leak or don’t perform as intended.",
+    "Scratches in shower bases, screens and glass are defective if they are due to the builder’s workmanship and are visible from a normal viewing position.",
+    "All cracks in shower bases, screens and glass are defective if they exist at handover or are due to the builder’s workmanship.",
+    "A shower component is defective if it allows the shower recess to leak during normal usage. Unenclosed shower screens are not intended to prevent the spread of water from the shower enclosure and are not considered defective.",
+    "Silicone sealants may require replacement after five years. This is regarded as normal house maintenance which is the owner’s responsibility.",
+    "Beading of water on surfaces such as poly-marble shower bases and polished porcelain tiles is considered normal and is therefore not regarded as a defect.”"
+   ]
+  },
+  "13.04": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Leaks in waterproof decks and balconies",
+   "text": [
+    "Leaks in waterproof decks and balconies. “Waterproof decks and balconies that leak are defective.”",
+    "Water Proofing – Decks & Balconies"
+   ]
+  },
+  "13.05": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Waterproof decks and balconies substrate",
+   "text": [
+    "Waterproof decks and balconies substrate. “Waterproof decks and balconies are defective if they are not constructed in accordance with the Building Code of Australia and AS 4654.2",
+    "Water proof decks and balconies are defective if the water proofing system is not installed in accordance with the manufacturer’s installation requirements.”"
+   ]
+  },
+  "13.06": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Decks and balcony freeboard outside windows and doors",
+   "text": [
+    "Decks and balcony freeboard outside windows and doors. “Waterproof decks and balconies are defective if they do not have a drainage system sufficient to withstand wind-driven water surging from the deck or balcony that complies with the Building Code of Australia and AS 4654.2. See Diagram 13.06"
+   ]
+  },
+  "13.07": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Ponding on waterproof decks and balconies",
+   "text": [
+    "Ponding on waterproof decks and balconies. “Waterproof decks and balconies are defective if water ponds (with the exception of residual water remaining due to surface tension) or does not drain to the outer edge or a stormwater inlet.",
+    "Decks and balconies that are required to be waterproofed are defective if they are not provided with adequate drainage and provision for overflow.”"
+   ]
+  },
+  "13.08": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Calcification and efflorescence associated with decks and balconies",
+   "text": [
+    "Calcification and efflorescence associated with decks and balconies. “Calcification or efflorescence caused by water coming from a deck or balcony that occurs on walls below or beside the deck or balcony, or that appears in the mortar joints at the deck or balcony is defective. Activities of others, such as owners watering plants, may also contribute to efflorescence, which may not be attributed to the work of the builder.”"
+   ]
+  },
+  "14.01": {
+   "section": "FRAMING",
+   "title": "Timber flooring – shrinkage and swelling",
+   "text": [
+    "Timber flooring – shrinkage and swelling. “Timber flooring will shrink or swell according to its internal moisture content, timber species used and the installation environment. The internal moisture content will adjust to the surrounding atmosphere after the timber is installed and this may lead to permanent or seasonal swelling, splitting or shrinkage creating gaps at board edges.",
+    "Exposure to sunlight, cooling, heating or other heat generating appliances is likely to cause localised shrinkage of timber that cannot be allowed for at the time of construction. This is to be taken into consideration when determining if there is defective workmanship.",
+    "When assessing the appearance of a floor it is to be done from a normal viewing position.”"
+   ]
+  },
+  "14.02": {
+   "section": "FRAMING",
+   "title": "Timber flooring",
+   "text": [
+    "Timber flooring. “Flooring, including tongue and groove strip flooring; structural plywood and particleboard sheet flooring, is defective if it is not installed according to AS 1684 and the manufacturer’s installation requirements.",
+    "Colour variations due to natural causes such as sunlight are not defective.",
+    "Ghosting, where blemishes appear beneath the finish coat, is defective when visible from a normal viewing position.",
+    "Due to necessary machining tolerances a step (lipping) of up to 0.5 mm or slight movement may exist between adjacent floor boards. This step (lippage) should not be evident at handover if the floorboards are also sanded and polished by the builder.”"
+   ]
+  },
+  "14.03": {
+   "section": "FRAMING",
+   "title": "Gaps in exposed timber flooring",
+   "text": [
+    "Gaps in exposed timber flooring. “Except where affected by exposure to sunlight, cooling, heating or other heat generating appliances, flooring is defective if it has gaps of more than 2 mm between adjacent boards that extend for more than 1 m, or more than 5 mm in total of three gaps between four consecutive boards.”"
+   ]
+  },
+  "14.04": {
+   "section": "FRAMING",
+   "title": "Joint swelling in timber, plywood and particleboard flooring",
+   "text": [
+    "Joint swelling in timber, plywood and particleboard flooring. “Joints in plywood and particleboard floors are defective if they can be detected through",
+    "normal floor coverings.",
+    "Swelling in tongue and groove strip timber flooring is defective if it causes tenting, buckling or crowning of the boards and can be seen from a normal viewing position.",
+    "Cupping in boards of more than 1 mm per 100 mm is a defect (Table C3 of AS 2796.1)."
+   ]
+  },
+  "14.05": {
+   "section": "FRAMING",
+   "title": "Nail popping in timber, plywood and particleboard floors",
+   "text": [
+    "Nail popping in timber, plywood and particleboard floors. “Nail heads that can be detected through floor coverings or nail popping that is clearly visible in exposed flooring are defective if they occur within 24 months from handover.”"
+   ]
+  },
+  "14.06": {
+   "section": "FRAMING",
+   "title": "Squeaking floors",
+   "text": [
+    "Squeaking floors. “Floors that consistently squeak by a person walking normally in a trafficable area within the first 24 months from handover are defective.”"
+   ]
+  },
+  "14.07": {
+   "section": "FRAMING",
+   "title": "Springy floors",
+   "text": [
+    "Springy floors. “Floors that bounce in a way that can be detected by a person walking normally in a trafficable area are defective if the substructure has not been constructed in accordance with the Building Code of Australia and AS 1684.”"
+   ]
+  },
+  "14.08": {
+   "section": "FRAMING",
+   "title": "Levelness of timber floor",
+   "text": [
+    "Levelness of timber floor. “New floors are defective if within the first 24 months of handover they differ in level by more than 10 mm in any room or area, or more than 4 mm in any 2 m length.",
+    "The overall deviation of floor level to the entire building footprint shall not exceed 20 mm",
+    "within 24 months of handover. Refer to Item I of this Guide where the new floor is to adjoin an existing floor.”"
+   ]
+  },
+  "14.09": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Splitting of timber decking",
+   "text": [
+    "Splitting of timber decking. “Splits in timber decking that extend to the end or side edge of the timber is defective if they are due to the fixing method.”",
+    "15 ELECTRICAL"
+   ]
+  },
+  "15.01": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Electrical",
+   "text": [
+    "Electrical. “Any electrical work is defective if it does not comply with the relevant regulations or the contract documents.",
+    "The builder shall provide the owner with a Certificate of Electrical Safety when a certificate is required to be issued by the licenced electrician.”"
+   ]
+  },
+  "16.01": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Concrete pools and spas",
+   "text": [
+    "Concrete pools and spas.  “Concrete pools and spas are defective if they do not comply with AS 2783.”"
+   ]
+  },
+  "16.02": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Premoulded fibre-reinforced plastic pools and spas",
+   "text": [
+    "Premoulded fibre-reinforced plastic pools and spas. “Premoulded pools and spas are defective if they are not installed in accordance with AS/NZS 1839.”"
+   ]
+  },
+  "16.03": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Variations from documented dimensions in concrete pools and spas",
+   "text": [
+    "Variations from documented dimensions in concrete pools and spas. “Departures from the documented set out for concrete pools and spas are defective if they exceed L/100, where L is the documented dimension, or 5 mm, whichever is the greater.”"
+   ]
+  },
+  "16.04": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Variations from documented datum in concrete pools and spas",
+   "text": [
+    "Variations from documented datum in concrete pools and spas. “Set outs that depart from documented reduced levels or finished floor levels by more than 40 mm are defective.”",
+    "18 GENERAL"
+   ]
+  },
+  "18.01": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Appliances and fittings",
+   "text": [
+    "Appliances and fittings. The owner is responsible for organising warranty service for faults in appliances and fittings supplied as part of the building contract where the builder has provided the warranty documents to the owner. Service outside the warranty period is the responsibility of the owner."
+   ]
+  },
+  "18.02": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Faults and damage to appliances and fittings",
+   "text": [
+    "Faults and damage to appliances and fittings. Damage to appliances and fittings supplied as part of the building contract is defective if it is due to the builder’s workmanship.",
+    "During the documented maintenance period after handover, fittings are defective if they",
+    "do not operate as intended by the manufacturer. If the maintenance period is not",
+    "documented it is to be taken as three months."
+   ]
+  },
+  "18.03": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Condensation",
+   "text": [
+    "Condensation. Condensation is a common problem in buildings (particularly in bathrooms and laundries) and can occur on windows, under unlined roofs or elsewhere. Further information is available in the Australian Building Codes Board Handbook – Condensation in Buildings (2014).",
+    "Where the requirements of the Building Code of Australia (BCA) have been complied with, the responsibility for controlling condensation by maintaining adequate natural or mechanical ventilation through the use of openable windows, exhaust fans, or other means, is the responsibility of the owner.",
+    "Condensation is defective if the builder has not complied with the relevant clauses of the BCA."
+   ]
+  },
+  "18.04": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Glazing",
+   "text": [
+    "Glazing. Scratches, fractures, chips or surface blemishes on glazing and mirrors are defective if they exist at handover and can be seen from a normal viewing position.",
+    "Minor scratches, fractures, chips or other blemishes that are not more than 10 mm long",
+    "and where there are not more than three blemishes per pane, are not defects."
+   ]
+  },
+  "18.05": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Lyctus borer",
+   "text": [
+    "Lyctus borer. Timber is defective if it is used during construction with evidence of lyctus borer attack, unless the timber product has been approved by the manufacturer."
+   ]
+  },
+  "18.06": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Termites",
+   "text": [
+    "Termites. Termites are a widespread problem in all areas of Australia and it is the owner’s responsibility to regularly inspect the property, including sub-floor inspections, to detect evidence of termite attack.",
+    "Termites can circumvent properly executed termite protection measures, such as building tunnels around barriers. Tunnels can be identified through regular inspections and, if found, the termite nest should be located and destroyed by a suitably qualified pest controller.",
+    "Termite management systems are intended to reduce the risk of damage to the structural members of buildings by deterring concealed entry of termites into a building. Termite management systems cannot prevent the entry of termites into the building. In Victoria, a termite management system is only required to be installed where the primary building elements are susceptible to termite attack, as defined in the Building Code of Australia."
+   ]
+  },
+  "18.07": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Termite damage",
+   "text": [
+    "Termite damage. Damage caused by termites that occurs in areas not designated by the relevant council as a termite risk area is the responsibility of the owner.",
+    "Damage caused by termites in buildings within designated termite risk areas is defective",
+    "if the termite management system has not been installed in accordance with the Building",
+    "Code of Australia.",
+    "Damage caused by termites in buildings within designated termite risk areas is not defective if the termite management system has not been regularly maintained by the owner, made non-compliant by the owner after handover, or not maintained in accordance with the manufacturer’s instructions and AS 3660.2."
+   ]
+  },
+  "18.08": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Cleaning",
+   "text": [
+    "Cleaning. Owners are entitled to expect that the building site and works are clean and tidy on completion. Where handover is delayed for any reason the owner must expect that dust may have settled on interior exposed surfaces.",
+    "Building sites are defective if they are not clear of building debris.",
+    "Building works are defective where windows are not clean, floors are not swept, mopped",
+    "or vacuumed as appropriate, tiles, sinks, basins, troughs, baths, etc. are not cleaned, and shelving, drawers and cupboards ready for use."
+   ]
+  },
+  "18.09": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "lists common causes of excessive wetting and drying that are likely to alter moisture leve",
+   "text": [
+    "lists common causes of excessive wetting and drying that are likely to alter moisture level in foundation soils around the building if not managed effectively."
+   ]
+  },
+  "18.10": {
+   "section": "WET AREAS, DECKS AND BALCONIES",
+   "title": "Floor coverings",
+   "text": [
+    "Floor coverings. Carpet and vinyl is defective if it is not installed in accordance with the manufacturer’s installation recommendations.",
+    "Joins in carpet and vinyl are defective if they peak, fray or misalign and are visible from",
+    "a normal viewing position within 12 months from handover.",
+    "Floating floors which rest on the structural floor are defective if not installed in accordance with the manufacturer’s installation requirements. Movement noises are an inherent characteristic of this type of flooring."
+   ]
+  }
+ },
+ "blocks": {
+  "normal_viewing": {
+   "title": "The Normal Viewing Position",
+   "text": [
+    "The Victorian Building Authority’s Guide to Standards and Tolerances, Inspecting surfaces from the normal viewing position, states; “Generally, variations in the surface colour, texture and finish of walls, floors and roofs, and variations in glass and similar transparent materials are to be viewed where possible from a normal viewing position. A normal viewing position is looking from a distance of 1.5 metres or greater, (600 mm for appliances and fixtures) with the surface or material being illuminated by “non-critical light”. “Non-critical light” means the light that strikes the surface is diffused and is not glancing or parallel to that surface.",
+    "Slight variations in the colour and finish of materials do not always constitute a defect.”"
+   ]
+  },
+  "polyethylene": {
+   "title": "Polyethylene (plastic) to slab",
+   "text": [
+    "The polyethylene vapour barrier from beneath the concrete floor slab should be turned up to the external side faces of its edge beams. It must be positioned prior to being back filled, otherwise moisture ingress may occur via slab edge dampness into the internal timber wall skins and/or the floor coverings.",
+    "It is a requirement of Part 3.2.2.6 Vapour Barriers of the BCA that ‘The vapour barrier must be placed beneath the slab so that the bottom surface of the slab is entirely under laid and extends under edge beams to finish at ground level in accordance with Figure 3.2.2.3.’"
+   ]
+  },
+  "exposed_reo": {
+   "title": "Exposed Reo",
+   "text": [
+    "The BCA part 3.2.3.2 Steel reinforcement states:",
+    "(d) Footings and slabs on ground must have concrete cover between the outermost edge of the reinforcement (including ligatures, tie wire etc) and the surface of the concrete of not less than:",
+    "(i) 40 mm to unprotected ground.",
+    "(ii) 30 mm to a membrane in contact with the ground.",
+    "(iii) 20 mm to an internal surface.",
+    "(iv) 40 mm to external exposure.",
+    "(e) Reinforcement must be cleaned of loose rust, mud, paints and oils immediately prior to the concrete pour."
+   ]
+  },
+  "bca_drainage": {
+   "title": "BCA Section 3.1.2.3 Surface Water Drainage",
+   "text": [
+    "Surface water must be diverted away from Class 1 buildings as follows:",
+    "Slab on ground finished ground level adjacent to buildings.",
+    "The external finished surface surrounding the slab must be drained to move surface water away from the building and graded to give a slope of not less than 50mm over the first 1 metre from the building. (Also refer AS2870 additional requirement)",
+    "(b) Slab on ground finished slab heights.",
+    "The height of the slab on ground (measured at the slab edge) above external finished surfaces must not be less than;",
+    "150 mm above ground level",
+    "100 mm above sandy well drained areas",
+    "50 mm above paved or concreted areas that slope from the building in accordance (a)"
+   ]
+  },
+  "site_drainage": {
+   "title": "Site Drainage",
+   "text": [
+    "Australian Standard (AS2870) is enforced to address issues relating to water ponding and water retention on building sites. This standard now requires:",
+    "The ground surface around the slab perimeter to be graded away to a minimum of 1:20 fall (75 millimetres over a distance of 1200 millimetres).",
+    "Surface drainage silt pits positioned at the base of site cut spaced at a maximum of 10 metres apart and connected to the stormwater system.",
+    "Temporary downpipes (socks) fitted to all downpipes and connected to stormwater drain risers used during construction.",
+    "Final connection of downpipes to the stormwater system to be in accordance with the Engineer’s Design and backfilled with clay material to the top 300 millimetres."
+   ]
+  }
+ }
+}

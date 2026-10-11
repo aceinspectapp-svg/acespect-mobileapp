@@ -65,6 +65,8 @@ export interface TemplateField {
   prefix?: string;
   options?: TemplateFieldOption[];
   allowOther?: boolean;
+  /** pill-select rows: the option values (the red "Defect" choices) that open the mobile app's defect-details form. */
+  defectOn?: string[];
   gate?: FieldGate;
   repeat?: RepeatConfig;
   itemFields?: TemplateField[];
