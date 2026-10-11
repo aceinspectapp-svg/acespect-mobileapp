@@ -304,7 +304,7 @@ pdfs.push(await runCase({
   name: "Dilapidation / Residential House",
   profile: HOUSE, inspectionTitle: "Dilapidation", propertyTitle: "Residential House", jobNo: "HV-26-CI01", client: "CI Smoke Client",
   answers: houseAnswers, photoSections: ["driveway", "paving_paths", "fences", "retaining_walls", "garage_carport_sheds", "pool_spa", "elevations", "roof_chimneys"],
-  headings: ["Description and Overview", "Condition Summary", "Driveway", "Fences", "Internal Areas"],
+  headings: ["Description and Overview", "Condition Summary", "Driveway", "Fences", "Internal Areas", "Residential House"],
   phrases: ["raft slab", "terracotta shingle", "uPVC", "hardwood sleepers", "parked trailer", "rotting edge"],
   minPages: 8, minImages: 10,
 }));
@@ -312,7 +312,7 @@ pdfs.push(await runCase({
   name: "Dilapidation / Public Assets",
   profile: PUBLIC_ASSETS, inspectionTitle: "Dilapidation", propertyTitle: "Public Assets", jobNo: "HV-26-CI02", client: "CI Public Assets Client",
   answers: publicAssetsAnswers, photoSections: ["elevations"],
-  headings: ["Description and Overview", "Part A: Frontage to project site", "Footpaths and Crossovers", "Kerbs and Channel", "Road surface and Parking bays", "Laneway surface"],
+  headings: ["Description and Overview", "Part A: Frontage to project site", "Footpaths and Crossovers", "Kerbs and Channel", "Road surface and Parking bays", "Laneway surface", "Public Assets"],
   phrases: [
     "The purpose of the inspection is to identify any defects or cracking to public assets and environs",
     "The inspection is for Public Assets to 3 Smoke Test Road.",
@@ -330,7 +330,7 @@ pdfs.push(await runCase({
   name: "Dilapidation / Commercial Properties",
   profile: COMMERCIAL, inspectionTitle: "Dilapidation", propertyTitle: "Commercial Properties", jobNo: "HV-26-CI03", client: "CI Commercial Client",
   answers: commercialAnswers, photoSections: ["driveway", "paving_paths", "fences", "garage_carport_sheds", "elevations", "pool_spa", "internal_areas"],
-  headings: ["Description and Overview", "Condition Summary", "Reception / Foyer", "Warehouse", "Underside Roof Covering & Frame"],
+  headings: ["Description and Overview", "Condition Summary", "Reception / Foyer", "Warehouse", "Underside Roof Covering & Frame", "Commercial Properties"],
   phrases: [
     "The property is a warehouse, facing north on a mostly flat block of land",
     "The driveway is to the front left of the block and is constructed of concrete.",
@@ -351,7 +351,7 @@ pdfs.push(await runCase({
   name: "Dilapidation / Apartment",
   profile: APARTMENT, inspectionTitle: "Dilapidation", propertyTitle: "Apartment", jobNo: "HV-26-CI04", client: "CI Apartment Client",
   answers: apartmentAnswers, photoSections: ["driveway", "elevations", "internal_areas"],
-  headings: ["Description and Overview", "Condition Summary", "External walls", "Ceilings", "Front door"],
+  headings: ["Description and Overview", "Condition Summary", "External walls", "Ceilings", "Front door", "Apartment"],
   phrases: [
     "The property is a 4-storey apartment in a multi-level complex, on a flat block of land",
     "The proposed works are excavation.",

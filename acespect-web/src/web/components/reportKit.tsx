@@ -17,14 +17,22 @@ export const reportTokens = {
   ink: "#1e2530", // primary text
   inkMuted: "#5b6472", // secondary text
   inkFaint: "#94a0b0", // tertiary / placeholder text
-  accent: "#1a2a4a", // brand navy, matches the existing toolbar/print button
-  accentSoft: "#eef2f8", // tinted backgrounds for accent bands
+  // Resolved through CSS variables so one report can carry the Houspect brand colours (see DILAPIDATION_BRAND) while another (Construction) keeps these fallbacks untouched.
+  accent: "var(--report-accent, #1a2a4a)", // navy, matches the existing toolbar/print button
+  accentSoft: "var(--report-accent-soft, #eef2f8)", // tinted backgrounds for accent bands
   border: "#e2e6ec",
   placeholderBg: "#fbf3e3",
   placeholderBorder: "#eddcb5",
   placeholderInk: "#8a6d2f",
   radius: "6px", // every coloured box (title bands, condition tags and pills, placeholders) rounds its corners by this much
 };
+
+/** Houspect brand colours (navy #183966, red #CE2328) for the Dilapidation report. Set on the report page element; anything outside it, and the Construction report, falls back to reportTokens' own values. */
+export const DILAPIDATION_BRAND = {
+  "--report-accent": "#183966",
+  "--report-accent-soft": "#eaeff6",
+  "--report-brand-red": "#CE2328",
+} as React.CSSProperties;
 
 /** The one title look shared by every band and page title: same family, weight, case and letter-spacing. Only the size (band vs page title) and the band's own colours differ. */
 const titleFont = {

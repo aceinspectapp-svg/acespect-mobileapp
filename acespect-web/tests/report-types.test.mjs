@@ -53,3 +53,16 @@ describe("report types", () => {
     assert.ok(!unknown.reportText.includes("The driveway is to the"), "no House sentences for an unregistered report type");
   });
 });
+
+describe("the cover says which kind of Dilapidation report it is", () => {
+  it("prints the property type under the title, for all four Dilapidation reports", async () => {
+    const { buildReportHeader } = await server.ssrLoadModule("/src/web/report.ts");
+    const header = (type, propertyType) => buildReportHeader({ type, propertyType, sections: [], client: "C", jobNo: "J", address: "1 Test St", suburb: "Box Hill", date: "2026-10-03" });
+    for (const [propertyType, expected] of [["Residential House", "Residential House"], ["Apartment", "Apartment"], ["Public Assets", "Public Assets"], ["Commercial Properties", "Commercial Properties"], ["residential_house", "Residential House"], ["commercial_properties", "Commercial Properties"]]) {
+      const h = header("Dilapidation", propertyType);
+      assert.equal(h.reportTitle, "Dilapidation Report");
+      assert.equal(h.reportType, expected, propertyType);
+    }
+    assert.equal(header("Pre-Purchase", "Apartment").reportType, undefined, "only Dilapidation reports say it");
+  });
+});
