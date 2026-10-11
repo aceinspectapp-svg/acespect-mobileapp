@@ -25,6 +25,16 @@ const SUMMARY_EXTRAS: Record<string, string[]> = {
   lanesurface_summary: ['Numerous items of deterioration throughout'],
 };
 
+/** The Word template's "There are significant {cracks / chipping / patches / ...}. The most significant items are:" line, per category. */
+const SIGNIFICANT: Record<string, string[]> = {
+  footpaths_summary: ['Significant cracks', 'Significant chipping', 'Significant patches', 'Significant damage'],
+  kerbs_summary: ['Significant cracks and chipping', 'Significant subsidence', 'Significant patches'],
+  roadsurface_summary: ['Significant cracks', 'Significant potholes', 'Significant patches'],
+  lanesurface_summary: ['Significant cracks', 'Significant potholes', 'Significant patches'],
+  fenceleft_summary: ['Significant cracks', 'Significant damage'],
+  fenceright_summary: ['Significant cracks', 'Significant damage'],
+};
+
 const DEFECT_KINDS = ['OK', 'Crack', 'Subsidence', 'Gap', 'Chipping', 'Leaning', 'Damage', 'Rust', 'Graffiti'];
 
 /** Applies the alignment to one section's fields in place. Returns true if anything changed. */
@@ -46,6 +56,36 @@ export function alignSection(sectionKey: string, fields: Field[]): boolean {
         if (!field?.options) continue;
         // before the trailing "Other" choice
         changed = addOptions(field, labels, 'Other') || changed;
+      }
+      for (const [key, labels] of Object.entries(SIGNIFICANT)) {
+        changed = addOptions(inner.find((f) => f.key === key), labels, 'Other') || changed;
+      }
+      // "The following observations commenced from {name of road / lane} and proceeded ..."
+      changed = addFieldAfter(inner, 'partName', { key: 'roadName', type: 'text', label: 'Name of road / lane', required: false }) || changed;
+      // The footpath's "leaf litter / overgrown grass / other"
+      changed = addOptions(inner.find((f) => f.key === 'footpaths_obscuredBy'), ['Leaf litter'], undefined) || changed;
+      for (const f of inner) {
+        if (f.type !== 'damage-list' || !f.itemFields) continue;
+        // "There is a crack starting at {start} and running to the {direction}."
+        if (!f.itemFields.some((g) => g.key === 'crackEndLocation')) {
+          const at = f.itemFields.findIndex((g) => g.key === 'crackStartLocation');
+          if (at >= 0) {
+            f.itemFields.splice(at + 1, 0, {
+              key: 'crackEndLocation',
+              type: 'text',
+              label: 'Running to the (e.g. north, the kerb)',
+              order: 0,
+              required: false,
+              ...(f.itemFields[at]?.gate ? { gate: f.itemFields[at].gate } : {}),
+            });
+            f.itemFields.forEach((g, i) => (g.order = i));
+            changed = true;
+          }
+        }
+        // Fences along a laneway: "There are loose palings at ..." / "There is graffiti at ..."
+        if (f.key === 'fenceleft_damages' || f.key === 'fenceright_damages') {
+          changed = addOptions(f.itemFields.find((g) => g.key === 'damageType'), ['Loose palings', 'Graffiti']) || changed;
+        }
       }
       // Each street asset: "Crack / subsidence / gap / chipping / OK", "Leaning / subsidence / damage / OK", ... -- what is wrong with it.
       for (const f of inner) {

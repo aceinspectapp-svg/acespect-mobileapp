@@ -46,7 +46,7 @@ const crack = (location, extra = {}) => ({ location, damageType: "Cracking", sub
 const partA = {
   partName: "Part A: Frontage to project site", surveyStart: "South end", startRef: "3m past the boundary of no. 5", surveyDirection: "North", surveyEnd: "North end", endRef: "the corner of Smith Street",
   itemsPresent: ["Footpaths and Crossovers", "Nature Strip, Light Posts, Signage, Trees", "Kerb and Channel", "Road Surface & Parking Bays"],
-  footpaths_material: ["Concrete"], footpaths_condition: "Fair", footpaths_summary: "Several minor cracks", footpaths_obscuredBy: ["Overgrown grass", "Parked vehicles"],
+  footpaths_material: ["Concrete"], footpaths_condition: "Fair", footpaths_summary: "Significant cracks", footpaths_obscuredBy: ["Overgrown grass", "Parked vehicles"],
   footpaths_damages: [crack("outside no. 7", { crackStartLocation: "the kerb", direction: "Horizontal", widthMm: 6, lengthMm: 850 }), crack("outside no. 9", { widthMm: 2, lengthMm: 300 })],
   footpaths_assets: [
     { assetType: "Utility pit cover", count: "1", condition: "Satisfactory with typical wear and tear", location: "the driveway of no. 7" },
@@ -73,18 +73,23 @@ describe("Public Assets: Description and Overview", () => {
   const desc = { proposedWorksType: "Development site", projectSiteAddress: "123 Test Street", scopeConfirmed: ["Footpaths, utility pit covers", "Kerb and channel", "Road surfaces"] };
 
   it("says what the inspection is for", () => {
-    assert.equal(draft("description", desc).reportText, "The inspection is for Public Assets to the development site.");
-    assert.equal(draft("description", { proposedWorksType: `${OTHER}Tram line` }).reportText, "The inspection is for Public Assets to the tram line.");
+    assert.equal(draft("description", desc).reportText, "The inspection is for Public Assets to 123 Test Street.");
+    assert.equal(draft("description", { proposedWorksType: `${OTHER}Tram line` }).reportText, "The inspection is for Public Assets.", "no project site address, nothing to name");
   });
 
   it("words the project works and the scope on the Description page, counting the survey areas", () => {
     const fields = draft("description", desc).fields;
     const blocks = wordingFor(PA).descriptionBlocks({ fields, areaCount: 2 });
-    assert.equal(blocks.works, "The project works are to the property at 123 Test Street.");
+    assert.equal(blocks.works, "The project works are to the development site at 123 Test Street.");
     const placed = wordingFor(PA).descriptionBlocks({ fields: { ...fields, siteSide: "Front", siteDirection: "NE" }, areaCount: 2 });
-    assert.equal(placed.works, "The project works are to the property at 123 Test Street, which is at the front - approximately north-east - of the site of this inspection.");
+    assert.equal(placed.works, "The project works are to the development site at 123 Test Street, which is at the front - approximately north-east - of the site of this inspection.");
+    // the document's own sentence, for works to a residential property
+    const house = draft("description", { proposedWorksType: "Residential property", projectSiteAddress: "123 Test Street" }).fields;
+    assert.equal(wordingFor(PA).descriptionBlocks({ fields: house, areaCount: 0 }).works, "The project works are to the property at 123 Test Street.");
     assert.equal(blocks.scope, "The scope for inspection is public assets including footpaths, utility pit covers, kerb and channel and road surfaces to the following two areas:");
-    assert.equal(wordingFor(PA).descriptionBlocks({ fields, areaCount: 0 }).scope, "The scope for inspection is public assets including footpaths, utility pit covers, kerb and channel and road surfaces");
+    assert.equal(wordingFor(PA).descriptionBlocks({ fields, areaCount: 0 }).scope, "The scope for inspection is public assets including footpaths, utility pit covers, kerb and channel and road surfaces.");
+    const bare = draft("description", { projectSiteAddress: "123 Test Street" }).fields;
+    assert.equal(wordingFor(PA).descriptionBlocks({ fields: bare, areaCount: 3 }).scope, "The scope for inspection is public assets including paths, nature strip, kerbs, lane surface, posts, signs, trees to the following three areas:");
   });
 
   it("words those two sentences itself, as the House and Commercial reports do", () => {
@@ -107,7 +112,7 @@ describe("Public Assets: survey parts", () => {
   it("describes a category: material, condition, and what obscured it", () => {
     assert.ok(paras.includes("ROOMHEAD::Footpaths and Crossovers"));
     assert.ok(paras.includes("The footpath and crossovers are constructed of concrete and in fair condition. Sections were obscured by overgrown grass and parked vehicles."));
-    assert.ok(paras.includes("There is a nature strip of grass which is in typical condition. Sections of the nature strip were obscured by vegetation."));
+    assert.ok(paras.includes("There is a grass nature strip which is in typical condition. Sections of the nature strip were obscured by vegetation."));
     assert.ok(paras.includes("The kerbs and channel are constructed of concrete and in poor condition."));
     assert.ok(paras.includes("The road surface and parking bays are constructed of asphalt and in satisfactory condition with typical shrinkage cracks and wear and tear. The painted line markings are worn."));
     assert.ok(paras.includes("The laneway surface is constructed of concrete and in average condition."));
@@ -118,11 +123,11 @@ describe("Public Assets: survey parts", () => {
   });
 
   it("lists the most significant defects, each as its own tagged sentence in template order across both parts", () => {
-    assert.ok(paras.includes("Several minor cracks observed. The most significant items are:"));
+    assert.ok(paras.includes("There are significant cracks. The most significant items are:"));
     const defects = paras.filter((p) => p.startsWith("DEFECT::"));
     assert.equal(defects.length, 6);
     assert.deepEqual(defects.map((d) => Number(d.split("::")[1])), [0, 1, 2, 3, 4, 5]);
-    assert.ok(defects[0].includes("Outside no. 7, there is a fine crack, starting from the kerb and running horizontally. The crack is approximately 6mm wide and approximately 850mm long."));
+    assert.ok(defects[0].includes("Outside no. 7, there is a horizontal fine crack starting at the kerb. The crack is 6 millimetres wide and 850 millimetres long."));
     assert.equal(out.damages.length, 6);
   });
 
@@ -194,7 +199,7 @@ describe("Public Assets: every answer on the website form is printed", () => {
   it("prints the safety, access and scope-limitation answers on the Description", () => {
     const p = paragraphs(draft("description", { proposedWorksType: "Road", safetyAssessed: "yes", safetyAssessedNotes: "Traffic management in place", scopeLimitations: "yes", scopeLimitationsNotes: "Part of the lane was fenced off" }).reportText);
     assert.ok(p.includes("All safety and access matters were assessed on site. Traffic management in place."));
-    assert.ok(p.includes("Limitations to the scope of the inspection: Part of the lane was fenced off."));
+    assert.ok(p.includes("There were limitations to the scope of the inspection. Part of the lane was fenced off."));
   });
 
   it("says which way the road runs, and each asset's start point, direction and size", () => {
@@ -205,7 +210,7 @@ describe("Public Assets: every answer on the website form is printed", () => {
     };
     const p = paragraphs(draft("elevations", { parts: [part] }).reportText);
     assert.ok(p.includes("The road / lane runs south to north."));
-    assert.ok(p.includes("There is a utility pit cover at no. 7. It is in fair condition. Start point and direction: the driveway, heading north. It is approximately 600mm wide and approximately 900mm long."));
+    assert.ok(p.includes("There is a utility pit cover at no. 7. It is in fair condition. It starts at the driveway, heading north. It is approximately 600mm wide and approximately 900mm long."));
   });
 });
 
@@ -227,13 +232,57 @@ describe("Public Assets: good and bad are worded differently, from the real form
     assert.ok(foot.includes("Damage to fence or gate observed."));
   });
 
-  it("says what is wrong with a street asset, and nothing for one marked OK", () => {
-    const assets = (defectKind) => part({ kerbs_condition: SAT, kerbs_assets: [{ assetType: "Utility pit cover", count: "1", condition: "Fair", defectKind, location: "no. 7" }] });
-    assert.ok(assets("Crack").includes("There is a utility pit cover at no. 7. It is in fair condition. It has a crack."));
-    assert.ok(assets("Leaning").includes("There is a utility pit cover at no. 7. It is in fair condition. It is leaning."));
-    assert.ok(assets("OK").includes("There is a utility pit cover at no. 7. It is in fair condition."));
-    const many = part({ kerbs_condition: SAT, kerbs_assets: [{ assetType: "Bollard / Parking meter", count: "2", condition: "Poor", defectKind: "Rust", location: "the corner" }] });
-    assert.ok(many.includes("There are two bollards/parking meters at the corner. They are in poor condition. They are rusted."));
+  it("says what is wrong with a street asset in the template's 'with ...' clause", () => {
+    const asset = (extra) => part({ kerbs_condition: SAT, kerbs_assets: [{ assetType: "Utility pit cover", count: "1", location: "no. 7", ...extra }] }).join(" ");
+    assert.ok(asset({ condition: SAT }).includes("There is a utility pit cover at no. 7. It is in satisfactory condition with typical wear and tear."));
+    assert.ok(asset({ condition: SAT, defectKind: "Crack" }).includes("It is in satisfactory condition with some cracks."));
+    assert.ok(asset({ condition: SAT, defectKind: "Chipping" }).includes("It is in satisfactory condition with chipping."));
+    assert.ok(asset({ condition: SAT, defectKind: "Leaning" }).includes("It is in satisfactory condition with leaning."));
+    assert.ok(asset({ condition: SAT, defectKind: "Damage" }).includes("It is in satisfactory condition with some damage."));
+    assert.ok(asset({ condition: SAT, defectKind: "OK" }).includes("It is in satisfactory condition with typical wear and tear."));
+    assert.ok(asset({ condition: "Poor" }).includes("It is in poor condition."));
+    assert.ok(asset({ condition: "Poor", defectKind: "Crack" }).includes("It is in poor condition with some cracks."));
+    const many = part({ kerbs_condition: SAT, kerbs_assets: [{ assetType: "Bollard / Parking meter", count: "2", condition: "Poor", defectKind: "Rust", location: "the corner" }] }).join(" ");
+    assert.ok(many.includes("There are two bollards/parking meters at the corner. They are in poor condition with some rust."));
+  });
+
+  it("says trees are 'in typical condition'", () => {
+    const trees = (extra) => part({ kerbs_condition: SAT, kerbs_assets: [{ assetType: "Tree", count: "2", ...extra }] }).join(" ");
+    assert.ok(trees({ condition: SAT }).includes("There are two trees in typical condition."));
+    assert.ok(part({ kerbs_condition: SAT, kerbs_assets: [{ assetType: "Tree", count: "1", condition: SAT }] }).join(" ").includes("There is one tree in typical condition."));
+    assert.ok(trees({ condition: SAT, defectKind: "Leaning" }).includes("There are two trees in satisfactory condition with leaning."));
+  });
+
+  it("words the survey start as the template does: from the road, proceeded, to the end at the house", () => {
+    const p = paragraphs(draft("elevations", { parts: [{ partName: "Part A: Frontage to project site", roadName: "Smith Street", surveyDirection: "North", surveyEnd: "North end", endRef: "3 metres past the side boundary of house number 9", itemsPresent: ["Kerb and Channel"], kerbs_condition: SAT }] }).reportText);
+    assert.ok(p.includes("The following observations commenced from Smith Street and proceeded north to the north end at 3 metres past the side boundary of house number 9."));
+  });
+
+  it("words the defects as the template does: crack start, where it runs to, width and length; loose palings and graffiti on a laneway fence", () => {
+    const fence = paragraphs(draft("elevations", {
+      parts: [{
+        partName: "Part B", itemsPresent: ["Fencing / Walls — Right Side"], fenceright_material: ["Timber palings"], fenceright_condition: SAT, fenceright_summary: "Significant cracks",
+        fenceright_damages: [
+          { location: "kerb", damageType: "Cracking", crackStartLocation: "the corner", crackEndLocation: "north", widthMm: 3, lengthMm: 700 },
+          { location: "house no. 4", damageType: "Loose palings" },
+          { location: "the lane entry", damageType: "Graffiti" },
+        ],
+      }],
+    }).reportText);
+    assert.ok(fence.includes("There are significant cracks. The most significant items are:"));
+    assert.ok(fence.some((x) => x.endsWith("At the kerb, there is a crack starting at the corner and running to the north. The crack is 3 millimetres wide and 700 millimetres long.")));
+    assert.ok(fence.some((x) => x.endsWith("There are loose palings at house no. 4.")));
+    assert.ok(fence.some((x) => x.endsWith("There is graffiti at the lane entry.")));
+  });
+
+  it("words each category's 'There are significant ...' line from the template's choices, and the line markings", () => {
+    const k = part({ kerbs_condition: SAT, kerbs_summary: "Significant cracks and chipping" });
+    assert.ok(k.includes("There are significant cracks and chipping."));
+    assert.ok(part({ kerbs_condition: SAT, kerbs_summary: "Significant subsidence" }).includes("There is significant subsidence."));
+    const road = (m) => paragraphs(draft("elevations", { parts: [{ partName: "A", itemsPresent: ["Road Surface & Parking Bays"], roadsurface_material: ["Asphalt"], roadsurface_condition: SAT, roadsurface_lineMarkings: m }] }).reportText).join(" ");
+    assert.ok(road("Worn").includes("The painted line markings are worn."));
+    assert.ok(road("New").includes("The painted line markings are new."));
+    assert.ok(road("Satisfactory with typical wear and tear").includes("The painted line markings are in satisfactory condition with typical wear and tear."));
   });
 
   it("has the real form's business signage and the extra street-asset kinds", () => {
@@ -243,6 +292,27 @@ describe("Public Assets: good and bad are worded differently, from the real form
     const partsField = rows.find((t) => t.sectionKey === "elevations").fields.find((f) => f.key === "parts");
     const road = partsField.itemFields.find((f) => f.key === "roadsurface_assets").itemFields.find((f) => f.key === "assetType").options.map((o) => o.label);
     for (const kind of ["Bike lane", "Traffic island", "Pedestrian crossing"]) assert.ok(road.includes(kind), kind);
+  });
+});
+
+describe("Public Assets: the cover's purpose paragraph", () => {
+  it("is the Public Assets one, with 'builder' except for the two named building consultants", async () => {
+    const { defaultPurposeFor } = await server.ssrLoadModule("/src/web/report.ts");
+    const pa = { type: "Dilapidation", propertyType: "Public Assets" };
+    const text = defaultPurposeFor(pa, "Rene White");
+    assert.ok(text.startsWith("The purpose of the inspection is to identify any defects or cracking to public assets and environs"));
+    assert.ok(text.includes("insofar as a licensed builder can reasonably identify the defects and current state of the assets."));
+    assert.ok(text.endsWith("may include concrete kerbing, footpaths, crossings, nature strip, trees, posts, signage, etc and is the result of a visual survey only."));
+    for (const name of ["Trevor Scott", "Peter Farries"]) assert.ok(defaultPurposeFor(pa, name).includes("licensed building consultant can reasonably"), name);
+    assert.ok(defaultPurposeFor({ type: "Dilapidation", propertyType: "Residential House" }, "Trevor Scott").includes("identify cracking, gaps and dilapidation in the main structures"));
+    assert.ok(defaultPurposeFor({ type: "Dilapidation", propertyType: "Commercial Properties" }, "Trevor Scott").includes("insofar as a licensed building consultant can reasonably"));
+    assert.ok(defaultPurposeFor({ type: "Dilapidation", propertyType: "Commercial Properties" }, "Rene White").includes("insofar as a licensed builder can reasonably"));
+  });
+});
+
+describe("Public Assets: no 'Label: value' lines", () => {
+  it("says the safety matters as typed and the notes of an added structure as a sentence", () => {
+    assert.equal(draft("notes", { publicAssetSafetyMatters: "Loose brick near the gate" }).reportText, "Loose brick near the gate.");
   });
 });
 

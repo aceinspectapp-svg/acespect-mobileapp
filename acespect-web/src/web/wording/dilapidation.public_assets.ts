@@ -8,18 +8,20 @@
 // defects, and the street assets found (utility pit covers, light posts, signs, bollards, ...).
 import type { AnswerTree, TemplateField } from "../templateFields";
 import type { ConditionSummaryRow } from "../templateFields";
-import { asString, buildDefectNote, isGateSatisfied, withPeriod } from "../templateFields";
+import { asString, buildDefectNote, isGateSatisfied, otherAnswerText, withPeriod } from "../templateFields";
 import { gradeOf } from "../conditionGrades";
 import type { Composer } from "./shared";
-import { conditionOf, damageSentences, defectOffsets, joinList, lower, many, observedSentence, one, scopeAndSafetyParagraphs } from "./shared";
+import { LOCATION_STARTS_WITH_PREPOSITION_RE, article, capitalize, conditionOf, defectOffsets, joinList, lower, many, observedSentence, one, scopeAndSafetyParagraphs } from "./shared";
+import { residentialHouseComposers as house } from "./dilapidation.residential_house";
+import { templateDamageSentences } from "./templateDamage";
 import type { ReportWording } from "./types";
 
 // ---- Description and Overview --------------------------------------------------------------
 
-/** "The inspection is for Public Assets to the {development site}." */
+/** "The inspection is for Public Assets to {the project site address}." */
 const description: Composer = (inst, itemFields) => {
-  const worksType = lower(one(itemFields, inst, ["proposedWorksType"]));
-  const lead = worksType ? `The inspection is for Public Assets to the ${worksType}.` : "The inspection is for Public Assets.";
+  const address = asString(inst.projectSiteAddress).trim().replace(/[.\s]+$/, "");
+  const lead = address ? `The inspection is for Public Assets to ${address}.` : "The inspection is for Public Assets.";
   // What was recorded about the scope and about safety follows, each as its own paragraph.
   return [lead, ...scopeAndSafetyParagraphs(inst)].join("\n\n");
 };
@@ -31,13 +33,20 @@ const numberWord = (n: number): string => NUMBER_WORDS[n] ?? String(n);
 function derivedFields(sectionKey: string, scope: AnswerTree, templateFields: TemplateField[]): Record<string, unknown> {
   if (sectionKey !== "description") return {};
   const items = many(templateFields, scope, ["scopeConfirmed"]).map(lower);
-  return items.length ? { scopeItems: items } : {};
+  const kind = one(templateFields, scope, ["proposedWorksType"]);
+  return { ...(items.length ? { scopeItems: items } : {}), ...(kind ? { worksTypeLabel: kind } : {}) };
 }
+
+/** The scope list the Word template has built in. */
+const DEFAULT_SCOPE_ITEMS = "paths, nature strip, kerbs, lane surface, posts, signs, trees";
 
 /** The two sentences the Description page words for this report type. */
 function descriptionBlocks({ fields, areaCount }: { fields: Record<string, unknown>; areaCount: number }): { works?: string; scope?: string } {
   const address = typeof fields.projectSiteAddress === "string" ? fields.projectSiteAddress.trim() : "";
   const text = (v: unknown): string => (typeof v === "string" ? clean(v) : "");
+  // The document's sentence is "The project works are to the property at {address}"; works to anything else say what they are ("to the road at ...").
+  const kind = text(fields.worksTypeLabel);
+  const what = !kind || /^residential property$/i.test(kind) ? "property" : lower(kind);
   const side = text(fields.siteSide);
   const direction = text(fields.siteDirection);
   const items = Array.isArray(fields.scopeItems) ? (fields.scopeItems as string[]) : [];
@@ -46,10 +55,12 @@ function descriptionBlocks({ fields, areaCount }: { fields: Record<string, unkno
     // Where the project works are in relation to the site, when the inspector gave a side and a direction.
     works: address
       ? side && direction
-        ? `The project works are to the property at ${address}, which is at the ${lower(side)} - approximately ${COMPASS[direction] ?? lower(direction)} - of the site of this inspection.`
-        : `The project works are to the property at ${address}.`
+        ? `The project works are to the ${what} at ${address}, which is at the ${lower(side)} - approximately ${COMPASS[direction] ?? lower(direction)} - of the site of this inspection.`
+        : `The project works are to the ${what} at ${address}.`
       : undefined,
-    scope: items.length ? `The scope for inspection is public assets including ${joinList(items)}${areas}` : undefined,
+    // "The scope for inspection is public assets including paths, nature strip, kerbs, lane surface, posts, signs, trees to the following two areas:" --
+    // the inspector's ticked scope items take the place of the template's fixed list; with none ticked the template's own list is used.
+    scope: `The scope for inspection is public assets including ${items.length ? joinList(items) : DEFAULT_SCOPE_ITEMS}${areas || "."}`,
   };
 }
 
@@ -103,9 +114,9 @@ const CATEGORIES: Category[] = [
     heading: "Nature strip, Light posts, Signage, Trees",
     wear: "typical wear and tear",
     obscuredNoun: "nature strip",
-    // "There is a nature strip of grass which is in typical condition."
+    // "There is a grass nature strip which is in typical condition."
     sentence: ({ material, condition }) =>
-      `There is a nature strip${material ? ` of ${material}` : ""}${condition ? ` which is in ${condition === "satisfactory" ? "typical" : condition} condition` : ""}.`,
+      `There is a${/^[aeiou]/i.test(material) ? "n" : ""} ${material ? `${material} ` : ""}nature strip${condition ? ` which is in ${condition === "satisfactory" ? "typical" : condition} condition` : ""}.`,
   },
   { prefix: "kerbs", heading: "Kerbs and Channel", wear: "typical wear and tear", obscuredNoun: "", sentence: overview("The kerbs and channel", "are") },
   { prefix: "roadsurface", heading: "Road surface and Parking bays", wear: "typical shrinkage cracks and wear and tear", obscuredNoun: "", sentence: overview("The road surface and parking bays", "are") },
@@ -133,30 +144,17 @@ function countOf(label: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** What the inspector ticked is wrong with an asset ("Crack / subsidence / gap / chipping / leaning / damage ... or OK"); OK says nothing. */
-function defectKindSentence(kind: string, count: number): string {
-  const one = count === 1;
-  switch (lower(kind)) {
-    case "crack":
-      return one ? "It has a crack." : "They have cracks.";
-    case "subsidence":
-      return one ? "It has subsidence." : "They have subsidence.";
-    case "gap":
-      return one ? "It has a gap." : "They have gaps.";
-    case "chipping":
-      return one ? "It has chipping." : "They have chipping.";
-    case "leaning":
-      return one ? "It is leaning." : "They are leaning.";
-    case "damage":
-      return one ? "It is damaged." : "They are damaged.";
-    case "rust":
-      return one ? "It is rusted." : "They are rusted.";
-    case "graffiti":
-      return one ? "It has graffiti." : "They have graffiti.";
-    default:
-      return "";
-  }
-}
+/** What the inspector ticked is wrong with an asset, as the template's "in satisfactory condition with {typical wear and tear / some cracks / chipping / leaning / some damage}" says it; OK says nothing. */
+const DEFECT_WITH: Record<string, string> = {
+  crack: "some cracks",
+  subsidence: "subsidence",
+  gap: "some gaps",
+  chipping: "chipping",
+  leaning: "leaning",
+  damage: "some damage",
+  rust: "some rust",
+  graffiti: "graffiti",
+};
 
 /** One street asset: "There is a utility pit cover at the corner. It is in satisfactory condition with typical wear and tear." */
 function assetSentence(assetFields: TemplateField[], asset: AnswerTree): string {
@@ -170,21 +168,52 @@ function assetSentence(assetFields: TemplateField[], asset: AnswerTree): string 
   const location = asString(asset.location).trim();
   const at = location ? ` at ${location}` : "";
   const cond = conditionOf(assetFields, asset, ["condition"]);
-  const state = cond.word ? ` ${count === 1 ? "It is" : "They are"} in ${cond.word} condition${cond.word === "satisfactory" ? " with typical wear and tear" : ""}.` : "";
-  const defect = defectKindSentence(one(assetFields, asset, ["defectKind"]), count);
-  const lead = count === 1 ? `There is ${articleFor(singular)} ${singular}${at}.` : `There are ${numberWord(count)} ${plural}${at}.`;
+  // "It is in satisfactory condition with typical wear and tear / some cracks / chipping / leaning / some damage."
+  const withDefect = DEFECT_WITH[lower(one(assetFields, asset, ["defectKind"]))] ?? "";
+  const withClause = withDefect ? ` with ${withDefect}` : cond.word === "satisfactory" ? " with typical wear and tear" : "";
+  const isTree = /^tree/i.test(kind);
+  const state = cond.word && !isTree ? ` ${count === 1 ? "It is" : "They are"} in ${cond.word} condition${withClause}.` : "";
+  // "There are two trees in typical condition."
+  const treeState = isTree && cond.word ? ` in ${cond.word === "satisfactory" && !withDefect ? "typical" : `${cond.word}`} condition${cond.word === "satisfactory" && !withDefect ? "" : withClause}` : "";
+  const lead = isTree
+    ? `${count === 1 ? `There is one tree` : `There are ${numberWord(count)} trees`}${at}${treeState}.`
+    : count === 1
+      ? `There is ${articleFor(singular)} ${singular}${at}.`
+      : `There are ${numberWord(count)} ${plural}${at}.`;
   // Where the asset's run starts and which way it goes, and its size, as the inspector recorded them.
   const start = asString(asset.startDirection).trim();
   const width = Number(asset.widthMm) || 0;
   const length = Number(asset.lengthMm) || 0;
   const sizeBits = [width > 0 ? `approximately ${width}mm wide` : "", length > 0 ? `approximately ${length}mm long` : ""].filter(Boolean);
-  const extra = [start ? `Start point and direction: ${withPeriod(start)}` : "", sizeBits.length ? `${count === 1 ? "It is" : "They are each"} ${sizeBits.join(" and ")}.` : ""].filter(Boolean).join(" ");
-  return `${lead}${state}${defect ? ` ${defect}` : ""}${extra ? ` ${extra}` : ""}`;
+  const extra = [start ? `${count === 1 ? "It starts" : "They start"} at ${start.replace(/[.\s]+$/, "")}.` : "", sizeBits.length ? `${count === 1 ? "It is" : "They are each"} ${sizeBits.join(" and ")}.` : ""].filter(Boolean).join(" ");
+  return `${lead}${state}${extra ? ` ${extra}` : ""}`;
 }
+
+/** "worn" / "new" / "in satisfactory condition with typical wear and tear" -- the template's three line-marking choices. */
+function markingsWords(label: string): string {
+  const l = lower(label);
+  return /^satisfactory/.test(l) ? "in satisfactory condition with typical wear and tear" : l;
+}
+
+/**
+ * The category's overview line: "There are significant cracks." / "There is significant chipping." for the template's
+ * "There are significant {cracks / chipping / patches / ...}" choices; nothing for "No significant cracking / damage".
+ */
+function summaryText(label: string): string {
+  if (!label || /^no\b/i.test(label)) return "";
+  if (/^significant\b/i.test(label)) {
+    const l = lower(label);
+    return `There ${/\band\b/.test(l) || /s$/.test(l) ? "are" : "is"} ${l}.`;
+  }
+  return observedSentence(label);
+}
+
+/** The defects, as the Public Assets template words them (see templateDamage.ts). */
+const paDamageSentences = templateDamageSentences({ approximately: false });
 
 const surveyPart: Composer = (inst, itemFields, label) => {
   const offsets = defectOffsets(itemFields, inst);
-  const defects = (key: string): string => damageSentences(inst, itemFields, { key, indexOffset: offsets[key] ?? 0 });
+  const defects = (key: string): string => paDamageSentences(inst, itemFields, { key, indexOffset: offsets[key] ?? 0 });
   const hasDefects = (key: string): boolean => Array.isArray(inst[key]) && (inst[key] as unknown[]).length > 0;
   const blocks: string[] = [];
 
@@ -197,7 +226,10 @@ const surveyPart: Composer = (inst, itemFields, label) => {
   const heading = clean(one(itemFields, inst, ["surveyDirection"]));
   const end = clean(one(itemFields, inst, ["surveyEnd"]));
   const endRef = asString(inst.endRef).trim();
-  const from = start ? `the ${lower(start)}${startRef ? ` at ${startRef}` : ""}` : startRef;
+  // "The following observations commenced from {name of road / lane} and proceeded {north} to the {north end} at {3 metres past house number}."
+  const roadName = asString(inst.roadName).trim();
+  const startBit = start ? ` at the ${lower(start)}${startRef ? ` (${startRef})` : ""}` : startRef ? ` at ${startRef}` : "";
+  const from = roadName ? `${roadName}${startBit}` : start ? `the ${lower(start)}${startRef ? ` at ${startRef}` : ""}` : startRef;
   const to = end ? `the ${lower(end)}${endRef ? ` at ${endRef}` : ""}` : endRef;
   // Which way the road or lane runs.
   const runs = clean(one(itemFields, inst, ["runsDirection"]));
@@ -229,7 +261,7 @@ const surveyPart: Composer = (inst, itemFields, label) => {
       : "";
     const paragraph = [
       main,
-      lineMarkings && !/^na$/i.test(lineMarkings) ? `The painted line markings are ${lower(lineMarkings)}.` : "",
+      lineMarkings && !/^na$/i.test(lineMarkings) ? `The painted line markings are ${markingsWords(lineMarkings)}.` : "",
       obscuredSentence,
     ]
       .filter(Boolean)
@@ -241,7 +273,7 @@ const surveyPart: Composer = (inst, itemFields, label) => {
     const defectKey = `${p}_damages`;
     const anyDefects = hasDefects(defectKey);
     // The overview is said only when it records an issue: "No significant cracking / damage" says nothing -- a good asset is just reported as good.
-    const summarySentence = summary && !/^no\b/i.test(summary) ? observedSentence(summary) : "";
+    const summarySentence = summaryText(summary);
     if (summarySentence || anyDefects) blocks.push([summarySentence, anyDefects ? "The most significant items are:" : ""].filter(Boolean).join(" "));
     const defectText = defects(defectKey);
     if (defectText) blocks.push(defectText);
@@ -302,13 +334,15 @@ export const dilapidationPublicAssets: ReportWording = {
   profile: { inspectionType: "dilapidation", propertyType: "public_assets" },
   status: "final",
   // A Public Assets report has no building, so only the description and the survey parts (the template's "elevations" section) are worded.
-  composers: { description, elevations: surveyPart },
+  composers: { description, elevations: surveyPart, custom_structure: house.custom_structure! },
   absence: {},
-  isFlatComposed: (sectionKey) => sectionKey === "description",
+  isFlatComposed: (sectionKey) => sectionKey === "description" || sectionKey.startsWith("custom_"),
   metadataFields: {},
+  plainFields: { notes: ["publicAssetSafetyMatters"] },
   noSummarySections: ["description"],
   absentSlotSections: [],
   derivedFields,
   descriptionBlocks,
+  damageSentences: paDamageSentences,
   summaryRows,
 };

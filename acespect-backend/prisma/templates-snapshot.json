@@ -28603,7 +28603,7 @@
     "propertyType": "public_assets",
     "sectionKey": "elevations",
     "name": "Elevations",
-    "version": 13,
+    "version": 14,
     "fields": [
       {
         "key": "parts",
@@ -28630,17 +28630,24 @@
             "required": true
           },
           {
+            "key": "roadName",
+            "type": "text",
+            "label": "Name of road / lane",
+            "required": false,
+            "order": 1
+          },
+          {
             "key": "startEndPhotos",
             "type": "photos",
             "label": "Wide view photos and street signs (start, min 4)",
-            "order": 1,
+            "order": 2,
             "required": true
           },
           {
             "key": "runsDirection",
             "type": "pill-select",
             "label": "The road / lane runs",
-            "order": 2,
+            "order": 3,
             "options": [
               {
                 "label": "South to north",
@@ -28661,7 +28668,7 @@
             "key": "surveyStart",
             "type": "pill-select",
             "label": "Survey commenced at",
-            "order": 3,
+            "order": 4,
             "options": [
               {
                 "label": "South end",
@@ -28686,14 +28693,14 @@
             "key": "startRef",
             "type": "text",
             "label": "Start reference (e.g. 3m past boundary of house no. / crossover / corner / intersection)",
-            "order": 4,
+            "order": 5,
             "required": true
           },
           {
             "key": "surveyDirection",
             "type": "pill-select",
             "label": "And proceeded",
-            "order": 5,
+            "order": 6,
             "options": [
               {
                 "label": "North",
@@ -28718,7 +28725,7 @@
             "key": "surveyEnd",
             "type": "pill-select",
             "label": "To end point of survey",
-            "order": 6,
+            "order": 7,
             "options": [
               {
                 "label": "North end",
@@ -28743,21 +28750,21 @@
             "key": "endRef",
             "type": "text",
             "label": "End reference (e.g. 3m past boundary of house no. / crossover / corner / intersection)",
-            "order": 7,
+            "order": 8,
             "required": true
           },
           {
             "key": "endPhotos",
             "type": "photos",
             "label": "Wide view photos looking back (end, min 4)",
-            "order": 8,
+            "order": 9,
             "required": true
           },
           {
             "key": "otherDescription",
             "type": "textarea",
             "label": "Other description",
-            "order": 9,
+            "order": 10,
             "required": true,
             "maxLength": 500
           },
@@ -28765,7 +28772,7 @@
             "key": "itemsPresent",
             "type": "chip-multiselect",
             "label": "What is present on this part? (select all that apply)",
-            "order": 10,
+            "order": 11,
             "options": [
               {
                 "label": "Footpaths and Crossovers",
@@ -28807,7 +28814,7 @@
             },
             "type": "chip-multiselect",
             "label": "Material overview",
-            "order": 11,
+            "order": 12,
             "options": [
               {
                 "label": "Concrete",
@@ -28846,7 +28853,7 @@
             },
             "type": "color-select",
             "label": "Condition overview",
-            "order": 12,
+            "order": 13,
             "options": [
               {
                 "label": "Satisfactory with typical wear and tear",
@@ -28880,7 +28887,7 @@
             },
             "type": "damage-list",
             "label": "Most significant items",
-            "order": 13,
+            "order": 14,
             "repeat": {
               "addable": true,
               "requireWhen": {
@@ -29222,6 +29229,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the kerb)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -29229,7 +29247,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -29256,7 +29274,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -29268,21 +29286,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ],
@@ -29296,7 +29314,7 @@
             },
             "type": "photos",
             "label": "Wide photos at start (min 4)",
-            "order": 14,
+            "order": 15,
             "required": true,
             "sectionLetter": "Footpaths & Crossovers"
           },
@@ -29308,7 +29326,7 @@
             },
             "type": "pill-select",
             "label": "Cracking / gaps / other deterioration",
-            "order": 15,
+            "order": 16,
             "options": [
               {
                 "label": "No significant cracking/damage",
@@ -29327,6 +29345,22 @@
                 "value": "damage_to_fence_gate"
               },
               {
+                "label": "Significant cracks",
+                "value": "significant_cracks"
+              },
+              {
+                "label": "Significant chipping",
+                "value": "significant_chipping"
+              },
+              {
+                "label": "Significant patches",
+                "value": "significant_patches"
+              },
+              {
+                "label": "Significant damage",
+                "value": "significant_damage"
+              },
+              {
                 "value": "other",
                 "label": "Other"
               }
@@ -29342,7 +29376,7 @@
             },
             "type": "text",
             "label": "Other (define)",
-            "order": 16,
+            "order": 17,
             "required": true,
             "sectionLetter": "Footpaths & Crossovers"
           },
@@ -29354,7 +29388,7 @@
             },
             "type": "repeating-group",
             "label": "Street assets",
-            "order": 17,
+            "order": 18,
             "repeat": {
               "addable": true,
               "presentation": "strip",
@@ -29576,7 +29610,7 @@
             },
             "type": "chip-multiselect",
             "label": "Sections were obscured by",
-            "order": 18,
+            "order": 19,
             "options": [
               {
                 "label": "Overgrown grass",
@@ -29593,6 +29627,10 @@
               {
                 "label": "Vegetation",
                 "value": "item3"
+              },
+              {
+                "label": "Leaf litter",
+                "value": "leaf_litter"
               }
             ],
             "required": true,
@@ -29607,7 +29645,7 @@
             },
             "type": "chip-multiselect",
             "label": "Material overview",
-            "order": 19,
+            "order": 20,
             "options": [
               {
                 "label": "Grass",
@@ -29646,7 +29684,7 @@
             },
             "type": "color-select",
             "label": "Condition overview",
-            "order": 20,
+            "order": 21,
             "options": [
               {
                 "label": "Satisfactory with typical wear and tear",
@@ -29680,7 +29718,7 @@
             },
             "type": "damage-list",
             "label": "Most significant items",
-            "order": 21,
+            "order": 22,
             "repeat": {
               "addable": true,
               "requireWhen": {
@@ -30022,6 +30060,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the kerb)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -30029,7 +30078,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -30056,7 +30105,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -30068,21 +30117,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ],
@@ -30096,7 +30145,7 @@
             },
             "type": "photos",
             "label": "Wide photos at start (min 4)",
-            "order": 22,
+            "order": 23,
             "required": true,
             "sectionLetter": "Nature Strip, Light Posts, Signage, Trees"
           },
@@ -30108,7 +30157,7 @@
             },
             "type": "pill-select",
             "label": "Cracking / gaps / other deterioration",
-            "order": 23,
+            "order": 24,
             "options": [
               {
                 "label": "No significant cracking/damage",
@@ -30146,7 +30195,7 @@
             },
             "type": "text",
             "label": "Other (define)",
-            "order": 24,
+            "order": 25,
             "required": true,
             "sectionLetter": "Nature Strip, Light Posts, Signage, Trees"
           },
@@ -30158,7 +30207,7 @@
             },
             "type": "repeating-group",
             "label": "Street assets",
-            "order": 25,
+            "order": 26,
             "repeat": {
               "addable": true,
               "presentation": "strip",
@@ -30380,7 +30429,7 @@
             },
             "type": "chip-multiselect",
             "label": "Sections were obscured by",
-            "order": 26,
+            "order": 27,
             "options": [
               {
                 "label": "Overgrown grass",
@@ -30411,7 +30460,7 @@
             },
             "type": "chip-multiselect",
             "label": "Material overview",
-            "order": 27,
+            "order": 28,
             "options": [
               {
                 "label": "Concrete",
@@ -30450,7 +30499,7 @@
             },
             "type": "color-select",
             "label": "Condition overview",
-            "order": 28,
+            "order": 29,
             "options": [
               {
                 "label": "Satisfactory with typical wear and tear",
@@ -30484,7 +30533,7 @@
             },
             "type": "damage-list",
             "label": "Most significant items",
-            "order": 29,
+            "order": 30,
             "repeat": {
               "addable": true,
               "requireWhen": {
@@ -30826,6 +30875,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the kerb)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -30833,7 +30893,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -30860,7 +30920,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -30872,21 +30932,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ],
@@ -30900,7 +30960,7 @@
             },
             "type": "photos",
             "label": "Wide photos at start (min 4)",
-            "order": 30,
+            "order": 31,
             "required": true,
             "sectionLetter": "Kerbs & Channel"
           },
@@ -30912,7 +30972,7 @@
             },
             "type": "pill-select",
             "label": "Cracking / gaps / other deterioration",
-            "order": 31,
+            "order": 32,
             "options": [
               {
                 "label": "No significant cracking/damage",
@@ -30931,6 +30991,18 @@
                 "value": "numerous_items_of_deterioration_throughout"
               },
               {
+                "label": "Significant cracks and chipping",
+                "value": "significant_cracks_and_chipping"
+              },
+              {
+                "label": "Significant subsidence",
+                "value": "significant_subsidence"
+              },
+              {
+                "label": "Significant patches",
+                "value": "significant_patches"
+              },
+              {
                 "value": "other",
                 "label": "Other"
               }
@@ -30946,7 +31018,7 @@
             },
             "type": "text",
             "label": "Other (define)",
-            "order": 32,
+            "order": 33,
             "required": true,
             "sectionLetter": "Kerbs & Channel"
           },
@@ -30958,7 +31030,7 @@
             },
             "type": "repeating-group",
             "label": "Street assets",
-            "order": 33,
+            "order": 34,
             "repeat": {
               "addable": true,
               "presentation": "strip",
@@ -31180,7 +31252,7 @@
             },
             "type": "chip-multiselect",
             "label": "Sections were obscured by",
-            "order": 34,
+            "order": 35,
             "options": [
               {
                 "label": "Overgrown grass",
@@ -31211,7 +31283,7 @@
             },
             "type": "chip-multiselect",
             "label": "Material overview",
-            "order": 35,
+            "order": 36,
             "options": [
               {
                 "label": "Concrete",
@@ -31250,7 +31322,7 @@
             },
             "type": "color-select",
             "label": "Condition overview",
-            "order": 36,
+            "order": 37,
             "options": [
               {
                 "label": "Satisfactory with typical wear and tear",
@@ -31284,7 +31356,7 @@
             },
             "type": "damage-list",
             "label": "Most significant items",
-            "order": 37,
+            "order": 38,
             "repeat": {
               "addable": true,
               "requireWhen": {
@@ -31626,6 +31698,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the kerb)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -31633,7 +31716,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -31660,7 +31743,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -31672,21 +31755,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ],
@@ -31700,7 +31783,7 @@
             },
             "type": "photos",
             "label": "Wide photos at start (min 4)",
-            "order": 38,
+            "order": 39,
             "required": true,
             "sectionLetter": "Road Surface & Parking Bays"
           },
@@ -31712,7 +31795,7 @@
             },
             "type": "pill-select",
             "label": "Cracking / gaps / other deterioration",
-            "order": 39,
+            "order": 40,
             "options": [
               {
                 "label": "No significant cracking/damage",
@@ -31731,6 +31814,18 @@
                 "value": "numerous_items_of_deterioration_throughout"
               },
               {
+                "label": "Significant cracks",
+                "value": "significant_cracks"
+              },
+              {
+                "label": "Significant potholes",
+                "value": "significant_potholes"
+              },
+              {
+                "label": "Significant patches",
+                "value": "significant_patches"
+              },
+              {
                 "value": "other",
                 "label": "Other"
               }
@@ -31746,7 +31841,7 @@
             },
             "type": "text",
             "label": "Other (define)",
-            "order": 40,
+            "order": 41,
             "required": true,
             "sectionLetter": "Road Surface & Parking Bays"
           },
@@ -31758,7 +31853,7 @@
             },
             "type": "repeating-group",
             "label": "Street assets",
-            "order": 41,
+            "order": 42,
             "repeat": {
               "addable": true,
               "presentation": "strip",
@@ -31980,7 +32075,7 @@
             },
             "type": "pill-select",
             "label": "Painted line markings are",
-            "order": 42,
+            "order": 43,
             "options": [
               {
                 "label": "Worn",
@@ -32006,7 +32101,7 @@
             },
             "type": "yesno",
             "label": "Guard rails along roadways",
-            "order": 43,
+            "order": 44,
             "options": [
               {
                 "label": "Yes",
@@ -32028,7 +32123,7 @@
             },
             "type": "damage-list",
             "label": "Guard Rails — details",
-            "order": 44,
+            "order": 45,
             "repeat": {
               "addable": true,
               "presentation": "strip",
@@ -32363,6 +32458,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the kerb)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -32370,7 +32476,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -32397,7 +32503,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -32409,21 +32515,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ],
@@ -32437,7 +32543,7 @@
             },
             "type": "photos",
             "label": "Guard Rails — wide photos",
-            "order": 45,
+            "order": 46,
             "required": true,
             "sectionLetter": "Road Surface & Parking Bays"
           },
@@ -32449,7 +32555,7 @@
             },
             "type": "yesno",
             "label": "Retaining walls",
-            "order": 46,
+            "order": 47,
             "options": [
               {
                 "label": "Yes",
@@ -32471,7 +32577,7 @@
             },
             "type": "damage-list",
             "label": "Retaining Walls — details",
-            "order": 47,
+            "order": 48,
             "repeat": {
               "addable": true,
               "presentation": "strip",
@@ -32806,6 +32912,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the kerb)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -32813,7 +32930,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -32840,7 +32957,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -32852,21 +32969,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ],
@@ -32880,7 +32997,7 @@
             },
             "type": "photos",
             "label": "Retaining Walls — wide photos",
-            "order": 48,
+            "order": 49,
             "required": true,
             "sectionLetter": "Road Surface & Parking Bays"
           },
@@ -32892,7 +33009,7 @@
             },
             "type": "yesno",
             "label": "Bridges",
-            "order": 49,
+            "order": 50,
             "options": [
               {
                 "label": "Yes",
@@ -32914,7 +33031,7 @@
             },
             "type": "damage-list",
             "label": "Bridges — details",
-            "order": 50,
+            "order": 51,
             "repeat": {
               "addable": true,
               "presentation": "strip",
@@ -33249,6 +33366,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the kerb)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -33256,7 +33384,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -33283,7 +33411,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -33295,21 +33423,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ],
@@ -33323,7 +33451,7 @@
             },
             "type": "photos",
             "label": "Bridges — wide photos",
-            "order": 51,
+            "order": 52,
             "required": true,
             "sectionLetter": "Road Surface & Parking Bays"
           },
@@ -33335,7 +33463,7 @@
             },
             "type": "textarea",
             "label": "Other (add page with tables and notes)",
-            "order": 52,
+            "order": 53,
             "required": true,
             "maxLength": 500,
             "sectionLetter": "Road Surface & Parking Bays"
@@ -33348,7 +33476,7 @@
             },
             "type": "chip-multiselect",
             "label": "Sections were obscured by",
-            "order": 53,
+            "order": 54,
             "options": [
               {
                 "label": "Overgrown grass",
@@ -33379,7 +33507,7 @@
             },
             "type": "chip-multiselect",
             "label": "Material overview",
-            "order": 54,
+            "order": 55,
             "options": [
               {
                 "label": "Timber palings",
@@ -33414,7 +33542,7 @@
             },
             "type": "color-select",
             "label": "Condition overview",
-            "order": 55,
+            "order": 56,
             "options": [
               {
                 "label": "Satisfactory with typical wear and tear",
@@ -33448,7 +33576,7 @@
             },
             "type": "damage-list",
             "label": "Most significant items",
-            "order": 56,
+            "order": 57,
             "repeat": {
               "addable": true,
               "requireWhen": {
@@ -33513,6 +33641,14 @@
                   {
                     "label": "Safety Issues",
                     "value": "safety_issues"
+                  },
+                  {
+                    "label": "Loose palings",
+                    "value": "loose_palings"
+                  },
+                  {
+                    "label": "Graffiti",
+                    "value": "graffiti"
                   }
                 ],
                 "required": true,
@@ -33790,6 +33926,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the kerb)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -33797,7 +33944,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -33824,7 +33971,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -33836,21 +33983,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ],
@@ -33864,7 +34011,7 @@
             },
             "type": "photos",
             "label": "Wide photos at start (min 4)",
-            "order": 57,
+            "order": 58,
             "required": true,
             "sectionLetter": "Left Side Fences & Walls of Laneway"
           },
@@ -33876,7 +34023,7 @@
             },
             "type": "pill-select",
             "label": "Cracking / gaps / other deterioration",
-            "order": 58,
+            "order": 59,
             "options": [
               {
                 "label": "No significant cracking/damage",
@@ -33895,6 +34042,14 @@
                 "value": "numerous_items_of_deterioration_throughout"
               },
               {
+                "label": "Significant cracks",
+                "value": "significant_cracks"
+              },
+              {
+                "label": "Significant damage",
+                "value": "significant_damage"
+              },
+              {
                 "value": "other",
                 "label": "Other"
               }
@@ -33910,7 +34065,7 @@
             },
             "type": "text",
             "label": "Other (define)",
-            "order": 59,
+            "order": 60,
             "required": true,
             "sectionLetter": "Left Side Fences & Walls of Laneway"
           },
@@ -33922,7 +34077,7 @@
             },
             "type": "repeating-group",
             "label": "Street assets",
-            "order": 60,
+            "order": 61,
             "repeat": {
               "addable": true,
               "presentation": "strip",
@@ -34144,7 +34299,7 @@
             },
             "type": "chip-multiselect",
             "label": "Sections were obscured by",
-            "order": 61,
+            "order": 62,
             "options": [
               {
                 "label": "Overgrown grass",
@@ -34175,7 +34330,7 @@
             },
             "type": "chip-multiselect",
             "label": "Material overview",
-            "order": 62,
+            "order": 63,
             "options": [
               {
                 "label": "Timber palings",
@@ -34210,7 +34365,7 @@
             },
             "type": "color-select",
             "label": "Condition overview",
-            "order": 63,
+            "order": 64,
             "options": [
               {
                 "label": "Satisfactory with typical wear and tear",
@@ -34244,7 +34399,7 @@
             },
             "type": "damage-list",
             "label": "Most significant items",
-            "order": 64,
+            "order": 65,
             "repeat": {
               "addable": true,
               "requireWhen": {
@@ -34309,6 +34464,14 @@
                   {
                     "label": "Safety Issues",
                     "value": "safety_issues"
+                  },
+                  {
+                    "label": "Loose palings",
+                    "value": "loose_palings"
+                  },
+                  {
+                    "label": "Graffiti",
+                    "value": "graffiti"
                   }
                 ],
                 "required": true,
@@ -34586,6 +34749,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the kerb)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -34593,7 +34767,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -34620,7 +34794,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -34632,21 +34806,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ],
@@ -34660,7 +34834,7 @@
             },
             "type": "photos",
             "label": "Wide photos at start (min 4)",
-            "order": 65,
+            "order": 66,
             "required": true,
             "sectionLetter": "Right Side Fences & Walls of Laneway"
           },
@@ -34672,7 +34846,7 @@
             },
             "type": "pill-select",
             "label": "Cracking / gaps / other deterioration",
-            "order": 66,
+            "order": 67,
             "options": [
               {
                 "label": "No significant cracking/damage",
@@ -34691,6 +34865,14 @@
                 "value": "numerous_items_of_deterioration_throughout"
               },
               {
+                "label": "Significant cracks",
+                "value": "significant_cracks"
+              },
+              {
+                "label": "Significant damage",
+                "value": "significant_damage"
+              },
+              {
                 "value": "other",
                 "label": "Other"
               }
@@ -34706,7 +34888,7 @@
             },
             "type": "text",
             "label": "Other (define)",
-            "order": 67,
+            "order": 68,
             "required": true,
             "sectionLetter": "Right Side Fences & Walls of Laneway"
           },
@@ -34718,7 +34900,7 @@
             },
             "type": "repeating-group",
             "label": "Street assets",
-            "order": 68,
+            "order": 69,
             "repeat": {
               "addable": true,
               "presentation": "strip",
@@ -34940,7 +35122,7 @@
             },
             "type": "chip-multiselect",
             "label": "Sections were obscured by",
-            "order": 69,
+            "order": 70,
             "options": [
               {
                 "label": "Overgrown grass",
@@ -34971,7 +35153,7 @@
             },
             "type": "chip-multiselect",
             "label": "Material overview",
-            "order": 70,
+            "order": 71,
             "options": [
               {
                 "label": "Concrete",
@@ -35010,7 +35192,7 @@
             },
             "type": "color-select",
             "label": "Condition overview",
-            "order": 71,
+            "order": 72,
             "options": [
               {
                 "label": "Satisfactory with typical wear and tear",
@@ -35044,7 +35226,7 @@
             },
             "type": "damage-list",
             "label": "Most significant items",
-            "order": 72,
+            "order": 73,
             "repeat": {
               "addable": true,
               "requireWhen": {
@@ -35386,6 +35568,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the kerb)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -35393,7 +35586,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -35420,7 +35613,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -35432,21 +35625,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ],
@@ -35460,7 +35653,7 @@
             },
             "type": "photos",
             "label": "Wide photos at start (min 4)",
-            "order": 73,
+            "order": 74,
             "required": true,
             "sectionLetter": "Laneway Surface"
           },
@@ -35472,7 +35665,7 @@
             },
             "type": "pill-select",
             "label": "Cracking / gaps / other deterioration",
-            "order": 74,
+            "order": 75,
             "options": [
               {
                 "label": "No significant cracking/damage",
@@ -35491,6 +35684,18 @@
                 "value": "numerous_items_of_deterioration_throughout"
               },
               {
+                "label": "Significant cracks",
+                "value": "significant_cracks"
+              },
+              {
+                "label": "Significant potholes",
+                "value": "significant_potholes"
+              },
+              {
+                "label": "Significant patches",
+                "value": "significant_patches"
+              },
+              {
                 "value": "other",
                 "label": "Other"
               }
@@ -35506,7 +35711,7 @@
             },
             "type": "text",
             "label": "Other (define)",
-            "order": 75,
+            "order": 76,
             "required": true,
             "sectionLetter": "Laneway Surface"
           },
@@ -35518,7 +35723,7 @@
             },
             "type": "repeating-group",
             "label": "Street assets",
-            "order": 76,
+            "order": 77,
             "repeat": {
               "addable": true,
               "presentation": "strip",
@@ -35740,7 +35945,7 @@
             },
             "type": "pill-select",
             "label": "Painted line markings are",
-            "order": 77,
+            "order": 78,
             "options": [
               {
                 "label": "NA",
@@ -35770,7 +35975,7 @@
             },
             "type": "chip-multiselect",
             "label": "Sections were obscured by",
-            "order": 78,
+            "order": 79,
             "options": [
               {
                 "label": "Overgrown grass",
