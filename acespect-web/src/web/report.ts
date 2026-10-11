@@ -1,10 +1,13 @@
 import type { FormSection, Inspection, User } from "./mockData";
 import { getReportSigner } from "./mockData";
 import { reportProfileOf } from "./wording/profile";
+import { propertyTitle } from "./constants/inspectionData";
 
 /** The front-matter of a Dilapidation Report, derived from Job Information. */
 export interface ReportHeader {
   reportTitle: string;
+  /** Which kind of report it is, under the title: "Residential House", "Apartment", "Public Assets", "Commercial Properties". */
+  reportType?: string;
   /** The day this report document was generated/issued -- distinct from
    *  `inspectionDate` (the site-visit date), matching the reference
    *  report's own cover, which shows both. Same generation-date semantics
@@ -184,9 +187,14 @@ export function buildReportHeader(inspection: Inspection, inspector?: Pick<User,
   // box just says "Dilapidation Report" with nothing appended for a
   // standard house. Previously this always appended one, which didn't match.
   const reportTitle = inspection.type === "Dilapidation" ? "Dilapidation Report" : `${inspection.type} Report`;
+  // ...but a Dilapidation report says which kind it is under the title, so a reader of the PDF knows whether it is a house,
+  // an apartment, a commercial property or public assets.
+  const profile = reportProfileOf(inspection.type, inspection.propertyType);
+  const reportType = profile.inspectionType === "dilapidation" && profile.propertyType ? propertyTitle(profile.propertyType) : undefined;
 
   return {
     reportTitle,
+    reportType,
     reportDate: formatLongDate(new Date().toISOString()),
     clientName: str(f.clientName, inspection.client),
     clientAttn: str(f.clientAttn) || undefined,

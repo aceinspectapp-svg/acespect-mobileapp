@@ -115,15 +115,11 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
             border: `1.5px solid ${reportTokens.ink}`,
           }}
         >
-          <span
-            style={{
-              fontSize: `${titleSize}px`,
-              fontWeight: 400,
-              color: reportTokens.ink,
-            }}
-          >
-            {r.reportTitle}
-          </span>
+          {/* "Dilapidation Report – Commercial Properties": the type to the right of the title, lighter; a long one steps the size down so it stays on one line. */}
+          <div style={{ fontSize: `${r.reportType && r.reportTitle.length + r.reportType.length > 28 ? Math.round(titleSize * 0.8) : titleSize}px`, fontWeight: 400, color: reportTokens.ink, lineHeight: 1.2 }}>
+            <span>{r.reportTitle}</span>
+            {r.reportType && <span style={{ color: reportTokens.accent }}>{` – ${r.reportType}`}</span>}
+          </div>
         </div>
 
         {/* Property details */}
