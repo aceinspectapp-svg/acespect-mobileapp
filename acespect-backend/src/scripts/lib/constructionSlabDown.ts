@@ -31,7 +31,7 @@ const measurements: Draft[] = [
   ...setbackBlock('rear', 'Rear setback', SIDE_DATUM),
   ...setbackBlock('left', 'Left side setback', SIDE_DATUM),
   {
-    key: 'slabDimensions', type: 'pill-select', label: 'Slab dimensions', required: true, sectionLetter: DIM,
+    key: 'slabDimensions', type: 'pill-select', label: 'Slab dimensions', required: true, sectionLetter: DIM, defectOn: ['overhangs', 'too_short'],
     options: [
       { value: 'overhangs', label: 'Overhangs', color: COLOR.bad },
       { value: 'too_short', label: 'Too short', color: COLOR.bad },
@@ -62,7 +62,7 @@ const quality: Draft[] = [
   ...check('reentrantCracks', 'Re-entrant cracks', NO_OK_YES_DEFECT, Q),
   ...check('slabEdges', 'Slab edges rough / honeycomb or excess', NO_OK_YES_DEFECT, Q),
   {
-    key: 'polythene', type: 'pill-select', label: 'Polyethylene (plastic) visible at edges of slab and in satisfactory condition', required: true, sectionLetter: Q, allowOther: true,
+    key: 'polythene', type: 'pill-select', label: 'Polyethylene (plastic) visible at edges of slab and in satisfactory condition', required: true, sectionLetter: Q, allowOther: true, defectOn: ['no_defect'],
     options: [{ value: 'yes_ok', label: 'Yes — OK', color: COLOR.ok }, { value: 'no_defect', label: 'No — defect', color: COLOR.bad }, { value: 'covered_in_backfill', label: 'Covered in backfill', color: COLOR.warn }],
   },
   ...check('wastesCorrect', 'Wastes correct sizes & locations', OK_DEFECT, Q),

@@ -82,6 +82,11 @@ export const CATEGORY_LABELS: Record<string, string> = {
 export const SEVERITY_LABELS: Record<string, string> = {
   major: "Major", minor: "Minor", cosmetic: "Cosmetic", structural: "Structural", safety: "Safety", weatherproofing: "Weatherproofing", durability: "Durability", serviceability: "Serviceability", amenity: "Amenity",
 };
-export const mapLabels = (v: AnswerValue, table: Record<string, string>) => asList(v).map((x) => table[x] ?? x);
+/** The ticked answers as their labels, in the form's own order (not the order they were tapped in). */
+export const mapLabels = (v: AnswerValue, table: Record<string, string>) => {
+  const order = Object.keys(table);
+  const rank = (x: string) => { const i = order.indexOf(x); return i === -1 ? order.length : i; };
+  return [...asList(v)].sort((a, b) => rank(a) - rank(b)).map((x) => table[x] ?? x);
+};
 
 export type { AnswerTree };

@@ -487,7 +487,7 @@
     "propertyType": "apartment",
     "sectionKey": "fr_roof_frame",
     "name": "Frame Stage: Roof Frame",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "trussConstruction",
@@ -1092,7 +1092,7 @@
     "propertyType": "apartment",
     "sectionKey": "fr_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -1355,7 +1355,7 @@
     "propertyType": "apartment",
     "sectionKey": "fr_wall_floor",
     "name": "Frame Stage: Wall & Floor Frames",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "floorFraming",
@@ -2336,7 +2336,7 @@
     "propertyType": "apartment",
     "sectionKey": "fr_windows_doors",
     "name": "Frame Stage: Windows & Doors",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "windowSizes",
@@ -3199,7 +3199,7 @@
     "propertyType": "apartment",
     "sectionKey": "fx_doors_windows",
     "name": "Fixing Stage: Doors & Windows",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "frontDoor",
@@ -3810,7 +3810,7 @@
     "propertyType": "apartment",
     "sectionKey": "fx_fitout",
     "name": "Fixing Stage: Skirtings, Cabinets & Painting",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "skirtingBoards",
@@ -4202,7 +4202,7 @@
     "propertyType": "apartment",
     "sectionKey": "fx_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -4384,7 +4384,7 @@
     "propertyType": "apartment",
     "sectionKey": "fx_stairs_floors",
     "name": "Fixing Stage: Stairs & Floors",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "stairwells",
@@ -4773,7 +4773,7 @@
     "propertyType": "apartment",
     "sectionKey": "fx_walls_ceilings",
     "name": "Fixing Stage: Plaster, Walls & Ceilings",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "plasterComplete",
@@ -5354,7 +5354,7 @@
     "propertyType": "apartment",
     "sectionKey": "fx_waterproofing",
     "name": "Fixing Stage: Waterproofing",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "bathWp",
@@ -7337,7 +7337,7 @@
     "propertyType": "apartment",
     "sectionKey": "lf_doors_windows",
     "name": "Lock Up & Fixing: Doors & Windows",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "frontDoor",
@@ -7948,7 +7948,7 @@
     "propertyType": "apartment",
     "sectionKey": "lf_external_walls",
     "name": "Lock Up Stage: External Walls",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "wallsComplete",
@@ -9292,7 +9292,7 @@
     "propertyType": "apartment",
     "sectionKey": "lf_fitout",
     "name": "Fixing Stage: Skirtings, Cabinets & Painting",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "skirtingBoards",
@@ -9684,7 +9684,7 @@
     "propertyType": "apartment",
     "sectionKey": "lf_roofing",
     "name": "Lock Up Stage: Roofing",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "roofingComplete",
@@ -10917,7 +10917,7 @@
     "propertyType": "apartment",
     "sectionKey": "lf_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -11099,7 +11099,7 @@
     "propertyType": "apartment",
     "sectionKey": "lf_stairs_floors",
     "name": "Fixing Stage: Stairs & Floors",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "stairwells",
@@ -11488,7 +11488,7 @@
     "propertyType": "apartment",
     "sectionKey": "lf_walls_ceilings",
     "name": "Fixing Stage: Plaster, Walls & Ceilings",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "plasterComplete",
@@ -12069,7 +12069,7 @@
     "propertyType": "apartment",
     "sectionKey": "lf_waterproofing",
     "name": "Fixing Stage: Waterproofing",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "bathWp",
@@ -13842,7 +13842,7 @@
     "propertyType": "apartment",
     "sectionKey": "lu_doors_windows",
     "name": "Lock Up Stage: Doors & Windows",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "frontDoor",
@@ -14313,7 +14313,7 @@
     "propertyType": "apartment",
     "sectionKey": "lu_external_walls",
     "name": "Lock Up Stage: External Walls",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "wallsComplete",
@@ -15657,7 +15657,7 @@
     "propertyType": "apartment",
     "sectionKey": "lu_framework",
     "name": "Lock Up Stage: Framework",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "plasterComplete",
@@ -16217,7 +16217,7 @@
     "propertyType": "apartment",
     "sectionKey": "lu_roofing",
     "name": "Lock Up Stage: Roofing",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "roofingComplete",
@@ -17341,7 +17341,7 @@
     "propertyType": "apartment",
     "sectionKey": "lu_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -17981,7 +17981,7 @@
     "propertyType": "apartment",
     "sectionKey": "pci_finishes",
     "name": "PCI Checklist: Internal — Finishes",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "finishes_flooring_level_movement_squeaking_insp",
@@ -18313,6 +18313,9 @@
             "value": "defect"
           }
         ],
+        "defectOn": [
+          "defect"
+        ],
         "sectionLetter": "Finishes"
       },
       {
@@ -18330,7 +18333,7 @@
     "propertyType": "apartment",
     "sectionKey": "pci_garage_site",
     "name": "PCI Checklist: External — Balconies & Common Areas",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "balconies_balcony_1_handrail_height_balusters_co",
@@ -18675,7 +18678,7 @@
     "propertyType": "apartment",
     "sectionKey": "pci_internal",
     "name": "PCI Checklist: Internal — Rooms",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "internal_apartment_front_door_fire_safety_rated",
@@ -19203,6 +19206,9 @@
             "value": "defect"
           }
         ],
+        "defectOn": [
+          "defect"
+        ],
         "sectionLetter": "Internal"
       },
       {
@@ -19266,7 +19272,7 @@
     "propertyType": "apartment",
     "sectionKey": "pci_roof",
     "name": "PCI Checklist: External — Roof",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "roof_multi_level_complex_could_you_access_r",
@@ -19563,7 +19569,7 @@
     "propertyType": "apartment",
     "sectionKey": "pci_services",
     "name": "PCI Checklist: Internal — Services & Other",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "services_water_supply_on",
@@ -20464,7 +20470,7 @@
     "propertyType": "apartment",
     "sectionKey": "pci_walls_doors",
     "name": "PCI Checklist: External — Walls, Windows, Doors & Car Bay",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "walls_cladding_straight_bowed_level_bonding_",
@@ -20627,6 +20633,9 @@
             "label": "Defect",
             "value": "defect"
           }
+        ],
+        "defectOn": [
+          "defect"
         ],
         "sectionLetter": "Walls"
       },
@@ -21228,7 +21237,7 @@
     "propertyType": "apartment",
     "sectionKey": "pp_formwork",
     "name": "Pre-Pour: Formwork & Measurements",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "slabDimensions",
@@ -21870,7 +21879,7 @@
     "propertyType": "apartment",
     "sectionKey": "pp_general",
     "name": "Pre-Pour: General Other",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "retainingWalls",
@@ -22329,7 +22338,7 @@
     "propertyType": "apartment",
     "sectionKey": "pp_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -22969,7 +22978,7 @@
     "propertyType": "apartment",
     "sectionKey": "sd_measurements",
     "name": "Slab Down: Site & Slab Measurements",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "boundaryPegs",
@@ -23317,6 +23326,10 @@
             "label": "Builder to re-check",
             "value": "builder_to_recheck"
           }
+        ],
+        "defectOn": [
+          "overhangs",
+          "too_short"
         ],
         "required": true,
         "sectionLetter": "Slab dimensions"
@@ -23818,7 +23831,7 @@
     "propertyType": "apartment",
     "sectionKey": "sd_quality",
     "name": "Slab Down: Slab Quality",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "slabLevels",
@@ -23940,6 +23953,9 @@
             "label": "Covered in backfill",
             "value": "covered_in_backfill"
           }
+        ],
+        "defectOn": [
+          "no_defect"
         ],
         "required": true,
         "allowOther": true,
@@ -24186,7 +24202,7 @@
     "propertyType": "apartment",
     "sectionKey": "sd_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -24814,7 +24830,7 @@
     "propertyType": "apartment",
     "sectionKey": "sf_measurements",
     "name": "Slab Down: Site & Slab Measurements",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "boundaryPegs",
@@ -25162,6 +25178,10 @@
             "label": "Builder to re-check",
             "value": "builder_to_recheck"
           }
+        ],
+        "defectOn": [
+          "overhangs",
+          "too_short"
         ],
         "required": true,
         "sectionLetter": "Slab dimensions"
@@ -25752,7 +25772,7 @@
     "propertyType": "apartment",
     "sectionKey": "sf_quality",
     "name": "Slab Down: Slab Quality",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "slabLevels",
@@ -25874,6 +25894,9 @@
             "label": "Covered in backfill",
             "value": "covered_in_backfill"
           }
+        ],
+        "defectOn": [
+          "no_defect"
         ],
         "required": true,
         "allowOther": true,
@@ -26120,7 +26143,7 @@
     "propertyType": "apartment",
     "sectionKey": "sf_roof_frame",
     "name": "Frame Stage: Roof Frame",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "trussConstruction",
@@ -26725,7 +26748,7 @@
     "propertyType": "apartment",
     "sectionKey": "sf_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -26971,7 +26994,7 @@
     "propertyType": "apartment",
     "sectionKey": "sf_wall_floor",
     "name": "Frame Stage: Wall & Floor Frames",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "floorFraming",
@@ -27952,7 +27975,7 @@
     "propertyType": "apartment",
     "sectionKey": "sf_windows_doors",
     "name": "Frame Stage: Windows & Doors",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "windowSizes",
@@ -28781,7 +28804,7 @@
     "propertyType": "residential_house",
     "sectionKey": "fr_roof_frame",
     "name": "Frame Stage: Roof Frame",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "trussConstruction",
@@ -29386,7 +29409,7 @@
     "propertyType": "residential_house",
     "sectionKey": "fr_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -29649,7 +29672,7 @@
     "propertyType": "residential_house",
     "sectionKey": "fr_wall_floor",
     "name": "Frame Stage: Wall & Floor Frames",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "floorFraming",
@@ -30630,7 +30653,7 @@
     "propertyType": "residential_house",
     "sectionKey": "fr_windows_doors",
     "name": "Frame Stage: Windows & Doors",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "windowSizes",
@@ -31493,7 +31516,7 @@
     "propertyType": "residential_house",
     "sectionKey": "fx_doors_windows",
     "name": "Fixing Stage: Doors & Windows",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "frontDoor",
@@ -32104,7 +32127,7 @@
     "propertyType": "residential_house",
     "sectionKey": "fx_fitout",
     "name": "Fixing Stage: Skirtings, Cabinets & Painting",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "skirtingBoards",
@@ -32496,7 +32519,7 @@
     "propertyType": "residential_house",
     "sectionKey": "fx_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -32678,7 +32701,7 @@
     "propertyType": "residential_house",
     "sectionKey": "fx_stairs_floors",
     "name": "Fixing Stage: Stairs & Floors",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "stairwells",
@@ -33067,7 +33090,7 @@
     "propertyType": "residential_house",
     "sectionKey": "fx_walls_ceilings",
     "name": "Fixing Stage: Plaster, Walls & Ceilings",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "plasterComplete",
@@ -33648,7 +33671,7 @@
     "propertyType": "residential_house",
     "sectionKey": "fx_waterproofing",
     "name": "Fixing Stage: Waterproofing",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "bathWp",
@@ -35631,7 +35654,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lf_doors_windows",
     "name": "Lock Up & Fixing: Doors & Windows",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "frontDoor",
@@ -36242,7 +36265,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lf_external_walls",
     "name": "Lock Up Stage: External Walls",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "wallsComplete",
@@ -37586,7 +37609,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lf_fitout",
     "name": "Fixing Stage: Skirtings, Cabinets & Painting",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "skirtingBoards",
@@ -37978,7 +38001,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lf_roofing",
     "name": "Lock Up Stage: Roofing",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "roofingComplete",
@@ -39211,7 +39234,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lf_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -39393,7 +39416,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lf_stairs_floors",
     "name": "Fixing Stage: Stairs & Floors",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "stairwells",
@@ -39782,7 +39805,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lf_walls_ceilings",
     "name": "Fixing Stage: Plaster, Walls & Ceilings",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "plasterComplete",
@@ -40363,7 +40386,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lf_waterproofing",
     "name": "Fixing Stage: Waterproofing",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "bathWp",
@@ -42136,7 +42159,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lu_doors_windows",
     "name": "Lock Up Stage: Doors & Windows",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "frontDoor",
@@ -42607,7 +42630,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lu_external_walls",
     "name": "Lock Up Stage: External Walls",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "wallsComplete",
@@ -43951,7 +43974,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lu_framework",
     "name": "Lock Up Stage: Framework",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "plasterComplete",
@@ -44511,7 +44534,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lu_roofing",
     "name": "Lock Up Stage: Roofing",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "roofingComplete",
@@ -45635,7 +45658,7 @@
     "propertyType": "residential_house",
     "sectionKey": "lu_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -46404,7 +46427,7 @@
     "propertyType": "residential_house",
     "sectionKey": "pci_finishes",
     "name": "PCI Checklist: Internal — Finishes",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "finishes_flooring_level_movement_squeaking_insp",
@@ -46736,6 +46759,9 @@
             "value": "defect"
           }
         ],
+        "defectOn": [
+          "defect"
+        ],
         "sectionLetter": "Finishes"
       },
       {
@@ -46753,7 +46779,7 @@
     "propertyType": "residential_house",
     "sectionKey": "pci_garage_site",
     "name": "PCI Checklist: External — Garage, Balconies & Site",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "garage_garage_vehicle_doors_roller_door_and_m",
@@ -46972,6 +46998,9 @@
             "label": "Defect",
             "value": "defect"
           }
+        ],
+        "defectOn": [
+          "defect"
         ],
         "sectionLetter": "Garage"
       },
@@ -47228,6 +47257,9 @@
             "label": "Defect",
             "value": "defect"
           }
+        ],
+        "defectOn": [
+          "defect"
         ],
         "sectionLetter": "Balconies"
       },
@@ -47597,6 +47629,9 @@
             "value": "defect"
           }
         ],
+        "defectOn": [
+          "defect"
+        ],
         "sectionLetter": "Site"
       },
       {
@@ -47685,6 +47720,9 @@
             "value": "defect"
           }
         ],
+        "defectOn": [
+          "defect"
+        ],
         "sectionLetter": "Common areas"
       },
       {
@@ -47702,7 +47740,7 @@
     "propertyType": "residential_house",
     "sectionKey": "pci_internal",
     "name": "PCI Checklist: Internal — Rooms",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "internal_front_door",
@@ -48258,6 +48296,9 @@
             "value": "defect"
           }
         ],
+        "defectOn": [
+          "defect"
+        ],
         "sectionLetter": "Internal"
       },
       {
@@ -48321,7 +48362,7 @@
     "propertyType": "residential_house",
     "sectionKey": "pci_roof",
     "name": "PCI Checklist: External — Roof",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "roof_covering_cracked_tiles_seated_clipped_",
@@ -48959,6 +49000,9 @@
             "value": "defect"
           }
         ],
+        "defectOn": [
+          "defect"
+        ],
         "sectionLetter": "Roof"
       },
       {
@@ -48976,7 +49020,7 @@
     "propertyType": "residential_house",
     "sectionKey": "pci_services",
     "name": "PCI Checklist: Internal — Services & Other",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "services_water_supply_on",
@@ -49672,6 +49716,9 @@
             "value": "defect"
           }
         ],
+        "defectOn": [
+          "defect"
+        ],
         "sectionLetter": "Other"
       },
       {
@@ -49689,7 +49736,7 @@
     "propertyType": "residential_house",
     "sectionKey": "pci_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -50415,7 +50462,7 @@
     "propertyType": "residential_house",
     "sectionKey": "pci_walls_doors",
     "name": "PCI Checklist: External — Walls, Doors & Windows",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "walls_cladding_hebel_concrete_panels_cement_",
@@ -50831,6 +50878,9 @@
             "value": "defect"
           }
         ],
+        "defectOn": [
+          "defect"
+        ],
         "sectionLetter": "Walls"
       },
       {
@@ -51030,6 +51080,9 @@
             "label": "Defect",
             "value": "defect"
           }
+        ],
+        "defectOn": [
+          "defect"
         ],
         "sectionLetter": "Doors, etc"
       },
@@ -51379,7 +51432,7 @@
     "propertyType": "residential_house",
     "sectionKey": "pp_formwork",
     "name": "Pre-Pour: Formwork & Measurements",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "slabDimensions",
@@ -52021,7 +52074,7 @@
     "propertyType": "residential_house",
     "sectionKey": "pp_general",
     "name": "Pre-Pour: General Other",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "retainingWalls",
@@ -52480,7 +52533,7 @@
     "propertyType": "residential_house",
     "sectionKey": "pp_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -53120,7 +53173,7 @@
     "propertyType": "residential_house",
     "sectionKey": "sd_measurements",
     "name": "Slab Down: Site & Slab Measurements",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "boundaryPegs",
@@ -53468,6 +53521,10 @@
             "label": "Builder to re-check",
             "value": "builder_to_recheck"
           }
+        ],
+        "defectOn": [
+          "overhangs",
+          "too_short"
         ],
         "required": true,
         "sectionLetter": "Slab dimensions"
@@ -53969,7 +54026,7 @@
     "propertyType": "residential_house",
     "sectionKey": "sd_quality",
     "name": "Slab Down: Slab Quality",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "slabLevels",
@@ -54091,6 +54148,9 @@
             "label": "Covered in backfill",
             "value": "covered_in_backfill"
           }
+        ],
+        "defectOn": [
+          "no_defect"
         ],
         "required": true,
         "allowOther": true,
@@ -54337,7 +54397,7 @@
     "propertyType": "residential_house",
     "sectionKey": "sd_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -54965,7 +55025,7 @@
     "propertyType": "residential_house",
     "sectionKey": "sf_measurements",
     "name": "Slab Down: Site & Slab Measurements",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "boundaryPegs",
@@ -55313,6 +55373,10 @@
             "label": "Builder to re-check",
             "value": "builder_to_recheck"
           }
+        ],
+        "defectOn": [
+          "overhangs",
+          "too_short"
         ],
         "required": true,
         "sectionLetter": "Slab dimensions"
@@ -55903,7 +55967,7 @@
     "propertyType": "residential_house",
     "sectionKey": "sf_quality",
     "name": "Slab Down: Slab Quality",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "slabLevels",
@@ -56025,6 +56089,9 @@
             "label": "Covered in backfill",
             "value": "covered_in_backfill"
           }
+        ],
+        "defectOn": [
+          "no_defect"
         ],
         "required": true,
         "allowOther": true,
@@ -56271,7 +56338,7 @@
     "propertyType": "residential_house",
     "sectionKey": "sf_roof_frame",
     "name": "Frame Stage: Roof Frame",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "trussConstruction",
@@ -56876,7 +56943,7 @@
     "propertyType": "residential_house",
     "sectionKey": "sf_site_facilities",
     "name": "Site & Facilities",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "builderSign",
@@ -57122,7 +57189,7 @@
     "propertyType": "residential_house",
     "sectionKey": "sf_wall_floor",
     "name": "Frame Stage: Wall & Floor Frames",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "floorFraming",
@@ -58103,7 +58170,7 @@
     "propertyType": "residential_house",
     "sectionKey": "sf_windows_doors",
     "name": "Frame Stage: Windows & Doors",
-    "version": 2,
+    "version": 1,
     "fields": [
       {
         "key": "windowSizes",

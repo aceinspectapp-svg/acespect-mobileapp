@@ -40,7 +40,7 @@ function checklist(prefix: string, group: string, list: Row[]): Draft[] {
 /** The form's "Other" and blank rows: tick a result and say what it is. */
 function otherRows(prefix: string, group: string): Draft[] {
   return [
-    { key: `${prefix}_other`, type: 'pill-select', label: 'Other', options: STATUS.map((c) => ({ value: slug(c.label), label: c.label, color: COLOR[c.tone] })), sectionLetter: group },
+    { key: `${prefix}_other`, type: 'pill-select', label: 'Other', options: STATUS.map((c) => ({ value: slug(c.label), label: c.label, color: COLOR[c.tone] })), sectionLetter: group, defectOn: ['defect'] },
     { key: `${prefix}_other_note`, type: 'textarea', label: 'Other — describe', placeholder: 'What did you check?', sectionLetter: group },
   ];
 }
