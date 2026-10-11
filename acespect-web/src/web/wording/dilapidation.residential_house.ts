@@ -295,12 +295,20 @@ const pavingPaths: Composer = (inst, itemFields, label) => {
   return houseTail(parts, itemFields, inst);
 };
 
-/** "something noted" choices on the form (decayed, leaning, ...), said once the grade is. */
-function conditionDetailWords(itemFields: TemplateField[], inst: AnswerTree): { someGaps: boolean; noted: string } {
+/** What the "Condition - what was noted" choices say: "There is some decay." / "The fence is leaning." / "There are loose or missing palings." */
+function conditionDetailWords(itemFields: TemplateField[], inst: AnswerTree, subject = "fence"): { someGaps: boolean; noted: string } {
   const all = many(itemFields, inst, ["conditionDetails"]);
   const someGaps = all.some((d) => /^typical weathering and some gaps$/i.test(d));
-  const rest = all.filter((d) => !/^typical weathering and some gaps$/i.test(d)).map(lower);
-  return { someGaps, noted: rest.length ? ` ${capitalize(joinList(rest))} noted.` : "" };
+  const sentences = all
+    .filter((d) => !/^typical weathering and some gaps$/i.test(d))
+    .map((d) => {
+      const l = lower(d);
+      if (l === "decayed") return "There is some decay.";
+      if (l === "leaning") return `The ${subject} is leaning.`;
+      if (l === "loose or missing palings") return "There are loose or missing palings.";
+      return `${capitalize(l)} noted.`;
+    });
+  return { someGaps, noted: sentences.length ? ` ${sentences.join(" ")}` : "" };
 }
 
 const fences: Composer = (inst, itemFields, label) => {
@@ -330,7 +338,7 @@ const retainingWalls: Composer = (inst, itemFields) => {
   const location = one(itemFields, inst, ["location"]);
   const materials = materialWords(many(itemFields, inst, ["material", "materials"]).map(lower).map(amp));
   const cond = conditionOf(itemFields, inst);
-  const details = conditionDetailWords(itemFields, inst);
+  const details = conditionDetailWords(itemFields, inst, "wall");
   // "Typical weathering and some gaps" is the form's own satisfactory choice: ticked on its own, it still states the condition.
   const grade = cond.word || (details.someGaps ? "satisfactory" : "");
   const parts: string[] = [];
@@ -600,6 +608,8 @@ const INTERNAL_AREAS_LEAD_IN_KEYS = new Set([
   "roomsNotAccessed",
   "movementObserved",
   "movementWhere",
+  "generalConditionComments",
+  "generalConditionCommentsOther",
 ]);
 
 function composeInternalAreasLeadIn(scope: AnswerTree, templateFields: TemplateField[]): string {
@@ -612,16 +622,24 @@ function composeInternalAreasLeadIn(scope: AnswerTree, templateFields: TemplateF
     const types = many(templateFields, scope, ["safetyAdvisoryTypes"]).map(lower);
     const notes = asString(scope.safetyAdvisoryNotes).trim();
     parts.push(
-      `${types.length ? `Safety advisory given to the owner: ${joinList(types)}.` : "A safety advisory was given to the owner."}${
-        notes ? ` ${withPeriod(notes)}` : ""
+      `${types.length ? `A safety advisory was given to the owner regarding ${joinList(types)}.` : "A safety advisory was given to the owner."}${
+        notes ? ` ${capitalize(withPeriod(notes))}` : ""
       }`,
     );
   }
   const notAccessed = asString(scope.roomsNotAccessed).trim();
   if (notAccessed) parts.push(`No access granted to ${withPeriod(notAccessed)}`);
+  // "Other general condition issues -- note the areas affected": a grade, and the inspector's own note of what and where.
+  const generalCond = conditionOf(templateFields, scope, ["generalConditionComments"]);
+  const generalNote = asString(scope.generalConditionCommentsOther).trim();
+  if (generalCond.word || generalNote) {
+    parts.push(
+      `${generalCond.word ? `There are other general condition issues in the internal areas, which are in ${generalCond.word} condition.` : "There are other general condition issues in the internal areas."}${generalNote ? ` ${capitalize(withPeriod(generalNote))}` : ""}`,
+    );
+  }
   if (yesNo(scope, "movementObserved")) {
     const where = asString(scope.movementWhere).trim();
-    parts.push(`Movement was observed in the internal areas${where ? `: ${withPeriod(where)}` : "."}`);
+    parts.push(`Movement was observed in the internal areas${where ? `, at ${where.replace(/[.\s]+$/, "")}` : ""}.`);
   }
   return parts.join("\n\n");
 }
@@ -726,7 +744,7 @@ const notes: Composer = (inst, itemFields, label) => {
     }
     if (/\bWhere\?$/.test(label)) {
       const base = label.replace(/\s*Where\?$/, "");
-      return `${base}${note ? ` Location: ${withPeriod(note)}` : ""}`;
+      return `${base}${note ? ` This is at ${note.replace(/[.\s]+$/, "")}.` : ""}`;
     }
     return `${label} observed.${note ? ` ${withPeriod(note)}` : ""}`;
   }
@@ -735,15 +753,31 @@ const notes: Composer = (inst, itemFields, label) => {
     const area = asString(inst.area);
     const reason = asString(inst.reason);
     if (!area && !reason) return "";
-    const line = `No access granted to ${area || "an area of the property"}${reason ? `: ${reason}` : ""}`;
+    const line = `No access was granted to ${area || "an area of the property"}${reason ? ` (${reason.replace(/[.\s]+$/, "")})` : ""}`;
     return withPeriod(line);
   }
   return "";
 };
 
 
+/**
+ * An extra structure the inspector added ("Water tank"): "There is a water tank, constructed of metal, which is generally in
+ * satisfactory state of repair." then its defects and notes.
+ */
+const customStructure: Composer = (inst, itemFields) => {
+  const description = lower(asString(inst.description).trim());
+  const materials = materialWords(many(itemFields, inst, ["material"]).map(lower).map(amp));
+  const cond = conditionOf(itemFields, inst);
+  const parts: string[] = [];
+  if (cond.tag) parts.push(cond.tag);
+  const subject = description ? `There is ${article(description)} ${description}` : "There is an additional structure";
+  parts.push(`${subject}${materials.length ? `, constructed of ${joinList(materials)}` : ""}${cond.word ? `, which is ${repairState(cond.word)}` : ""}.`);
+  return houseTail(parts, itemFields, inst);
+};
+
 /** The sentences for Dilapidation / Residential House. */
 export const residentialHouseComposers: Record<string, Composer> = {
+  custom_structure: customStructure,
   description,
   notes,
   driveway,
@@ -799,10 +833,12 @@ export const dilapidationResidentialHouse: ReportWording = {
   // Description is flat (no repeating group). Driveway and Pool / Spa are flat in the published templates, but the original seed wrapped them in a one-item list.
   isFlatComposed: (sectionKey, templateFields) =>
     sectionKey === "description" ||
+    sectionKey.startsWith("custom_") ||
     ((sectionKey === "driveway" || sectionKey === "pool_spa") && !templateFields.some((f) => f.type === "repeating-group")),
   leadIn: { sectionKey: "internal_areas", keys: INTERNAL_AREAS_LEAD_IN_KEYS, compose: composeInternalAreasLeadIn },
   floorGrouped: { sectionKey: "internal_areas", heading: floorHeading },
   metadataFields: { notes: ["postProject", "hasDamage"] },
+  plainFields: { notes: ["additionalNotes"] },
   noSummarySections: ["description"],
   absentSlotSections: ["fences"],
   damageSentences: houseDamageSentences,

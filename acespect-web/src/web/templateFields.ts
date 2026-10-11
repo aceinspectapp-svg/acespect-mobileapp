@@ -2,7 +2,7 @@ import { API_BASE, getToken } from "./api";
 import { atLocation, damageSentences, isNotPresent } from "./wording/shared";
 import { toSlug, type ReportProfile } from "./wording/profile";
 import { wordingFor } from "./wording/registry";
-import { composeSection, type ReportWording } from "./wording/types";
+import { composeSection, composerFor, type ReportWording } from "./wording/types";
 import { gradeOf } from "./conditionGrades";
 
 /**
@@ -540,7 +540,7 @@ function walk(
       }
       // A defect list that sits at the top of a section the wording writes item by item (Notes' "Additional damage
       // records") is not narrated by any item -- write its sentences here, so they are printed, not just saved.
-      if (ancestorLabels.length === 0 && sectionKey && wording.composers[sectionKey] && !isFlatComposedSection) {
+      if (ancestorLabels.length === 0 && sectionKey && composerFor(wording, sectionKey) && !isFlatComposedSection) {
         let text = (wording.damageSentences ?? damageSentences)(scope, templateFields, { key: field.key, indexOffset: firstIndex });
         // The Notes section prints as a plain numbered list (ReportView), which has no place for a defect's photos: plain sentences there.
         if (sectionKey.startsWith("notes")) text = text.replace(/DEFECT::\d+::/g, "");
@@ -709,7 +709,9 @@ function walk(
     const isPresenceFlag = field.key === "present" && !!sectionKey && wording.absence[sectionKey] !== undefined;
     const isLeadInField = !!leadInSpec && leadInSpec.keys.has(field.key);
     if (!isFlatComposedSection && !isNotesMetadata && !isPresenceFlag && !isLeadInField) {
-      textParts.push(`${field.label}: ${withPeriod(strValue)}`);
+      // A free-text comment (the Notes' own) is said as typed, not as "Additional notes: ...".
+      const isPlain = !!sectionKey && (wording.plainFields?.[sectionKey]?.includes(field.key) ?? false);
+      textParts.push(isPlain ? withPeriod(strValue) : `${field.label}: ${withPeriod(strValue)}`);
     }
   }
 
