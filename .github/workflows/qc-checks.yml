@@ -2,7 +2,7 @@ name: QC checks
 
 # Type-checks all three apps and runs the QC end-to-end checks (tenant isolation,
 # permissions, lifecycle, SLA, DLP, inspections, reports, privacy) against a
-# throwaway Postgres. A failure in the isolation checks blocks the merge.
+# throwaway Postgres and Redis (the inspection review queue). A failure in the isolation checks blocks the merge.
 on:
   pull_request:
   push:
@@ -21,8 +21,14 @@ jobs:
         ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U acespect" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://acespect:scratch@localhost:5432/qc_scratch?schema=public
+      REDIS_URL: redis://127.0.0.1:6379
       JWT_ACCESS_SECRET: ci-access-secret-0123456789abcdef
       JWT_REFRESH_SECRET: ci-refresh-secret-0123456789abcdef
       RATE_LIMIT_OFF: '1'
@@ -48,6 +54,13 @@ jobs:
           HASH=$(node -e "require('bcryptjs').hash('Admin123456!x',10).then(h=>process.stdout.write(h))")
           PGPASSWORD=scratch psql -h localhost -U acespect -d qc_scratch -c "INSERT INTO users (id,email,role,\"passwordHash\",\"updatedAt\") VALUES ('admin1','admin@test.com','ADMIN','$HASH',now())"
       - run: npm run check:lifecycle
+      # The two checks use the same fake company numbers (ABNs), so the second one starts from an empty database.
+      - name: Reset the database for the platform checks
+        run: |
+          PGPASSWORD=scratch psql -h localhost -U acespect -d qc_scratch -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+          npx prisma migrate deploy
+          HASH=$(node -e "require('bcryptjs').hash('Admin123456!x',10).then(h=>process.stdout.write(h))")
+          PGPASSWORD=scratch psql -h localhost -U acespect -d qc_scratch -c "INSERT INTO users (id,email,role,\"passwordHash\",\"updatedAt\") VALUES ('admin1','admin@test.com','ADMIN','$HASH',now())"
       - run: npm run check:platform
 
   web:

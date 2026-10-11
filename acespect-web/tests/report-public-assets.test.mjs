@@ -87,9 +87,10 @@ describe("Public Assets: Description and Overview", () => {
     assert.equal(wordingFor(PA).descriptionBlocks({ fields, areaCount: 0 }).scope, "The scope for inspection is public assets including footpaths, utility pit covers, kerb and channel and road surfaces");
   });
 
-  it("is the only report type that words those two sentences itself", () => {
+  it("words those two sentences itself, as the House and Commercial reports do", () => {
     assert.equal(typeof wordingFor(PA).descriptionBlocks, "function");
-    assert.equal(wordingFor({ inspectionType: "dilapidation", propertyType: "residential_house" }).descriptionBlocks, undefined);
+    assert.equal(typeof wordingFor({ inspectionType: "dilapidation", propertyType: "residential_house" }).descriptionBlocks, "function");
+    assert.equal(typeof wordingFor({ inspectionType: "dilapidation", propertyType: "commercial_properties" }).descriptionBlocks, "function");
   });
 });
 
@@ -105,11 +106,11 @@ describe("Public Assets: survey parts", () => {
 
   it("describes a category: material, condition, and what obscured it", () => {
     assert.ok(paras.includes("ROOMHEAD::Footpaths and Crossovers"));
-    assert.ok(paras.includes("The footpath and crossovers are constructed of concrete and in fair condition with typical wear and tear. Sections were obscured by overgrown grass and parked vehicles."));
+    assert.ok(paras.includes("The footpath and crossovers are constructed of concrete and in fair condition. Sections were obscured by overgrown grass and parked vehicles."));
     assert.ok(paras.includes("There is a nature strip of grass which is in typical condition. Sections of the nature strip were obscured by vegetation."));
-    assert.ok(paras.includes("The kerbs and channel are constructed of concrete and in poor condition with typical wear and tear."));
+    assert.ok(paras.includes("The kerbs and channel are constructed of concrete and in poor condition."));
     assert.ok(paras.includes("The road surface and parking bays are constructed of asphalt and in satisfactory condition with typical shrinkage cracks and wear and tear. The painted line markings are worn."));
-    assert.ok(paras.includes("The laneway surface is constructed of concrete and in average condition with typical shrinkage cracks and wear and tear."));
+    assert.ok(paras.includes("The laneway surface is constructed of concrete and in average condition."));
   });
 
   it("gives each category its own condition tag", () => {
@@ -125,21 +126,21 @@ describe("Public Assets: survey parts", () => {
     assert.equal(out.damages.length, 6);
   });
 
-  it("says nothing about defects for a category with none, only its overview", () => {
-    assert.ok(paras.includes("No significant cracking or damage observed."));
-    assert.ok(!paras.includes("No significant cracking or damage observed. The most significant items are:"));
+  it("says nothing about cracking for a category with none -- a good category is just reported as good", () => {
+    assert.ok(!/no significant cracking/i.test(out.reportText));
+    assert.ok(!paras.includes("The most significant items are:"));
   });
 
   it("describes street assets by count, kind and location, and skips a count of nil", () => {
     assert.ok(paras.includes("There is a utility pit cover at the driveway of no. 7. It is in satisfactory condition with typical wear and tear."));
-    assert.ok(paras.includes("There are three bollards/parking meters at the corner. They are in fair condition with typical wear and tear."));
-    assert.ok(paras.includes("There is a stormwater cover at the lane entry. It is in fair condition with typical wear and tear."));
+    assert.ok(paras.includes("There are three bollards/parking meters at the corner. They are in fair condition."));
+    assert.ok(paras.includes("There is a stormwater cover at the lane entry. It is in fair condition."));
     assert.ok(!out.reportText.toLowerCase().includes("there are nil") && !/\btrees?\b/.test(paras.filter((p) => p.startsWith("There")).join(" ")));
   });
 
   it("words the laneway fences left and right under one heading, with typed Other answers", () => {
     assert.equal(paras.filter((p) => p === "ROOMHEAD::Fencing / Walls along laneway").length, 1);
-    assert.ok(paras.includes("The left side fences and walls are constructed of timber palings and hardwood sleepers and in fair condition with typical weathering. Sections were obscured by stacked pallets."));
+    assert.ok(paras.includes("The left side fences and walls are constructed of timber palings and hardwood sleepers and in fair condition. Sections were obscured by stacked pallets."));
     assert.ok(paras.includes("The right side fences and walls are constructed of brick walls and in satisfactory condition with typical weathering."));
   });
 
@@ -204,7 +205,44 @@ describe("Public Assets: every answer on the website form is printed", () => {
     };
     const p = paragraphs(draft("elevations", { parts: [part] }).reportText);
     assert.ok(p.includes("The road / lane runs south to north."));
-    assert.ok(p.includes("There is a utility pit cover at no. 7. It is in fair condition with typical wear and tear. Start point and direction: the driveway, heading north. It is approximately 600mm wide and approximately 900mm long."));
+    assert.ok(p.includes("There is a utility pit cover at no. 7. It is in fair condition. Start point and direction: the driveway, heading north. It is approximately 600mm wide and approximately 900mm long."));
+  });
+});
+
+describe("Public Assets: good and bad are worded differently, from the real form's choices", () => {
+  const SAT = "Satisfactory with typical wear and tear";
+  const part = (extra) => paragraphs(draft("elevations", { parts: [{ partName: "Part A", itemsPresent: ["Kerb and Channel"], kerbs_material: ["Concrete"], ...extra }] }).reportText);
+
+  it("says 'with typical wear and tear' only for a satisfactory category; any other grade is just stated", () => {
+    assert.ok(part({ kerbs_condition: SAT }).includes("The kerbs and channel are constructed of concrete and in satisfactory condition with typical wear and tear."));
+    for (const grade of ["Fair", "Average", "Poor"]) assert.ok(part({ kerbs_condition: grade }).includes(`The kerbs and channel are constructed of concrete and in ${grade.toLowerCase()} condition.`), grade);
+  });
+
+  it("says the overview only when it records an issue, in the form's own words for that category", () => {
+    assert.ok(!/significant|deterioration|cracks/i.test(part({ kerbs_condition: "Fair", kerbs_summary: "No significant cracking/damage" }).join(" ")));
+    assert.ok(part({ kerbs_condition: "Fair", kerbs_summary: "Numerous items of deterioration throughout" }).includes("Numerous items of deterioration observed throughout."));
+    const strip = paragraphs(draft("elevations", { parts: [{ partName: "A", itemsPresent: ["Nature Strip, Light Posts, Signage, Trees"], naturestrip_condition: "Fair", naturestrip_summary: "Several minor items of deterioration" }] }).reportText);
+    assert.ok(strip.includes("Several minor items of deterioration observed."));
+    const foot = paragraphs(draft("elevations", { parts: [{ partName: "A", itemsPresent: ["Footpaths and Crossovers"], footpaths_condition: "Fair", footpaths_summary: "Damage to fence / gate" }] }).reportText);
+    assert.ok(foot.includes("Damage to fence or gate observed."));
+  });
+
+  it("says what is wrong with a street asset, and nothing for one marked OK", () => {
+    const assets = (defectKind) => part({ kerbs_condition: SAT, kerbs_assets: [{ assetType: "Utility pit cover", count: "1", condition: "Fair", defectKind, location: "no. 7" }] });
+    assert.ok(assets("Crack").includes("There is a utility pit cover at no. 7. It is in fair condition. It has a crack."));
+    assert.ok(assets("Leaning").includes("There is a utility pit cover at no. 7. It is in fair condition. It is leaning."));
+    assert.ok(assets("OK").includes("There is a utility pit cover at no. 7. It is in fair condition."));
+    const many = part({ kerbs_condition: SAT, kerbs_assets: [{ assetType: "Bollard / Parking meter", count: "2", condition: "Poor", defectKind: "Rust", location: "the corner" }] });
+    assert.ok(many.includes("There are two bollards/parking meters at the corner. They are in poor condition. They are rusted."));
+  });
+
+  it("has the real form's business signage and the extra street-asset kinds", () => {
+    const rows = snapshot.filter((t) => t.inspectionType === "dilapidation" && t.propertyType === "public_assets");
+    const job = rows.find((t) => t.sectionKey === "job-info").fields.map((f) => f.key);
+    assert.ok(job.includes("businessName") && job.includes("businessSignage"));
+    const partsField = rows.find((t) => t.sectionKey === "elevations").fields.find((f) => f.key === "parts");
+    const road = partsField.itemFields.find((f) => f.key === "roadsurface_assets").itemFields.find((f) => f.key === "assetType").options.map((o) => o.label);
+    for (const kind of ["Bike lane", "Traffic island", "Pedestrian crossing"]) assert.ok(road.includes(kind), kind);
   });
 });
 

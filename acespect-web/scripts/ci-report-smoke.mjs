@@ -193,7 +193,7 @@ const publicAssetsAnswers = {
   },
 };
 
-// A commercial / industrial site: the lean one-line wording, offices and warehouse areas.
+// A commercial / industrial site: the House-style sentences, offices and warehouse areas.
 const SAT = "Satisfactory with typical wear and tear";
 const commercialAnswers = {
   "job-info": { jobNumber: "HV-26-CI03", inspectionDate: "2026-10-03", assignedInspector: "CI Inspector", clientName: "CI Commercial Client", inspectionAddress: "1 Smoke Test Road, Box Hill VIC 3128", weather: ["Dry"] },
@@ -217,25 +217,19 @@ const commercialAnswers = {
   },
 };
 
-// An apartment: the unit and building checklist, with the grouped sections.
+// An apartment: a multi-level office building (the Multi Level Offices inspector template): outside, then offices by level.
 const apartmentAnswers = {
   "job-info": { jobNumber: "HV-26-CI04", inspectionDate: "2026-10-03", assignedInspector: "CI Inspector", clientName: "CI Apartment Client", inspectionAddress: "1 Smoke Test Road, Box Hill VIC 3128", weather: ["Dry"] },
   description: {
-    buildingType: "Apartment Block", constructedYear: "2010", storeys: "4", slope: "Flat", cladding: "Brick veneer", foundations: "Concrete slab", roofDesign: "Flat", roofCovering: "Membrane", windows: "Aluminium frame",
-    worksType: "Excavation", projectAddr: "3 Smoke Test Road", direction: "Left", scopeType: "External & Internal (full)", limitations: "no", safetyIssues: "yes", safetyIssuesNotes: "Loose balustrade on level 2",
+    constructionIs: ["Commercial offices"], constructedYear: "2005", streetFrontage: "East", blockSlope: "Mostly flat", wallCladdingGround: ["Tilt concrete panels"], wallCladdingFirst: ["Metal"],
+    foundations: "Concrete slab", roofDesign: "Flat", roofCovering: ["Metal decking"], windows: "Aluminium",
+    proposedWorksType: "Development site", projectSiteAddress: "3 Smoke Test Road", siteSide: "Front", siteDirection: "North", safetyIssues: "yes", safetyIssuesNotes: "Loose balustrade on level 2",
   },
-  driveway: { items: [{ location: "Front", material: "Concrete", condition: "Fair", obstructions: ["Parked Vehicle"], notableDamage: "yes", safetyHazard: "no", damages: [crack("near the ramp", { notes: "" })] }] },
-  elevations: {
-    elev_overview_elevations: "All accessible faces", elev_overview_partyWall: "yes", elev_overview_claddingCond: "Fair", elev_overview_comments: "Access from balconies only",
-    ext_walls_material: "Brick", ext_walls_rendered: "yes", ext_walls_condition: "Fair", ext_walls_majorCracking: "no", ext_walls_damages: [crack("east wall", { notes: "" })],
-    front_door_material: "Timber", front_door_condition: "Satisfactory with typical wear and tear", front_door_requires: "Re-painting", front_door_deadlocks: "yes",
-  },
-  internal_areas: {
-    int_roof_applicable: "no", int_roof_naReason: "Roof cavity not accessible", int_roof_comments: "Roof space is common property",
-    ceilings_material: "Plasterboard", ceilings_cornices: "Cove", ceilings_condition: "Fair", ceilings_adequatelyFixed: "yes", ceilings_damages: [crack("ceiling above the kitchen", { notes: "" })],
-    plumbing_waterSupplyOn: "yes", plumbing_waterLeaks: "no",
-  },
-  notes: { structural_structurallySound: "no", structural_describe: "Differential settlement at the north wall", post_project_describe: "No access to the plant room" },
+  driveway: { present: "yes", locatedAt: "Front left", material: "Asphalt", condition: "Poor", crackingSummary: "Numerous cracking throughout", obscuredBy: ["Parked cars"], damages: [crack("near the ramp", { notes: "" })] },
+  elevations: { sides: { front: { orientation: "East", condition: SAT, damageSummary: "No visible significant damage", obscuredBy: ["Vegetation"] }, left: { orientation: "North", partyWall: "yes", partyWallNumber: "12", condition: "Fair", damageSummary: "Several minor gaps and cracks", damages: [crack("above the window", { notes: "" })] } } },
+  pool_spa: { areas: { reception_foyer: { present: "yes", floorLevel: "Ground floor", generalCondition: SAT, damageSummary: "No visible significant damage" }, consulting_room: { present: "yes", floorLevel: "3rd floor", generalCondition: "Fair", damageSummary: "Items of damage throughout", damages: [crack("window frame", { notes: "" })] } } },
+  internal_areas: { gen_renovationsInProgress: "no", gen_safetyAdvisories: "no", gen_roomsNotAccessed: "Plant room (locked)", gen_movementObserved: "no" },
+  notes: { postProject: "no", additionalNotes: "" },
 };
 
 // One report type, end to end: submit, compose the wording, approve, download the PDF, read what the reader would see.
@@ -333,16 +327,15 @@ pdfs.push(await runCase({
   phrases: [
     "The property is a warehouse, facing north on a mostly flat block of land",
     "The driveway is to the front left of the block and is constructed of concrete.",
-    "Driveway: Several minor cracks. Sections were obscured by vegetation.",
-    "The left fence is constructed of brick.",
+    "It is in fair condition. Several minor cracks observed. Sections of the driveway were obscured by vegetation.",
+    "The left-hand fence is constructed of brick and is in satisfactory condition with typical weathering.",
     "It is located on the ground floor.",
     "There is no paving to the left-hand side of property.",
     "There is no front fence.",
-    "Left Fence: Satisfactory.",
-    "Sections of the walls and hardstand were obscured by shelving and stored goods.",
-    "This elevation is on the boundary and could not be inspected.",
-    "The most significant items are",
-    "Satisfactory and typical condition. Water stains observed. Sections were obscured by sarking.",
+    "Sections of the walls and floor were obscured by shelving and stored goods.",
+    "The left elevation is a party wall abutting the next property at No. 12 and could not be inspected.",
+    "Several minor gaps and cracks observed.",
+    "is in satisfactory and typical condition. Water stains observed. Sections were obscured by sarking.",
   ],
   minPages: 6, minImages: 4,
 }));
@@ -350,18 +343,16 @@ pdfs.push(await runCase({
 pdfs.push(await runCase({
   name: "Dilapidation / Apartment",
   profile: APARTMENT, inspectionTitle: "Dilapidation", propertyTitle: "Apartment", jobNo: "HV-26-CI04", client: "CI Apartment Client",
-  answers: apartmentAnswers, photoSections: ["driveway", "elevations", "internal_areas"],
-  headings: ["Description and Overview", "Condition Summary", "External walls", "Ceilings", "Front door"],
+  answers: apartmentAnswers, photoSections: ["driveway", "elevations", "pool_spa"],
+  headings: ["Description and Overview", "Condition Summary", "Reception / Foyer", "Consulting room"],
   phrases: [
-    "The property is an apartment block, with 4 storeys on a flat block of land",
-    "The proposed works are excavation.",
-    "The scope for inspection is external and internal to all structures.",
-    "This elevation is on the boundary and could not be inspected.",
-    "External walls constructed of brick.",
-    "The front door requires re-painting.",
-    "Roof space: not applicable",
-    "The most significant items are",
-    "Notable damage was observed.",
+    "The property is a commercial office building, facing east on a mostly flat block of land",
+    "It is in poor condition. Numerous cracking observed throughout. Sections of the driveway were obscured by parked cars.",
+    "The left elevation is a party wall abutting the next property at No. 12 and could not be inspected.",
+    "The reception and foyer are in satisfactory and typical condition.",
+    "The consulting room is in fair condition. Items of damage observed throughout.",
+    "No access granted to Plant room (locked).",
+    "Safety issues: Loose balustrade on level 2.",
   ],
   minPages: 6, minImages: 4,
 }));
