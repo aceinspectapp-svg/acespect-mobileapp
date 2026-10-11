@@ -12,6 +12,8 @@ const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const server = await createServer({ root: webRoot, server: { middlewareMode: true }, logLevel: "error" });
 after(() => server.close());
 const { buildConstructionReport, stageOfSectionKeys, referencedCodes } = await server.ssrLoadModule("/src/web/construction/reportModel.ts");
+const { flattenSectionToDraft } = await server.ssrLoadModule("/src/web/templateFields.ts");
+const { wordingFor } = await server.ssrLoadModule("/src/web/wording/registry.ts");
 
 const OK = "#1FA463", BAD = "#E63329", WARN = "#E8A33D", NA = "#94A1B2";
 const row = (key, label, order, extra = {}) => ({
@@ -22,7 +24,11 @@ const row = (key, label, order, extra = {}) => ({
 const photos = (n) => Array.from({ length: n }, (_, i) => `/p${i}.jpg`);
 const defect = (over = {}) => ({ location: "Front left roof", category: ["workmanship_outside_tolerance"], severity: ["major", "safety"], photos: photos(2), comments: "Needs repair.", constructionCode: "2.04", ...over });
 
-const section = (key, name, fields, answers, approved = true) => ({ key, name, fields, answers, approved });
+/** A section as the reviewer portal shows it: the report text and defects the Construction Stage wording writes from its answers. */
+const section = (key, name, fields, answers, approved = true) => {
+  const derived = flattenSectionToDraft(fields, answers, key, { inspectionType: "construction_stage", propertyType: "residential_house" });
+  return { key, name, fields, answers, approved, reportText: derived.reportText, damages: derived.damages };
+};
 
 const description = section("pci_description", "Description & Overview",
   [
@@ -63,7 +69,7 @@ describe("construction report", () => {
     assert.equal(stageOfSectionKeys(["driveway"]), null);
   });
 
-  const model = buildConstructionReport([description, roof, internal, summary], jobInfo, false);
+  const model = buildConstructionReport([description, roof, internal, summary], jobInfo);
 
   it("writes the General Description sentences", () => {
     assert.ok(model.description.includes("The property is being constructed by Metricon."));
@@ -88,12 +94,11 @@ describe("construction report", () => {
     const d1 = model.defects[0];
     assert.match(d1.text, /Gutters/);
     assert.match(d1.text, /Front left roof/);
-    assert.deepEqual(d1.severities, ["Major", "Safety"]);
-    assert.deepEqual(d1.categories, ["Workmanship outside tolerance"]);
+    assert.match(d1.text, /Severity: Major, Safety\./);
+    assert.match(d1.text, /Category: Workmanship outside tolerance\./);
     assert.equal(d1.photos.length, 2);
     const row1 = model.blocks.flatMap((b) => b.groups.flatMap((g) => g.items)).find((i) => /debris/i.test(i.heading));
-    assert.equal(row1.text, "Refer to Defects (Defect 1).");
-    assert.deepEqual(row1.defectNos, [1]);
+    assert.equal(row1.text, "Refer to Defects.");
   });
 
   it("puts the codes the inspector typed into the references, with the standing normal-viewing block", () => {
@@ -106,12 +111,12 @@ describe("construction report", () => {
     assert.ok(model.notes.includes("The workmanship is generally to a satisfactory industry standard, except for the defects noted above."));
     assert.ok(model.notes.some((n) => /^Appliances are installed, except for/.test(n)));
     assert.ok(model.notes.some((n) => /Certificate of Occupancy/.test(n)));
-    const practical = buildConstructionReport([description, summary], { stageOptionPci: "practical_completion_appliances_not_yet_installed" }, false);
+    const practical = buildConstructionReport([description, summary], { stageOptionPci: "practical_completion_appliances_not_yet_installed" });
     assert.ok(practical.notes.some((n) => /not yet installed/.test(n)));
   });
 
   it("prints only approved sections and says which are waiting", () => {
-    const waiting = buildConstructionReport([description, { ...roof, approved: false }, summary], jobInfo, false);
+    const waiting = buildConstructionReport([description, { ...roof, approved: false }, summary], jobInfo);
     assert.equal(waiting.blocks.length, 0);
     assert.deepEqual(waiting.waitingSections, ["PCI Checklist: External — Roof"]);
   });
@@ -123,17 +128,17 @@ describe("construction report", () => {
       { key: "frontSite", label: "Front setback on site (approx)", type: "numeric", unit: "mm", order: 2, sectionLetter: "Front setback" },
       { key: "frontResult", label: "Front setback — result", type: "pill-select", order: 3, sectionLetter: "Front setback", options: [{ value: "ok", label: "OK", color: OK }] },
     ];
-    const m = buildConstructionReport([section("sd_measurements", "Slab Down: Site & Slab Measurements", fields, { frontDatum: "pegs", frontPlan: "4500", frontSite: "4510", frontResult: "ok" })], null, false);
+    const m = buildConstructionReport([section("sd_measurements", "Slab Down: Site & Slab Measurements", fields, { frontDatum: "pegs", frontPlan: "4500", frontSite: "4510", frontResult: "ok" })], null);
     const item = m.blocks[0].groups[0].items[0];
     assert.equal(m.blocks[0].banner, "SLAB DOWN");
     assert.match(item.text, /As estimated from pegs\. Setbacks on plan are 4500 millimetres and on site are approximately 4510 millimetres\. Checked and satisfactory\./);
   });
 
   it("lists defects as one numbered list for the early stages and under EXTERNAL / INTERNAL from Lock Up on", () => {
-    const early = buildConstructionReport([section("fr_defects", "Defects", [], { defects: [{ location: "Roof frame", description: "Truss not strapped", photos: photos(1) }, { location: "Bedroom 2", description: "Stud bowed", photos: [] }] })], null, false);
+    const early = buildConstructionReport([section("fr_defects", "Defects", [], { defects: [{ location: "Roof frame", description: "Truss not strapped", photos: photos(1) }, { location: "Bedroom 2", description: "Stud bowed", photos: [] }] })], null);
     assert.equal(early.groupedDefects, false);
     assert.deepEqual(early.defects.map((d) => d.no), [1, 2]);
-    const late = buildConstructionReport([section("lu_defects", "Defects", [], { defects: [{ location: "Bedroom 2", description: "Stud bowed", photos: [] }, { location: "Roof gutter", description: "Not fixed", photos: [] }] })], null, false);
+    const late = buildConstructionReport([section("lu_defects", "Defects", [], { defects: [{ location: "Bedroom 2", description: "Stud bowed", photos: [] }, { location: "Roof gutter", description: "Not fixed", photos: [] }] })], null);
     assert.equal(late.groupedDefects, true);
     assert.deepEqual(late.defects.map((d) => d.area), ["EXTERNAL", "INTERNAL"]);
   });

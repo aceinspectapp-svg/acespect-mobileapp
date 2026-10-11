@@ -50,6 +50,11 @@ function fill(fields) {
   return a;
 }
 
+// every field key in a section, at any depth
+function allKeys(fields) {
+  return fields.flatMap((f) => [f.key, ...(f.itemFields ? allKeys(f.itemFields) : [])]);
+}
+
 // every field that offers a choice, with the path of groups / lists it sits in and the fields beside it
 function choiceFields(fields, path = []) {
   const out = [];
@@ -107,7 +112,9 @@ for (const wording of FINAL_TYPES) describe(`report contract (${wording.profile.
       for (const { field, path, siblings } of fields2) {
         // the stored codes (front_left, timber_palings) must never reach the reader; a typed Other
         // only exists on fields the template marks allowOther
-        const rawValues = field.options.map((o) => o.value).filter((v) => v.includes("_"));
+        // (a stored code that is also part of a field's own name -- "n_a" inside "internal_kitchen_and_pantry" -- cannot be told from its key in the saved fields)
+        const keyText = JSON.stringify(allKeys(fields));
+        const rawValues = field.options.map((o) => o.value).filter((v) => v.includes("_") && !keyText.includes(v));
         const variants = [...field.options.map((o) => o.value), ...(field.allowOther ? ["other", "__other__:Typed detail", "__other__:"] : [])];
         for (const v of variants) {
           const value = MULTI.has(field.type) ? [v] : v;
@@ -120,6 +127,7 @@ for (const wording of FINAL_TYPES) describe(`report contract (${wording.profile.
           if (bad.length) failures.push(`${field.key} = ${JSON.stringify(value)} -> ${bad.join(", ")}`);
         }
       }
+      if (fields2.length === 0) return; // nothing to choose in this section (a Defects table, a list of notes)
       assert.ok(tried > 0);
       assert.deepEqual(failures.slice(0, 8), [], `${failures.length} problem(s) of ${tried} combinations`);
     });

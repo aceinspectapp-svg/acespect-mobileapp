@@ -21,6 +21,7 @@ import { ReportConditions } from "../../components/ReportConditions";
 import { ReportSection } from "../../components/ReportSection";
 import { buildReportHeader, DEFAULT_PURPOSE, withExcludedPhotosRemoved } from "../../report";
 import { SectionFieldEditor, PhotoUploadContext } from "../../components/SectionFieldEditor";
+import { constructionSectionText, isConstructionKey } from "../../construction/sectionText";
 import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSectionToDraft, fetchActiveTemplate, listMissingItems } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { reportProfileOf } from "../../wording/profile";
@@ -752,13 +753,22 @@ export function ReviewerFormView() {
   const inspectorName = getUser(inspection.inspectorId)?.name ?? inspection.inspectorId;
   const sc = STATUS_CONFIG[inspection.status];
   const selectedSection = sections.find((s) => s.id === selectedSectionId) ?? sections[0];
+  // A Construction Stage section shows the text the Construction Stage wording writes from its answers -- the same text the printed report is made from.
+  const selectedKey = selectedSection ? (selectedSection.key ?? selectedSection.id) : "";
+  const constructionView = selectedSection && isConstructionKey(selectedKey)
+    ? constructionSectionText(selectedSection, templates[selectedKey]?.fields, reportProfileOf(inspection.type, inspection.propertyType))
+    : null;
+  const shownSection = selectedSection && constructionView ? { ...selectedSection, reportText: constructionView.reportText, damages: constructionView.damages, photos: [] } : selectedSection;
   const reviewedCount = sections.filter((s) => s.reviewStatus !== "pending").length;
 
   /* section mutations → backend (provider refreshes the inspection) */
   async function updateSectionReportText(sectionId: string, text: string) {
     setBusy(true);
     try {
-      await patchSection(inspection!.id, sectionId, { reportText: text });
+      // A Construction Stage section's text is written from its answers; text typed over it is kept until the answers change.
+      const section = inspection!.sections.find((x) => x.id === sectionId);
+      const typedOver = section && isConstructionKey(section.key ?? section.id);
+      await patchSection(inspection!.id, sectionId, typedOver ? { reportText: text, fields: { ...(section!.fields as Record<string, unknown>), reportTextOverride: true } } : { reportText: text });
     } finally {
       setBusy(false);
     }
@@ -1457,10 +1467,10 @@ export function ReviewerFormView() {
                       padding: "16px 18px",
                       borderLeft: "3px solid #2563eb",
                     }}>
-                      <ReportSection section={withExcludedPhotosRemoved(selectedSection)} compact />
+                      <ReportSection section={withExcludedPhotosRemoved(shownSection)} compact />
                       <button
                         onClick={() => {
-                          const newText = prompt("Edit report text:", selectedSection.reportText);
+                          const newText = prompt("Edit report text:", shownSection.reportText);
                           if (newText !== null) updateSectionReportText(selectedSection.id, newText);
                         }}
                         style={{ marginTop: "12px", fontSize: "11px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}

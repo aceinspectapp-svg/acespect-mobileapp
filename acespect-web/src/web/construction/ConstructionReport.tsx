@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { Inspection } from "../mockData";
 import { formatLongDate, type ReportHeader } from "../report";
 import { fetchActiveTemplate, type AnswerTree, type TemplateField } from "../templateFields";
+import { reportProfileOf } from "../wording/profile";
+import { constructionSectionText } from "./sectionText";
 import { Heading, MetaRow, Para, PhotoGrid, PhotoNumberProvider, SectionBand, reportTokens, usePhotoNumbering } from "../components/reportKit";
 import { buildConstructionReport, stageMeta, stageOfSectionKeys, type ConstructionReportModel, type DefectEntry, type ReportGroup, type SectionInput } from "./reportModel";
 
@@ -15,27 +17,32 @@ const REFERENCES_NOTE =
 const isConstruction = (inspection?: Inspection) => !!inspection && /construction/i.test(inspection.type);
 
 /**
- * Loads each submitted section's template (its labels and options) and builds the report model from the answers.
- * Returns undefined while loading, null for an inspection that is not a Construction Stage one.
+ * Loads each submitted section's template and builds the report model from each section's wording (the same text the
+ * reviewer portal shows). Returns undefined while loading, null for an inspection that is not a Construction Stage one.
  */
 export function useConstructionReport(inspection?: Inspection): ConstructionReportModel | null | undefined {
   const [model, setModel] = useState<ConstructionReportModel | null | undefined>(isConstruction(inspection) ? undefined : null);
-  const key = inspection ? `${inspection.id}:${inspection.sections.map((s) => `${s.key ?? s.id}:${s.reviewStatus}`).join(",")}` : "";
+  const key = inspection ? `${inspection.id}:${inspection.sections.map((s) => `${s.key ?? s.id}:${s.reviewStatus}:${s.reportText.length}`).join(",")}` : "";
 
   useEffect(() => {
     if (!inspection || !isConstruction(inspection)) { setModel(null); return; }
     let cancelled = false;
+    const profile = reportProfileOf(inspection.type, inspection.propertyType);
     const sections = inspection.sections.filter((s) => !(s.key ?? s.id).startsWith("job-info"));
     Promise.all(
       sections.map(async (s) => {
         const sectionKey = s.key ?? s.id;
         const t = await fetchActiveTemplate(inspection.type, inspection.propertyType, sectionKey);
+        const fields = (t?.fields ?? []) as TemplateField[];
+        const text = constructionSectionText(s, fields, profile);
         const input: SectionInput = {
           key: sectionKey,
           name: s.name,
-          answers: (s.answers as AnswerTree | null | undefined) ?? null,
-          fields: (t?.fields ?? []) as TemplateField[],
           approved: s.reviewStatus === "approved",
+          reportText: text.reportText,
+          damages: text.damages,
+          answers: (s.answers as AnswerTree | null | undefined) ?? null,
+          fields,
           excludedPhotos: s.excludedPhotoUrls ?? [],
         };
         return input;
@@ -43,8 +50,7 @@ export function useConstructionReport(inspection?: Inspection): ConstructionRepo
     ).then((inputs) => {
       if (cancelled) return;
       const jobInfo = inspection.sections.find((s) => (s.key ?? s.id).startsWith("job-info"));
-      const apartment = /apartment/i.test(inspection.propertyType);
-      setModel(buildConstructionReport(inputs, (jobInfo?.answers as AnswerTree | null | undefined) ?? null, apartment));
+      setModel(buildConstructionReport(inputs, (jobInfo?.answers as AnswerTree | null | undefined) ?? null));
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,18 +102,12 @@ function Groups({ groups, banner }: { groups: ReportGroup[]; banner: string }) {
 }
 
 function Defect({ d }: { d: DefectEntry }) {
-  const meta = [
-    d.severities.length ? `Severity: ${d.severities.join(", ")}` : "",
-    d.categories.length ? `Category: ${d.categories.join(", ")}` : "",
-    d.code ? `Construction code: ${d.code}` : "",
-  ].filter(Boolean);
   return (
     <div style={{ margin: "0 0 12px", breakInside: "avoid" }}>
       <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
         <span style={{ fontWeight: 700, minWidth: "26px", color: reportTokens.ink }}>{d.no}.</span>
         <div style={{ flex: 1 }}>
-          <Para style={{ margin: "0 0 2px" }}>{d.text}</Para>
-          {meta.length > 0 && <Para style={{ margin: "0 0 4px", fontSize: "0.88em", color: reportTokens.inkMuted }}>{meta.join("  ·  ")}</Para>}
+          <Para style={{ margin: "0 0 4px" }}>{d.text}</Para>
           {/* The office template sets defect photos at about 5.5 cm, two side by side. */}
           {d.photos.length > 0 && <div style={{ maxWidth: "11.6cm" }}><Photos photos={d.photos} /></div>}
         </div>
@@ -118,7 +118,7 @@ function Defect({ d }: { d: DefectEntry }) {
 
 function Defects({ model }: { model: ConstructionReportModel }) {
   if (model.defects.length === 0) return <Para>No defects were identified at the time of inspection.</Para>;
-  if (!model.groupedDefects) return <>{model.defects.map((d) => <Defect key={d.id} d={d} />)}</>;
+  if (!model.groupedDefects) return <>{model.defects.map((d) => <Defect key={d.no} d={d} />)}</>;
   const areas = ["EXTERNAL", "INTERNAL"] as const;
   return (
     <>
@@ -132,7 +132,7 @@ function Defects({ model }: { model: ConstructionReportModel }) {
             {subs.map((sub) => (
               <div key={sub}>
                 <Heading level={3}>{sub}</Heading>
-                {list.filter((d) => d.sub === sub).map((d) => <Defect key={d.id} d={d} />)}
+                {list.filter((d) => d.sub === sub).map((d) => <Defect key={d.no} d={d} />)}
               </div>
             ))}
           </div>

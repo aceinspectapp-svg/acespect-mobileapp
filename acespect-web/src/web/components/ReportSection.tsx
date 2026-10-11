@@ -54,10 +54,14 @@ type ParsedItem =
   | { kind: "floorband"; text: string }
   | { kind: "cond"; color: string; label: string }
   | { kind: "defect"; index: number; text: string }
+  | { kind: "item"; heading: string; text: string }
   | { kind: "para"; text: string };
 
 // Matches the report type's wording (src/web/wording/) damageSentences -- one tagged paragraph per recorded defect, where `index` is that defect's position in the section's damage list, so its own photos can be printed right under its sentence.
 const DEFECT_RE = /^DEFECT::(\d+)::([\s\S]*)$/;
+// Construction Stage report text: one checklist row (its short name in bold, then its sentence), and a sentence that is printed under the report's Notes.
+const ITEM_RE = /^ITEM::(.+?)::([\s\S]*)$/;
+const NOTE_RE = /^NOTE::([\s\S]*)$/;
 
 function renderParsedItem(item: ParsedItem, compact: boolean, key: number | string, damages: DamageRecord[]) {
   switch (item.kind) {
@@ -83,6 +87,13 @@ function renderParsedItem(item: ParsedItem, compact: boolean, key: number | stri
       return <ConditionTag key={key} color={item.color} label={item.label} />;
     case "defect":
       return <DefectBlock key={key} text={item.text} damage={damages[item.index]} compact={compact} />;
+    case "item":
+      return (
+        <div key={key} style={{ margin: "0 0 6px" }}>
+          <p style={{ margin: "0 0 1px", fontWeight: 700, breakAfter: "avoid" }}>{item.heading}</p>
+          <Para style={{ margin: "0 0 2px" }}>{item.text}</Para>
+        </div>
+      );
     case "para":
       return <Para key={key}>{item.text}</Para>;
   }
@@ -277,6 +288,10 @@ export function ReportSection({
       if (roomMatch) return { kind: "roomhead", text: roomMatch[1] };
       const defectMatch = p.match(DEFECT_RE);
       if (defectMatch) return { kind: "defect", index: Number(defectMatch[1]), text: defectMatch[2].trim() };
+      const itemMatch = p.match(ITEM_RE);
+      if (itemMatch) return { kind: "item", heading: itemMatch[1], text: itemMatch[2].trim() };
+      const noteMatch = p.match(NOTE_RE);
+      if (noteMatch) return { kind: "para", text: noteMatch[1].trim() };
       if (FLOOR_HEADINGS.includes(p)) return { kind: "floorband", text: p };
       return { kind: "para", text: p };
     }),

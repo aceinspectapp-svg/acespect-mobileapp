@@ -17,6 +17,7 @@ const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const server = await createServer({ root: webRoot, server: { middlewareMode: true }, logLevel: "error" });
 after(() => server.close());
 const { buildConstructionReport, stageOfSectionKeys } = await server.ssrLoadModule("/src/web/construction/reportModel.ts");
+const { flattenSectionToDraft } = await server.ssrLoadModule("/src/web/templateFields.ts");
 const snap = JSON.parse(readFileSync(resolve(webRoot, "../acespect-backend/prisma/templates-snapshot.json"), "utf8"));
 
 const STAGES = [
@@ -26,12 +27,6 @@ const PROPS = ["residential_house", "apartment"];
 
 /** Answers that are asked on the form but deliberately do not appear in the report text, with the reason. */
 const NOT_PRINTED = {
-  plansSpecs: "which plans were supplied is not part of the report layout",
-  plansSpecsOther: "which plans were supplied is not part of the report layout",
-  previousDefectsList: "the previous-defects list is covered by its own Previous Defects section",
-  clientIssuesList: "the client list is covered by its own Client List of Issues section",
-  safetyIssues: "printed through the General Description only when 'yes' (see safetyDescribe)",
-  safetyDescribe: "printed through the General Description",
   streetPhotos: "photographs are laid out separately", elevationPhotos: "photographs are laid out separately", neighbourPhotos: "photographs are laid out separately",
 };
 
@@ -76,11 +71,15 @@ const probes = (f) => {
   return [];
 };
 
+/** What the reviewer portal shows for each section (the Construction Stage wording applied to its answers), laid out as the report. */
 function build(prop, prefix, answersByKey, jobInfo = {}) {
-  const sections = templates(prop, prefix).map((t, i) => ({
-    key: t.sectionKey, name: t.name, fields: t.fields, answers: answersByKey[t.sectionKey] ?? {}, approved: true, order: i,
-  }));
-  return buildConstructionReport(sections, jobInfo, prop === "apartment");
+  const profile = { inspectionType: "construction_stage", propertyType: prop };
+  const sections = templates(prop, prefix).map((t) => {
+    const answers = answersByKey[t.sectionKey] ?? {};
+    const derived = flattenSectionToDraft(t.fields, answers, t.sectionKey, profile);
+    return { key: t.sectionKey, name: t.name, fields: t.fields, answers, approved: true, reportText: derived.reportText, damages: derived.damages };
+  });
+  return buildConstructionReport(sections, jobInfo);
 }
 const baseAnswers = (prop, prefix) => Object.fromEntries(templates(prop, prefix).map((t) => [t.sectionKey, fill(t.fields)]));
 const printed = (m) => JSON.stringify(m);
@@ -155,12 +154,13 @@ for (const prop of PROPS) {
         assert.equal(d.no, 1);
         assert.match(d.text, /Level 1 hall/);
         assert.match(d.text, /probe comment/);
-        assert.deepEqual(d.categories, ["Damage"]);
-        assert.deepEqual(d.severities, ["Minor"]);
+        assert.match(d.text, /Severity: Minor\./);
+        assert.match(d.text, /Category: Damage\./);
+        assert.match(d.text, /Construction code: 2\.04\./);
         assert.equal(d.photos.length, 2);
         assert.equal(d.code, "2.04");
         assert.ok(m.references.some((s) => s.codes.some((c) => c.code === "2.04")), "the code's extract is in the references");
-        assert.ok(m.blocks.flatMap((b) => b.groups.flatMap((g) => g.items)).some((i) => /Defect 1\)/.test(i.text)), "the checklist row points to Defect 1");
+        assert.ok(m.blocks.flatMap((b) => b.groups.flatMap((g) => g.items)).some((i) => i.text === "Refer to Defects."), "the checklist row says Refer to Defects");
       });
 
       it("prints each part of a defect's details", () => {
