@@ -184,9 +184,9 @@ describe("House form: the real inspector template's choices and fields", () => {
 
   it("words what was noted on a fence, a retaining wall and a roof", () => {
     const fence = paras(draft("fences", { items: { left: { present: "yes", material: ["Timber palings"], condition: SAT, conditionDetails: ["Typical weathering and some gaps", "Loose or missing palings", "Leaning"] } } })).join(" ");
-    assert.ok(fence.includes("is in satisfactory condition with typical weathering and some gaps. Loose or missing palings and leaning noted."));
+    assert.ok(fence.includes("is in satisfactory condition with typical weathering and some gaps. There are loose or missing palings. The fence is leaning."));
     const wall = paras(draft("retaining_walls", { present: "yes", items: [{ location: "Left", materials: ["Brick"], condition: SAT, conditionDetails: ["Decayed"] }] })).join(" ");
-    assert.ok(wall.includes("Decayed noted."));
+    assert.ok(wall.includes("There is some decay."));
     const roof = paras(draft("roof_chimneys", { sections: { upper: { generalCondition: ["Satisfactory to fair with typical weathering", "Some surface rust", "Cracked tiles", "Chimney appears unstable"] } } })).join(" ");
     assert.ok(roof.includes("Some surface rust and cracked tiles noted. Chimney appears unstable."));
     const named = paras(draft("garage_carport_sheds", { structures: { shed: { present: "yes", structureName: "Greenhouse", attachment: "Separate to house", position: "Rear", wallsCondition: SAT } } })).join(" ");
@@ -251,5 +251,34 @@ describe("House form: the real inspector template's choices and fields", () => {
     assert.ok(room.includes("The bedroom and ensuite are in satisfactory and typical condition. Sections were obscured by furniture and stored goods."));
     const plain = compose({ bedroom: { present: "yes", floorLevel: "Ground floor", generalCondition: "Fair" } });
     assert.ok(plain.includes("ROOMHEAD::Bedroom 1") && plain.includes("The bedroom is in fair condition."));
+  });
+
+  it("words cladding, windows and doors, eaves and downpipes as full sentences, not 'Label: value'", () => {
+    const e = paras(draft("elevations", {
+      sides: { front: { orientation: "East", condition: SAT, cladding: ["Paint is flaking from sections", "Timber is cracked"], windowsDoors: ["Broken glazing", "Door delaminating"], eaves: ["Water stains", "Dark mould"], downpipesGutters: ["Rusted", "Not connected to stormwater system"] } },
+    })).join(" ");
+    assert.ok(e.includes("Paint is flaking from sections of the cladding. The timber cladding is cracked."));
+    assert.ok(e.includes("There is broken glazing. A door is delaminating."));
+    assert.ok(e.includes("There are water stains to the eaves. There is dark mould to the eaves."));
+    assert.ok(e.includes("The downpipes and gutters are rusted. A downpipe is not connected to the stormwater system."));
+    assert.ok(!/(Cladding|Windows and doors|Eaves|Downpipes and gutters):/.test(e));
+    const typed = paras(draft("elevations", { sides: { front: { orientation: "East", condition: SAT, eaves: [OTHER + "sagging soffit"] } } })).join(" ");
+    assert.ok(typed.includes("Sagging soffit to the eaves."));
+  });
+
+  it("says the Notes' own comments as typed, and an extra structure as a sentence", () => {
+    assert.ok(paras(draft("notes", { additionalNotes: "Squeaky floor in the hall" })).includes("Squeaky floor in the hall."));
+    const structure = flattenSectionToDraft(fieldsOf("custom_structure"), { description: "Water tank", material: ["Metal"], condition: "Fair", notes: "Leaning slightly" }, "custom_water_tank", HOUSE).reportText;
+    assert.ok(structure.includes("There is a water tank, constructed of metal, which is generally in fair state of repair."));
+    assert.ok(structure.includes("Leaning slightly."));
+    assert.ok(!/Brief description|Material:|Condition:/.test(structure));
+  });
+
+  it("words the safety advisory, movement, rooms not accessed and the notes' 'where' as sentences", () => {
+    const p = paras(draft("internal_areas", { safetyAdvisories: "yes", safetyAdvisoryTypes: ["Exposed electrical cables"], movementObserved: "yes", movementWhere: "the hallway floor", roomsNotAccessed: "Bedroom 3", generalConditionComments: "Fair", generalConditionCommentsOther: "damp to the laundry wall" }));
+    assert.ok(p.includes("A safety advisory was given to the owner regarding exposed electrical cables."));
+    assert.ok(p.includes("Movement was observed in the internal areas, at the hallway floor."));
+    assert.ok(p.includes("No access granted to Bedroom 3."));
+    assert.ok(p.includes("There are other general condition issues in the internal areas, which are in fair condition. Damp to the laundry wall."));
   });
 });

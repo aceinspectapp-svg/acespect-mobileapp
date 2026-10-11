@@ -12,7 +12,7 @@
 import { addFieldAfter, addOptions, find, renumber, runAlignment, slug, type Field } from './lib/align-helpers';
 
 const PROFILE = { inspectionType: 'dilapidation', propertyType: 'commercial_properties' };
-const SECTIONS = ['job-info', 'driveway', 'fences', 'retaining_walls', 'roof_chimneys'] as const;
+const SECTIONS = ['job-info', 'driveway', 'paving_paths', 'fences', 'retaining_walls', 'garage_carport_sheds', 'elevations', 'roof_chimneys', 'pool_spa', 'internal_areas', 'notes'] as const;
 
 const chips = (labels: string[]) => labels.map((label) => ({ label, value: slug(label) }));
 
@@ -35,9 +35,33 @@ function addConditionDetails(items: Field | undefined, labels: string[]): boolea
   return true;
 }
 
+/** "There is a crack starting at {start} and running to the {direction}": every defect list gets a "Running to the" box beside its start point. */
+function addCrackEnd(fields: Field[]): boolean {
+  let changed = false;
+  for (const f of fields) {
+    if (f.type === 'damage-list' && f.itemFields && !f.itemFields.some((g) => g.key === 'crackEndLocation')) {
+      const at = f.itemFields.findIndex((g) => g.key === 'crackStartLocation');
+      if (at >= 0) {
+        f.itemFields.splice(at + 1, 0, {
+          key: 'crackEndLocation',
+          type: 'text',
+          label: 'Running to the (e.g. north, the corner)',
+          order: 0,
+          required: false,
+          ...(f.itemFields[at]?.gate ? { gate: f.itemFields[at].gate } : {}),
+        });
+        f.itemFields.forEach((g, i) => (g.order = i));
+        changed = true;
+      }
+    }
+    if (f.itemFields && addCrackEnd(f.itemFields)) changed = true;
+  }
+  return changed;
+}
+
 /** Applies the alignment to one section's fields in place. Returns true if anything changed. */
 export function alignSection(sectionKey: string, fields: Field[]): boolean {
-  let changed = false;
+  let changed = addCrackEnd(fields);
   switch (sectionKey) {
     case 'job-info': {
       // "Photos sequence for entire Job: 1st pic No / Last pic No"
@@ -51,6 +75,8 @@ export function alignSection(sectionKey: string, fields: Field[]): boolean {
       break;
     }
     case 'fences': {
+      // The template's fence defects: "A gap at {location}." / "A loose paling at {location}."
+      changed = addOptions(find(find(fields, 'items')?.itemFields ?? [], 'damageType'), ['Gap', 'Loose paling']) || changed;
       changed = addConditionDetails(find(fields, 'items'), ['Typical weathering and some gaps', 'Decayed', 'Loose or missing palings', 'Leaning']) || changed;
       break;
     }
@@ -58,7 +84,22 @@ export function alignSection(sectionKey: string, fields: Field[]): boolean {
       changed = addConditionDetails(find(fields, 'items'), ['Typical weathering and some gaps', 'Decayed', 'Leaning']) || changed;
       break;
     }
+    case 'internal_areas': {
+      // Warehouse and production floors: "There are scuff marks from forklifts. The painted line markings are worn / satisfactory."
+      changed = addFieldAfter(fields, 'hard_obscuredByOther', { key: 'hard_scuffMarks', type: 'yesno', label: 'Scuff marks from forklifts?', required: false }) || changed;
+      changed =
+        addFieldAfter(fields, 'hard_scuffMarks', {
+          key: 'hard_lineMarkings',
+          type: 'pill-select',
+          label: 'Painted line markings are',
+          required: false,
+          options: chips(['Worn', 'Satisfactory']),
+        }) || changed;
+      break;
+    }
     case 'roof_chimneys': {
+      // "The roof could not be inspected as the building is a multi-level building complex ... common property"
+      changed = addOptions(find(fields, 'inspectionStatus'), ['Not inspected - multi-level building complex (common property)']) || changed;
       // "Limited observations from ground level using camera zoom indicate the roof is generally: [ ] Satisfactory to fair with typical weathering [ ] some surface rust ..."
       changed =
         addFieldAfter(fields, 'generalCondition', {

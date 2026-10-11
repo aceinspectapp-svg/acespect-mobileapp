@@ -139,3 +139,28 @@ describe("every answer on the website form is printed", () => {
     });
   }
 });
+
+// The report is made of sentences: no line may be left in the plain "Label: value." form.
+describe("the report has no 'Label: value' lines", () => {
+  const LABEL_VALUE = /^[A-Z][A-Za-z0-9 /&'()?,–—-]{1,80}: \S/;
+  for (const w of Object.values(WORDING_BY_PROFILE).filter((x) => x.status === "final")) {
+    it(`${w.profile.inspectionType} / ${w.profile.propertyType}`, () => {
+      const found = [];
+      const rows = snap.filter((x) => x.inspectionType === w.profile.inspectionType && x.propertyType === w.profile.propertyType && x.sectionKey !== "job-info");
+      for (const t of rows) {
+        // a Public Assets survey only has the description, the survey parts, the notes and added structures
+        if (w.profile.propertyType === "public_assets" && !["description", "elevations", "notes", "custom_structure"].includes(t.sectionKey)) continue;
+        const a = fill(t.fields);
+        const sectionKeys = t.sectionKey === "custom_structure" ? ["custom_structure", "custom_water_tank"] : [t.sectionKey];
+        for (const sk of sectionKeys) {
+          const text = flattenSectionToDraft(t.fields, JSON.parse(JSON.stringify(a)), sk, w.profile).reportText;
+          for (const para of text.split("\n\n")) {
+            const line = para.replace(/^(DEFECT::\d+::|ROOMHEAD::|COND::#[0-9a-f]+::)/, "").trim();
+            if (LABEL_VALUE.test(line)) found.push(`${sk}: ${line.slice(0, 90)}`);
+          }
+        }
+      }
+      assert.deepEqual(found, []);
+    });
+  }
+});

@@ -298,10 +298,49 @@ export function handedSide(label: string): string {
   return l === "left" ? "left-hand" : l === "right" ? "right-hand" : l;
 }
 
-/** "Cladding: paint is flaking from sections and timber is cracked." -- for the published templates' observation checklists, whose option labels are already complete phrases. */
+/** The sentence for each cladding / windows and doors / eaves / downpipes choice the published templates offer. */
+const OBSERVATION_SENTENCES: Record<string, Record<string, string>> = {
+  cladding: {
+    "paint is weathered": "The paint to the cladding is weathered.",
+    "paint is flaking from sections": "Paint is flaking from sections of the cladding.",
+    "timber is cracked": "The timber cladding is cracked.",
+    "decay to some boards": "There is decay to some boards.",
+    "there is decay to some boards": "There is decay to some boards.",
+  },
+  "windows and doors": {
+    "paint flaking from timber": "Paint is flaking from the timber to the windows and doors.",
+    "gaps at windows & cladding": "There are gaps at the windows and cladding.",
+    "gaps at windows and cladding": "There are gaps at the windows and cladding.",
+    "broken glazing": "There is broken glazing.",
+    "decay to some frames or sashes": "There is decay to some frames or sashes.",
+    "door delaminating": "A door is delaminating.",
+  },
+  eaves: {
+    "water stains": "There are water stains to the eaves.",
+    "dark mould": "There is dark mould to the eaves.",
+    "gaps at sheet joins": "There are gaps at the sheet joins of the eaves.",
+    "gaps at quads": "There are gaps at the quads of the eaves.",
+    "broken or cracked eave linings": "There are broken or cracked eave linings.",
+    cracked: "The eaves are cracked.",
+  },
+  "downpipes and gutters": {
+    rusted: "The downpipes and gutters are rusted.",
+    rust: "There is rust to the downpipes and gutters.",
+    "sagging or loose": "The downpipes and gutters are sagging or loose.",
+    "not connected to stormwater system": "A downpipe is not connected to the stormwater system.",
+  },
+};
+
+/**
+ * What was ticked for cladding, windows and doors, eaves or downpipes and gutters, as full sentences:
+ * "Paint is flaking from sections of the cladding. There is broken glazing." (`heading` says which of the four it is.)
+ * Something the inspector typed as Other is said as "{Text} to the {part}."
+ */
 export function observationLine(itemFields: TemplateField[], inst: AnswerTree, keys: string[], heading: string): string {
-  const items = many(itemFields, inst, keys).map(lower);
-  return items.length ? ` ${heading}: ${joinList(items)}.` : "";
+  const kind = lower(heading);
+  const table = OBSERVATION_SENTENCES[kind] ?? {};
+  const sentences = many(itemFields, inst, keys).map((label) => table[lower(label).replace(/[.\s]+$/, "")] ?? `${capitalize(label.replace(/[.\s]+$/, ""))} to the ${kind}.`);
+  return sentences.length ? ` ${sentences.join(" ")}` : "";
 }
 
 /**
@@ -349,10 +388,10 @@ export function defectOffsets(itemFields: TemplateField[], inst: AnswerTree): Re
 export function scopeAndSafetyParagraphs(inst: AnswerTree): string[] {
   const out: string[] = [];
   const changes = asString(inst.scopeChanges).trim();
-  if (changes) out.push(`Changes to the scope: ${withPeriod(changes.replace(/\s*\n+\s*/g, " "))}`);
+  if (changes) out.push(`The scope of the inspection was changed. ${capitalize(withPeriod(changes.replace(/\s*\n+\s*/g, " ")))}`);
   if (yesNo(inst, "scopeLimitations")) {
     const notes = asString(inst.scopeLimitationsNotes).trim();
-    out.push(notes ? `Limitations to the scope of the inspection: ${withPeriod(notes.replace(/\s*\n+\s*/g, " "))}` : "There were limitations to the scope of the inspection.");
+    out.push(`There were limitations to the scope of the inspection.${notes ? ` ${capitalize(withPeriod(notes.replace(/\s*\n+\s*/g, " ")))}` : ""}`);
   }
   if (inst.safetyAssessed !== undefined && asString(inst.safetyAssessed) !== "") {
     const notes = asString(inst.safetyAssessedNotes).trim();
@@ -361,7 +400,7 @@ export function scopeAndSafetyParagraphs(inst: AnswerTree): string[] {
   }
   if (yesNo(inst, "safetyIssues")) {
     const notes = asString(inst.safetyIssuesNotes).trim();
-    out.push(notes ? `Safety issues: ${withPeriod(notes.replace(/\s*\n+\s*/g, " "))}` : "There were safety issues at the property.");
+    out.push(`There were safety issues at the property.${notes ? ` ${capitalize(withPeriod(notes.replace(/\s*\n+\s*/g, " ")))}` : ""}`);
   }
   return out;
 }

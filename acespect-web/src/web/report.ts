@@ -1,5 +1,6 @@
 import type { FormSection, Inspection, User } from "./mockData";
 import { getReportSigner } from "./mockData";
+import { reportProfileOf } from "./wording/profile";
 
 /** The front-matter of a Dilapidation Report, derived from Job Information. */
 export interface ReportHeader {
@@ -35,6 +36,30 @@ export const DEFAULT_PURPOSE =
   "current state of the property. This report documents existing visible cracks and gaps to areas " +
   "in scope and may include internal walls, ceilings and floors, external walls, garage, driveway, " +
   "paths and fencing and is the result of a visual survey only.";
+
+/** The inspectors who are shown as a "building consultant" rather than a "builder" in the purpose paragraph. */
+const BUILDING_CONSULTANTS = /trevor scott|peter farries/i;
+
+/**
+ * The purpose paragraph on the cover. A Public Assets report has its own ("to identify any defects or cracking to public assets
+ * and environs ... insofar as a licensed builder can reasonably identify ..."); every other report type uses the standard one.
+ * The Public Assets template says "builder" for every inspector except Trevor Scott and Peter Farries, who are "building consultant".
+ */
+export function defaultPurposeFor(inspection: { type?: string; propertyType?: string }, inspectorName = ""): string {
+  const profile = reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "");
+  // Every other report: the standard paragraph, with the Industrial-Commercial template's rule -- "builder" except Trevor Scott, a "building consultant".
+  if (profile.inspectionType !== "dilapidation" || profile.propertyType !== "public_assets") {
+    return /trevor scott/i.test(inspectorName) ? DEFAULT_PURPOSE.replace("a licensed builder", "a licensed building consultant") : DEFAULT_PURPOSE;
+  }
+  const who = BUILDING_CONSULTANTS.test(inspectorName) ? "building consultant" : "builder";
+  return (
+    "The purpose of the inspection is to identify any defects or cracking to public assets and environs, so as to establish " +
+    "the current condition of the assets in relation to the project works and/or excavation, insofar as a licensed " +
+    `${who} can reasonably identify the defects and current state of the assets. This report documents defects or cracking ` +
+    "to public assets as specified in the Scope, and may include concrete kerbing, footpaths, crossings, nature strip, trees, " +
+    "posts, signage, etc and is the result of a visual survey only."
+  );
+}
 
 /* ── Description & Overview section boilerplate / template placeholders ── */
 
@@ -175,7 +200,7 @@ export function buildReportHeader(inspection: Inspection, inspector?: Pick<User,
     weather: str(f.weather, "—"),
     inspector: str(f.inspector, inspector?.name ?? "—"),
     inspectorRegistration: str(f.inspectorRegistration) || inspector?.licenseNumber || undefined,
-    purpose: str(f.purpose) || DEFAULT_PURPOSE,
+    purpose: str(f.purpose) || defaultPurposeFor(inspection, str(f.inspector, inspector?.name ?? "")),
     signatureUrl: signer?.signatureUrl,
     signatureName: signer?.signatureName ?? signer?.name,
     signatureTitle: signer?.signatureTitle,

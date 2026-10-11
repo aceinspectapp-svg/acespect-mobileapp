@@ -19,7 +19,7 @@ import { ReportDescription } from "../../components/ReportDescription";
 import { ReportScope } from "../../components/ReportScope";
 import { ReportConditions } from "../../components/ReportConditions";
 import { ReportSection } from "../../components/ReportSection";
-import { buildReportHeader, DEFAULT_PURPOSE, withExcludedPhotosRemoved } from "../../report";
+import { buildReportHeader, defaultPurposeFor, withExcludedPhotosRemoved } from "../../report";
 import { SectionFieldEditor, PhotoUploadContext } from "../../components/SectionFieldEditor";
 import { constructionSectionText, isConstructionKey } from "../../construction/sectionText";
 import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSectionToDraft, fetchActiveTemplate, listMissingItems } from "../../templateFields";
@@ -258,7 +258,7 @@ function JobInfoFieldsForm({
       case "inspectorRegistration":
         return asDraftString(raw, inspector?.licenseNumber ?? "");
       case "purpose":
-        return asDraftString(raw, DEFAULT_PURPOSE);
+        return asDraftString(raw, defaultPurposeFor(inspection, asDraftString((section.fields as Record<string, unknown>).inspector, inspector?.name ?? "")));
       default:
         return asDraftString(raw);
     }
