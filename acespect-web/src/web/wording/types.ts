@@ -32,6 +32,8 @@ export interface ReportWording {
   noSummarySections: string[];
   /** Sections where a fixed slot marked "not present" gets its own sentence ("There is no front fence."). */
   absentSlotSections: string[];
+  /** How this report type writes a recorded defect, where it differs from the shared wording (used for a defect list that no item narrates, e.g. Notes). */
+  damageSentences?(inst: AnswerTree, itemFields: TemplateField[], options?: { key?: string; indexOffset?: number }): string;
   /** Condition Summary rows for one item of a section, when a report type grades several categories per item. Undefined: the standard single row. */
   summaryRows?(sectionKey: string, inst: AnswerTree, itemFields: TemplateField[], label: string): ConditionSummaryRow[] | undefined;
   /** Extra values worked out from a section's answers and stored with its fields (e.g. the list of labels a sentence needs). */
