@@ -16,7 +16,7 @@ import { ReportPoolSpaDisclaimer } from "../components/ReportPoolSpaDisclaimer";
 import { reportProfileOf } from "../wording/profile";
 import { wordingFor } from "../wording/registry";
 import type { ConditionSummaryRow } from "../templateFields";
-import { PhotoNumberProvider, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
+import { DILAPIDATION_BRAND, PhotoNumberProvider, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 import { ConstructionReportBody, constructionFileName, useConstructionReport } from "../construction/ConstructionReport";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
@@ -218,6 +218,7 @@ export function ReportView() {
           borderRadius: "10px",
           boxShadow: "0 4px 28px rgba(0,0,0,0.12)",
           ...reportTextStyle(false),
+          ...(construction ? {} : DILAPIDATION_BRAND),
         }}
       >
         {construction ? (

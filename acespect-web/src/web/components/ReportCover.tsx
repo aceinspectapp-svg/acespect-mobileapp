@@ -113,6 +113,7 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
             padding: compact ? "10px 12px" : "12px 16px",
             margin: compact ? "14px 0" : "20px 0",
             border: `1.5px solid ${reportTokens.ink}`,
+            borderLeft: "5px solid var(--report-brand-red, " + reportTokens.ink + ")",
           }}
         >
           {/* "Dilapidation Report – Commercial Properties": the type to the right of the title, lighter; a long one steps the size down so it stays on one line. */}

@@ -1,4 +1,5 @@
 import type { DamageRecord, FormSection } from "../mockData";
+import { conditionTagColors } from "../conditionGrades";
 import { Heading, Para, PhotoGrid, reportTextStyle, reportTokens, SectionBand, usePhotoNumbering } from "./reportKit";
 
 // Internal Areas' floor headings (see the report type's wording (src/web/wording/) internal_areas
@@ -23,22 +24,24 @@ const CONDITION_TAG_RE = /^COND::(#[0-9a-fA-F]{6})::(.+)$/;
 const ROOM_HEADING_RE = /^ROOMHEAD::(.+)$/;
 
 function ConditionTag({ color, label }: { color: string; label: string }) {
+  const c = conditionTagColors(color);
   return (
     <div
       style={{
         display: "inline-flex",
         alignItems: "baseline",
         gap: "5px",
-        padding: "3px 11px",
+        padding: "3px 11px 3px 9px",
         borderRadius: reportTokens.radius,
-        background: color,
-        color: "white",
+        background: c.fill,
+        borderLeft: `4px solid ${c.bar}`,
+        color: c.text,
         letterSpacing: "0.02em",
         margin: "6px 0 4px",
       }}
     >
       {/* Two sizes: the word "Condition:" smaller and lighter, the grade itself larger and bold. */}
-      <span style={{ fontSize: "0.74em", fontWeight: 400, opacity: 0.92 }}>Condition:</span>
+      <span style={{ fontSize: "0.74em", fontWeight: 400 }}>Condition:</span>
       <span style={{ fontSize: "0.98em", fontWeight: 700 }}>{label}</span>
     </div>
   );
