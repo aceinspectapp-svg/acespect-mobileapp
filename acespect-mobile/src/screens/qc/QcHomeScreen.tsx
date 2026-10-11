@@ -1,12 +1,13 @@
 import React, { useCallback, useMemo } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, shadows, spacing, typography } from '../../theme';
 import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { AppScreenProps } from '../../navigation/types';
 import { useQcData } from '../../context/QcDataContext';
-import { useAuth } from '../../context/AuthContext';
+import { SyncBanner } from '../../components/qc/SyncBanner';
+import { useDefectSync } from '../../hooks/useDefectSync';
 import { qcMe } from '../../services/qcPlatformApi';
 import { setActiveClientId } from '../../services/apiClient';
 import { registerForPush } from '../../services/pushRegistration';
@@ -28,7 +29,7 @@ interface PropertyCard {
  */
 export function QcHomeScreen({ navigation }: AppScreenProps<'QcHome'>) {
   const { tasks, loading, error, refreshTasks } = useQcData();
-  const { signOut } = useAuth();
+  const sync = useDefectSync();
   const [pickClient, setPickClient] = React.useState<Array<{ id: string; name: string; role: string }> | null>(null);
   const [caps, setCaps] = React.useState<string[]>([]);
 
@@ -74,12 +75,13 @@ export function QcHomeScreen({ navigation }: AppScreenProps<'QcHome'>) {
     return Array.from(byId.values()).sort((a, b) => a.propertyName.localeCompare(b.propertyName));
   }, [tasks]);
 
-  const onSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: () => signOut() },
-    ]);
-  };
+  const has = (c: string) => caps.includes(c);
+  const tiles: Array<{ key: string; icon: keyof typeof Ionicons.glyphMap; label: string; sub: string; bg: string; fg: string; show: boolean; go: () => void }> = [
+    { key: 'defects', icon: 'alert-circle-outline', label: 'Defects', sub: 'Everything you can see', bg: colors.primaryTint, fg: colors.danger, show: has('defects.view'), go: () => navigation.navigate('QcMyDefects') },
+    { key: 'new', icon: 'add-circle-outline', label: 'New defect', sub: 'Raise one on site', bg: colors.accentBlue, fg: colors.accentBlueFg, show: has('defects.create'), go: () => navigation.navigate('QcNewDefect') },
+    { key: 'insp', icon: 'clipboard-outline', label: 'Inspections', sub: 'Start, record, sign', bg: colors.accentGreen, fg: colors.accentGreenFg, show: has('inspections.progress'), go: () => navigation.navigate('QcInspections') },
+    { key: 'proj', icon: 'folder-open-outline', label: 'Projects', sub: 'Documents and drawings', bg: colors.accentIndigo, fg: colors.accentIndigoFg, show: has('projects.view'), go: () => navigation.navigate('QcProjects') },
+  ];
 
   return (
     <View style={styles.root}>
@@ -89,9 +91,11 @@ export function QcHomeScreen({ navigation }: AppScreenProps<'QcHome'>) {
         onBack={() => navigation.goBack()}
         actions={[
           { icon: 'notifications-outline', onPress: () => navigation.navigate('QcNotifications'), accessibilityLabel: 'Notifications' },
-          { icon: 'log-out-outline', onPress: onSignOut, accessibilityLabel: 'Sign out' },
+          { icon: 'person-circle-outline', onPress: () => navigation.navigate('QcAccount'), accessibilityLabel: 'Account' },
         ]}
       />
+
+      <SyncBanner pending={sync.pending} failed={sync.failed} syncing={sync.syncing} onPress={() => (sync.failed ? navigation.navigate('QcAccount') : void sync.syncNow())} />
 
       {loading && properties.length === 0 && (
         <View style={styles.centered}>
@@ -122,18 +126,20 @@ export function QcHomeScreen({ navigation }: AppScreenProps<'QcHome'>) {
       <FlatList
         data={properties}
         ListHeaderComponent={
-          caps.includes('inspections.progress') ? (
-            <Pressable onPress={() => navigation.navigate('QcInspections')} style={({ pressed }) => [styles.card, pressed && styles.cardPressed]} accessibilityRole="button" accessibilityLabel="Inspections">
-              <View style={[styles.iconTile, { backgroundColor: colors.accentGreen }]}>
-                <Ionicons name="clipboard-outline" size={26} color={colors.accentGreenFg} />
-              </View>
-              <View style={styles.cardText}>
-                <Text style={styles.cardTitle}>Inspections</Text>
-                <Text style={styles.cardSub}>Assigned to you: start, record, sign</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-            </Pressable>
-          ) : null
+          <View>
+            <View style={styles.tileGrid}>
+              {tiles.filter((t) => t.show).map((t) => (
+                <Pressable key={t.key} onPress={t.go} style={({ pressed }) => [styles.tile, pressed && styles.cardPressed]} accessibilityRole="button" accessibilityLabel={t.label}>
+                  <View style={[styles.tileIcon, { backgroundColor: t.bg }]}>
+                    <Ionicons name={t.icon} size={24} color={t.fg} />
+                  </View>
+                  <Text style={styles.tileLabel}>{t.label}</Text>
+                  <Text style={styles.tileSub}>{t.sub}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {properties.length > 0 && <Text style={styles.sectionLabel}>YOUR ASSIGNED PROPERTIES</Text>}
+          </View>
         }
         keyExtractor={(p) => p.propertyId}
         contentContainerStyle={styles.list}
@@ -157,7 +163,7 @@ export function QcHomeScreen({ navigation }: AppScreenProps<'QcHome'>) {
           </Pressable>
         )}
         ListEmptyComponent={
-          !loading && !error ? <Text style={styles.empty}>No properties with assigned work yet.</Text> : null
+          !loading && !error ? <Text style={styles.empty}>No properties with assigned tasks yet.</Text> : null
         }
       />
     </View>
@@ -183,6 +189,12 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   cardPressed: { opacity: 0.92 },
+  tileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.lg },
+  tile: { width: '48%', flexGrow: 1, backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, ...shadows.card },
+  tileIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
+  tileLabel: { ...typography.h3, color: colors.textPrimary },
+  tileSub: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  sectionLabel: { ...typography.sectionTitle, color: colors.textMuted, marginBottom: spacing.md },
   iconTile: {
     width: 56,
     height: 56,

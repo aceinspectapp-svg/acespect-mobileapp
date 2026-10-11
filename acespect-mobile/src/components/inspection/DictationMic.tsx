@@ -1,8 +1,25 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { colors, radius } from '../../theme';
+
+/**
+ * The speech module is native. Expo Go does not contain it and importing it there throws at load, which used to take the
+ * whole app down. Load it defensively: without it the mic buttons simply do not appear (a development or production
+ * build has it and behaves as before).
+ */
+type SpeechModule = typeof import('expo-speech-recognition');
+let speech: SpeechModule | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  speech = require('expo-speech-recognition') as SpeechModule;
+} catch {
+  speech = null;
+}
+export const dictationAvailable = speech !== null;
+const ExpoSpeechRecognitionModule = speech?.ExpoSpeechRecognitionModule as SpeechModule['ExpoSpeechRecognitionModule'];
+// Called unconditionally by the hook below, so when the module is missing it has to be a hook-shaped no-op.
+const useSpeechRecognitionEvent: SpeechModule['useSpeechRecognitionEvent'] = speech?.useSpeechRecognitionEvent ?? ((() => undefined) as never);
 
 /**
  * Speech-to-text is a single native session app-wide -- if two mic buttons
@@ -131,6 +148,7 @@ export function DictationMicButton({
   size?: 'sm' | 'md';
 }) {
   const { listening, toggle } = useDictation(onResult);
+  if (!dictationAvailable) return null;
   const dimension = size === 'sm' ? 30 : 36;
   return (
     <Pressable

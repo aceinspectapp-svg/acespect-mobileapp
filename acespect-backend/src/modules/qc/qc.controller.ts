@@ -6,7 +6,7 @@ import { serializeTask } from './qc.serializers';
 import { getDefectForUser } from './qc.defects.service';
 import { availableActions } from './qc.lifecycle';
 import { prisma } from '../../lib/prisma';
-import { registerDefectUploads } from './qc.evidence';
+import { defectPlacement, registerDefectUploads } from './qc.evidence';
 
 function requireId(req: Request, label = 'id'): string {
   const { id } = req.params;
@@ -67,15 +67,16 @@ export const qcController = {
     const user = requireUser(req);
     const files = (req.files as Express.Multer.File[] | undefined) ?? [];
     const { uploadPhoto } = await import('../../lib/storage');
+    const task = await prisma.qcTask.findUnique({ where: { id: requireId(req, 'Task id') }, select: { defectId: true } });
+    const place = task ? await defectPlacement(task.defectId) : null;
     const photoUrls: string[] = [];
     const uploads: Array<{ url: string; hash?: string; name: string; mime: string; size: number }> = [];
     for (const file of files) {
       const ext = (file.originalname.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-      const uploaded = await uploadPhoto(file.buffer, file.mimetype || 'image/jpeg', ext);
+      const uploaded = place?.job ? await uploadPhoto(file.buffer, file.mimetype || 'image/jpeg', ext, 'Defects', place.label, undefined, place.job) : await uploadPhoto(file.buffer, file.mimetype || 'image/jpeg', ext);
       photoUrls.push(uploaded.url);
       uploads.push({ url: uploaded.url, hash: uploaded.storedHash, name: file.originalname, mime: file.mimetype, size: file.size });
     }
-    const task = await prisma.qcTask.findUnique({ where: { id: requireId(req, 'Task id') }, select: { defectId: true } });
     if (task) await registerDefectUploads(uploads, task.defectId, user.id);
     const update = await qcService.postTaskUpdate(requireId(req, 'Task id'), user.id, user.role, req.body, photoUrls);
     res.status(201).json({ update });

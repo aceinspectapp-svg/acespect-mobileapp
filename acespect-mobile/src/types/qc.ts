@@ -178,10 +178,43 @@ export interface QcDefectEvent {
   createdAt: string;
 }
 
+export interface QcDefectComment {
+  id: string;
+  text: string;
+  visibleTo: string;
+  authorRole: string;
+  attachments: string[];
+  createdAt: string;
+  author: QcPerson;
+}
+
 export interface QcDefectDetail {
   defect: QcDefect;
   events: QcDefectEvent[];
+  comments?: QcDefectComment[];
   actorRole: string;
+}
+
+export interface QcProject {
+  id: string;
+  name: string;
+  status?: string;
+  projectRef?: string | null;
+  client?: { id: string; name: string };
+}
+
+export interface QcLot {
+  id: string;
+  name: string;
+  projectId: string;
+  propertyType?: { label: string } | null;
+  site?: { id: string; name: string } | null;
+}
+
+export interface QcProjectDocument {
+  id: string;
+  createdAt: string;
+  [key: string]: unknown;
 }
 
 export interface QcConfigBundle {

@@ -34,6 +34,8 @@ export type AppStackParamList = {
   // when a finished section navigates back to update progress.
   InspectionSections: { data: JobSetupData; completedId?: string };
   // Individual section screens.
+  // One shared screen for every section of a Construction Stage inspection; the key picks the template.
+  StageSection: { sectionKey: string; sectionName: string; icon: string; order: number };
   DrivewaySection: undefined;
   PavingPaths: undefined;
   Fences: undefined;
@@ -73,6 +75,14 @@ export type AppStackParamList = {
   QcInspection: { inspectionId: string };
   QcInspectionComplete: { inspectionId: string };
   QcNotifications: undefined;
+  // The defects feed (every defect your role can see), raising a defect, the account screen,
+  // project documents and unplanned inspections.
+  QcMyDefects: { status?: string } | undefined;
+  QcNewDefect: { projectId?: string } | undefined;
+  QcAccount: undefined;
+  QcProjects: undefined;
+  QcProjectDocs: { projectId: string; name: string };
+  QcNewInspection: undefined;
 };
 
 export type AuthScreenProps<T extends keyof AuthStackParamList> =

@@ -15,7 +15,7 @@ import { actorOf, assertClientAccess, ctxOf, projectScope } from './qc.context';
 import { guardEntity, tenantOf } from './qc.guard';
 import { OPTIONAL_PERMISSIONS, can } from './qc.permissions';
 import { authService } from '../auth/auth.service';
-import { registerDefectUploads } from './qc.evidence';
+import { defectPlacement, registerDefectUploads } from './qc.evidence';
 
 function requireId(req: Request, label = 'id'): string {
   const { id } = req.params;
@@ -48,11 +48,12 @@ async function storeUploads(req: Request, defectId?: string): Promise<string[]> 
   const files = (req.files as Express.Multer.File[] | undefined) ?? [];
   if (files.length === 0) return [];
   const { uploadPhoto } = await import('../../lib/storage');
+  const place = defectId ? await defectPlacement(defectId) : null;
   const urls: string[] = [];
   const uploads: Array<{ url: string; hash?: string; name: string; mime: string; size: number }> = [];
   for (const file of files) {
     const ext = (file.originalname.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-    const uploaded = await uploadPhoto(file.buffer, file.mimetype || 'image/jpeg', ext);
+    const uploaded = place?.job ? await uploadPhoto(file.buffer, file.mimetype || 'image/jpeg', ext, 'Defects', place.label, undefined, place.job) : await uploadPhoto(file.buffer, file.mimetype || 'image/jpeg', ext);
     urls.push(uploaded.url);
     uploads.push({ url: uploaded.url, hash: uploaded.storedHash, name: file.originalname, mime: file.mimetype, size: file.size });
   }

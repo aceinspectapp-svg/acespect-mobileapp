@@ -36,7 +36,7 @@ export function InspectionSectionsScreen({
   route,
 }: AppScreenProps<'InspectionSections'>) {
   const draft = useInspectionDraft();
-  const { propertyTypeId, inspectionTypeId } = draft.getTop();
+  const { propertyTypeId, inspectionTypeId, stageId } = draft.getTop();
 
   // `route.params.data` has arrived here undefined in practice -- some path
   // reaches this hub without ever merging it in (`navigate({..., merge:
@@ -71,7 +71,7 @@ export function InspectionSectionsScreen({
     }, []),
   );
 
-  const sectionGroups = getSectionGroupsForProperty(propertyTypeId, inspectionTypeId);
+  const sectionGroups = getSectionGroupsForProperty(propertyTypeId, inspectionTypeId, stageId);
   const sections = sectionGroups.flatMap((g) => g.sections);
   const totalSections = sections.length;
 
@@ -117,6 +117,10 @@ export function InspectionSectionsScreen({
       // Same reasoning as JobInformation above -- push a fresh instance so
       // its own back arrow returns here rather than past this screen.
       navigation.push('InspectionSetupStep2', { data });
+      return;
+    }
+    if (section.route === 'StageSection' && section.routeParams) {
+      navigation.navigate('StageSection', section.routeParams as never);
       return;
     }
     if (section.route) {
@@ -204,6 +208,7 @@ export function InspectionSectionsScreen({
         {/* Inspector-added extras — a pergola, granny flat, spare room found
             on site, anything the fixed 13 sections don't cover. Not counted
             in the "X of 13" total above; each gets its own status dot. */}
+        {inspectionTypeId !== 'construction_stage' && (
         <View>
           <Text style={styles.groupTitle}>ADDITIONAL</Text>
           {customSections.map((s) => (
@@ -240,6 +245,7 @@ export function InspectionSectionsScreen({
             <Text style={styles.addRowText}>Add extra structure / room</Text>
           </Pressable>
         </View>
+        )}
       </ScrollView>
 
       {/* Sticky footer */}

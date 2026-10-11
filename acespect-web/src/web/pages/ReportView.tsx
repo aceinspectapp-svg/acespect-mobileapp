@@ -17,6 +17,7 @@ import { reportProfileOf } from "../wording/profile";
 import { wordingFor } from "../wording/registry";
 import type { ConditionSummaryRow } from "../templateFields";
 import { PhotoNumberProvider, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
+import { ConstructionReportBody, constructionFileName, useConstructionReport } from "../construction/ConstructionReport";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
 const slug = (s: Pick<FormSection, "id" | "key">): string => s.key ?? s.id;
@@ -31,6 +32,8 @@ export function ReportView() {
   const inspection = id ? getInspectionById(id) : undefined;
   // The report type decides which wording applies (see wording/registry.ts).
   const reportWording = wordingFor(reportProfileOf(inspection?.type ?? "", inspection?.propertyType ?? ""));
+  // A Construction Stage inspection has its own report layout (undefined while its templates load).
+  const construction = useConstructionReport(inspection);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
@@ -54,7 +57,7 @@ export function ReportView() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${(inspection?.jobNo || id).replace(/[^a-z0-9.-]+/gi, "-")}-dilapidation-report.pdf`;
+      a.download = construction ? constructionFileName(inspection?.jobNo || id) : `${(inspection?.jobNo || id).replace(/[^a-z0-9.-]+/gi, "-")}-dilapidation-report.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -66,10 +69,10 @@ export function ReportView() {
     }
   }
 
-  if (!inspection) {
+  if (!inspection || construction === undefined) {
     return (
       <div style={{ padding: "48px", textAlign: "center", color: "#94a3b8", fontFamily: "Inter, sans-serif" }}>
-        {loading ? "Loading…" : "Inspection not found."}
+        {loading || (inspection && construction === undefined) ? "Loading…" : "Inspection not found."}
       </div>
     );
   }
@@ -217,6 +220,10 @@ export function ReportView() {
           ...reportTextStyle(false),
         }}
       >
+        {construction ? (
+          <ConstructionReportBody inspection={inspection} model={construction} header={r} />
+        ) : (
+          <>
         {/* Cover / front matter, generated from Job Information */}
         <ReportCover header={r} />
 
@@ -290,6 +297,8 @@ export function ReportView() {
             <ReportConditions />
           </div>
         </PhotoNumberProvider>
+          </>
+        )}
       </div>
     </div>
   );

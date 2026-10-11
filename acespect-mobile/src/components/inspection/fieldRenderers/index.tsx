@@ -6,6 +6,7 @@ import { colors, radius, spacing, typography } from '../../../theme';
 import { Button, ProgressBar } from '../../ui';
 import type { TemplateField, TemplateFieldType, TemplateLayout } from '../../../services/templateApi';
 import { AnswerTree, AnswerValue, FieldRendererProps, isGateSatisfied, isRepeatRequirementMet } from './types';
+import { DEFECT_DETAIL_FIELDS, defectKey, defectScope, isDefectOpen } from './defectDetail';
 import {
   ChipMultiSelectFieldRenderer,
   ColorSelectFieldRenderer,
@@ -75,6 +76,21 @@ export function FieldListRenderer({
               missing={!!showMissing && isFieldMissing(field, visible, scope)}
               showMissing={showMissing}
             />
+            {isDefectOpen(field, scope) && (
+              <View style={styles.defectCard}>
+                <View style={styles.defectHeader}>
+                  <Ionicons name="warning" size={16} color={colors.primary} />
+                  <Text style={styles.defectTitle}>Defect details</Text>
+                </View>
+                <FieldListRenderer
+                  fields={DEFECT_DETAIL_FIELDS}
+                  scope={defectScope(field, scope)}
+                  onChange={(k, v) => onChange(defectKey(field.key), { ...defectScope(field, scope), [k]: v })}
+                  path={[...path, defectKey(field.key)]}
+                  showMissing={showMissing}
+                />
+              </View>
+            )}
           </React.Fragment>
         );
       })}
@@ -786,6 +802,16 @@ export const FIELD_RENDERERS: Record<TemplateFieldType, React.ComponentType<Fiel
 export * from './types';
 
 const styles = StyleSheet.create({
+  defectCard: {
+    marginTop: -spacing.xs,
+    marginBottom: spacing.md,
+    marginLeft: spacing.sm,
+    paddingLeft: spacing.md,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+  },
+  defectHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
+  defectTitle: { ...typography.bodySm, fontWeight: '800', color: colors.primary },
   block: { marginBottom: spacing.lg },
   // Applied on top of `block` (or similar) once `missing` is true -- a
   // required-but-unfilled repeating-group/damage-list container (e.g. an

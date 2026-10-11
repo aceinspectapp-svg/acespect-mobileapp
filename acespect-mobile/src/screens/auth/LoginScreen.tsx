@@ -86,7 +86,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
       {/* Form sheet */}
       <KeyboardAvoidingView
         style={styles.sheetWrap}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
       >
         <ScrollView
           contentContainerStyle={styles.sheet}

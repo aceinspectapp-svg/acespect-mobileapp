@@ -158,6 +158,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
   const sectionGroups = getSectionGroupsForProperty(
     data.selection.propertyTypeId,
     data.selection.inspectionTypeId,
+    data.selection.stageId ?? draft.getTop().stageId,
   );
   const sections = sectionGroups.flatMap((g) => g.sections);
   const totalSections = sections.length;

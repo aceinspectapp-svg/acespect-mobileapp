@@ -3,6 +3,7 @@
  * by stage (E12), bulk lot import (F06), the lot x stage planning matrix and
  * the guarded project status lifecycle (REQ-PRJ-*).
  */
+import { signMediaUrl } from '../../lib/mediaLinks';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
@@ -29,7 +30,11 @@ export async function listDocuments(ctx: QcContext, projectId: string) {
   const group = DOC_VISIBILITY[ctx.role];
   return rows
     .filter((r) => ctx.isSA || ctx.role === 'CLIENT_ADMIN' || (group && ((r.data as Record<string, unknown>).visible_to as string[] | undefined)?.includes(group)))
-    .map((r) => ({ id: r.id, createdAt: r.createdAt, ...(r.data as Record<string, unknown>) }));
+    .map((r) => {
+      const d = r.data as Record<string, unknown>;
+      // The file is only served through a short-lived signed link (see the media route).
+      return { id: r.id, createdAt: r.createdAt, ...d, fileUrl: typeof d.fileUrl === 'string' ? signMediaUrl(d.fileUrl) : d.fileUrl };
+    });
 }
 
 export async function addDocument(ctx: QcContext, projectId: string, input: Record<string, unknown>, file: { url: string; name: string; size: number; mime: string }) {

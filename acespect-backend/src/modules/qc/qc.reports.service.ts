@@ -14,7 +14,7 @@ import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { recordAudit } from '../../lib/audit';
 import { logSecurityEvent } from '../../lib/securityLog';
-import { fetchPhotoStream, uploadDocument } from '../../lib/storage';
+import { fetchPhotoStream, qcJobFolder, uploadDocument } from '../../lib/storage';
 import { mediaIdOf, signMediaUrl } from '../../lib/mediaLinks';
 import { QcContext } from './qc.context';
 import { visibilityWhere } from './qc.defects.service';
@@ -192,7 +192,8 @@ async function fetchBuffer(url: string): Promise<Buffer | null> {
 
 async function storeReport(ctx: QcContext, args: { clientId: string; projectId?: string | null; reportType: string; format: 'PDF' | 'Excel (XLSX)' | 'ZIP evidence pack'; params: unknown; buffer: Buffer; fileName: string; mime: string }) {
   const hash = createHash('sha256').update(args.buffer).digest('hex');
-  const file = await uploadDocument(args.buffer, args.mime, args.fileName.split('.').pop() ?? 'bin', 'reports', args.clientId);
+  const job = args.projectId ? await qcJobFolder(args.projectId) : undefined;
+  const file = await uploadDocument(args.buffer, args.mime, args.fileName.split('.').pop() ?? 'bin', 'Reports', args.clientId, job);
   const row = await prisma.qcRecord.create({
     data: {
       kind: 'report', clientId: args.clientId, projectId: args.projectId ?? null, status: 'READY', title: args.reportType, createdById: ctx.userId,

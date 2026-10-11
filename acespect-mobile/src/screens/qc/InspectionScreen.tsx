@@ -81,7 +81,7 @@ export function QcInspectionScreen({ navigation, route }: AppScreenProps<'QcInsp
   };
 
   return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.root} behavior="padding">
       <InspectionHeader title={`${insp.ref}: ${insp.stage?.stage_name ?? insp.type}`} subtitle={`${insp.project?.name ?? ''}${insp.lot ? ` · Lot ${insp.lot.name}` : ''}`} onBack={() => navigation.goBack()} />
       {(offline || queue.length > 0) && (
         <Pressable onPress={send} style={styles.banner} accessibilityRole="button">

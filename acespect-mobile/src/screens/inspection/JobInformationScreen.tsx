@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollIntoViewContext, useKeyboardAwareScroll } from '../../components/ui/KeyboardScroll';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,8 +21,15 @@ import { pinAllSectionTemplates } from '../../utils/pinAllSectionTemplates';
 import { FieldListRenderer } from '../../components/inspection/fieldRenderers';
 import { isGateSatisfied, type AnswerTree, type AnswerValue } from '../../components/inspection/fieldRenderers/types';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
+import { CONSTRUCTION_STAGE_BY_ID } from '../../constants/constructionStages';
 
 const SECTION_KEY = 'job-info';
+
+/** "Test Inspector" -> "TI" -- the stage forms ask for the inspector's initials, not their full name. */
+function initialsOf(name: string): string {
+  const words = name.replace(/@.*$/, '').split(/[\s._-]+/).filter(Boolean);
+  return words.slice(0, 3).map((w) => w[0]!.toUpperCase()).join('');
+}
 
 /** Narrows an answer to a plain string -- safe wherever the field is known
  * by construction to be single-valued (text/date/select-tiles/yesno; not
@@ -40,6 +48,7 @@ export function JobInformationScreen({
   const systemStatus = useSystemStatus();
   const { user } = useAuth();
 
+  const keyboardScroll = useKeyboardAwareScroll();
   const [template, setTemplate] = useState<ActiveTemplate | null>(null);
   const [loadError, setLoadError] = useState(false);
   // Generic answers keyed by field.key — replaces the old fixed `details` shape
@@ -64,12 +73,13 @@ export function JobInformationScreen({
       propertyTypeId: selection.propertyTypeId,
       inspectionType: typeDef?.title ?? selection.inspectionTypeId,
       propertyType: PROPERTY_LABELS[selection.propertyTypeId] ?? selection.propertyTypeId,
+      ...(selection.stageId ? { stageId: selection.stageId, stage: CONSTRUCTION_STAGE_BY_ID[selection.stageId]?.title ?? selection.stageId } : {}),
     });
     // Snapshot every section's template up front, not just this one -- so a
     // section not yet visited in this inspection can't pick up a version
     // published (or accepted elsewhere) after this inspection started. See
     // pinAllSectionTemplates for why lazy per-section fetching isn't enough.
-    pinAllSectionTemplates(draft, selection.inspectionTypeId, selection.propertyTypeId);
+    pinAllSectionTemplates(draft, selection.inspectionTypeId, selection.propertyTypeId, selection.stageId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -111,10 +121,12 @@ export function JobInformationScreen({
     const inspectorName = user?.name || user?.email || '';
     setAnswers((prev) => {
       const next = { ...prev };
+      // Which stage this is -- the template's Stage choices are gated on it, so each stage shows its own two options.
+      if (selection.stageId) next.constructionStage = selection.stageId;
       for (const f of template.fields) {
         if (next[f.key] !== undefined) continue;
         if (f.type === 'date') next[f.key] = todayIso;
-        else if (f.key === 'assignedInspector') next[f.key] = inspectorName;
+        else if (f.key === 'assignedInspector') next[f.key] = selection.stageId ? initialsOf(inspectorName) : inspectorName;
         else next[f.key] = '';
       }
       draft.setAnswers(SECTION_KEY, next);
@@ -199,6 +211,11 @@ export function JobInformationScreen({
     }
 
     if (!canContinue) return;
+    // A stage inspection has no separate Step 2 (its Description is one of the stage's own sections): go to the hub.
+    if (selection.stageId) {
+      navigation.navigate('InspectionSections', { data });
+      return;
+    }
     navigation.navigate('InspectionSetupStep2', { data });
   };
 
@@ -208,7 +225,7 @@ export function JobInformationScreen({
 
       <InspectionHeader
         title="Job Information"
-        subtitle="Inspection Setup · Step 1 of 2"
+        subtitle={selection.stageId ? `${CONSTRUCTION_STAGE_BY_ID[selection.stageId]?.title ?? "Stage"} inspection` : "Inspection Setup · Step 1 of 2"}
         onBack={() => navigation.goBack()}
         actions={[
           {
@@ -233,7 +250,7 @@ export function JobInformationScreen({
           both shift up as one when a text field is focused. */}
       <KeyboardAvoidingView
         style={styles.keyboardAvoider}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
       {!template ? (
@@ -260,7 +277,12 @@ export function JobInformationScreen({
           )}
         </View>
       ) : (
+        <ScrollIntoViewContext.Provider value={keyboardScroll.value}>
         <ScrollView
+          ref={keyboardScroll.scrollRef}
+          onScroll={keyboardScroll.onScroll}
+          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
           style={styles.body}
           contentContainerStyle={styles.bodyContent}
           showsVerticalScrollIndicator={false}
@@ -409,7 +431,9 @@ export function JobInformationScreen({
               done={systemStatus.offlineSave.ready}
             />
           </SectionCard>
+          <View style={{ height: keyboardScroll.extraBottom }} />
         </ScrollView>
+        </ScrollIntoViewContext.Provider>
       )}
 
       {/* Sticky footer */}
