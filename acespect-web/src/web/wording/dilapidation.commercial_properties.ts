@@ -27,6 +27,7 @@ import {
   roofStatusSentence,
   typically,
 } from "./dilapidation.residential_house";
+import { templateDamageSentences } from "./templateDamage";
 import type { ReportWording } from "./types";
 
 const COMPASS: Record<string, string> = {
@@ -52,6 +53,23 @@ function obscured(itemFields: TemplateField[], inst: AnswerTree, key = "obscured
 }
 
 const hasDefects = (inst: AnswerTree, key: string): boolean => Array.isArray(inst[key]) && (inst[key] as unknown[]).length > 0;
+
+/** The template's defect sentences: external ones state the size plainly, internal ones say "approximately". */
+const external = templateDamageSentences({ approximately: false });
+const internal = templateDamageSentences({ approximately: true });
+
+/**
+ * A House composer for the part's description, with the defects and notes said the template's way after it:
+ * "At the corner, there is a crack starting at the gate and running to the north. The crack is 3 millimetres wide and 500 millimetres long."
+ */
+const withDefects =
+  (compose: Composer, damageSentences: typeof external, extra?: (inst: AnswerTree) => string): Composer =>
+  (inst, itemFields, label) => {
+    const body = compose({ ...inst, damages: [], notes: "" }, itemFields, label);
+    if (!body) return body;
+    const notes = asString(inst.notes).trim();
+    return [body, extra?.(inst) ?? "", damageSentences(inst, itemFields, { key: "damages" }), notes ? withPeriod(notes) : ""].filter(Boolean).join("\n\n");
+  };
 
 // ---- Description and Overview --------------------------------------------------------------
 
@@ -107,7 +125,10 @@ export const makeDescription =
     const build: string[] = [];
     if (wallsBit) build.push(`constructed of ${wallsBit}`);
     if (foundations) build.push(`on ${lower(foundations)}`);
-    if (roofDesign) build.push(/^combo (of )?/i.test(roofDesign) ? `with a combination of ${lower(roofDesign).replace(/^combo (of )?/, "")} roofs` : `with a ${lower(roofDesign)} roof`);
+    if (roofDesign)
+      build.push(
+        /^combo (of )?/i.test(roofDesign) ? `with a combination of ${lower(roofDesign).replace(/^combo (of )?/, "")} roofs` : `with a ${lower(roofDesign)} roof`,
+      );
     if (roofCovering.length) build.push(`a covering of ${joinList(roofCovering)}`);
     if (build.length) parts.push(`It is ${joinClauses(build)}.`);
     if (windows.length) parts.push(`Windows are constructed of ${joinList(windows)}.`);
@@ -120,39 +141,50 @@ const description = makeDescription();
 // ---- External ------------------------------------------------------------------------------
 
 /** "The driveway is to the front left of the block and is constructed of concrete. It is in fair condition. ..." */
-const driveway: Composer = (inst, itemFields, label) => house.driveway!(inst, itemFields, label);
+const driveway: Composer = withDefects((inst, itemFields, label) => house.driveway!(inst, itemFields, label), external);
 
 /** "There is paving to the front of the block, constructed of concrete. ..." / "There is no paving to the front of property." */
-const pavingPaths: Composer = (inst, itemFields, label) => {
+const pavingPaths: Composer = withDefects((inst, itemFields, label) => {
   const named = asString(inst.areaName).trim();
   const side = named || handed(label);
   if (isNotPresent(inst)) return `There is no paving to the ${/-hand$/.test(side) ? `${side} side` : side} of property.`;
   return house.paving_paths!({ ...inst, name: named }, itemFields, label);
-};
+}, external);
 
 /** The inspector's own description of the worst item, as a sentence of its own after what the form says. */
-const withWorstItem = (text: string, inst: AnswerTree): string => {
+const worstItem = (inst: AnswerTree): string => {
   const worst = asString(inst.worstItem)
     .trim()
     .replace(/\s*\n+\s*/g, " ");
-  return worst ? [text, withPeriod(worst)].filter(Boolean).join("\n\n") : text;
+  return worst ? withPeriod(worst) : "";
 };
 
 /** "The front fence is constructed of timber palings and is in satisfactory condition with typical weathering. ..." / "There is no front fence." */
-const fences: Composer = (inst, itemFields, label) => {
-  // A renamed fence ("Main boundary fence") is said by its own name.
-  const named = asString(inst.fenceName)
-    .trim()
-    .replace(/\s+fence$/i, "");
-  return withWorstItem(house.fences!(inst, itemFields, named || label), inst);
-};
+const fences: Composer = withDefects(
+  (inst, itemFields, label) => {
+    // A renamed fence ("Main boundary fence") is said by its own name.
+    const named = asString(inst.fenceName)
+      .trim()
+      .replace(/\s+fence$/i, "");
+    return house.fences!(inst, itemFields, named || label);
+  },
+  external,
+  worstItem,
+);
 
 /** "There is a retaining wall to the left, constructed of brick. It is in satisfactory condition with typical weathering." */
-const retainingWalls: Composer = (inst, itemFields, label) => {
-  const named = asString(inst.wallName).trim();
-  const text = house.retaining_walls!(inst, itemFields, label);
-  return withWorstItem(named ? text.replace(/There is a retaining wall/, `There is a retaining wall (${named})`) : text, inst);
-};
+const retainingWalls: Composer = withDefects(
+  (inst, itemFields, label) => {
+    const named = asString(inst.wallName).trim();
+    const text = house.retaining_walls!(inst, itemFields, label);
+    return named ? text.replace(/There is a retaining wall/, `There is a retaining wall (${named})`) : text;
+  },
+  external,
+  worstItem,
+);
+
+/** A parked vehicle is said as the template does: "A parked car obscured part of the hardstand." */
+const isParked = (value: string): boolean => /^parked/.test(value);
 
 /** A garage, shed or loading dock: its own heading, then the House sentence for a structure. */
 const garageCarportSheds: Composer = (inst, itemFields, label) => {
@@ -165,26 +197,42 @@ const garageCarportSheds: Composer = (inst, itemFields, label) => {
   const roof = Array.isArray(inst.roof) ? (inst.roof as string[]).filter((r) => !/^not_applicable/.test(r)) : inst.roof;
   // "Basement" as the wall material of a garage in the basement just repeats where it is.
   const walls = Array.isArray(inst.walls) ? (inst.walls as string[]).filter((w) => w !== "basement") : inst.walls;
-  const body = house.garage_carport_sheds!({ ...inst, structureName: name, roof, walls }, itemFields, label);
-  return body ? [`ROOMHEAD::${heading}`, body].join("\n\n") : "";
+  const rawObscured = inst.obscuredBy;
+  const obscuredBy = Array.isArray(rawObscured) ? (rawObscured as string[]) : typeof rawObscured === "string" && rawObscured ? [rawObscured] : [];
+  const parked = obscuredBy.filter(isParked);
+  let body = house.garage_carport_sheds!(
+    { ...inst, structureName: name, roof, walls, obscuredBy: obscuredBy.filter((v) => !isParked(v)), damages: [], notes: "" },
+    itemFields,
+    label,
+  );
+  if (!body) return "";
+  if (parked.length) {
+    const sentence = parked.length === 1 && /car/.test(parked[0]!) ? "A parked car obscured part of the hardstand." : "Parked vehicles obscured part of the hardstand.";
+    body = body.replace(/^(There is [^\n]*)$/m, `$1 ${sentence}`);
+  }
+  const notes = asString(inst.notes).trim();
+  return [`ROOMHEAD::${heading}`, body, external(inst, itemFields, { key: "damages" }), notes ? withPeriod(notes) : ""].filter(Boolean).join("\n\n");
 };
 
-/** "Front Elevation (north)", then the House elevation sentences. */
+/** "Front Elevation (north)", then the elevation's sentences: "Satisfactory and in typical condition." (any other grade: "It is in poor condition.") and the defects. */
 const elevations: Composer = (inst, itemFields, label) => {
   const named = asString(inst.elevationName).trim();
-  const body = house.elevations!(inst, itemFields, label);
-  if (!named) return body;
-  // A renamed elevation keeps its direction in the heading too.
-  const orientation = one(itemFields, inst, ["orientation"]);
-  return body.replace(/^ROOMHEAD::[^\n]*/, `ROOMHEAD::${named}${orientation ? ` (${compassPhrase(orientation)})` : ""}`);
+  let body = house.elevations!({ ...inst, damages: [], notes: "" }, itemFields, label);
+  if (!body) return "";
+  if (named) {
+    // A renamed elevation keeps its direction in the heading too.
+    const orientation = one(itemFields, inst, ["orientation"]);
+    body = body.replace(/^ROOMHEAD::[^\n]*/, `ROOMHEAD::${named}${orientation ? ` (${compassPhrase(orientation)})` : ""}`);
+  }
+  const notes = asString(inst.notes).trim();
+  return [body, external(inst, itemFields, { key: "damages" }), notes ? withPeriod(notes) : ""].filter(Boolean).join("\n\n");
 };
 
 // ---- Roof ----------------------------------------------------------------------------------
 
 /**
- * The commercial roof is one flat roof (no upper / lower): "The roof covering appears to be in satisfactory to fair condition
- * with typical weathering, constructed of kliplock decking. Comments are based on limited observations from the ground only
- * and using a camera zoom."
+ * The commercial roof is one roof (no upper / lower): "The roof covering of kliplock decking appears to be in satisfactory
+ * condition with typical weathering. Comments are based on limited observations from the ground only and using a camera zoom."
  */
 const roofChimneys: Composer = (inst, itemFields) => {
   const status = many(itemFields, inst, ["inspectionStatus"]);
@@ -197,15 +245,26 @@ const roofChimneys: Composer = (inst, itemFields) => {
   const cond = conditionOf(itemFields, inst, ["generalCondition"]);
   const parts: string[] = [];
   if (cond.tag) parts.push(cond.tag);
-  const gradePhrase = satisfactoryToFair ? "satisfactory to fair condition with typical weathering" : cond.word ? `${cond.word} condition` : "";
+  // "appears to be in {new / poor / aged / satisfactory} condition with {typical weathering / rust spots / gaps at flashings}"
+  const gradePhrase = satisfactoryToFair ? "satisfactory to fair condition" : cond.word ? `${cond.word} condition` : "";
+  const withBits = [...(satisfactoryToFair || (cond.word === "satisfactory" && observed.length === 0) ? ["typical weathering"] : []), ...observed];
+  const material = covering.length ? ` of ${joinList(covering)}` : "";
   const main = gradePhrase
-    ? `The roof covering appears to be in ${gradePhrase}${covering.length ? `, constructed of ${joinList(covering)}` : ""}.`
+    ? `The roof covering${material} appears to be in ${gradePhrase}${withBits.length ? ` with ${joinList(withBits)}` : ""}.`
     : covering.length
       ? `The roof covering is constructed of ${joinList(covering)}.`
       : "";
-  const text = [main, ...status.map(roofStatusSentence), observed.length ? `${capitalize(joinList(observed))} noted.` : "", ...chimney].filter(Boolean).join(" ");
+  // How the roof was seen: from the ground with a camera zoom, from a ladder, or not at all in a multi-level complex.
+  const seen = status.map((s) =>
+    /ladder/i.test(s)
+      ? "Comments are based on limited observations standing on a ladder to the lower roof and from the ground using a camera zoom."
+      : /multi-level building complex/i.test(s)
+        ? "The roof could not be inspected as the building is a multi-level building complex. Roof coverings in a building complex are common property and need to be maintained through the Owners Corporation."
+        : roofStatusSentence(s),
+  );
+  const text = [main, ...seen, ...chimney].filter(Boolean).join(" ");
   if (text) parts.push(text);
-  const damages = houseDamageSentences(inst, itemFields);
+  const damages = external(inst, itemFields, { key: "damages" });
   if (damages) parts.push(damages);
   const notes = asString(inst.notes).trim();
   if (notes) parts.push(withPeriod(notes));
@@ -222,7 +281,10 @@ function floorHeading(label: string): string {
 }
 
 /** "Reception / Foyer", then "The reception and foyer are in satisfactory and typical condition." and any defects. */
-const officesAndStaff: Composer = (inst, itemFields, label) => house.internal_areas!({ ...inst, roomName: asString(inst.areaName) }, itemFields, label);
+const officesAndStaff: Composer = withDefects(
+  (inst, itemFields, label) => house.internal_areas!({ ...inst, roomName: asString(inst.areaName) }, itemFields, label),
+  internal,
+);
 
 // ---- Internal: warehouse and production ------------------------------------------------------
 
@@ -278,14 +340,14 @@ function leadIn(inst: AnswerTree, itemFields: TemplateField[]): string[] {
     const types = many(itemFields, inst, ["gen_safetyAdvisoryTypes"]).map(lower);
     const notes = asString(inst.gen_safetyAdvisoryNotes).trim();
     parts.push(
-      `${types.length ? `Safety advisory given to the owner: ${joinList(types)}.` : "A safety advisory was given to the owner."}${notes ? ` ${withPeriod(notes)}` : ""}`,
+      `${types.length ? `A safety advisory was given to the owner regarding ${joinList(types)}.` : "A safety advisory was given to the owner."}${notes ? ` ${capitalize(withPeriod(notes))}` : ""}`,
     );
   }
   const notAccessed = asString(inst.gen_roomsNotAccessed).trim();
   if (notAccessed) parts.push(`No access granted to ${withPeriod(notAccessed)}`);
   if (yesNo(inst, "gen_movementObserved")) {
     const where = asString(inst.gen_movementWhere).trim();
-    parts.push(`Movement was observed in the internal areas${where ? `: ${withPeriod(where)}` : "."}`);
+    parts.push(`Movement was observed in the internal areas${where ? `, at ${where.replace(/[.\s]+$/, "")}` : ""}.`);
   }
   return parts;
 }
@@ -309,40 +371,45 @@ const warehouseAndProduction: Composer = (inst, itemFields) => {
       const frame = one(itemFields, inst, ["roofin_frameOf"]);
       if (covering.length || frame) {
         sentences.push(
-          covering.length ? `The roof is covered with ${joinList(covering)}${frame ? `, on a ${lower(frame)} frame` : ""}.` : `The roof has a ${lower(frame)} frame.`,
+          covering.length ? `The roof covering is ${joinList(covering)}${frame ? `, on a ${lower(frame)} frame` : ""}.` : `The roof has a ${lower(frame)} frame.`,
         );
       }
+      if (yesNo(inst, "roofin_sarking")) sentences.push("The roof is covered in sarking, obscuring inspection.");
     }
-    // The grade: satisfactory is "in satisfactory condition with typical wear and tear", any other grade is just stated.
-    // (The roof underside's own choice is worded "satisfactory and in typical condition".)
+    // The template's own line: "Satisfactory and in typical condition." -- any other grade is just stated.
+    // Under sarking: "From these limited observations, the roof underside appears to be in satisfactory and in typical condition."
     if (cond.word) {
-      const verb = group.plural ? "are" : "is";
-      const state =
-        p === "roofin" && cond.word === "satisfactory" ? "in satisfactory and typical condition" : `in ${cond.word} condition${typically(cond.word, "wear and tear")}`;
-      sentences.push(`The ${group.subject} ${verb} ${state}.`);
+      const sarking = p === "roofin" && yesNo(inst, "roofin_sarking");
+      const state = cond.word === "satisfactory" ? "satisfactory and in typical condition" : `${cond.word} condition`;
+      sentences.push(
+        sarking
+          ? `From these limited observations, the roof underside appears to be in ${state}.`
+          : cond.word === "satisfactory"
+            ? "Satisfactory and in typical condition."
+            : `It is in ${cond.word} condition.`,
+      );
     }
-    if (level) sentences.push(`${group.plural ? "They are" : "It is"} located on the ${lower(level)}.`);
+    if (level) sentences.push(`It is located on the ${lower(level)}.`);
     if (p === "roofin") {
       // What was seen on the underside: only what was ticked.
       const observed = many(itemFields, inst, ["roofin_damageSummary"]).map(lower);
       if (observed.length) sentences.push(`${capitalize(joinList(observed))} observed.`);
-      if (yesNo(inst, "roofin_sarking")) sentences.push("Sections were obscured by sarking.");
     } else {
       // The damage overview is said only when it records an issue; the obstructions follow.
       const overview = overviewIfIssue(itemFields, inst, [`${p}_damageSummary`]);
       if (overview) sentences.push(overview);
       const obstruction = obscured(itemFields, inst, `${p}_obscuredBy`);
       if (obstruction) sentences.push(obstruction);
+      // Floors: "There are scuff marks from forklifts. The painted line markings are worn."
+      if (p === "hard") {
+        if (yesNo(inst, "hard_scuffMarks")) sentences.push("There are scuff marks from forklifts.");
+        const markings = one(itemFields, inst, ["hard_lineMarkings"]);
+        if (markings) sentences.push(`The painted line markings are ${lower(markings)}.`);
+      }
     }
     if (sentences.length) blocks.push(sentences.join(" "));
     const key = `${p}_damages`;
-    if (hasDefects(inst, key))
-      blocks.push(
-        houseDamageSentences(inst, itemFields, {
-          key,
-          indexOffset: offsets[key] ?? 0,
-        }),
-      );
+    if (hasDefects(inst, key)) blocks.push(internal(inst, itemFields, { key, indexOffset: offsets[key] ?? 0 }));
     const notes = asString(inst[`${p}_notes`]).trim();
     if (notes) blocks.push(withPeriod(notes));
   }
@@ -389,6 +456,7 @@ export const dilapidationCommercialProperties: ReportWording = {
     pool_spa: officesAndStaff, // the template's "Offices & Staff Facilities" is served from the pool_spa slot
     internal_areas: warehouseAndProduction,
     notes: house.notes!,
+    custom_structure: withDefects(house.custom_structure!, external),
   },
   absence: {
     driveway: "There is no driveway.",
@@ -399,9 +467,12 @@ export const dilapidationCommercialProperties: ReportWording = {
   },
   // Description, the driveway, the roof and Warehouse & Production are flat (no repeating group) in this report type's form.
   isFlatComposed: (sectionKey, templateFields) =>
-    sectionKey === "description" || (["driveway", "roof_chimneys", "internal_areas"].includes(sectionKey) && !templateFields.some((f) => f.type === "repeating-group")),
+    sectionKey === "description" ||
+    sectionKey.startsWith("custom_") ||
+    (["driveway", "roof_chimneys", "internal_areas"].includes(sectionKey) && !templateFields.some((f) => f.type === "repeating-group")),
   floorGrouped: { sectionKey: "pool_spa", heading: floorHeading },
   metadataFields: { notes: ["hasDamage"] },
+  plainFields: { notes: ["additionalNotes"] },
   // "Post project?" at the top of Notes is said as a sentence, not dropped.
   leadIn: {
     sectionKey: "notes",
@@ -410,7 +481,7 @@ export const dilapidationCommercialProperties: ReportWording = {
   },
   noSummarySections: ["description"],
   absentSlotSections: ["paving_paths", "fences"],
-  damageSentences: houseDamageSentences,
+  damageSentences: external,
   descriptionBlocks,
   derivedFields,
   summaryRows,

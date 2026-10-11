@@ -19238,7 +19238,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "driveway",
     "name": "Driveway",
-    "version": 6,
+    "version": 7,
     "fields": [
       {
         "key": "present",
@@ -19679,6 +19679,17 @@
             "required": true
           },
           {
+            "key": "crackEndLocation",
+            "type": "text",
+            "label": "Running to the (e.g. north, the corner)",
+            "order": 11,
+            "required": false,
+            "gate": {
+              "equals": "cracking",
+              "fieldKey": "damageType"
+            }
+          },
+          {
             "key": "direction",
             "gate": {
               "equals": "cracking",
@@ -19686,7 +19697,7 @@
             },
             "type": "pill-select",
             "label": "Running",
-            "order": 11,
+            "order": 12,
             "options": [
               {
                 "label": "Vertical",
@@ -19713,7 +19724,7 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Width",
-            "order": 12,
+            "order": 13,
             "required": true
           },
           {
@@ -19725,21 +19736,21 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Length",
-            "order": 13,
+            "order": 14,
             "required": true
           },
           {
             "key": "notes",
             "type": "textarea",
             "label": "Notes",
-            "order": 14,
+            "order": 15,
             "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
-            "order": 15,
+            "order": 16,
             "required": false
           }
         ]
@@ -19838,7 +19849,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "elevations",
     "name": "Elevations",
-    "version": 7,
+    "version": 8,
     "fields": [
       {
         "key": "sides",
@@ -20318,6 +20329,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the corner)",
+                "order": 11,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -20325,7 +20347,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 11,
+                "order": 12,
                 "options": [
                   {
                     "label": "Vertical",
@@ -20352,7 +20374,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 12,
+                "order": 13,
                 "required": true
               },
               {
@@ -20364,21 +20386,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 14,
+                "order": 15,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 15,
+                "order": 16,
                 "required": false
               }
             ]
@@ -20573,7 +20595,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "fences",
     "name": "Fences",
-    "version": 8,
+    "version": 9,
     "fields": [
       {
         "key": "items",
@@ -20803,6 +20825,14 @@
                   {
                     "label": "Safety Issues",
                     "value": "safety_issues"
+                  },
+                  {
+                    "label": "Gap",
+                    "value": "gap"
+                  },
+                  {
+                    "label": "Loose paling",
+                    "value": "loose_paling"
                   }
                 ],
                 "required": true,
@@ -21080,6 +21110,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the corner)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -21087,7 +21128,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -21114,7 +21155,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -21126,21 +21167,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ]
@@ -21211,7 +21252,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "garage_carport_sheds",
     "name": "Garage & Other Structures",
-    "version": 7,
+    "version": 8,
     "fields": [
       {
         "key": "structures",
@@ -21723,6 +21764,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the corner)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -21730,7 +21782,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -21757,7 +21809,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -21769,21 +21821,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ]
@@ -22045,7 +22097,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "internal_areas",
     "name": "Warehouse & Production",
-    "version": 6,
+    "version": 7,
     "fields": [
       {
         "key": "gen_renovationsInProgress",
@@ -22611,6 +22663,17 @@
             "required": true
           },
           {
+            "key": "crackEndLocation",
+            "type": "text",
+            "label": "Running to the (e.g. north, the corner)",
+            "order": 12,
+            "required": false,
+            "gate": {
+              "equals": "cracking",
+              "fieldKey": "damageType"
+            }
+          },
+          {
             "key": "direction",
             "gate": {
               "equals": "cracking",
@@ -22618,7 +22681,7 @@
             },
             "type": "pill-select",
             "label": "Running",
-            "order": 12,
+            "order": 13,
             "options": [
               {
                 "label": "Vertical",
@@ -22645,7 +22708,7 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Width",
-            "order": 13,
+            "order": 14,
             "required": true
           },
           {
@@ -22657,21 +22720,21 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Length",
-            "order": 14,
+            "order": 15,
             "required": true
           },
           {
             "key": "notes",
             "type": "textarea",
             "label": "Notes",
-            "order": 15,
+            "order": 16,
             "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
-            "order": 16,
+            "order": 17,
             "required": false
           }
         ],
@@ -23162,6 +23225,17 @@
             "required": true
           },
           {
+            "key": "crackEndLocation",
+            "type": "text",
+            "label": "Running to the (e.g. north, the corner)",
+            "order": 12,
+            "required": false,
+            "gate": {
+              "equals": "cracking",
+              "fieldKey": "damageType"
+            }
+          },
+          {
             "key": "direction",
             "gate": {
               "equals": "cracking",
@@ -23169,7 +23243,7 @@
             },
             "type": "pill-select",
             "label": "Running",
-            "order": 12,
+            "order": 13,
             "options": [
               {
                 "label": "Vertical",
@@ -23196,7 +23270,7 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Width",
-            "order": 13,
+            "order": 14,
             "required": true
           },
           {
@@ -23208,21 +23282,21 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Length",
-            "order": 14,
+            "order": 15,
             "required": true
           },
           {
             "key": "notes",
             "type": "textarea",
             "label": "Notes",
-            "order": 15,
+            "order": 16,
             "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
-            "order": 16,
+            "order": 17,
             "required": false
           }
         ],
@@ -23338,10 +23412,34 @@
         "sectionLetter": "Hardstand & Floors"
       },
       {
+        "key": "hard_scuffMarks",
+        "type": "yesno",
+        "label": "Scuff marks from forklifts?",
+        "required": false,
+        "order": 29
+      },
+      {
+        "key": "hard_lineMarkings",
+        "type": "pill-select",
+        "label": "Painted line markings are",
+        "required": false,
+        "options": [
+          {
+            "label": "Worn",
+            "value": "worn"
+          },
+          {
+            "label": "Satisfactory",
+            "value": "satisfactory"
+          }
+        ],
+        "order": 30
+      },
+      {
         "key": "hard_generalCondition",
         "type": "color-select",
         "label": "General condition",
-        "order": 29,
+        "order": 31,
         "options": [
           {
             "label": "Satisfactory with typical wear and tear",
@@ -23371,7 +23469,7 @@
         "key": "hard_damages",
         "type": "damage-list",
         "label": "Damage — use aisle numbers or painted markings to locate",
-        "order": 30,
+        "order": 32,
         "repeat": {
           "addable": true,
           "requireWhen": {
@@ -23713,6 +23811,17 @@
             "required": true
           },
           {
+            "key": "crackEndLocation",
+            "type": "text",
+            "label": "Running to the (e.g. north, the corner)",
+            "order": 12,
+            "required": false,
+            "gate": {
+              "equals": "cracking",
+              "fieldKey": "damageType"
+            }
+          },
+          {
             "key": "direction",
             "gate": {
               "equals": "cracking",
@@ -23720,7 +23829,7 @@
             },
             "type": "pill-select",
             "label": "Running",
-            "order": 12,
+            "order": 13,
             "options": [
               {
                 "label": "Vertical",
@@ -23747,7 +23856,7 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Width",
-            "order": 13,
+            "order": 14,
             "required": true
           },
           {
@@ -23759,21 +23868,21 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Length",
-            "order": 14,
+            "order": 15,
             "required": true
           },
           {
             "key": "notes",
             "type": "textarea",
             "label": "Notes",
-            "order": 15,
+            "order": 16,
             "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
-            "order": 16,
+            "order": 17,
             "required": false
           }
         ],
@@ -23783,7 +23892,7 @@
         "key": "hard_damageSummary",
         "type": "pill-select",
         "label": "Damage overview",
-        "order": 31,
+        "order": 33,
         "options": [
           {
             "label": "No visible significant damage",
@@ -23805,7 +23914,7 @@
         "key": "hard_photos",
         "type": "photos",
         "label": "Pic seq",
-        "order": 32,
+        "order": 34,
         "required": true,
         "sectionLetter": "Hardstand & Floors"
       },
@@ -23813,7 +23922,7 @@
         "key": "hard_notes",
         "type": "textarea",
         "label": "Notes",
-        "order": 33,
+        "order": 35,
         "required": true,
         "sectionLetter": "Hardstand & Floors"
       },
@@ -23821,7 +23930,7 @@
         "key": "roofin_coveringOf",
         "type": "chip-multiselect",
         "label": "Covering of",
-        "order": 34,
+        "order": 36,
         "options": [
           {
             "label": "Kliplock",
@@ -23846,7 +23955,7 @@
         },
         "type": "textarea",
         "label": "If Other — please specify",
-        "order": 35,
+        "order": 37,
         "required": true,
         "sectionLetter": "Roof Underside & Frame"
       },
@@ -23854,7 +23963,7 @@
         "key": "roofin_sarking",
         "type": "yesno",
         "label": "Sections obscured by sarking",
-        "order": 36,
+        "order": 38,
         "required": true,
         "sectionLetter": "Roof Underside & Frame"
       },
@@ -23862,7 +23971,7 @@
         "key": "roofin_frameOf",
         "type": "pill-select",
         "label": "Frame of",
-        "order": 37,
+        "order": 39,
         "options": [
           {
             "label": "Steel",
@@ -23881,7 +23990,7 @@
         "key": "roofin_generalCondition",
         "type": "color-select",
         "label": "General condition",
-        "order": 38,
+        "order": 40,
         "options": [
           {
             "label": "Satisfactory with typical wear and tear",
@@ -23911,7 +24020,7 @@
         "key": "roofin_damages",
         "type": "damage-list",
         "label": "Most significant items — use aisle numbers to locate",
-        "order": 39,
+        "order": 41,
         "repeat": {
           "addable": true,
           "requireWhen": {
@@ -24253,6 +24362,17 @@
             "required": true
           },
           {
+            "key": "crackEndLocation",
+            "type": "text",
+            "label": "Running to the (e.g. north, the corner)",
+            "order": 12,
+            "required": false,
+            "gate": {
+              "equals": "cracking",
+              "fieldKey": "damageType"
+            }
+          },
+          {
             "key": "direction",
             "gate": {
               "equals": "cracking",
@@ -24260,7 +24380,7 @@
             },
             "type": "pill-select",
             "label": "Running",
-            "order": 12,
+            "order": 13,
             "options": [
               {
                 "label": "Vertical",
@@ -24287,7 +24407,7 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Width",
-            "order": 13,
+            "order": 14,
             "required": true
           },
           {
@@ -24299,21 +24419,21 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Length",
-            "order": 14,
+            "order": 15,
             "required": true
           },
           {
             "key": "notes",
             "type": "textarea",
             "label": "Notes",
-            "order": 15,
+            "order": 16,
             "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
-            "order": 16,
+            "order": 17,
             "required": false
           }
         ],
@@ -24323,7 +24443,7 @@
         "key": "roofin_damageSummary",
         "type": "chip-multiselect",
         "label": "Observations",
-        "order": 40,
+        "order": 42,
         "options": [
           {
             "label": "Water stains",
@@ -24346,7 +24466,7 @@
         "key": "roofin_photos",
         "type": "photos",
         "label": "Pic seq",
-        "order": 41,
+        "order": 43,
         "required": true,
         "sectionLetter": "Roof Underside & Frame"
       },
@@ -24354,7 +24474,7 @@
         "key": "roofin_notes",
         "type": "textarea",
         "label": "Notes",
-        "order": 42,
+        "order": 44,
         "required": true,
         "sectionLetter": "Roof Underside & Frame"
       }
@@ -24483,7 +24603,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "notes",
     "name": "Notes / Post Project / Defects",
-    "version": 6,
+    "version": 7,
     "fields": [
       {
         "key": "postProject",
@@ -24912,6 +25032,17 @@
             "required": true
           },
           {
+            "key": "crackEndLocation",
+            "type": "text",
+            "label": "Running to the (e.g. north, the corner)",
+            "order": 12,
+            "required": false,
+            "gate": {
+              "equals": "cracking",
+              "fieldKey": "damageType"
+            }
+          },
+          {
             "key": "direction",
             "gate": {
               "equals": "cracking",
@@ -24919,7 +25050,7 @@
             },
             "type": "pill-select",
             "label": "Running",
-            "order": 12,
+            "order": 13,
             "options": [
               {
                 "label": "Vertical",
@@ -24946,7 +25077,7 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Width",
-            "order": 13,
+            "order": 14,
             "required": true
           },
           {
@@ -24958,21 +25089,21 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Length",
-            "order": 14,
+            "order": 15,
             "required": true
           },
           {
             "key": "notes",
             "type": "textarea",
             "label": "Notes",
-            "order": 15,
+            "order": 16,
             "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
-            "order": 16,
+            "order": 17,
             "required": false
           }
         ]
@@ -24991,7 +25122,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "paving_paths",
     "name": "Paving / Car Park",
-    "version": 7,
+    "version": 8,
     "fields": [
       {
         "key": "areas",
@@ -25413,6 +25544,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the corner)",
+                "order": 11,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -25420,7 +25562,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 11,
+                "order": 12,
                 "options": [
                   {
                     "label": "Vertical",
@@ -25447,7 +25589,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 12,
+                "order": 13,
                 "required": true
               },
               {
@@ -25459,21 +25601,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 14,
+                "order": 15,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 15,
+                "order": 16,
                 "required": false
               }
             ]
@@ -25544,7 +25686,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "pool_spa",
     "name": "Offices & Staff Facilities",
-    "version": 6,
+    "version": 7,
     "fields": [
       {
         "key": "areas",
@@ -26029,6 +26171,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the corner)",
+                "order": 12,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -26036,7 +26189,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 12,
+                "order": 13,
                 "options": [
                   {
                     "label": "Vertical",
@@ -26063,7 +26216,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
@@ -26075,21 +26228,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 14,
+                "order": 15,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 15,
+                "order": 16,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 16,
+                "order": 17,
                 "required": false
               }
             ]
@@ -26150,7 +26303,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "retaining_walls",
     "name": "Retaining Walls",
-    "version": 8,
+    "version": 9,
     "fields": [
       {
         "key": "present",
@@ -26604,6 +26757,17 @@
                 "required": true
               },
               {
+                "key": "crackEndLocation",
+                "type": "text",
+                "label": "Running to the (e.g. north, the corner)",
+                "order": 11,
+                "required": false,
+                "gate": {
+                  "equals": "cracking",
+                  "fieldKey": "damageType"
+                }
+              },
+              {
                 "key": "direction",
                 "gate": {
                   "equals": "cracking",
@@ -26611,7 +26775,7 @@
                 },
                 "type": "pill-select",
                 "label": "Running",
-                "order": 11,
+                "order": 12,
                 "options": [
                   {
                     "label": "Vertical",
@@ -26638,7 +26802,7 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Width",
-                "order": 12,
+                "order": 13,
                 "required": true
               },
               {
@@ -26650,21 +26814,21 @@
                 "type": "numeric",
                 "unit": "mm",
                 "label": "Length",
-                "order": 13,
+                "order": 14,
                 "required": true
               },
               {
                 "key": "notes",
                 "type": "textarea",
                 "label": "Notes",
-                "order": 14,
+                "order": 15,
                 "required": false
               },
               {
                 "key": "photos",
                 "type": "photos",
                 "label": "Photographs",
-                "order": 15,
+                "order": 16,
                 "required": false
               }
             ]
@@ -26723,7 +26887,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "roof_chimneys",
     "name": "Roof & Chimneys",
-    "version": 7,
+    "version": 8,
     "fields": [
       {
         "key": "inspectionStatus",
@@ -26746,6 +26910,10 @@
           {
             "label": "Inspected from ladder",
             "value": "inspected_from_ladder"
+          },
+          {
+            "label": "Not inspected - multi-level building complex (common property)",
+            "value": "not_inspected_multi_level_building_complex_common_property"
           }
         ],
         "required": true,
@@ -27148,6 +27316,17 @@
             "required": true
           },
           {
+            "key": "crackEndLocation",
+            "type": "text",
+            "label": "Running to the (e.g. north, the corner)",
+            "order": 11,
+            "required": false,
+            "gate": {
+              "equals": "cracking",
+              "fieldKey": "damageType"
+            }
+          },
+          {
             "key": "direction",
             "gate": {
               "equals": "cracking",
@@ -27155,7 +27334,7 @@
             },
             "type": "pill-select",
             "label": "Running",
-            "order": 11,
+            "order": 12,
             "options": [
               {
                 "label": "Vertical",
@@ -27182,7 +27361,7 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Width",
-            "order": 12,
+            "order": 13,
             "required": true
           },
           {
@@ -27194,21 +27373,21 @@
             "type": "numeric",
             "unit": "mm",
             "label": "Length",
-            "order": 13,
+            "order": 14,
             "required": true
           },
           {
             "key": "notes",
             "type": "textarea",
             "label": "Notes",
-            "order": 14,
+            "order": 15,
             "required": false
           },
           {
             "key": "photos",
             "type": "photos",
             "label": "Photographs",
-            "order": 15,
+            "order": 16,
             "required": false
           }
         ]
