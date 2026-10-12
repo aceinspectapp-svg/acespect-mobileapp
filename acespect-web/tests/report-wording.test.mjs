@@ -220,7 +220,7 @@ describe("published templates: Elevations, Roof, Internal Areas, Notes", () => {
     assert.ok(out.includes("ROOMHEAD::Front Elevation (north)"));
     assert.ok(out.includes("Could only be partly inspected to the rear. It is in fair condition."));
     assert.ok(!/notable damage/.test(out), "the damage overview pick is not a sentence in the report");
-    assert.ok(out.includes("Cladding: paint is flaking from sections."));
+    assert.ok(out.includes("Paint is flaking from sections of the cladding."));
     assert.ok(!out.includes("rear elevation"));
   });
 
@@ -264,7 +264,7 @@ describe("published templates: Elevations, Roof, Internal Areas, Notes", () => {
       },
     });
     assert.ok(out.includes("Floors are bouncy / squeaking at the hallway."));
-    assert.ok(out.includes("Location: rear chimney."));
+    assert.ok(out.includes("This is at rear chimney."));
     assert.ok(!out.includes("binding"));
   });
 
@@ -653,9 +653,9 @@ describe("House: scope, safety and additional damage answers are printed", () =>
     const p = paragraphs(
       text("description", { constructionIs: "single_storey_house", scopeChanges: "Rear shed added", scopeLimitations: "yes", scopeLimitationsNotes: "Roof space not accessible", safetyIssues: "yes", safetyIssuesNotes: "Loose paving at the entry" }).reportText,
     );
-    assert.ok(p.includes("Changes to the scope: Rear shed added."));
-    assert.ok(p.includes("Limitations to the scope of the inspection: Roof space not accessible."));
-    assert.ok(p.includes("Safety issues: Loose paving at the entry."));
+    assert.ok(p.includes("The scope of the inspection was changed. Rear shed added."));
+    assert.ok(p.includes("There were limitations to the scope of the inspection. Roof space not accessible."));
+    assert.ok(p.includes("There were safety issues at the property. Loose paving at the entry."));
     assert.ok(!/limitations|safety/i.test(text("description", { constructionIs: "single_storey_house", scopeLimitations: "no", safetyIssues: "no" }).reportText));
   });
 

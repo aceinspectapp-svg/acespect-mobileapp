@@ -1,5 +1,7 @@
-// Dilapidation / Apartment wording, run against the real published template: the Houspect "Multi Level Offices" inspector
-// template (1 May 2024) -- the Commercial report without the warehouse, for an office or hotel building of several levels.
+// Dilapidation / Apartment wording, run against the Apartment form (the checklist of the unit and the building). The sentences follow
+// Houspect's "Residential Apartment / Infrastructure Project" report template (May 2025) where it has them -- the property description,
+// "No visible significant cracking.", "There is significant cracking / damage. The most significant items are:", "This elevation is on
+// the boundary and could not be inspected." -- and every other answer on the form is a sentence in the same style, never "Label: value".
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -41,98 +43,164 @@ function convert(fields, a) {
 const draft = (key, answers) => flattenSectionToDraft(fieldsOf(key), convert(fieldsOf(key), answers), key, APT);
 const paras = (d) => d.reportText.split("\n\n");
 const crack = (location, extra = {}) => ({ location, damageType: "Cracking", sub_cracking: "Fine", direction: "Vertical", widthMm: 3, lengthMm: 500, ...extra });
-const SAT = "Satisfactory with typical wear and tear";
-
-describe("Apartment: the form is the Multi Level Offices template", () => {
-  it("has the office-building choices and no warehouse areas", () => {
-    const labels = (section, key) => fieldsOf(section).find((f) => f.key === key).options.map((o) => o.label);
-    assert.deepEqual(labels("description", "constructionIs"), ["Commercial offices", "Hotel/motel"]);
-    assert.deepEqual(labels("description", "wallCladdingGround"), ["Tilt concrete panels", "Hebel", "Metal", "Brick", "Combo of"]);
-    assert.ok(labels("description", "wallCladdingFirst").includes("Cement sheet"));
-    assert.deepEqual(labels("description", "foundations"), ["Concrete slab", "Brick piers"]);
-    assert.deepEqual(labels("description", "roofCovering"), ["Metal decking", "Zincalume", "Mix of"]);
-    assert.ok(labels("roof_chimneys", "generalObservations").includes("Cracked tiles"));
-    const keys = fieldsOf("internal_areas").map((f) => f.key);
-    assert.ok(keys.some((k) => k.startsWith("gen_")));
-    assert.ok(!keys.some((k) => /^(wh|prod|hard|roofin)_/.test(k)), "no warehouse, production, hardstand or roof underside");
-  });
-
-  it("lists the offices and staff facilities by level Grnd / 1 / 2 / 3, with a Consulting room", () => {
-    const areas = fieldsOf("pool_spa").find((f) => f.key === "areas");
-    assert.deepEqual(areas.repeat.fixedInstances.map((i) => i.label), [
-      "Reception / Foyer", "Offices", "Board room", "Meeting room", "Consulting room", "Staff rooms / kitchens", "WC Male / Female", "Stairs / stairwell / Landing", "Storerooms", "Other area",
-    ]);
-    assert.deepEqual(areas.itemFields.find((f) => f.key === "floorLevel").options.map((o) => o.label), ["Ground floor", "1st floor", "2nd floor", "3rd floor"]);
-    assert.equal(areas.repeat.addable, true, "extra 'Area?' tables can be added");
-  });
-
-  it("has no 'loose bricks' or 'leaning fences' lines in the notes, as in the office template", () => {
-    const movement = fieldsOf("notes").find((f) => f.key === "movement");
-    assert.deepEqual(movement.repeat.fixedInstances.map((i) => i.key), ["bouncy_floors", "floors_out_of_level", "doors_binding"]);
-  });
-});
 
 describe("Apartment: Description and Overview", () => {
-  it("says what kind of building it is", () => {
-    const d = draft("description", {
-      constructionIs: ["Commercial offices"], constructedYear: "2005", streetFrontage: "East", blockSlope: "Mostly flat",
-      wallCladdingGround: ["Tilt concrete panels"], wallCladdingFirst: ["Metal", "Brick"], foundations: "Concrete slab", roofDesign: "Combo pitched and flat", roofCovering: ["Metal decking"], windows: "Aluminium",
-    });
-    assert.equal(
-      d.reportText,
-      "The property is a commercial office building, facing east on a mostly flat block of land and estimated to have been constructed around 2005. It is constructed of tilt concrete panel walls to the ground floor and metal and brick to the first floor on concrete slab with a combination of pitched and flat roofs and a covering of metal decking. Windows are constructed of aluminium.",
-    );
-    assert.ok(draft("description", { constructionIs: ["Hotel/motel"] }).reportText.startsWith("The property is a hotel or motel."));
+  const answers = {
+    buildingType: "Apartment Block", constructedYear: "2010", storeys: "1", slope: "Flat", cladding: "Brick veneer", foundations: "Concrete slab",
+    roofDesign: "Flat", roofCovering: "Membrane", windows: "Aluminium frame", worksType: "Excavation", projectAddr: "5 Test Street", direction: "Left",
+    scopeType: "External & Internal (full)", limitations: "yes", limitationsNotes: "Roof space not accessible", safetyIssues: "yes", safetyIssuesNotes: "Loose balustrade on level 2",
+  };
+
+  it("words the apartment as the template does, from the form's answers", () => {
+    const p = paras(draft("description", answers));
+    assert.equal(p[0], "The property is a single-storey apartment in a multi-level complex, on a flat block of land and estimated to have been constructed around 2010. The complex is an apartment block. It is constructed of brick veneer walls on concrete slab with a flat roof and a covering of membrane. Windows are constructed of aluminium frame.");
+    assert.ok(p.includes("The proposed works are excavation."));
+    assert.ok(p.includes("There were limitations to the scope of the inspection. Roof space not accessible."));
+    assert.ok(p.includes("There were safety issues at the property. Loose balustrade on level 2."));
+  });
+
+  it("says the storeys and a sloping block as the form gives them", () => {
+    assert.ok(draft("description", { storeys: "2" }).reportText.startsWith("The property is a double-storey apartment in a multi-level complex."));
+    assert.ok(draft("description", { storeys: "4", slope: "Steep fall" }).reportText.includes("The property is a 4-storey apartment in a multi-level complex, on a block of land with a steep fall."));
+    assert.ok(draft("description", { buildingType: "High-rise Apartments" }).reportText.includes("The complex is a high-rise apartment building."));
+  });
+
+  it("words the project works and the scope on the Description page", () => {
+    const fields = draft("description", answers).fields;
+    const blocks = wordingFor(APT).descriptionBlocks({ fields, areaCount: 0 });
+    assert.equal(blocks.works, "The project works are to the property at 5 Test Street, which is at the left of the site of this inspection.");
+    assert.equal(blocks.scope, "The scope for inspection is external and internal to all structures.");
+    assert.equal(wordingFor(APT).descriptionBlocks({ fields: { ...fields, scopeType: "External only" }, areaCount: 0 }).scope, "The scope for inspection is external only to all areas.");
   });
 });
 
-describe("Apartment: worded as the office report, good and bad differently", () => {
-  it("words the driveway, car park, fences and garage in the report's sentences", () => {
-    const drive = paras(draft("driveway", { present: "yes", locatedAt: "Front left", material: "Asphalt", condition: "Poor", crackingSummary: "Numerous cracking throughout", obscuredBy: ["Parked cars", "Trailer"] }));
-    assert.ok(drive.includes("The driveway is to the front left of the block and is constructed of asphalt. It is in poor condition. Numerous cracking observed throughout. Sections of the driveway were obscured by parked cars and trailer."));
-    const car = paras(draft("paving_paths", { areas: { front: { present: "yes", material: ["Concrete"], condition: SAT } } }));
-    assert.ok(car.includes("There is paving to the front of the block, constructed of concrete. It is in satisfactory condition with typical wear and tear."));
-    const fence = paras(draft("fences", { items: { left: { present: "yes", material: ["Brick"], condition: SAT } } }));
-    assert.ok(fence.includes("The left-hand fence is constructed of brick and is in satisfactory condition with typical weathering."));
-    const garage = paras(draft("garage_carport_sheds", { structures: { garage: { present: "yes", attachment: "Basement", walls: ["Basement"], wallsCondition: SAT, floor: ["Concrete hardstand"] } } }));
-    assert.ok(garage.includes("ROOMHEAD::Garage"));
-    assert.ok(garage.some((x) => x.startsWith("There is a garage in the basement, with concrete hardstand, and is generally in satisfactory state of repair.")));
+describe("Apartment: items listed one by one", () => {
+  it("prints the driveway's flags as well as its sentences", () => {
+    const p = paras(draft("driveway", { items: [{ location: "Front", material: "Concrete", condition: "Fair", obstructions: ["Parked Vehicle"], notableDamage: "yes", safetyHazard: "yes", damages: [crack("near the ramp")] }] }));
+    assert.ok(p.includes("The driveway is to the front of the block and is constructed of concrete. It is in fair condition. Sections of the driveway were obscured by parked vehicle."));
+    assert.ok(p.includes("Notable damage was observed."));
+    assert.ok(p.includes("A safety hazard was identified."));
+    assert.ok(p.some((x) => x.startsWith("DEFECT::0::Near the ramp there is a vertical fine crack")));
   });
 
-  it("words the elevations and roof", () => {
-    const e = paras(draft("elevations", { sides: { rear: { orientation: "South", condition: "Fair", damageSummary: "Several minor gaps and cracks", obscuredBy: ["Stored goods"], damages: [crack("above the window")] } } }));
-    assert.ok(e.includes("ROOMHEAD::Rear Elevation (south)"));
-    assert.ok(e.includes("It is in fair condition. Several minor gaps and cracks observed. Sections were obscured by stored goods."));
-    assert.ok(e.some((x) => x.startsWith("DEFECT::0::Above the window there is a vertical fine crack")));
-    const roof = paras(draft("roof_chimneys", { inspectionStatus: ["Limited observations from ground level using camera zoom"], generalCondition: SAT, generalObservations: ["Cracked tiles"] })).join(" ");
-    assert.ok(roof.includes("The roof covering appears to be in satisfactory condition. Comments are based on limited observations from the ground only and using a camera zoom. Cracked tiles noted."));
+  it("says both the type and the material of a fence, and of a retaining wall, and 'typical weathering' only for a satisfactory one", () => {
+    const fence = paras(draft("fences", { items: [{ location: "Front", structureType: "Timber Paling", material: "Timber", condition: "Fair", notableCracking: "yes" }] }));
+    assert.ok(fence.includes("The front fence is a timber paling fence constructed of timber and is in fair condition."));
+    assert.ok(fence.includes("Notable cracking was observed."));
+    const good = paras(draft("fences", { items: [{ location: "Rear", structureType: "Timber Paling", material: "Timber", condition: "Satisfactory with typical wear and tear" }] }));
+    assert.ok(good.includes("The rear fence is a timber paling fence constructed of timber and is in satisfactory condition with typical weathering."));
+    const wall = paras(draft("retaining_walls", { items: [{ location: "Left", structureType: "Besser Block", material: "Brick", condition: "Fair", notableDamage: "yes" }] }));
+    assert.ok(wall.includes("There is a besser block retaining wall to the left, constructed of brick. It is in fair condition."));
+    assert.ok(wall.includes("Notable damage was observed."));
+  });
+});
+
+describe("Apartment: the checklist sections", () => {
+  const external = draft("elevations", {
+    elev_overview_elevations: "All accessible faces", elev_overview_partyWall: "yes", elev_overview_claddingCond: "Fair", elev_overview_comments: "Access from balconies only",
+    ext_walls_material: "Brick", ext_walls_rendered: "yes", ext_walls_condition: "Fair", ext_walls_majorCracking: "no", ext_walls_damages: [crack("east wall")],
+    front_door_material: "Timber", front_door_condition: "Satisfactory with typical wear and tear", front_door_requires: "Re-painting", front_door_deadlocks: "yes",
+  });
+  const p = paras(external);
+
+  it("puts each part of the building under its own heading, with its grade", () => {
+    assert.ok(p.includes("ROOMHEAD::External walls"));
+    const i = p.indexOf("ROOMHEAD::External walls");
+    assert.equal(p[i + 1], "COND::#d97706::Fair");
+    assert.ok(p.includes("ROOMHEAD::Front door"));
   });
 
-  it("groups the offices under the level they are on, up to the 3rd floor", () => {
-    const d = draft("pool_spa", {
-      areas: {
-        reception_foyer: { present: "yes", floorLevel: "Ground floor", generalCondition: SAT },
-        consulting_room: { present: "yes", floorLevel: "3rd floor", generalCondition: "Fair", damageSummary: "Items of damage throughout", damages: [crack("window frame")] },
-      },
-    });
-    const p = paras(d);
-    assert.deepEqual(p.filter((x) => /^[A-Z ]+ FLOOR$/.test(x)), ["GROUND FLOOR", "THIRD FLOOR"]);
-    assert.ok(p.includes("The reception and foyer are in satisfactory and typical condition."));
-    assert.ok(p.includes("The consulting room is in fair condition. Items of damage observed throughout."));
+  it("uses the template's sentences where it has them", () => {
+    assert.ok(p.some((x) => x.includes("This elevation is on the boundary and could not be inspected.")));
+    assert.ok(p.includes("There is significant cracking. The most significant items are:"));
+    assert.ok(p.some((x) => x.startsWith("DEFECT::0::At the east wall there is a vertical fine crack")));
   });
 
-  it("keeps what was recorded about the whole building, and has no warehouse text", () => {
-    const d = draft("internal_areas", { gen_renovationsInProgress: "yes", gen_renovationsRooms: "Level 2 kitchen", gen_safetyAdvisories: "no", gen_roomsNotAccessed: "Plant room", gen_movementObserved: "yes", gen_movementWhere: "Level 1 corridor floor" });
-    const p = paras(d);
-    assert.ok(p.includes("Renovations in progress to level 2 kitchen."));
-    assert.ok(p.includes("No access granted to Plant room."));
-    assert.ok(p.includes("Movement was observed in the internal areas: Level 1 corridor floor."));
-    assert.ok(!/warehouse|production|hardstand/i.test(d.reportText));
+  it("reads each answer as a sentence, never as 'Label: value'", () => {
+    assert.ok(p.some((x) => x.includes("The external walls are constructed of brick.")));
+    assert.ok(p.some((x) => x.includes("The external walls are rendered.")));
+    assert.ok(p.some((x) => x.includes("The external walls are in fair condition.")));
+    assert.ok(p.some((x) => x.includes("The front door requires re-painting.")));
+    assert.ok(p.some((x) => x.includes("Deadlocks are fitted to the front door.")));
+    assert.ok(p.some((x) => x.includes("The front door is constructed of timber.")));
+    assert.ok(p.some((x) => x.includes("The front door is in satisfactory condition with typical wear and tear.")));
+    assert.ok(p.some((x) => x.includes("The cladding is fair.")));
+    assert.ok(p.includes("Access from balconies only."));
+  });
+
+  it("says 'no visible significant cracking' for a part with no defects, and nothing of the kind for one with defects", () => {
+    assert.ok(!p.some((x) => /No visible significant cracking/.test(x)), "the external walls have a recorded defect");
+    const q = paras(draft("elevations", { ext_walls_material: "Brick", ext_walls_condition: "Satisfactory with typical wear and tear" }));
+    assert.ok(q.some((x) => x.includes("No visible significant cracking.")));
+    const rooms = paras(draft("internal_areas", { ceilings_material: "Plasterboard", ceilings_condition: "Fair", int_walls_material: "Plasterboard", int_walls_damages: [crack("hallway wall")] }));
+    assert.ok(rooms.some((x) => x.includes("No visible significant cracks.")), "ceilings");
+    assert.equal(rooms.filter((x) => x.includes("No visible significant cracks.")).length, 1, "not the internal walls, which have a defect");
+  });
+
+  it("says a part is not applicable, and why, instead of skipping it", () => {
+    const d = draft("internal_areas", { int_roof_applicable: "no", int_roof_naReason: "Roof cavity not accessible", int_roof_comments: "Roof space is common property" });
+    assert.ok(paras(d).includes("The roof space is not applicable (roof cavity not accessible – no manhole)."));
+    assert.ok(paras(d).includes("Roof space is common property."));
+  });
+
+  it("words the building's services and safety items as sentences", () => {
+    const p2 = paras(draft("internal_areas", {
+      plumbing_waterSupplyOn: "yes", plumbing_tapsNormal: "no", plumbing_waterLeaks: "yes",
+      electrical_powerOn: "yes", electrical_rcdCount: "Nil", electrical_batteryAlarms: "yes", electrical_batteryAlarmsCount: "2", electrical_alarmsLocated: "no",
+      int_windows_flywire: "Some windows", int_doors_style: "Several styles",
+    })).join(" ");
+    assert.ok(p2.includes("The water supply was on. Not all taps, showers and toilets operated normally. There are water leaks to taps, waste pipes or showers."));
+    assert.ok(p2.includes("The power supply was on. There are no RCDs installed. Battery smoke alarms are installed. There are 2 battery smoke alarms. Smoke alarms are not within 1.5 metres of each sleeping area."));
+    assert.ok(p2.includes("Flywire screens are fitted to some windows."));
+    assert.ok(p2.includes("The internal doors are of several styles."));
+  });
+
+  it("says each observation the inspector ticked as its own sentence", () => {
+    const p2 = paras(draft("roof_chimneys", { eaves_applicable: "yes", eaves_material: "Timber", eaves_condition: "Poor", eaves_comments: "Water staining at the north end" })).join(" ");
+    assert.ok(p2.includes("The eaves are constructed of timber. The eaves are in poor condition."));
+    assert.ok(p2.includes("Water staining at the north end."));
+  });
+
+  it("has one Condition Summary row per graded part", () => {
+    assert.deepEqual(external.fields.conditionSummary.map((r) => [r.subLabel, r.conditionLabel]), [["External walls", "Fair"], ["Front door", "Satisfactory"]]);
+  });
+
+  it("prints the notes and the structural answers", () => {
+    const n = paras(draft("notes", { structural_structurallySound: "no", structural_describe: "Differential settlement at the north wall", post_project_describe: "No access to the plant room" }));
+    assert.ok(n.includes("The unit is not considered structurally sound."));
+    assert.ok(n.includes("Differential settlement at the north wall."));
+    assert.ok(n.includes("No access to the plant room."));
+    // Notes prints as a plain numbered list: no headings or tags may appear in it.
+    assert.ok(!n.some((x) => /^(ROOMHEAD|COND|DEFECT)::/.test(x)));
+  });
+});
+
+describe("Apartment: every checklist question has a sentence", () => {
+  it("covers every question on the Apartment form", async () => {
+    const { apartmentSaysField } = await server.ssrLoadModule("/src/web/wording/dilapidation.apartment.ts");
+    const missing = [];
+    const walk = (fields) => {
+      for (const f of fields) {
+        if (f.itemFields && f.type !== "damage-list") continue; // the one-by-one items are worded by their own composers
+        if (!apartmentSaysField(f.key, f.type)) missing.push(f.key);
+      }
+    };
+    for (const t of snapshot.filter((x) => x.inspectionType === "dilapidation" && x.propertyType === "apartment" && ["elevations", "garage_carport_sheds", "roof_chimneys", "internal_areas", "paving_paths", "notes"].includes(x.sectionKey))) walk(t.fields);
+    assert.deepEqual(missing, []);
+  });
+});
+
+describe("Apartment: the form is as it was", () => {
+  it("still has every section of the Apartment inspection, with the same questions", () => {
+    const keys = snapshot.filter((x) => x.inspectionType === "dilapidation" && x.propertyType === "apartment").map((x) => x.sectionKey).sort();
+    assert.deepEqual(keys, ["custom_structure", "description", "driveway", "elevations", "fences", "garage_carport_sheds", "internal_areas", "job-info", "notes", "paving_paths", "pool_spa", "retaining_walls", "roof_chimneys"]);
+    const count = (k) => fieldsOf(k).length;
+    assert.deepEqual([count("description"), count("elevations"), count("internal_areas"), count("paving_paths"), count("roof_chimneys"), count("notes")], [25, 66, 102, 56, 41, 15]);
   });
 });
 
 describe("Apartment: wording registry", () => {
-  it("is a final report type of its own, with the project-works sentences on the Description page", () => {
+  it("is a final report type of its own, with the project-works sentence on the Description page", () => {
     const w = wordingFor(APT);
     assert.equal(w.status, "final");
     assert.deepEqual(w.profile, APT);

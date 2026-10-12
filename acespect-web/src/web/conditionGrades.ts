@@ -51,3 +51,41 @@ export function gradeOf(option: GradeOption | undefined): Grade | undefined {
   const label = shortConditionLabel(option.label);
   return { label, color, word: label.toLowerCase() };
 }
+
+// --- Condition tag colours -------------------------------------------------
+// White text on the solid grade colour fails WCAG AA for small text on four of the five grades (3.1-3.6:1 against the 4.5:1 needed), so a tag is a pale tint of the grade colour carrying a darkened shade of it as text, with the full colour kept as a bar down the left edge. The label is always printed, so colour never carries the grade alone.
+
+function rgbOf(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.replace(/./g, "$&$&") : h;
+  return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as [number, number, number];
+}
+
+function mixHex(hex: string, withHex: string, amount: number): string {
+  const a = rgbOf(hex);
+  const b = rgbOf(withHex);
+  return `#${a.map((c, i) => Math.round(c + (b[i]! - c) * amount).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function luminance(hex: string): number {
+  const [r, g, b] = rgbOf(hex).map((c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** WCAG 2 contrast ratio between two hex colours. */
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** The pale fill, dark text and full-colour bar for a condition tag or pill of this grade colour. */
+export function conditionTagColors(color: string): { fill: string; text: string; bar: string } {
+  const fill = mixHex(color, "#ffffff", 0.88);
+  let text = mixHex(color, "#000000", 0.6);
+  // Any option colour a template brings must still read: darken until the text clears AA.
+  for (let t = 0.6; contrastRatio(text, fill) < 4.5 && t < 1; t += 0.1) text = mixHex(color, "#000000", t);
+  return { fill, text, bar: color };
+}

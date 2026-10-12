@@ -1,5 +1,5 @@
 import type { ConditionSummaryRow } from "../templateFields";
-import { GRADE_LEGEND } from "../conditionGrades";
+import { conditionTagColors, GRADE_LEGEND } from "../conditionGrades";
 import { PageTitle, reportTextStyle, reportTokens } from "./reportKit";
 
 /** One category's rows for the Condition Summary page -- `sectionName` is
@@ -25,14 +25,16 @@ function TopicLink({ anchorId, children }: { anchorId?: string; children: React.
 }
 
 function ConditionPill({ color, label }: { color: string; label: string }) {
+  const c = conditionTagColors(color);
   return (
     <span
       style={{
         display: "inline-block",
-        padding: "2px 10px",
+        padding: "2px 10px 2px 8px",
         borderRadius: reportTokens.radius,
-        background: color,
-        color: "white",
+        background: c.fill,
+        borderLeft: `4px solid ${c.bar}`,
+        color: c.text,
         fontWeight: 700,
         fontSize: "0.82em",
         letterSpacing: "0.02em",

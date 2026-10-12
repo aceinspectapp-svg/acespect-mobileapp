@@ -28,6 +28,8 @@ export interface ReportWording {
   floorGrouped?: { sectionKey: string; heading(label: string): string };
   /** Classification-only answers per section, never printed as "Label: value." lines. */
   metadataFields: Record<string, string[]>;
+  /** Free-text answers (per section) said as they were typed, with no "Label:" in front -- e.g. the Notes' own comments. */
+  plainFields?: Record<string, string[]>;
   /** Sections that have no Condition Summary row. */
   noSummarySections: string[];
   /** Sections where a fixed slot marked "not present" gets its own sentence ("There is no front fence."). */
@@ -59,6 +61,11 @@ export const NO_WORDING: ReportWording = {
   absentSlotSections: [],
 };
 
+/** The composer for a section; an inspector-added extra structure (`custom_<name>`) is worded by the `custom_structure` composer. */
+export function composerFor(wording: ReportWording, sectionKey: string): Composer | undefined {
+  return wording.composers[sectionKey] ?? (sectionKey.startsWith("custom_") ? wording.composers.custom_structure : undefined);
+}
+
 /** The sentence a report type has for one section, or undefined when it has none for it. */
 export function composeSection(
   wording: ReportWording,
@@ -67,6 +74,6 @@ export function composeSection(
   itemFields: TemplateField[],
   label: string,
 ): string | undefined {
-  const composer = wording.composers[sectionKey];
+  const composer = composerFor(wording, sectionKey);
   return composer ? composer(inst, itemFields, label) : undefined;
 }
