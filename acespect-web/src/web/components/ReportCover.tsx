@@ -1,13 +1,10 @@
+import type { CSSProperties, ReactNode } from "react";
 import type { ReportHeader } from "../report";
-import { MetaRow, Para, reportTokens } from "./reportKit";
 
-// Puppeteer's page.pdf() (see acespect-backend/src/lib/reportPdf.ts) reserves
-// a 225mm-tall content area per printed page: A4's 297mm minus the 30mm top /
-// 42mm bottom margins it sets aside for the header/footer templates. The
-// cover anchors its signature against this same budget so the signature
-// lands at a fixed spot near the bottom of page 1, matching the reference
-// report, instead of trailing wherever the fields happen to end.
-const PAGE1_CONTENT_MM = 225;
+// The cover is laid out the same way as the Construction Report's (construction/ConstructionReport.tsx, the Houspect Lock-up design
+// sample): the report date, Client / References, a navy banner with the report title, then ruled rows of details and the sign-off.
+// Its colours are the Construction report's own.
+const C = { navy: "#1b3a6b", red: "#d1262b", ink: "#1f2937", grey: "#6b7280", rule: "#e5e7eb", font: "Arial, Helvetica, sans-serif" };
 
 // Acespect Pty Ltd trades AS Houspect Victoria -- this report carries that
 // real trading identity, not the internal ACESPECT app's own logo. The image
@@ -25,155 +22,84 @@ function HouspectVictoriaLogo() {
  * full size is used on the official report page.
  */
 export function ReportCover({ header: r, compact = false }: { header: ReportHeader; compact?: boolean }) {
-  // Wide enough that "Weather Conditions" (the longest label) never wraps.
-  const labelW = compact ? 120 : 170;
-  const fontSize = compact ? 12.5 : 15;
-  const titleSize = compact ? 22 : 38;
+  const base = compact ? 12 : 14;
+  const label: CSSProperties = { fontSize: compact ? "9px" : "10px", fontWeight: 700, letterSpacing: "0.14em", color: C.grey, textTransform: "uppercase" };
 
-  const hasSignature = Boolean(r.signatureUrl || r.signatureName);
-
-  const signatureBlock = hasSignature && (
-    <>
-      {r.signatureUrl && (
-        <img
-          src={r.signatureUrl}
-          alt="Signature"
-          style={{ height: compact ? "36px" : "56px", display: "block", marginBottom: "4px" }}
-        />
-      )}
-      {r.signatureName && (
-        <div style={{ fontWeight: 400, color: "#5b7ba8", fontSize: compact ? "0.95em" : "1.05em" }}>
-          {r.signatureName}
-        </div>
-      )}
-      {r.signatureTitle && (
-        <div style={{ fontWeight: 700, color: reportTokens.accent, fontSize: "0.85em" }}>{r.signatureTitle}</div>
-      )}
-    </>
-  );
+  const rows: [string, ReactNode][] = [
+    ["Property", r.property],
+    [
+      "Property Owner",
+      <>
+        <div>{r.propertyOwner ?? "—"}</div>
+        {r.propertyOwnerEmail && <div style={{ fontSize: "0.86em", color: C.grey }}>Via email: {r.propertyOwnerEmail}</div>}
+      </>,
+    ],
+    ["Inspection Date", r.inspectionDate],
+    ["Weather Conditions", r.weather],
+    ["Inspector", `${r.inspector}${r.inspectorRegistration ? ` (Builder Registration No ${r.inspectorRegistration})` : ""}`],
+    ["Purpose", r.purpose],
+  ];
 
   return (
-    <div style={{ fontFamily: reportTokens.font, color: reportTokens.ink, fontSize: `${fontSize}px`, lineHeight: 1.5 }}>
-      {/* Fields + purpose + signature all sit in one normal-flow column,
-          given a 225mm floor (page 1's real content height -- see
-          PAGE1_CONTENT_MM) so `marginTop: "auto"` on the signature below
-          pulls it down to sit flush with the bottom of page 1 when the
-          fields above leave room, instead of trailing right after Purpose
-          with a short, content-dependent gap.
+    <div style={{ fontFamily: C.font, color: C.ink, fontSize: `${base}px`, lineHeight: 1.45 }}>
+      {!compact && (
+        // Hidden when printed/exported to PDF: the PDF pipeline's own
+        // per-page header (see acespect-backend/src/lib/reportPdf.ts)
+        // already puts this same logo on every page, cover included --
+        // showing both here would double it up on page 1. Still shown in
+        // the live browser view, which has no per-page header of its own.
+        <div className="screen-only" style={{ display: "flex", justifyContent: "flex-end", marginBottom: "18px" }}>
+          <HouspectVictoriaLogo />
+        </div>
+      )}
 
-          An earlier version pinned the signature with `position: absolute`
-          instead, so it couldn't be pushed down by its own height. That
-          worked in isolation, but Chromium's print pagination doesn't
-          reliably confine an absolutely positioned box to the physical page
-          its containing block started on -- adding an unrelated page (the
-          Condition Summary) right after the cover was enough to make the
-          same absolute signature render on *that* next page, printed
-          directly on top of its heading. Plain normal-flow layout doesn't
-          have that failure mode: an element's own position can never cross
-          a `break-before` on a later sibling, so this can't overlap
-          whatever page the cover is followed by, no matter what that is.
+      <div style={{ fontWeight: 700, fontSize: `${base + 1}px`, margin: "0 0 14px" }}>{r.reportDate}</div>
 
-          The trade-off: if the fields + purpose content is itself long
-          enough to leave no room at all for the signature once combined
-          with `breakInside: "avoid"` below, the whole signature block
-          flows onto page 2 with it, naturally and without any extra code
-          -- which is exactly what the "must also appear on page 2" case
-          needs anyway. */}
-      <div style={{ display: "flex", flexDirection: "column", minHeight: compact ? undefined : `${PAGE1_CONTENT_MM}mm` }}>
-        {!compact && (
-          // Hidden when printed/exported to PDF: the PDF pipeline's own
-          // per-page header (see acespect-backend/src/lib/reportPdf.ts)
-          // already puts this same logo on every page, cover included --
-          // showing both here would double it up on page 1. Still shown in
-          // the live browser view, which has no per-page header of its own.
-          <div className="screen-only" style={{ display: "flex", justifyContent: "flex-end", marginBottom: "24px" }}>
-            <HouspectVictoriaLogo />
-          </div>
-        )}
-
-        {/* Client + references */}
+      {/* Client, and the two references */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
         <div>
-          <MetaRow label="Report Date" labelWidth={labelW} compact={compact}>{r.reportDate}</MetaRow>
-          <MetaRow label="Client" labelWidth={labelW} compact={compact}>
-            <div>{r.clientName}</div>
-            {r.clientAttn && <div style={{ color: reportTokens.inkMuted, fontSize: "0.92em" }}>Attn: {r.clientAttn}</div>}
-            {r.clientEmail && <div style={{ color: reportTokens.inkMuted, fontSize: "0.92em" }}>Via email: {r.clientEmail}</div>}
-          </MetaRow>
-          <MetaRow label="Your Reference" labelWidth={labelW} compact={compact}>{r.yourReference}</MetaRow>
-          <MetaRow label="Our Reference" labelWidth={labelW} compact={compact}>{r.ourReference}</MetaRow>
+          <div style={label}>Client</div>
+          <div style={{ marginTop: "3px" }}>{r.clientName}</div>
+          {r.clientAttn && <div style={{ fontSize: "0.86em", color: C.grey }}>Attn: {r.clientAttn}</div>}
+          {r.clientEmail && <div style={{ fontSize: "0.86em", color: C.grey }}>Via email: {r.clientEmail}</div>}
         </div>
-
-        {/* Title -- a plain bordered box. Regular weight and a tighter box
-            than a typical web heading, matching the reference report's own
-            (larger type, less padding, not bold). */}
-        <div
-          style={{
-            textAlign: "left",
-            borderRadius: reportTokens.radius,
-            padding: compact ? "10px 12px" : "12px 16px",
-            margin: compact ? "14px 0" : "20px 0",
-            border: `1.5px solid ${reportTokens.ink}`,
-            borderLeft: "5px solid var(--report-brand-red, " + reportTokens.ink + ")",
-          }}
-        >
-          {/* "Dilapidation Report – Commercial Properties": the type to the right of the title, lighter; a long one steps the size down so it stays on one line. */}
-          <div style={{ fontSize: `${r.reportType && r.reportTitle.length + r.reportType.length > 28 ? Math.round(titleSize * 0.8) : titleSize}px`, fontWeight: 400, color: reportTokens.ink, lineHeight: 1.2 }}>
-            <span>{r.reportTitle}</span>
-            {r.reportType && <span style={{ color: reportTokens.accent }}>{` – ${r.reportType}`}</span>}
-          </div>
-        </div>
-
-        {/* Property details */}
         <div>
-          <MetaRow label="Property" labelWidth={labelW} compact={compact}>{r.property}</MetaRow>
-          <MetaRow label="Property Owner" labelWidth={labelW} compact={compact}>
-            <div>{r.propertyOwner ?? "—"}</div>
-            {r.propertyOwnerEmail && (
-              <div style={{ color: reportTokens.inkMuted, fontSize: "0.92em" }}>Via email: {r.propertyOwnerEmail}</div>
-            )}
-          </MetaRow>
-          <MetaRow label="Inspection Date" labelWidth={labelW} compact={compact}>{r.inspectionDate}</MetaRow>
-          <MetaRow label="Weather Conditions" labelWidth={labelW} compact={compact}>{r.weather}</MetaRow>
-          <MetaRow label="Inspector" labelWidth={labelW} compact={compact}>
-            {r.inspector}
-            {r.inspectorRegistration ? ` (Builder Registration No ${r.inspectorRegistration})` : ""}
-          </MetaRow>
+          <div style={label}>Our Reference</div>
+          <div style={{ marginTop: "3px" }}>{r.ourReference}</div>
+          {r.yourReference && (
+            <div style={{ marginTop: "8px" }}>
+              <div style={label}>Your Reference</div>
+              <div style={{ marginTop: "3px" }}>{r.yourReference}</div>
+            </div>
+          )}
         </div>
-
-        {/* Purpose */}
-        <div style={{ marginTop: compact ? "16px" : "24px" }}>
-          <MetaRow label="Purpose" labelWidth={labelW} compact={compact}>
-            <Para style={{ margin: 0 }}>{r.purpose}</Para>
-          </MetaRow>
-        </div>
-
-        {/* No front-of-property photo here -- it belongs in the Description &
-            Overview section instead (see ReportDescription's own photo slot),
-            matching the reference report exactly: its cover carries no photo
-            at all, and the front-of-property image sits on the Description
-            page. `coverPhotoUrl` is no longer read by this component. */}
-
-        {/* Signature -- left-aligned with the value column (not centered),
-            matching the reference's own placement. `marginTop: "auto"`
-            (non-compact only) is what pins it to the bottom of the 225mm
-            column above instead of trailing right after Purpose. */}
-        {hasSignature && (
-          <div
-            style={{
-              marginTop: compact ? "20px" : "auto",
-              paddingLeft: `${labelW + 14}px`,
-              // Keeps the signature image, name and title together as one
-              // unbreakable block -- without this, Chromium's print
-              // pagination can split the block mid-way (e.g. the name on
-              // one page, the title alone at the top of the next), which is
-              // wrong since they're one signature, not separate content.
-              breakInside: "avoid",
-            }}
-          >
-            {signatureBlock}
-          </div>
-        )}
       </div>
+
+      {/* Title banner: "DILAPIDATION REPORT" over the kind of report ("Residential House") */}
+      <div style={{ background: C.navy, borderRight: `${compact ? 6 : 9}px solid ${C.red}`, color: "white", padding: compact ? "14px 18px 16px" : "22px 26px 24px", margin: compact ? "22px 0 20px" : "34px 0 30px" }}>
+        <div style={{ fontSize: compact ? "10px" : "12.5px", fontWeight: 700, letterSpacing: "0.3em", textTransform: "uppercase", opacity: 0.92 }}>{r.reportTitle}</div>
+        <div style={{ fontSize: compact ? "24px" : "36px", fontWeight: 700, marginTop: "6px", lineHeight: 1.1 }}>{r.reportType || r.reportTitle}</div>
+      </div>
+
+      {/* The details, one ruled row each */}
+      <div>
+        {rows.map(([k, v]) => (
+          <div key={k} style={{ display: "grid", gridTemplateColumns: `${compact ? 120 : 166}px 1fr`, gap: "14px", padding: "9px 0", borderBottom: `1px solid ${C.rule}`, breakInside: "avoid" }}>
+            <div style={{ ...label, paddingTop: "3px" }}>{k}</div>
+            <div>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* No front-of-property photo here -- it belongs in the Description & Overview section (see ReportDescription's own photo slot). */}
+
+      {(r.signatureName || r.signatureTitle) && (
+        // One unbreakable block, so the name is never left on one page and the title on the next.
+        <div style={{ marginTop: "28px", breakInside: "avoid" }}>
+          {r.signatureName && <div style={{ color: C.navy, fontSize: compact ? "14px" : "17px" }}>{r.signatureName}</div>}
+          {r.signatureTitle && <div style={{ color: C.navy, fontSize: compact ? "11px" : "13px", fontWeight: 700 }}>{r.signatureTitle}</div>}
+        </div>
+      )}
     </div>
   );
 }
