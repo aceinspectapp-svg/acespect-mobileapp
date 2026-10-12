@@ -70,6 +70,25 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   throw lastErr;
 }
 
+/**
+ * Every call to Egnyte goes through here. This Egnyte account allows about 2 requests a second ("Spike arrest violation",
+ * HTTP 429), so calls are spaced out, and a 429 is waited out and retried rather than failing the photo upload.
+ */
+const MIN_GAP_MS = 550;
+let nextSlot = 0;
+export async function egnyteFetch(url: string, init: RequestInit): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const now = Date.now();
+    const start = Math.max(now, nextSlot);
+    nextSlot = start + MIN_GAP_MS;
+    if (start > now) await new Promise((r) => setTimeout(r, start - now));
+    const res = await fetch(url, init);
+    if (res.status !== 429 || attempt >= 6) return res;
+    await res.arrayBuffer().catch(() => undefined);
+    nextSlot = Math.max(nextSlot, Date.now() + 1000 * (attempt + 1));
+  }
+}
+
 /** Create the root inspection-photos folder if it doesn't exist. Safe to call on boot. */
 export async function ensureBucket(): Promise<boolean> {
   if (!isStorageEnabled()) return false;
@@ -180,7 +199,7 @@ const egnyteRoot = () => (env.EGNYTE_ROOT_FOLDER.startsWith('/') ? env.EGNYTE_RO
 
 async function egnyteRequest(path: string, init: { method: string; body?: unknown; query?: string }): Promise<Response> {
   return withRetry(() =>
-    fetch(`${egnyteBase()}/pubapi/v1/fs${encodeEgnytePath(path)}${init.query ?? ''}`, {
+    egnyteFetch(`${egnyteBase()}/pubapi/v1/fs${encodeEgnytePath(path)}${init.query ?? ''}`, {
       method: init.method,
       headers: { ...authHeaders(), ...(init.body ? { 'Content-Type': 'application/json' } : {}) },
       body: init.body ? JSON.stringify(init.body) : undefined,
@@ -244,6 +263,7 @@ async function folderLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 }
 
 const resolutionCache = new Map<string, { at: number; resolution: Resolution }>();
+const resolutionInFlight = new Map<string, Promise<Resolution>>();
 const CACHE_MS = 10 * 60 * 1000;
 
 /**
@@ -254,9 +274,16 @@ export async function resolveInspectionDestination(jobNo: string | null | undefi
   const key = `${(jobNo ?? '').trim().toUpperCase()}|${draftId ?? ''}|${opts.createJobFolder === false ? 'nc' : 'c'}`;
   const hit = resolutionCache.get(key);
   if (!opts.fresh && hit && Date.now() - hit.at < CACHE_MS) return hit.resolution;
-  const resolution = await resolveInspectionFolder(egnyteFs, egnyteRoot(), jobNo, { draftId, lock: folderLock, createJobFolder: opts.createJobFolder });
-  if (resolution.status !== 'unassigned') resolutionCache.set(key, { at: Date.now(), resolution });
-  return resolution;
+  // Photos of one job arrive together: they share one lookup instead of each listing Egnyte.
+  const running = resolutionInFlight.get(key);
+  if (running) return running;
+  const work = (async () => {
+    const resolution = await resolveInspectionFolder(egnyteFs, egnyteRoot(), jobNo, { draftId, lock: folderLock, createJobFolder: opts.createJobFolder });
+    if (resolution.status !== 'unassigned') resolutionCache.set(key, { at: Date.now(), resolution });
+    return resolution;
+  })().finally(() => resolutionInFlight.delete(key));
+  resolutionInFlight.set(key, work);
+  return work;
 }
 
 /** Move a folder into another (merging if the target exists) and repoint the photo index. Used by the one-off tidy-up script. */
@@ -299,7 +326,7 @@ export async function settleInspectionFolder(inspectionId: string, jobNo: string
 
 async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string): Promise<void> {
   const res = await withRetry(() =>
-    fetch(`${egnyteBase()}/pubapi/v1/fs-content${encodeEgnytePath(path)}`, {
+    egnyteFetch(`${egnyteBase()}/pubapi/v1/fs-content${encodeEgnytePath(path)}`, {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': contentType },
       body: buffer,

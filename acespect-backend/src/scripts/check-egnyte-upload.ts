@@ -18,6 +18,8 @@ if (!/localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL ?? '')) { console.er
 const folders = new Set<string>(); // "/a/b"
 const files = new Map<string, number>(); // path -> bytes
 const log: string[] = [];
+const hits: number[] = [];
+let rejected = 0;
 const addFolder = (p: string) => { const parts = p.split('/').filter(Boolean); let cur = ''; for (const part of parts) { cur += '/' + part; folders.add(cur); } };
 const decode = (u: string) => decodeURIComponent(u);
 
@@ -28,6 +30,9 @@ const server = http.createServer(async (req, res) => {
   const body = Buffer.concat(chunks);
   const json = (code: number, obj: unknown) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
   const fsPath = decode(url.pathname.replace('/pubapi/v1/fs-content', '').replace('/pubapi/v1/fs', ''));
+  // Like the real account: more than 2 requests in any second is answered with 429.
+  const nowMs = Date.now(); hits.push(nowMs); while (hits.length && hits[0]! < nowMs - 1000) hits.shift();
+  if (hits.length > 2) { rejected++; return json(429, { fault: { faultstring: 'Spike arrest violation. Allowed rate : 2' } }); }
   log.push(`${req.method} ${url.pathname.startsWith('/pubapi/v1/fs-content') ? 'content' : 'fs'} ${fsPath}`);
 
   if (url.pathname.startsWith('/pubapi/v1/fs-content')) {
@@ -153,7 +158,8 @@ async function main() {
   await prisma.inspection.deleteMany({ where: { inspectorId: inspector.id } });
   await prisma.user.delete({ where: { id: inspector.id } });
   await prisma.$disconnect();
-  console.log(`\n${passed} checks passed`);
+  assert.equal(rejected, 0, `Egnyte answered 429 ${rejected} times: requests are not spaced out`);
+  console.log(`\n${passed} checks passed (Egnyte's 2-per-second limit was never exceeded)`);
 }
 
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });
