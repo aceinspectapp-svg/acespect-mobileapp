@@ -84,6 +84,13 @@ export interface Resolution {
 
 const safeSegment = (raw: string) => raw.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 100);
 const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+/**
+ * The office adds the client to a job folder's name ("V260601 Arora"), so a folder belongs to a job when its name is the job
+ * folder name, alone or followed by a space and more text ("V260601" and "V260601 Arora" are job V260601; "V2606010" is not).
+ */
+export const isJobFolderName = (name: string, jobFolder: string) =>
+  name.length >= jobFolder.length && sameName(name.slice(0, jobFolder.length), jobFolder) && (name.length === jobFolder.length || /\s/.test(name[jobFolder.length]!));
+const findJobFolder = (names: string[], jobFolder: string) => names.find((n) => sameName(n, jobFolder)) ?? names.find((n) => isJobFolderName(n, jobFolder));
 
 export const UNASSIGNED_FOLDER = '_Unassigned';
 
@@ -134,23 +141,28 @@ export async function resolveInspectionFolder(fs: EgnyteFs, root: string, rawJob
   }
 
   const batchPath = `${root}/${batch.name}`;
-  const jobPath = `${batchPath}/${job.folder}`;
   const inBatch = (await fs.list(batchPath)) ?? { folders: [], files: [] };
-  const exists = inBatch.folders.some((f) => sameName(f, job.folder));
+  // The folder the office already made for this job (whatever its suffix), else the plain job number.
+  const found = findJobFolder(inBatch.folders, job.folder);
+  const exists = !!found;
+  const jobPath = `${batchPath}/${found ?? job.folder}`;
+  if (inBatch.folders.filter((f) => isJobFolderName(f, job.folder)).length > 1) {
+    warnings.push(`More than one folder in ${batch.name} starts with ${job.folder}; used ${found}.`);
+  }
 
   // Capacity counts inspection folders only -- never images or stray files.
   const capacity = batch.end - batch.start + 1;
   if (!exists && inBatch.folders.length >= capacity) {
     warnings.push(`Batch ${batch.name} already holds ${inBatch.folders.length} folders (room for ${capacity}); ${job.folder} was still stored in it because its number belongs there.`);
   }
-  if (rootListing.folders.some((f) => sameName(f, job.folder))) {
+  if (rootListing.folders.some((f) => isJobFolderName(f, job.folder))) {
     warnings.push(`A folder named ${job.folder} also exists directly under the root; the photos go in ${batch.name}.`);
   }
 
   if (!exists && opts.createJobFolder !== false) {
     await lock(`egnyte-job:${job.folder}`, async () => {
       const again = await fs.list(batchPath);
-      if (!again?.folders.some((f) => sameName(f, job.folder))) await fs.createFolder(jobPath);
+      if (!again || !findJobFolder(again.folders, job.folder)) await fs.createFolder(jobPath);
     });
   }
 

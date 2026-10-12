@@ -117,6 +117,19 @@ async function main() {
     assert.equal(r2.batch, 'V23001-V231501');
   });
 
+  await check('the office adds the client to a job folder name ("V260630 SGQ Cons"): that folder is reused, never duplicated', async () => {
+    const { fs, calls } = fakeEgnyte([`${ROOT}/V260601-V260700/V260630 SGQ Cons/a.jpg`, `${ROOT}/V260601-V260700/V2606300 Other/`, `${ROOT}/V260601-V260700/V260631/`]);
+    const r = await resolveInspectionFolder(fs, ROOT, 'VIC-260630', { lock });
+    assert.equal(r.path, `${ROOT}/V260601-V260700/V260630 SGQ Cons`);
+    assert.equal(r.status, 'ok');
+    assert.equal(calls.create.length, 0, 'nothing created');
+    const plain = await resolveInspectionFolder(fs, ROOT, 'V260631', { lock });
+    assert.equal(plain.path, `${ROOT}/V260601-V260700/V260631`);
+    const fresh = await resolveInspectionFolder(fs, ROOT, 'V260640', { lock });
+    assert.equal(fresh.path, `${ROOT}/V260601-V260700/V260640`, 'no folder yet: the plain job number is made');
+    assert.equal(calls.create.length, 1);
+  });
+
   await check('two uploads for new jobs at the same moment make one batch and one folder each', async () => {
     const { fs, calls } = fakeEgnyte([`${ROOT}/V260001-V260100/V260001/`]);
     const results = await Promise.all(Array.from({ length: 12 }, (_, i) => resolveInspectionFolder(fs, ROOT, i % 2 ? 'V260105' : 'V260150', { lock })));
