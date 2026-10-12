@@ -1,8 +1,8 @@
 /**
- * The Construction Report: lays a submitted Construction Stage inspection out the way Houspect's office templates do
- * ("ACESPECT <stage>_Office Template"): cover details, General Description, Photographs, Site & Facilities, the stage's own
- * checks (a heading and one sentence each), Identified Defects Requiring Attention (numbered, with photos), Notes, Client
- * queries, items from the previous inspection, and the References and Guide to Standards and Tolerances.
+ * The Construction Report, laid out the way the Houspect Lock-up Report design sample does: cover details, General
+ * Description, Photographs, the Inspection Checklist (a summary of six status colours, then one table per section), Identified
+ * Defects Requiring Attention (numbered, grouped by topic, with photos), Notes, Previous Defects, Client Concerns, then
+ * Scope and Conditions.
  *
  * It does not write any sentences itself. Every section's text comes from the section's report text -- the same text the
  * reviewer portal shows (written by the Construction Stage wording, src/web/wording/construction_stage.ts, or typed over by
@@ -13,48 +13,70 @@
 import type { AnswerTree, TemplateField } from "../templateFields";
 import { asString } from "../templateFields";
 import { headingMap, photosIn } from "./words";
-import { GENERAL, PURPOSE, SECTION_ORDER, STAGES, bannerOf, kindOfKey, stageOfSectionKeys, type StageId } from "./stages";
-import { TAGS } from "./compose";
+import { GENERAL, PURPOSE, SECTION_ORDER, STAGES, coverTitleOf, kindOfKey, stageOfSectionKeys, type StageId } from "./stages";
+import { ITEM_STATUSES, TAGS, type ItemStatus } from "./compose";
 import library from "./codeLibrary.json";
 
 export { stageOfSectionKeys, stageMeta } from "./stages";
 export type { StageId } from "./stages";
+export type { ItemStatus } from "./compose";
+export { ITEM_STATUSES } from "./compose";
 
 // ───────────────────────── Model ─────────────────────────
 
-export interface ReportItem { heading: string; text: string; photos: string[] }
-export interface ReportGroup { heading?: string; items: ReportItem[] }
-export interface ReportBlock { banner: string; groups: ReportGroup[] }
+export interface ChecklistItem {
+  /** Anchor id, so a defect or note can be jumped to from the summary. */
+  id: string;
+  heading: string;
+  status: ItemStatus;
+  text: string;
+  /** The defect number this row refers to, when it is a defect. */
+  defectNo?: number;
+}
+export interface ChecklistGroup { heading?: string; items: ChecklistItem[] }
+export interface ChecklistTable {
+  title: string;
+  groups: ChecklistGroup[];
+  counts: Record<ItemStatus, number>;
+  /** Photographs the inspector took against rows of this section (measurements, levels), with the row they belong to. */
+  photos: { heading: string; photos: string[] }[];
+}
 
 export interface DefectEntry {
   no: number;
-  area: "EXTERNAL" | "INTERNAL";
-  sub: string;
-  /** The defect's sentence: the checklist row, where it is, the inspector's comments, severity, category and construction code. */
+  /** The sentence: the checklist row, where it is and the inspector's comments. */
   text: string;
+  severity: string;
+  category: string;
+  /** What the inspector typed as the construction code ("2.04") and the library's name for it. */
   code: string;
+  codeTitle: string;
   photos: string[];
+  /** Where it came from: the checklist row's anchor, so the defect can link back. */
+  fromId?: string;
 }
+export interface DefectGroup { heading: string; defects: DefectEntry[] }
 
-export interface ReferenceSection { section: string; codes: { code: string; title: string; text: string[] }[] }
+export interface AttachedList { attached: boolean; text: string; photos: string[] }
 
 export interface ConstructionReportModel {
   stage: StageId;
+  /** "Lock-up" -- the Stage row on the cover. */
   stageLabel: string;
+  /** "Lock-up Stage" -- the cover title. */
+  coverTitle: string;
   purpose: string;
   general: string;
   description: string[];
   streetPhotos: string[];
   otherPhotos: string[];
-  site: ReportGroup[];
-  blocks: ReportBlock[];
-  defects: DefectEntry[];
-  groupedDefects: boolean;
+  tables: ChecklistTable[];
+  totals: Record<ItemStatus, number>;
+  defectGroups: DefectGroup[];
+  defectCount: number;
   notes: string[];
-  clientQueries: { text: string; photos: string[] } | null;
-  previous: { text: string; photos: string[] } | null;
-  blocksRef: { title: string; text: string[] }[];
-  references: ReferenceSection[];
+  previous: AttachedList;
+  clientConcerns: AttachedList;
   /** Sections that were submitted but not yet approved, so they are not printed. */
   waitingSections: string[];
 }
@@ -77,19 +99,18 @@ export interface SectionInput {
 
 type Line =
   | { kind: "room"; text: string }
-  | { kind: "item"; heading: string; text: string }
+  | { kind: "item"; heading: string; status: ItemStatus; text: string }
   | { kind: "note"; text: string }
   | { kind: "defect"; index: number; text: string }
   | { kind: "para"; text: string };
 
+const ITEM = /^ITEM::(.+?)::(?:(ok|progress|defect|note|notcomplete|na)::)?([\s\S]*)$/;
+
 export function parseLines(reportText: string): Line[] {
   return reportText.split(/\n{2,}|\n/).map((l) => l.trim()).filter(Boolean).map((l): Line => {
     if (l.startsWith(TAGS.room)) return { kind: "room", text: l.slice(TAGS.room.length) };
-    if (l.startsWith(TAGS.item)) {
-      const rest = l.slice(TAGS.item.length);
-      const at = rest.indexOf("::");
-      return at === -1 ? { kind: "para", text: rest } : { kind: "item", heading: rest.slice(0, at), text: rest.slice(at + 2) };
-    }
+    const item = ITEM.exec(l);
+    if (item) return { kind: "item", heading: item[1]!, status: (item[2] as ItemStatus | undefined) ?? "ok", text: item[3]!.trim() };
     if (l.startsWith(TAGS.note)) return { kind: "note", text: l.slice(TAGS.note.length) };
     const d = /^DEFECT::(\d+)::([\s\S]*)$/.exec(l);
     if (d) return { kind: "defect", index: Number(d[1]), text: d[2]!.trim() };
@@ -98,44 +119,12 @@ export function parseLines(reportText: string): Line[] {
 }
 
 const paragraphs = (lines: Line[]) => lines.filter((l): l is Extract<Line, { kind: "para" }> => l.kind === "para").map((l) => l.text);
+const emptyCounts = (): Record<ItemStatus, number> => ({ ok: 0, progress: 0, defect: 0, note: 0, notcomplete: 0, na: 0 });
 
-/** A checklist section's lines -> groups of items, with the row photos from the form's photo fields attached to their rows. */
-function groupsOf(s: SectionInput): ReportGroup[] {
-  const groups: ReportGroup[] = [];
-  const excluded = s.excludedPhotos ?? [];
-  let current: ReportGroup | null = null;
-  let inDefects = false;
-  for (const l of parseLines(s.reportText)) {
-    if (l.kind === "room") { inDefects = l.text === "Defects"; if (!inDefects) { current = { heading: l.text, items: [] }; groups.push(current); } continue; }
-    if (inDefects || l.kind !== "item") continue;
-    if (!current) { current = { items: [] }; groups.push(current); }
-    current.items.push({ heading: l.heading, text: l.text, photos: [] });
-  }
-  // Photographs the inspector took against a row ("Photos with measurements", "Photo showing the digital level").
-  const a = s.answers;
-  if (a) {
-    const headings = headingMap(s.fields);
-    for (const f of s.fields) {
-      if (f.type !== "photos") continue;
-      const photos = photosIn(a[f.key], excluded);
-      if (!photos.length) continue;
-      const base = f.key.replace(/Photos$/, "");
-      const rowHeading = headings.get(base);
-      const item = rowHeading ? groups.flatMap((g) => g.items).find((it) => it.heading === rowHeading) : undefined;
-      if (item) item.photos.push(...photos);
-      else {
-        if (!current) { current = { items: [] }; groups.push(current); }
-        current.items.push({ heading: f.label.replace(/^Photos? (of|showing) /i, ""), text: "", photos });
-      }
-    }
-  }
-  return groups.filter((g) => g.items.length > 0);
-}
+// ───────────────────────── Defects ─────────────────────────
 
-// ───────────────────────── References ─────────────────────────
-
-type Library = { codes: Record<string, { section: string; title: string; text: string[] }>; blocks: Record<string, { title: string; text: string[] }> };
-const LIB = library as unknown as Library;
+type CodeLibrary = { codes: Record<string, { section: string; title: string; text: string[] }> };
+const LIB = library as unknown as CodeLibrary;
 
 /** "2.04, 3.01 and 12.2" -> the numbered references the library knows about. */
 export function referencedCodes(text: string): string[] {
@@ -147,25 +136,28 @@ export function referencedCodes(text: string): string[] {
   return [...found];
 }
 
-function buildReferences(stage: StageId, defectTexts: string[]): { blocks: { title: string; text: string[] }[]; sections: ReferenceSection[] } {
-  const codes = new Set<string>(STAGES[stage].defaultCodes);
-  for (const t of defectTexts) {
-    const m = /Construction code:\s*([^\n]*?)(?:\.\s*$|$)/.exec(t);
-    if (m) for (const c of referencedCodes(m[1]!)) codes.add(c);
-  }
-  const sorted = [...codes].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  const bySection = new Map<string, ReferenceSection>();
-  for (const code of sorted) {
-    const c = LIB.codes[code]!;
-    let sec = bySection.get(c.section);
-    if (!sec) { sec = { section: c.section, codes: [] }; bySection.set(c.section, sec); }
-    sec.codes.push({ code, title: c.title, text: c.text });
-  }
-  const blocks = ["normal_viewing", ...STAGES[stage].defaultBlocks].map((k) => LIB.blocks[k]).filter((b): b is { title: string; text: string[] } => !!b);
-  return { blocks, sections: [...bySection.values()] };
+/** The defect's sentence, and the Severity / Category / Construction code the wording appended to it. */
+export function splitDefect(text: string): { sentence: string; severity: string; category: string; code: string } {
+  let rest = text;
+  const grab = (label: string): string => {
+    const i = rest.lastIndexOf(` ${label}: `);
+    if (i === -1) return "";
+    const value = rest.slice(i + label.length + 3).trim().replace(/\.$/, "");
+    rest = rest.slice(0, i);
+    return value;
+  };
+  const code = grab("Construction code");
+  const category = grab("Category");
+  const severity = grab("Severity");
+  return { sentence: rest.trim(), severity, category, code };
 }
 
-// ───────────────────────── The Stage / Status on Job Information (PCI) ─────────────────────────
+function codeTitle(code: string): string {
+  const known = referencedCodes(code);
+  return known.length ? known.map((c) => `${c} ${LIB.codes[c]!.title}`).join("; ") : code;
+}
+
+// ───────────────────────── Stage / Status on Job Information (PCI) ─────────────────────────
 
 function pciStatus(jobInfo: AnswerTree | null): string {
   const raw = jobInfo ? asString(jobInfo.stageOptionPci) : "";
@@ -183,6 +175,15 @@ function pciAppliances(status: string): string {
   return "";
 }
 
+const tableTitle = (name: string) => (name.split(":").pop() ?? name).trim().toUpperCase();
+
+/** A sub-heading as the report prints it: without the form's instructions to the inspector ("— use a digital level …", "— check with the office …?"). */
+function cleanGroup(heading: string): string {
+  const at = heading.indexOf(" — ");
+  return at !== -1 && /\?|use a digital level|check/i.test(heading.slice(at)) ? heading.slice(0, at) : heading;
+}
+const norm = (s: string) => s.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, " ").trim();
+
 // ───────────────────────── The whole report ─────────────────────────
 
 export function buildConstructionReport(sections: SectionInput[], jobInfo: AnswerTree | null): ConstructionReportModel | null {
@@ -199,13 +200,18 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
   let description: string[] = [];
   let streetPhotos: string[] = [];
   let otherPhotos: string[] = [];
-  let site: ReportGroup[] = [];
-  const blocks: ReportBlock[] = [];
-  let clientQueries: ConstructionReportModel["clientQueries"] = null;
-  let previous: ConstructionReportModel["previous"] = null;
+  const tables: ChecklistTable[] = [];
   let summaryLines: string[] = [];
   const siteNotes: string[] = [];
-  const raised: { area: "EXTERNAL" | "INTERNAL"; sub: string; text: string; photos: string[] }[] = [];
+  const noList = (): AttachedList => ({ attached: false, text: "", photos: [] });
+  let previous = noList();
+  let clientConcerns = noList();
+
+  interface Raised { sub: string; text: string; photos: string[]; fromId?: string }
+  const raised: Raised[] = [];
+  /** Checklist rows that say "refer defects", per section, to be tied to their defects once those are numbered. */
+  const pending: { item: ChecklistItem; raisedIndex: number }[] = [];
+  let itemSeq = 0;
 
   for (const s of approved) {
     const lines = parseLines(s.reportText);
@@ -214,15 +220,11 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
     const a = s.answers;
 
     // The defects this section records, each paired with its own photos.
+    const firstRaised = raised.length;
     for (const l of lines) {
       if (l.kind !== "defect") continue;
       const dmg = s.damages[l.index];
-      raised.push({
-        area: dmg?.direction === "INTERNAL" ? "INTERNAL" : "EXTERNAL",
-        sub: dmg?.type || "General",
-        text: l.text,
-        photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)),
-      });
+      raised.push({ sub: dmg?.type || "General", text: l.text, photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)) });
     }
 
     if (kind === "description") {
@@ -230,36 +232,79 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       if (stage === "pci" && status) description = description.map((p) => (p === meta.progress ? `Progress of the works to date is ${status.split(" — ")[0]!.toLowerCase()}.` : p));
       streetPhotos = a ? photosIn(a.streetPhotos, excluded) : [];
       otherPhotos = a ? [...photosIn(a.elevationPhotos, excluded), ...photosIn(a.neighbourPhotos, excluded)] : [];
-    } else if (kind === "site") {
-      site = groupsOf(s);
-      siteNotes.push(...lines.filter((l): l is Extract<Line, { kind: "note" }> => l.kind === "note").map((l) => l.text));
-    } else if (kind === "stage") {
-      const groups = groupsOf(s);
-      if (groups.length === 0) continue;
-      const banner = bannerOf(s.key, s.name);
-      const prior = blocks[blocks.length - 1];
-      if (prior && prior.banner === banner) prior.groups.push(...groups);
-      else blocks.push({ banner, groups });
+    } else if (kind === "site" || kind === "stage") {
+      const groups: ChecklistGroup[] = [];
+      let current: ChecklistGroup | null = null;
+      let inDefects = false;
+      let defectRowsSeen = 0;
+      for (const l of lines) {
+        if (l.kind === "room") {
+          inDefects = l.text === "Defects";
+          if (!inDefects) { current = { heading: l.text, items: [] }; groups.push(current); }
+          continue;
+        }
+        if (l.kind === "note") { siteNotes.push(l.text); continue; }
+        if (inDefects || l.kind !== "item") continue;
+        if (!current) { current = { items: [] }; groups.push(current); }
+        const item: ChecklistItem = { id: `item-${++itemSeq}`, heading: l.heading, status: l.status, text: l.text };
+        current.items.push(item);
+        if (l.status === "defect") pending.push({ item, raisedIndex: firstRaised + defectRowsSeen++ });
+      }
+      const title = tableTitle(s.name);
+      const kept = groups.filter((g) => g.items.length > 0).map((g) => {
+        const heading = g.heading ? cleanGroup(g.heading) : undefined;
+        // A sub-heading that only repeats the table's own title says nothing.
+        return { ...g, heading: heading && norm(heading) !== norm(title) ? heading : undefined };
+      });
+      // Photographs the inspector took against a row ("Photos with measurements", "Photo showing the digital level").
+      const photos: ChecklistTable["photos"] = [];
+      if (a) {
+        const headings = headingMap(s.fields);
+        for (const f of s.fields) {
+          if (f.type !== "photos") continue;
+          const got = photosIn(a[f.key], excluded);
+          if (!got.length) continue;
+          const rowHeading = headings.get(f.key.replace(/Photos$/, ""));
+          photos.push({ heading: rowHeading ?? f.label.replace(/^Photos? (of|showing) /i, ""), photos: got });
+        }
+      }
+      if (kept.length || photos.length) {
+        const counts = emptyCounts();
+        for (const g of kept) for (const it of g.items) counts[it.status] += 1;
+        tables.push({ title, groups: kept, counts, photos });
+      }
     } else if (kind === "summary") {
       summaryLines = paragraphs(lines);
     } else if (kind === "client" || kind === "previous") {
-      const text = paragraphs(lines).join(" ");
-      if (!text) continue;
-      const photos = a ? photosIn(a[`${kind === "client" ? "clientList" : "previousDefects"}Photos`], excluded) : [];
-      const entry = { text, photos };
-      if (kind === "client") clientQueries = entry; else previous = entry;
+      const text = paragraphs(lines);
+      const entry: AttachedList = text.length
+        ? { attached: true, text: text.slice(1).join(" "), photos: a ? photosIn(a[`${kind === "client" ? "clientList" : "previousDefects"}Photos`], excluded) : [] }
+        : noList();
+      if (kind === "client") clientConcerns = entry; else previous = entry;
     }
   }
 
-  // Defects: one numbered list for the early stages; EXTERNAL then INTERNAL, by area, from Lock Up on.
-  const subOrder = new Map<string, number>();
-  for (const d of raised) if (!subOrder.has(`${d.area}|${d.sub}`)) subOrder.set(`${d.area}|${d.sub}`, subOrder.size);
-  const ordered = meta.groupedDefects
-    ? raised.map((d, i) => ({ d, i })).sort((x, y) => (x.d.area === y.d.area ? (subOrder.get(`${x.d.area}|${x.d.sub}`)! - subOrder.get(`${y.d.area}|${y.d.sub}`)!) || x.i - y.i : x.d.area === "EXTERNAL" ? -1 : 1)).map((x) => x.d)
-    : raised;
-  const defects: DefectEntry[] = ordered.map((d, i) => ({
-    no: i + 1, area: d.area, sub: d.sub, text: d.text, photos: d.photos, code: referencedCodes((/Construction code:\s*([^\n]*)/.exec(d.text) ?? [])[1] ?? "").join(", "),
-  }));
+  // Defects: numbered in the order of the checklist, grouped under the topic they came from.
+  const topicOrder: string[] = [];
+  for (const d of raised) { d.sub = cleanGroup(d.sub); if (!topicOrder.includes(d.sub)) topicOrder.push(d.sub); }
+  const defectGroups: DefectGroup[] = [];
+  const numberOf = new Map<number, number>();
+  let n = 0;
+  for (const topic of topicOrder) {
+    const group: DefectGroup = { heading: topic, defects: [] };
+    raised.forEach((d, i) => {
+      if (d.sub !== topic) return;
+      n += 1;
+      numberOf.set(i, n);
+      const parts = splitDefect(d.text);
+      group.defects.push({ no: n, text: parts.sentence, severity: parts.severity, category: parts.category, code: parts.code, codeTitle: parts.code ? codeTitle(parts.code) : "", photos: d.photos });
+    });
+    defectGroups.push(group);
+  }
+  for (const p of pending) p.item.defectNo = numberOf.get(p.raisedIndex);
+
+  const totals = emptyCounts();
+  for (const t of tables) for (const k of ITEM_STATUSES) totals[k] += t.counts[k];
 
   // Notes: the section's own notes, the PCI appliances note for the chosen Stage / Status, then what Site & Facilities added.
   const notes = [...summaryLines];
@@ -267,9 +312,8 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
   if (appliances) notes.splice(Math.min(1, notes.length), 0, appliances);
   notes.push(...siteNotes);
 
-  const refs = buildReferences(stage, raised.map((d) => d.text));
   return {
-    stage, stageLabel, purpose: PURPOSE, general: GENERAL, description, streetPhotos, otherPhotos, site, blocks, defects,
-    groupedDefects: meta.groupedDefects, notes, clientQueries, previous, blocksRef: refs.blocks, references: refs.sections, waitingSections,
+    stage, stageLabel, coverTitle: coverTitleOf(stage), purpose: PURPOSE, general: GENERAL, description, streetPhotos, otherPhotos, tables, totals,
+    defectGroups, defectCount: n, notes, previous, clientConcerns, waitingSections,
   };
 }

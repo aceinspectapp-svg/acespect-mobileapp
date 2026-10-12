@@ -28,6 +28,8 @@ const PROPS = ["residential_house", "apartment"];
 /** Answers that are asked on the form but deliberately do not appear in the report text, with the reason. */
 const NOT_PRINTED = {
   streetPhotos: "photographs are laid out separately", elevationPhotos: "photographs are laid out separately", neighbourPhotos: "photographs are laid out separately",
+  // The design sample's General Description has no plans / previous-defects / client-list lines; those lists have their own pages.
+  plansSpecs: "not in the design sample", plansSpecsOther: "not in the design sample", previousDefectsList: "own Previous Defects page", clientIssuesList: "own Client Concerns page",
 };
 
 const templates = (prop, prefix) => snap.filter((t) => t.inspectionType === "construction_stage" && t.propertyType === prop && t.sectionKey.startsWith(prefix));
@@ -100,13 +102,13 @@ for (const prop of PROPS) {
         const m = build(prop, prefix, answers);
         assert.ok(m, "model");
         assert.ok(m.description.length >= 3, "description sentences");
-        if (secs.some((s) => s.sectionKey.endsWith("_site_facilities"))) assert.ok(m.site.length > 0, "site & facilities");
-        assert.ok(m.blocks.length > 0, "stage checks");
+        if (secs.some((s) => s.sectionKey.endsWith("_site_facilities"))) assert.ok(m.tables.some((t) => t.title === "SITE & FACILITIES"), "site & facilities");
+        assert.ok(m.tables.length > 1, "stage checks");
         assert.ok(m.notes.some((n) => /workmanship/i.test(n)), "workmanship statement");
         assert.ok(!/undefined|NaN|\[object/.test(printed(m)), "no broken text");
         // Every stage section that has checklist rows contributes at least one printed row.
-        const banners = m.blocks.length;
-        assert.ok(banners >= 1);
+        assert.ok(m.tables.every((t) => t.groups.some((g) => g.items.length > 0) || t.photos.length > 0));
+        assert.equal(Object.values(m.totals).reduce((a, b) => a + b, 0), m.tables.reduce((n, t) => n + t.groups.reduce((k, g) => k + g.items.length, 0), 0), "the summary counts every row");
       });
 
       it("prints every answer on the form", () => {
@@ -149,18 +151,21 @@ for (const prop of PROPS) {
         answers[t.sectionKey][f.key] = f.defectOn[0];
         answers[t.sectionKey][`${f.key}__defect`] = { location: "Level 1 hall", category: ["damage"], severity: ["minor"], photos: ["/a.jpg", "/b.jpg"], comments: "probe comment", constructionCode: "2.04" };
         const m = build(prop, prefix, answers);
-        assert.equal(m.defects.length, 1);
-        const d = m.defects[0];
+        assert.equal(m.defectCount, 1);
+        const d = m.defectGroups[0].defects[0];
         assert.equal(d.no, 1);
         assert.match(d.text, /Level 1 hall/);
         assert.match(d.text, /probe comment/);
-        assert.match(d.text, /Severity: Minor\./);
-        assert.match(d.text, /Category: Damage\./);
-        assert.match(d.text, /Construction code: 2\.04\./);
-        assert.equal(d.photos.length, 2);
+        assert.equal(d.severity, "Minor");
+        assert.equal(d.category, "Damage");
         assert.equal(d.code, "2.04");
-        assert.ok(m.references.some((s) => s.codes.some((c) => c.code === "2.04")), "the code's extract is in the references");
-        assert.ok(m.blocks.flatMap((b) => b.groups.flatMap((g) => g.items)).some((i) => i.text === "Refer to Defects."), "the checklist row says Refer to Defects");
+        assert.match(d.codeTitle, /^2\.04 /);
+        assert.equal(d.photos.length, 2);
+        const items = m.tables.flatMap((tb) => tb.groups.flatMap((g) => g.items));
+        const row = items.find((i) => i.status === "defect");
+        assert.ok(row, "the checklist row says Refer defects");
+        assert.equal(row.text, "Refer defects.");
+        assert.equal(row.defectNo, 1);
       });
 
       it("prints each part of a defect's details", () => {

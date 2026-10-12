@@ -125,10 +125,33 @@ function buildFooterTemplate(clientName: string, jobNo: string): string {
   `;
 }
 
+// The Construction Report's footer, as in the Houspect Lock-up Report design sample: a thin rule, then Client / Date (the
+// inspection date) / Job No / Page, the company details, and a red and a navy bar along the bottom edge.
+function buildConstructionFooterTemplate(clientName: string, jobNo: string, inspectionDate: string): string {
+  const client = escapeHtml(clientName || '—');
+  const job = escapeHtml(jobNo || '—');
+  const date = escapeHtml(inspectionDate || '—');
+  const label = (t: string) => `<span style="font-weight:700;">${t}</span>`;
+  const sep = '&nbsp;&nbsp;|&nbsp;&nbsp;';
+  return `
+    <div style="width:100%; font-family: Arial, Helvetica, sans-serif; box-sizing:border-box; color:#6b7280; font-size:8.5px; padding:0 ${MARGIN_H};">
+      <div style="border-top:1px solid #e5e7eb; padding-top:5px; text-align:center;">
+        ${label('Client:')} ${client}${sep}${label('Date:')} ${date}${sep}${label('Job No:')} ${job}${sep}${label('Page')} <span class="pageNumber"></span> of <span class="totalPages"></span>
+      </div>
+      <div style="text-align:center; margin-top:3px; font-size:8px;">
+        PO BOX 2521 Mt Waverley VIC 3149${sep}P (03) 9808 4000${sep}E info@houspectvic.com.au${sep}W www.houspect.com.au/victoria
+      </div>
+      <div style="text-align:center; margin-top:1px; font-size:8px;">${COMPANY_NAME}&nbsp; ${COMPANY_ABN_ACN}</div>
+      <div style="height:1.2mm; background:${BRAND_RED}; margin-top:6px; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
+      <div style="height:2.4mm; background:#1b3a6b; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
+    </div>
+  `;
+}
+
 export async function generateInspectionReportPdf(
   inspectionId: string,
   authToken: string,
-  meta: { clientName: string; jobNo: string },
+  meta: { clientName: string; jobNo: string; kind?: 'construction'; inspectionDate?: string },
 ): Promise<Buffer> {
   const browser = await puppeteer.launch({
     headless: true,
@@ -172,7 +195,9 @@ export async function generateInspectionReportPdf(
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: HEADER_TEMPLATE,
-      footerTemplate: buildFooterTemplate(meta.clientName, meta.jobNo),
+      footerTemplate: meta.kind === 'construction'
+        ? buildConstructionFooterTemplate(meta.clientName, meta.jobNo, meta.inspectionDate ?? '')
+        : buildFooterTemplate(meta.clientName, meta.jobNo),
       // Wider side margins and a taller bottom margin than before (the
       // previous 34mm let body text on several content-heavy pages run
       // into the footer bars) -- the top margin grew slightly too, to fit

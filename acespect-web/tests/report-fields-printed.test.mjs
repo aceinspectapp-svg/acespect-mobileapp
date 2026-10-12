@@ -78,7 +78,12 @@ const render = (fields, answers, sectionKey, profile) => {
 
 // Answers the REAL Houspect report does not print (see "Dilapidation Residential Example Apr 2025.pdf"): the kind of works
 // is only used to choose the project-works sentence ("... to the property at X" or "... are the X"), never printed.
+// The Construction Report follows the Houspect Lock-up design sample: its General Description has no plans / previous-defects /
+// client-list lines (those lists have their own Previous Defects and Client Concerns pages).
+const CONSTRUCTION_NOT_PRINTED = ["plansSpecs", "plansSpecsOther", "previousDefectsList", "clientIssuesList"].map((k) => `_description: ${k}`);
 const NOT_PRINTED_BY_DESIGN = {
+  "construction_stage/residential_house": CONSTRUCTION_NOT_PRINTED,
+  "construction_stage/apartment": CONSTRUCTION_NOT_PRINTED,
   "dilapidation/residential_house": ["description: proposedWorksTypeOther"],
   "dilapidation/commercial_properties": ["description: proposedWorksTypeOther"],
   "dilapidation/apartment": ["description: proposedWorksTypeOther"],
@@ -135,7 +140,7 @@ describe("every answer on the website form is printed", () => {
   for (const w of Object.values(WORDING_BY_PROFILE).filter((x) => x.status === "final")) {
     it(`${w.profile.inspectionType} / ${w.profile.propertyType}`, () => {
       const skip = NOT_PRINTED_BY_DESIGN[`${w.profile.inspectionType}/${w.profile.propertyType}`] ?? [];
-      assert.deepEqual(unprintedFields(w).filter((x) => !skip.some((s) => x.startsWith(s))), []);
+      assert.deepEqual(unprintedFields(w).filter((x) => !skip.some((s) => x.startsWith(s) || (s.startsWith("_") && x.includes(s)))), []);
     });
   }
 });

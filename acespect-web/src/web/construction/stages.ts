@@ -39,7 +39,7 @@ export interface StageMeta {
 }
 
 export const PURPOSE =
-  "The purpose of the inspection is to check on the progress of works and quality of workmanship at the specified construction stage, and to identify defects or faults in the new construction, insofar as a licensed builder / building consultant / building practitioner can reasonably identify those defects or faults.";
+  "The purpose of the inspection is to check on the progress of works and quality of workmanship at the specified construction stage, and to identify defects or faults in the new construction, insofar as a licensed builder can reasonably identify those defects or faults.";
 export const GENERAL =
   "This report is the result of a visual inspection only and is intended to provide a reasonable confirmation of the progress of works and to note items that may need attention by the construction builder to ensure satisfactory quality of workmanship.";
 
@@ -71,7 +71,7 @@ export const STAGES: Record<StageId, StageMeta> = {
     progress: "The progress of the works to date is Framework.", standingNotes: [FRAME_FOCUS],
   },
   lock_up: {
-    label: "Lock Up", workmanshipLead: "The workmanship of the lock-up stage", groupedDefects: true, defaultCodes: [], defaultBlocks: [],
+    label: "Lock-up", workmanshipLead: "The workmanship of the lock-up stage", groupedDefects: true, defaultCodes: [], defaultBlocks: [],
     progress: "Progress of the works to date is the Lock Up stage.", standingNotes: [],
   },
   fixing: {
@@ -98,6 +98,15 @@ export const STAGES: Record<StageId, StageMeta> = {
 };
 
 export const stageMeta = (id: StageId): StageMeta => STAGES[id];
+
+/** The big title on the cover: "Lock-up Stage". */
+export function coverTitleOf(stage: StageId): string {
+  const titles: Record<StageId, string> = {
+    pre_pour: "Pre-Pour Stage", slab: "Slab Down Stage", framework: "Frame Stage", lock_up: "Lock-up Stage", fixing: "Fixing Stage",
+    pci: "Practical Completion / Handover", slab_frame: "Slab Down & Frame Stage", lock_fix: "Lock-up & Fixing Stage",
+  };
+  return titles[stage];
+}
 
 /** The order the app lists a stage's sections in, which is also the order they print in. */
 export const SECTION_ORDER: string[] = ['pp_description','pp_site_facilities','pp_measurements','pp_formwork','pp_general','pp_defects','pp_summary','pp_client_issues','sd_description','sd_site_facilities','sd_measurements','sd_quality','sd_defects','sd_summary','sd_previous_defects','sd_client_issues','fr_description','fr_site_facilities','fr_services','fr_roof_frame','fr_wall_floor','fr_windows_doors','fr_progress','fr_defects','fr_summary','fr_previous_defects','fr_client_issues','lu_description','lu_site_facilities','lu_external_walls','lu_doors_windows','lu_framework','lu_roofing','lu_defects','lu_summary','lu_previous_defects','lu_client_issues','fx_description','fx_site_facilities','fx_walls_ceilings','fx_stairs_floors','fx_doors_windows','fx_fitout','fx_waterproofing','fx_defects','fx_summary','fx_previous_defects','fx_client_issues','pci_description','pci_site_facilities','pci_roof','pci_walls_doors','pci_garage_site','pci_internal','pci_finishes','pci_services','pci_typical_defects','pci_defects','pci_summary','pci_previous_defects','pci_client_issues','sf_description','sf_site_facilities','sf_measurements','sf_quality','sf_services','sf_roof_frame','sf_wall_floor','sf_windows_doors','sf_progress','sf_defects','sf_summary','sf_previous_defects','sf_client_issues','lf_description','lf_site_facilities','lf_external_walls','lf_roofing','lf_walls_ceilings','lf_stairs_floors','lf_doors_windows','lf_fitout','lf_waterproofing','lf_services','lf_defects','lf_summary','lf_previous_defects','lf_client_issues'];

@@ -4,7 +4,7 @@
  *
  * The text is lines, in the same plain format every report type uses, with these tags:
  *   ROOMHEAD::<heading>        a sub-heading (a group of checks, "Roof", "Walls" ...)
- *   ITEM::<heading>::<text>    one checklist row: its short name in bold, then its sentence
+ *   ITEM::<heading>::<status>::<text>   one checklist row: its short name, its status (ok, progress, defect, note, notcomplete, na) and its sentence
  *   NOTE::<text>               a sentence that belongs under the report's Notes (printed there, and shown in the section for the reviewer)
  *   DEFECT::<n>::<text>        defect n of this section (its photos are the section's n-th damage record)
  * and plain paragraphs for everything else.
@@ -13,7 +13,7 @@ import type { AnswerTree, TemplateField } from "../templateFields";
 import { asAnswerTree, asString, asStringArray, isGateSatisfied } from "../templateFields";
 import { EXTERNAL_WORDS, STAGES, areaOfSection, kindOfKey, stageOfKey, type StageId } from "./stages";
 import {
-  CATEGORY_LABELS, NOT_APPLICABLE, SATISFACTORY, SEVERITY_LABELS, asList, cap, chosen, headingMap, headingOf, joinList, labelsOf, lower, mapLabels, photosIn, sentence, toneOfOption,
+  type Chosen, CATEGORY_LABELS, NOT_APPLICABLE, SATISFACTORY, SEVERITY_LABELS, asList, cap, chosen, headingMap, headingOf, joinList, labelsOf, lower, mapLabels, photosIn, sentence, toneOfOption,
 } from "./words";
 
 export interface ComposedDamage {
@@ -45,8 +45,9 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartm
 
   const kind = one("constructionIs") || one("design");
   const foundations = one("foundations");
-  if (kind) out.push(`The construction is a ${kind} ${apartment ? "apartment" : "house"}.`);
-  if (foundations) out.push(`Foundations are ${foundations}.`);
+  if (kind && foundations) out.push(`The construction is a ${kind}${apartment ? " apartment" : ""} on a ${foundations}.`);
+  else if (kind) out.push(`The construction is a ${kind}${apartment ? " apartment" : ""}.`);
+  else if (foundations) out.push(`Foundations are ${foundations}.`);
 
   const ground = all("groundCladding");
   const first = all("firstCladding").filter((x) => x !== "not applicable");
@@ -65,21 +66,15 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartm
   const roofCover = one("roofCoveringIs");
   if (roofDesign || roofCover) out.push(`The roof design is ${roofDesign || "—"}${roofCover ? ` and the covering is constructed of ${roofCover}` : ""}.`);
   const frontage = one("frontage");
-  if (frontage) out.push(`The street frontage is to the ${frontage}.`);
+  if (frontage) out.push(`Street frontage is to the ${frontage}.`);
   const block = one("blockSlope");
   if (block) out.push(`The block is ${block}.`);
   if (a.supervisorOnSite === "yes" || a.supervisorOnSite === "no") out.push(`The site supervisor was${a.supervisorOnSite === "no" ? " not" : ""} onsite at the time of inspection.`);
-  if (a.ownersOnSite === "yes" || a.ownersOnSite === "no") out.push(`The owners were${a.ownersOnSite === "no" ? " not" : ""} present for the inspection.`);
+  if (a.ownersOnSite === "yes" || a.ownersOnSite === "no") out.push(`The owner ${a.ownersOnSite === "no" ? "was not" : "was"} onsite at the time of inspection.`);
   if (a.safetyIssues === "yes") {
     const d = asString(a.safetyDescribe).trim();
     out.push(d ? `Safety issues were noted: ${sentence(d)}` : "Safety issues were noted on site.");
   }
-  const plans = labelsOf(f("plansSpecs"), a.plansSpecs).map(lower);
-  const plansOther = asString(a.plansSpecsOther).trim();
-  if (plans.length) out.push(`Plans and specifications provided: ${joinList(plans.map((x) => (x === "other" && plansOther ? plansOther : x)))}.`);
-  if (asString(a.previousDefectsList) === "yes") out.push("A defects list from the previous report is attached, with its status updated.");
-  const clientList = asString(a.clientIssuesList);
-  if (clientList === "yes" || clientList === "yes_attached") out.push("The client has supplied a list of issues, which is attached with the inspector's comments.");
   out.push(STAGES[stage].progress);
   return out;
 }
@@ -133,9 +128,41 @@ function typicalDefects(fields: TemplateField[], a: AnswerTree): Defect[] {
 
 const toMm = (n: string) => (n ? `${n} millimetres` : "—");
 
-interface Row { group?: string; heading: string; text: string }
+/** How a checklist row reads on the report: the colour of its status. */
+export type ItemStatus = "ok" | "progress" | "defect" | "note" | "notcomplete" | "na";
+export const ITEM_STATUSES: ItemStatus[] = ["ok", "progress", "defect", "note", "notcomplete", "na"];
 
-/** One checklist section -> its rows (heading + sentence) and the defects raised in it. */
+const NOT_YET = /\bnot\s+(yet|commenced|complete|compete|sighted|started|installed|fitted|done)\b/i;
+const IN_PROGRESS = /progress|part done|temp|off hinges|incomplete/i;
+
+/** The status a chosen answer stands for: a defect, a note, work in progress, not yet done, not applicable, or checked and okay. */
+function statusOf(c: Chosen, isDefect: boolean): ItemStatus {
+  if (isDefect) return "defect";
+  if (c.tone === "na") return NOT_YET.test(c.label) ? "notcomplete" : "na";
+  if (c.tone === "warn") {
+    if (/note/i.test(c.label)) return "note";
+    if (NOT_YET.test(c.label)) return "notcomplete";
+    if (IN_PROGRESS.test(c.label)) return "progress";
+    return "note";
+  }
+  return "ok";
+}
+
+/** The sentence under a row's name. */
+function textFor(status: ItemStatus, c: Chosen, hasRedOption: boolean, plainYesNo: boolean): string {
+  if (status === "defect") return "Refer defects.";
+  if (status === "ok" && (SATISFACTORY.test(c.label) || hasRedOption || (plainYesNo && /^(yes|no)$/i.test(c.label)))) return "Checked and okay.";
+  if (status === "note" && /note/i.test(c.label)) return "Refer notes.";
+  if (status === "na" && NOT_APPLICABLE.test(c.label)) return "Not applicable.";
+  return sentence(c.label);
+}
+
+const SEVERITY_ORDER: ItemStatus[] = ["defect", "note", "notcomplete", "progress", "ok", "na"];
+const worst = (list: ItemStatus[]): ItemStatus => SEVERITY_ORDER.find((s) => list.includes(s)) ?? "ok";
+
+interface Row { group?: string; heading: string; status: ItemStatus; text: string }
+
+/** One checklist section -> its rows (heading, status and sentence) and the defects raised in it. */
 function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind: "site" | "stage"): { rows: Row[]; defects: Defect[] } {
   const rows: Row[] = [];
   const defects: Defect[] = [];
@@ -144,8 +171,30 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
   const visible = [...fields].filter((f) => isGateSatisfied(f, a)).sort((x, y) => x.order - y.order);
   const headings = headingMap(fields);
   const area = kind === "site" ? "EXTERNAL" : areaOfSection(key);
-  const add = (f: TemplateField, heading: string, text: string) => {
-    if (text) rows.push({ group: f.sectionLetter ? headingOf(f.sectionLetter) : undefined, heading, text });
+  const add = (f: TemplateField, heading: string, status: ItemStatus, text: string) => {
+    if (text) rows.push({ group: f.sectionLetter ? headingOf(f.sectionLetter) : undefined, heading, status, text });
+  };
+  const hasRed = (f: TemplateField) => !!f.options?.some((x) => toneOfOption(x.color) === "bad");
+
+  /** If this row was answered "Defect", record the defect (with the details the inspector gave) and say so. */
+  const captureDefect = (f: TemplateField, heading: string): boolean => {
+    const v = a[f.key];
+    if (f.type !== "pill-select" || typeof v !== "string") return false;
+    const isDefect = f.defectOn ? f.defectOn.includes(v) : chosen(f, v).tone === "bad";
+    if (!isDefect) return false;
+    const d = asAnswerTree(a[`${f.key}${DEFECT_SUFFIX}`]);
+    defects.push({
+      sub: f.sectionLetter ? headingOf(f.sectionLetter) : "General", area, location: asString(d.location).trim(),
+      text: defectText(heading, asString(d.location).trim(), asString(d.comments).trim(), mapLabels(d.severity, SEVERITY_LABELS), mapLabels(d.category, CATEGORY_LABELS), asString(d.constructionCode).trim()),
+      photos: photosIn(d.photos),
+    });
+    return true;
+  };
+  const statusOfField = (f: TemplateField | undefined): ItemStatus => {
+    const v = f ? a[f.key] : undefined;
+    if (!f || typeof v !== "string" || !v) return "ok";
+    const c = chosen(f, v);
+    return statusOf(c, f.defectOn ? f.defectOn.includes(v) : c.tone === "bad");
   };
 
   // Items worked out from several rows at once are printed where their first row sits.
@@ -178,13 +227,15 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
         : `On plan is ${plan || "—"} and on site is approximately ${onSite || "—"}.`,
     );
     const resRaw = result ? asString(a[result.key]) : "";
+    let status: ItemStatus = "ok";
     if (result && resRaw) {
       const r = chosen(result, resRaw);
-      if (r.label) parts.push(r.tone === "ok" && SATISFACTORY.test(r.label) ? "Checked and satisfactory." : sentence(r.label));
+      status = statusOf(r, false);
+      if (r.label) parts.push(r.tone === "ok" && SATISFACTORY.test(r.label) ? "Checked and okay." : sentence(r.label));
     }
     used.add(f.key); used.add(site.key); if (datum) used.add(datum.key); if (result) used.add(result.key);
     const text = parts.join(" ");
-    emitAt.set(anchorOf(datum, f, site, result), () => add(f, name, text));
+    emitAt.set(anchorOf(datum, f, site, result), () => add(f, name, status, text));
   }
 
   // The upper-roof rows carry a limitation sentence in the office template.
@@ -202,7 +253,13 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
       low ? `Lower level roofing was checked from the ladder and is ${low}.` : "",
     ].filter(Boolean);
     used.add("upperRoofFrom"); used.add("upperRoofAppears"); used.add("lowerRoofLadder");
-    if (parts.length) { const text = parts.join(" "); emitAt.set("upperRoofFrom", () => add(roofFrom, "Roof covering", text)); }
+    if (parts.length) {
+      const text = parts.join(" ");
+      emitAt.set("upperRoofFrom", () => {
+        const defect = [appears, lowerRoof].map((f) => (f ? captureDefect(f, headingOf(f.label)) : false)).some(Boolean);
+        add(roofFrom, "Roof covering", defect ? "defect" : worst([statusOfField(appears), statusOfField(lowerRoof)]), defect ? `${text} Refer defects.` : text);
+      });
+    }
   }
   const gutterAccess = fieldByKey.get("safeAccessGuttering");
   if (gutterAccess && a.safeAccessGuttering && !used.has("safeAccessGuttering")) {
@@ -217,7 +274,13 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
       low ? `Lower level guttering was checked and is ${low}.` : "",
     ].filter(Boolean);
     used.add("safeAccessGuttering"); used.add("upperGutteringGround"); used.add("lowerGutteringLadder");
-    if (parts.length) { const text = parts.join(" "); emitAt.set("safeAccessGuttering", () => add(gutterAccess, "Roof gutters", text)); }
+    if (parts.length) {
+      const text = parts.join(" ");
+      emitAt.set("safeAccessGuttering", () => {
+        const defect = [g, l].map((f) => (f ? captureDefect(f, headingOf(f.label)) : false)).some(Boolean);
+        add(gutterAccess, "Roof gutters", defect ? "defect" : worst([statusOfField(g), statusOfField(l)]), defect ? `${text} Refer defects.` : text);
+      });
+    }
   }
 
   const rowByKey = new Map<string, Row>();
@@ -236,53 +299,46 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
       if (/^(applicable|not applicable)$/i.test(c.label) && /^(truss|non-truss|hebel|masonry|blueboard|stairwell|balcony)/i.test(heading)) continue; // only switches a group of checks on or off
       if (c.other && !c.label) continue; // a typed "Other" with nothing typed says nothing
       if (f.key.endsWith("_material")) {
-        // "Colorbond" belongs to the row above it; if that row was left out (N/A), it stands on its own.
-        const baseKey = f.key.replace(/_material$/, "");
-        const baseRow = rowByKey.get(baseKey);
+        // "Colorbond" belongs to the row above it; if that row was left out, it stands on its own.
+        const baseRow = rowByKey.get(f.key.replace(/_material$/, ""));
         if (baseRow) baseRow.text = `${c.label}. ${baseRow.text}`.trim();
-        else add(f, heading, sentence(c.label));
+        else add(f, heading, "ok", sentence(c.label));
         continue;
       }
       const isOtherRow = /_other$/.test(f.key);
-      if (c.tone === "na" && NOT_APPLICABLE.test(c.label) && !(isOtherRow && asString(a[`${f.key}_note`]).trim())) continue;
       const isDefect = f.defectOn ? f.defectOn.includes(v) : c.tone === "bad";
-      let text: string;
-      if (isDefect) text = "Refer to Defects.";
-      else if (c.tone === "ok" && (SATISFACTORY.test(c.label) || f.options?.some((x) => toneOfOption(x.color) === "bad"))) text = "Checked and satisfactory.";
-      else if (/note/i.test(c.label)) text = "Refer to Notes.";
-      else text = sentence(c.label);
-      if (/_other$/.test(f.key)) {
+      let status = statusOf(c, isDefect);
+      // "Yes" / "No" on a check that also offers "see notes" (power supply: Yes / No - see notes) means it is fine; "Complete? Yes" is an answer in itself.
+      const plainYesNo = !/complete\??$/i.test(heading) && !!f.options?.some((x) => toneOfOption(x.color) !== "ok");
+      let text = textFor(status, c, hasRed(f), plainYesNo);
+      if (isOtherRow) {
         // "Other": printed only when the inspector said what it was (or it is a defect).
         const note = asString(a[`${f.key}_note`]).trim();
         if (!note && !isDefect) continue;
-        text = note ? (isDefect ? `${text} ${sentence(note)}` : sentence(note)) : text;
+        if (note) {
+          text = isDefect ? `${text} ${sentence(note)}` : sentence(note);
+          if (status === "ok" || status === "na") status = "note";
+        }
       }
-      const row: Row = { group: f.sectionLetter ? headingOf(f.sectionLetter) : undefined, heading, text };
+      const row: Row = { group: f.sectionLetter ? headingOf(f.sectionLetter) : undefined, heading, status, text };
       rows.push(row);
       rowByKey.set(f.key, row);
-      if (isDefect) {
-        const d = asAnswerTree(a[`${f.key}${DEFECT_SUFFIX}`]);
-        defects.push({
-          sub: row.group ?? "General", area, location: asString(d.location).trim(),
-          text: defectText(heading, asString(d.location).trim(), asString(d.comments).trim(), mapLabels(d.severity, SEVERITY_LABELS), mapLabels(d.category, CATEGORY_LABELS), asString(d.constructionCode).trim()),
-          photos: photosIn(d.photos),
-        });
-      }
+      if (isDefect) captureDefect(f, heading);
       continue;
     }
 
-    if (f.type === "yesno") { add(f, heading, v === "yes" ? "Yes." : v === "no" ? "No." : ""); continue; }
+    if (f.type === "yesno") { add(f, heading, "ok", v === "yes" ? "Yes." : v === "no" ? "No." : ""); continue; }
     if (f.type === "chip-multiselect" || f.type === "tile-multiselect") {
       const list = labelsOf(f, v);
       if (!list.length) continue;
-      if (/visible at$/i.test(heading)) add(f, heading.replace(/\s+(are\s+)?visible at$/i, ""), /none/i.test(list[0]!) ? "None visible." : `Visible at ${joinList(list.map(lower))}.`);
-      else add(f, heading, sentence(joinList(list)));
+      if (/visible at$/i.test(heading)) add(f, heading.replace(/\s+(are\s+)?visible at$/i, ""), "ok", /none/i.test(list[0]!) ? "None visible." : `Visible at ${joinList(list.map(lower))}.`);
+      else add(f, heading, "ok", sentence(joinList(list)));
       continue;
     }
-    if (f.type === "numeric") { add(f, heading, `${asString(v) || String(v)}${f.unit ? ` ${f.unit}` : ""}.`); continue; }
+    if (f.type === "numeric") { add(f, heading, "ok", `${asString(v) || String(v)}${f.unit ? ` ${f.unit}` : ""}.`); continue; }
     if (f.type === "text" || f.type === "textarea" || f.type === "date") {
       const t = asString(v).trim();
-      if (t) add(f, heading, sentence(t));
+      if (t) add(f, heading, "note", sentence(t));
     }
   }
   return { rows, defects };
@@ -375,7 +431,7 @@ export function composeConstructionSection(key: string, fields: TemplateField[],
         group = r.group;
         if (group) lines.push(`${TAGS.room}${group}`);
       }
-      lines.push(`${TAGS.item}${r.heading}::${r.text}`);
+      lines.push(`${TAGS.item}${r.heading}::${r.status}::${r.text}`);
     }
     defects.push(...raised);
     if (kind === "site") for (const n of siteNotes(stage, fields, a)) lines.push(`${TAGS.note}${n}`);

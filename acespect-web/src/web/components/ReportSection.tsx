@@ -60,7 +60,7 @@ type ParsedItem =
 // Matches the report type's wording (src/web/wording/) damageSentences -- one tagged paragraph per recorded defect, where `index` is that defect's position in the section's damage list, so its own photos can be printed right under its sentence.
 const DEFECT_RE = /^DEFECT::(\d+)::([\s\S]*)$/;
 // Construction Stage report text: one checklist row (its short name in bold, then its sentence), and a sentence that is printed under the report's Notes.
-const ITEM_RE = /^ITEM::(.+?)::([\s\S]*)$/;
+const ITEM_RE = /^ITEM::(.+?)::(?:(?:ok|progress|defect|note|notcomplete|na)::)?([\s\S]*)$/;
 const NOTE_RE = /^NOTE::([\s\S]*)$/;
 
 function renderParsedItem(item: ParsedItem, compact: boolean, key: number | string, damages: DamageRecord[]) {
