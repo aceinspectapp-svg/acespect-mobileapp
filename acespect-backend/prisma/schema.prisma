@@ -190,6 +190,13 @@ model Inspection {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
+  /// Where the photos live in Egnyte: {root}/{batch folder}/{job folder} (see lib/egnyteJobFolders.ts).
+  egnytePath      String?
+  /// "ok", or "needs_review" / "unassigned" / "failed" when the office must look (egnyteMessage says why). Null before any placement.
+  egnyteStatus    String?
+  egnyteMessage   String?
+  egnyteCheckedAt DateTime?
+
   /// Set only on a Post-Dilapidation job: the earlier, already-submitted
   /// inspection this one is being assessed against. Its presence (not a
   /// separate inspectionType) is what makes an inspection "post-dilap" --

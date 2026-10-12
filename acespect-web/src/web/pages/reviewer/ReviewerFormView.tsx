@@ -734,7 +734,7 @@ function ResizeHandle({ width, onChange, min, max, grows, initial }: { width: nu
 export function ReviewerFormView() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { currentUser, loading, getInspectionById, getUser, patchSection, patchDamage } = useAppData();
+  const { currentUser, loading, getInspectionById, getUser, patchSection, patchDamage, patchInspection } = useAppData();
   const inspection = getInspectionById(id ?? "");
   // The Construction Report as it will print (every section counted), so each section's "Report Content" matches the final report.
   const [areasW, setAreasW] = usePersistedWidth("reviewer.areasWidth", 220);
@@ -1088,6 +1088,29 @@ export function ReviewerFormView() {
           </strong>
         </div>
       </div>
+
+      {/* The photos' Egnyte folder needs the office's attention (job number not recognised, batch inconsistent, or Egnyte unreachable). */}
+      {inspection.egnyte && inspection.egnyte.status !== "ok" && (
+        <div style={{ flexShrink: 0, background: inspection.egnyte.status === "failed" ? "#fef2f2" : "#fffbeb", borderBottom: "1px solid #e5e7eb", padding: "8px 24px", display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: "#374151" }}>
+          <strong style={{ color: inspection.egnyte.status === "failed" ? "#b91c1c" : "#92400e" }}>
+            {inspection.egnyte.status === "failed" ? "Photo folder not placed" : inspection.egnyte.status === "unassigned" ? "Photos waiting for a valid job number" : "Photo folder needs a look"}
+          </strong>
+          <span style={{ flex: 1 }}>{inspection.egnyte.message}</span>
+          <button
+            onClick={async () => {
+              try {
+                await api.resolveEgnyte(inspection.id);
+                await patchInspection(inspection.id, {});
+              } catch (e) {
+                alert((e as Error).message || "Could not re-check the Egnyte folder.");
+              }
+            }}
+            style={{ height: "28px", padding: "0 10px", borderRadius: "6px", border: "1px solid #d1d5db", background: "white", cursor: "pointer", fontSize: "12px", fontWeight: 600, flexShrink: 0 }}
+          >
+            Re-check folder
+          </button>
+        </div>
+      )}
 
       {/* ── 3-column body ── */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden", height: CONTENT_H }}>

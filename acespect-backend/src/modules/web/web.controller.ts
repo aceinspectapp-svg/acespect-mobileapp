@@ -43,6 +43,13 @@ export const webController = {
     res.status(200).json({ inspection });
   }),
 
+  resolveEgnyte: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    const inspection = await webService.resolveEgnyte(id);
+    res.status(200).json({ inspection });
+  }),
+
   updateDamage: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Damage id is required');

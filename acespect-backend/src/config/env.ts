@@ -40,6 +40,8 @@ const schema = z.object({
   // returns false and photo uploads fail loudly rather than silently.
   EGNYTE_DOMAIN: z.string().default(''),
   EGNYTE_API_TOKEN: z.string().default(''),
+  // Test only: a stand-in Egnyte server (scripts/check-egnyte-upload.ts). Leave empty in production.
+  EGNYTE_BASE_URL: z.string().default(''),
   EGNYTE_ROOT_FOLDER: z.string().default('/Shared/ACE SPECT/inspection-photos'),
 
   // The web app's own origin -- the PDF pipeline points a headless browser

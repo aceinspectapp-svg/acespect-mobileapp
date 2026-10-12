@@ -184,6 +184,16 @@ async function updateDamage(id: string, input: DamageUpdateInput) {
 }
 
 /** Status / notes / reviewer-assignment changes on an inspection. */
+/** Re-run the Egnyte folder placement for one inspection (after a failure, or once its job number was corrected). */
+async function resolveEgnyte(id: string) {
+  const row = await prisma.inspection.findUnique({ where: { id }, select: { id: true, jobNo: true } });
+  if (!row) throw ApiError.notFound('Inspection not found');
+  const { settleEgnyteFolder } = await import('../inspections/inspections.service');
+  await settleEgnyteFolder(row.id, row.jobNo);
+  const fresh = await prisma.inspection.findUnique({ where: { id }, include: SECTIONS_INCLUDE });
+  return serializeInspection(fresh!);
+}
+
 async function updateInspection(id: string, input: InspectionUpdateInput) {
   const exists = await prisma.inspection.findUnique({ where: { id }, select: { id: true } });
   if (!exists) throw ApiError.notFound('Inspection not found');
@@ -237,5 +247,6 @@ export const webService = {
   updateSection,
   updateDamage,
   updateInspection,
+  resolveEgnyte,
   listSubmissionLogs,
 };

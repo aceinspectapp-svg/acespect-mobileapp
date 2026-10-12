@@ -71,6 +71,8 @@ export interface Inspection {
   notes: string;
   /** Link to the folder holding this job's photos (generated from the job number); null when photo storage isn't set up. */
   photoArchiveUrl?: string | null;
+  /** Where the photos were placed in Egnyte ({batch}/{job}) and whether the office needs to look at it; null before any placement. */
+  egnyte?: { status: "ok" | "needs_review" | "unassigned" | "failed"; path: string | null; message: string | null; checkedAt: string | null } | null;
 }
 
 /* ─── Inspection templates (admin-defined form structure) ──────────── */

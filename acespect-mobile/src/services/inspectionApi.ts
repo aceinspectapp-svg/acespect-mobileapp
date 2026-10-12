@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import { api } from './apiClient';
 import type { SubmitPayload } from '../context/InspectionDraftContext';
 
@@ -8,9 +9,18 @@ import type { SubmitPayload } from '../context/InspectionDraftContext';
  * upload — always pass them for a real inspection photo (see
  * `InspectionDraftContext.getFolderId()`).
  */
+/**
+ * A fixed id for one photo, made from the inspection, the section and the photo's own file path. The server keeps the photo
+ * under this id, so sending the same photo again after a dropped connection returns the copy it already has.
+ */
+async function stablePhotoId(inspectionId: string, sectionKey: string | undefined, uri: string): Promise<string> {
+  const hex = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${inspectionId}|${sectionKey ?? ''}|${uri}`);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
 export async function uploadPhoto(
   uri: string,
-  opts?: { inspectionId?: string; sectionKey?: string },
+  opts?: { inspectionId?: string; sectionKey?: string; jobNo?: string },
 ): Promise<string> {
   const name = uri.split('/').pop() || 'photo.jpg';
   const rawExt = (name.split('.').pop() || 'jpg').toLowerCase();
@@ -21,6 +31,9 @@ export async function uploadPhoto(
   form.append('photo', { uri, name, type: mime } as unknown as Blob);
   if (opts?.inspectionId) form.append('inspectionId', opts.inspectionId);
   if (opts?.sectionKey) form.append('sectionKey', opts.sectionKey);
+  // The job number lets the server file the photo straight into its batch / job folder in Egnyte.
+  if (opts?.jobNo) form.append('jobNo', opts.jobNo);
+  if (opts?.inspectionId) form.append('photoId', await stablePhotoId(opts.inspectionId, opts.sectionKey, uri));
 
   const { data } = await api.post<{ url: string }>('/inspections/photos', form, {
     headers: { 'Content-Type': 'multipart/form-data' },

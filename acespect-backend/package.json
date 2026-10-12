@@ -18,7 +18,10 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "check:lifecycle": "tsx src/scripts/qc-lifecycle-check.ts",
-    "check:platform": "tsx src/scripts/qc-platform-check.ts"
+    "check:platform": "tsx src/scripts/qc-platform-check.ts",
+    "check:egnyte-folders": "tsx src/scripts/check-egnyte-folders.ts",
+    "check:egnyte-upload": "tsx src/scripts/check-egnyte-upload.ts",
+    "egnyte:reconcile": "tsx src/scripts/egnyte-reconcile.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
