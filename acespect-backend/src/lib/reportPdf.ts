@@ -15,10 +15,8 @@ import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
  * separate print-only route needed.
  */
 
-export const BRAND_NAVY = '#1a2a4a';
-export const BRAND_RED = '#dc2626';
-export const FOOTER_META_COLOR = '#7b93b5'; // light blue-grey, matching the reference's own meta-line color
-export const FOOTER_LABEL_COLOR = '#8a97a8'; // grey "PA / P / E / W" style labels
+export const BRAND_NAVY = '#1b3a6b'; // the one navy of the whole report (its cover, bands, footer)
+export const BRAND_RED = '#d1262b';
 const MARGIN_H = '22mm'; // wider side margins than before, matching the reference
 
 // Acespect Pty Ltd trades AS Houspect Victoria -- this is this business's
@@ -26,36 +24,12 @@ const MARGIN_H = '22mm'; // wider side margins than before, matching the referen
 // straight off Houspect Victoria's own master report template's footer.
 export const COMPANY_NAME = 'Acespect Pty Ltd trading as Houspect Victoria';
 export const COMPANY_ABN_ACN = 'ABN 24 237 148 557 ACN 688 819 712';
-// Each address segment as its own {label, value} so the label can render
-// grey and the value navy, matching the reference's own styling (a single
-// plain string couldn't carry that split).
-export const ADDRESS_LINE_1: { label: string; value: string }[] = [
-  { label: 'PA', value: 'PO BOX 2521 Mt Waverley VIC 3149' },
-  { label: 'P', value: '(03) 9808 4000' },
-  { label: 'E', value: 'info@houspectvic.com.au' },
-];
-export const ADDRESS_LINE_2: { label: string; value: string }[] = [
-  { label: 'W', value: 'www.houspect.com.au/victoria' },
-  { label: '', value: `${COMPANY_NAME} ${COMPANY_ABN_ACN}` },
-];
-
 // Puppeteer's header/footer templates are their own isolated, unscripted
 // document -- values from the page being printed (client name, job no) have
 // to be baked into the template's own HTML string before it's handed to
 // page.pdf(), so this escapes them the same way React would.
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function addressLine(parts: { label: string; value: string }[]): string {
-  const pipe = `<span style="color:${BRAND_RED};">|</span>`;
-  return parts
-    .map(
-      (p) =>
-        (p.label ? `<span style="color:${FOOTER_LABEL_COLOR};">${p.label}</span> ` : '') +
-        `<span style="color:${BRAND_NAVY};">${p.value}</span>`,
-    )
-    .join(` &nbsp;${pipe}&nbsp; `);
 }
 
 // Puppeteer's header/footer templates are plain, unscripted HTML -- no access
@@ -72,62 +46,9 @@ const HEADER_TEMPLATE = `
   </div>
 `;
 
-// Matches Houspect Victoria's own master template footer: Client Name, then
-// a Date/Job No/Page No line with red pipe separators, a red bar, a navy
-// bar, then the two company-details lines. "Date" here is the day the PDF
-// was generated (not the inspection date, which already has its own row on
-// the cover) -- same as the reference template, where it differs from the
-// inspection date for the same reason.
-//
-// The reference's own footer actually varies its bar/line order across
-// different page ranges (pages 1-2, 3-4, and 5+ each arrange the address
-// lines and bars differently) -- Puppeteer's footerTemplate is one static
-// HTML string applied to every page with no way to key off which page
-// number it's currently rendering, so reproducing that exactly isn't
-// possible here. This uses the one structure the reference itself settles
-// into from page 5 onward (bar, then both address lines below) consistently
-// on every page, rather than the apparently inconsistent early-page
-// formatting, which reads as leftover manual Word editing rather than
-// intentional design.
-function buildFooterTemplate(clientName: string, jobNo: string): string {
-  const today = new Date();
-  const dateStr = [today.getDate(), today.getMonth() + 1, today.getFullYear()]
-    .map((n, i) => (i < 2 ? String(n).padStart(2, '0') : String(n)))
-    .join('.');
-  const pipe = `<span style="color:${BRAND_RED};">|</span>`;
-  const client = escapeHtml(clientName || '—');
-  const job = escapeHtml(jobNo || '—');
-
-  return `
-    <div style="width:100%; font-family: Arial, Helvetica, sans-serif; box-sizing:border-box; color:${FOOTER_META_COLOR}; font-size:9px;">
-      <div style="padding:0 ${MARGIN_H};">
-        <div style="text-align:center;">
-          <span style="font-weight:700;">Client Name:</span>&nbsp; ${client}
-        </div>
-        <div style="text-align:center; margin-top:3px;">
-          ${pipe} <span style="font-weight:700;">Date:</span> ${dateStr}
-          &nbsp;${pipe} <span style="font-weight:700;">Job No:</span> ${job}
-          &nbsp;${pipe} <span style="font-weight:700;">Page No:</span> <span class="pageNumber"></span> of <span class="totalPages"></span>
-        </div>
-      </div>
-      <!-- Full-bleed, edge-to-edge -- outside the ${MARGIN_H} side padding above/below, unlike the text lines. -->
-      <div style="height:2mm; background:${BRAND_RED}; margin-top:7px; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
-      <div style="height:8mm; background:${BRAND_NAVY}; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
-      <div style="padding:0 ${MARGIN_H};">
-        <div style="font-size:8px; text-align:center; margin-top:5px;">
-          ${addressLine(ADDRESS_LINE_1)}
-        </div>
-        <div style="font-size:8px; text-align:center; margin-top:2px;">
-          ${addressLine(ADDRESS_LINE_2)}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-// The Construction Report's footer, as in the Houspect Lock-up Report design sample: a thin rule, then Client / Date (the
+// The footer of every report, as in the Houspect Lock-up Report design sample: a thin rule, then Client / Date (the
 // inspection date) / Job No / Page, the company details, and a red and a navy bar along the bottom edge.
-function buildConstructionFooterTemplate(clientName: string, jobNo: string, inspectionDate: string): string {
+function buildFooterTemplate(clientName: string, jobNo: string, inspectionDate: string): string {
   const client = escapeHtml(clientName || '—');
   const job = escapeHtml(jobNo || '—');
   const date = escapeHtml(inspectionDate || '—');
@@ -143,7 +64,7 @@ function buildConstructionFooterTemplate(clientName: string, jobNo: string, insp
       </div>
       <div style="text-align:center; margin-top:1px; font-size:8px;">${COMPANY_NAME}&nbsp; ${COMPANY_ABN_ACN}</div>
       <div style="height:1.2mm; background:${BRAND_RED}; margin-top:6px; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
-      <div style="height:2.4mm; background:#1b3a6b; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
+      <div style="height:2.4mm; background:${BRAND_NAVY}; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
     </div>
   `;
 }
@@ -207,7 +128,7 @@ export async function withReportPage<T>(
 export async function generateInspectionReportPdf(
   inspectionId: string,
   authToken: string,
-  meta: { clientName: string; jobNo: string; kind?: 'construction'; inspectionDate?: string },
+  meta: { clientName: string; jobNo: string; inspectionDate?: string },
 ): Promise<Buffer> {
   return withReportPage(inspectionId, authToken, async (page) => {
     const pdf = await page.pdf({
@@ -215,9 +136,7 @@ export async function generateInspectionReportPdf(
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: HEADER_TEMPLATE,
-      footerTemplate: meta.kind === 'construction'
-        ? buildConstructionFooterTemplate(meta.clientName, meta.jobNo, meta.inspectionDate ?? '')
-        : buildFooterTemplate(meta.clientName, meta.jobNo),
+      footerTemplate: buildFooterTemplate(meta.clientName, meta.jobNo, meta.inspectionDate ?? ''),
       // Wider side margins and a taller bottom margin than before (the
       // previous 34mm let body text on several content-heavy pages run
       // into the footer bars) -- the top margin grew slightly too, to fit

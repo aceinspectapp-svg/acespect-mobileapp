@@ -8,10 +8,13 @@ export const FALLBACK_ASPECT = 4 / 3;
  * any are still loading, `pending` is true and the unknown ones count as
  * 4:3 -- the layout settles as soon as the real sizes arrive. The PDF
  * generator waits for `pending` to clear (the grid marks itself with
- * `data-photo-grid-pending`) before printing.
+ * `data-photo-grid-pending`) before printing. `failed[i]` is true for a photo
+ * that could not be loaded at all (the grid draws a neutral "Photograph
+ * unavailable" box in its place rather than the browser's broken-picture icon).
  */
-export function useImageAspects(urls: string[]): { aspects: number[]; pending: boolean } {
+export function useImageAspects(urls: string[]): { aspects: number[]; pending: boolean; failed: boolean[] } {
   const [known, setKnown] = useState<Record<string, number>>({});
+  const [broken, setBroken] = useState<Record<string, true>>({});
   const key = urls.join("\n");
 
   useEffect(() => {
@@ -23,7 +26,10 @@ export function useImageAspects(urls: string[]): { aspects: number[]; pending: b
         if (!cancelled) setKnown((prev) => (url in prev ? prev : { ...prev, [url]: aspect }));
       };
       img.onload = () => done(img.naturalWidth > 0 && img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : FALLBACK_ASPECT);
-      img.onerror = () => done(FALLBACK_ASPECT);
+      img.onerror = () => {
+        if (!cancelled) setBroken((prev) => (url in prev ? prev : { ...prev, [url]: true }));
+        done(FALLBACK_ASPECT);
+      };
       img.src = url;
     }
     return () => {
@@ -33,5 +39,5 @@ export function useImageAspects(urls: string[]): { aspects: number[]; pending: b
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return { aspects: urls.map((u) => known[u] ?? FALLBACK_ASPECT), pending: urls.some((u) => !(u in known)) };
+  return { aspects: urls.map((u) => known[u] ?? FALLBACK_ASPECT), pending: urls.some((u) => !(u in known)), failed: urls.map((u) => !!broken[u]) };
 }

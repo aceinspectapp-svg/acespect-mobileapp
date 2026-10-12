@@ -20,7 +20,7 @@ import {
 } from 'docx';
 import type { Page } from 'puppeteer';
 import { REPORT_EXTRACT_SOURCE } from './reportDocxExtract';
-import { ADDRESS_LINE_1, ADDRESS_LINE_2, BRAND_NAVY, BRAND_RED, COMPANY_ABN_ACN, COMPANY_NAME, FOOTER_LABEL_COLOR, FOOTER_META_COLOR, withReportPage } from './reportPdf';
+import { BRAND_NAVY, BRAND_RED, COMPANY_ABN_ACN, COMPANY_NAME, withReportPage } from './reportPdf';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
 
 /**
@@ -134,6 +134,35 @@ async function loadImage(src: string, token: string): Promise<{ data: Buffer; ki
 
 // ---- blocks to Word ---------------------------------------------------------------------------------------------------------
 type Loaded = { data: Buffer; kind: ImageKind } | null;
+
+/** The rotation note a phone puts in a JPEG ("EXIF orientation", 1 = as stored, 2-8 = to be turned or flipped when shown), or 1 when there is none. */
+function exifOrientation(data: Buffer): number {
+  if (data.length < 12 || data[0] !== 0xff || data[1] !== 0xd8) return 1;
+  let i = 2;
+  while (i + 4 < data.length) {
+    if (data[i] !== 0xff) return 1;
+    const marker = data[i + 1]!;
+    const size = data.readUInt16BE(i + 2);
+    if (marker === 0xe1 && data.toString('latin1', i + 4, i + 10) === 'Exif\0\0') {
+      const tiff = i + 10;
+      const little = data.toString('latin1', tiff, tiff + 2) === 'II';
+      const u16 = (at: number): number => (little ? data.readUInt16LE(at) : data.readUInt16BE(at));
+      const u32 = (at: number): number => (little ? data.readUInt32LE(at) : data.readUInt32BE(at));
+      const dir = tiff + u32(tiff + 4);
+      if (dir + 2 > data.length) return 1;
+      const entries = u16(dir);
+      for (let e = 0; e < entries; e++) {
+        const at = dir + 2 + e * 12;
+        if (at + 12 > data.length) return 1;
+        if (u16(at) === 0x0112) return u16(at + 8) || 1;
+      }
+      return 1;
+    }
+    if (marker === 0xda) return 1; // start of the picture data: no Exif block came first
+    i += 2 + size;
+  }
+  return 1;
+}
 
 class Writer {
   constructor(
@@ -260,56 +289,13 @@ function buildHeader(): Header {
   });
 }
 
-function buildFooter(clientName: string, jobNo: string): Footer {
-  const today = new Date();
-  const date = [today.getDate(), today.getMonth() + 1, today.getFullYear()].map((n, i) => (i < 2 ? String(n).padStart(2, '0') : String(n))).join('.');
-  const meta = (text: string, bold = false) => new TextRun({ text, bold, color: hex2(FOOTER_META_COLOR), size: 18, font: 'Arial' });
-  const pipe = () => new TextRun({ text: '  |  ', color: hex2(BRAND_RED), size: 18, font: 'Arial' });
-  const address = (parts: { label: string; value: string }[]) =>
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { before: 40, after: 0 },
-      children: parts.flatMap((p, i) => [
-        ...(i ? [new TextRun({ text: '  |  ', color: hex2(BRAND_RED), size: 16, font: 'Arial' })] : []),
-        ...(p.label ? [new TextRun({ text: `${p.label} `, color: hex2(FOOTER_LABEL_COLOR), size: 16, font: 'Arial' })] : []),
-        new TextRun({ text: p.value, color: hex2(BRAND_NAVY), size: 16, font: 'Arial' }),
-      ]),
-    });
-  return new Footer({
-    children: [
-      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 0 }, children: [meta('Client Name: ', true), meta(clientName || '—')] }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 20, after: 60 },
-        children: [
-          pipe(),
-          meta('Date: ', true),
-          meta(date),
-          pipe(),
-          meta('Job No: ', true),
-          meta(jobNo || '—'),
-          pipe(),
-          meta('Page No: ', true),
-          new TextRun({ children: [PageNumber.CURRENT], color: hex2(FOOTER_META_COLOR), size: 18, font: 'Arial' }),
-          meta(' of '),
-          new TextRun({ children: [PageNumber.TOTAL_PAGES], color: hex2(FOOTER_META_COLOR), size: 18, font: 'Arial' }),
-        ],
-      }),
-      // the red bar, then the navy bar
-      new Paragraph({ spacing: { before: 0, after: 0, line: 60 }, shading: { type: ShadingType.CLEAR, fill: hex2(BRAND_RED), color: 'auto' }, children: [] }),
-      new Paragraph({ spacing: { before: 0, after: 0, line: 200 }, shading: { type: ShadingType.CLEAR, fill: hex2(BRAND_NAVY), color: 'auto' }, children: [] }),
-      address(ADDRESS_LINE_1),
-      address(ADDRESS_LINE_2),
-    ],
-  });
-}
 const hex2 = (css: string): string => css.replace('#', '').toUpperCase();
 
 /**
- * The Construction Report's footer, the same as its PDF footer (reportPdf.ts buildConstructionFooterTemplate): a thin rule, then Client /
+ * The footer of every report, the same as the PDF's (reportPdf.ts buildFooterTemplate): a thin rule, then Client /
  * Date (the inspection date) / Job No / Page, the company details, and a red and a navy bar.
  */
-function buildConstructionFooter(clientName: string, jobNo: string, inspectionDate: string): Footer {
+function buildFooter(clientName: string, jobNo: string, inspectionDate: string): Footer {
   const grey = '6B7280';
   const text = (t: string, bold = false, size = 13) => new TextRun({ text: t, bold, color: grey, size, font: 'Arial' });
   const sep = () => text('  |  ');
@@ -339,7 +325,7 @@ function buildConstructionFooter(clientName: string, jobNo: string, inspectionDa
       line([text('PO BOX 2521 Mt Waverley VIC 3149', false, 12), sep(), text('P (03) 9808 4000', false, 12), sep(), text('E info@houspectvic.com.au', false, 12), sep(), text('W www.houspect.com.au/victoria', false, 12)], 12, 60),
       line([text(`${COMPANY_NAME}  ${COMPANY_ABN_ACN}`, false, 12)], 12, 20),
       new Paragraph({ spacing: { before: 90, after: 0, line: 68, lineRule: LineRuleType.EXACT }, shading: { type: ShadingType.CLEAR, fill: hex2(BRAND_RED), color: 'auto' }, children: [] }),
-      new Paragraph({ spacing: { before: 0, after: 0, line: 136, lineRule: LineRuleType.EXACT }, shading: { type: ShadingType.CLEAR, fill: '1B3A6B', color: 'auto' }, children: [] }),
+      new Paragraph({ spacing: { before: 0, after: 0, line: 136, lineRule: LineRuleType.EXACT }, shading: { type: ShadingType.CLEAR, fill: hex2(BRAND_NAVY), color: 'auto' }, children: [] }),
     ],
   });
 }
@@ -355,31 +341,46 @@ async function loadPictures(blocks: Block[], page: Page, token: string): Promise
   };
   collect(blocks);
   const out = new Map<string, Loaded>();
-  await Promise.all(
-    [...srcs].map(async (src) => {
-      let loaded = await loadImage(src, token);
-      if (!loaded) loaded = await rasterise(page, src);
-      out.set(src, loaded);
-    }),
-  );
+  // A few workers, each with one scratch page of its own that it reuses: a report can hold hundreds of pictures, and a page per picture, all at once, overloads the browser.
+  const items = [...srcs];
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    let scratch: Page | undefined;
+    try {
+      while (next < items.length) {
+        const src = items[next++]!;
+        let loaded = await loadImage(src, token);
+        // Word may not honour a phone photo's rotation note (the PDF does: the browser turns it), so a photo that carries one is redrawn by the browser, upright.
+        if (loaded?.kind === 'jpg' && exifOrientation(loaded.data) > 1) {
+          scratch ??= await page.browser().newPage();
+          loaded = (await rasterise(scratch, src, 'jpeg')) ?? loaded;
+        }
+        if (!loaded) {
+          scratch ??= await page.browser().newPage();
+          loaded = await rasterise(scratch, src);
+        }
+        out.set(src, loaded);
+      }
+    } finally {
+      await scratch?.close().catch(() => undefined);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
   return out;
 }
 
-async function rasterise(page: Page, src: string): Promise<Loaded> {
-  // On a page of its own, so nothing of the report is in the way of the screenshot.
-  const scratch = await page.browser().newPage();
+async function rasterise(scratch: Page, src: string, type: 'png' | 'jpeg' = 'png'): Promise<Loaded> {
+  // On a page of its own (the caller's scratch page), so nothing of the report is in the way of the screenshot.
   try {
     await scratch.setViewport({ width: 1600, height: 1200, deviceScaleFactor: 1 });
     await scratch.setContent(`<html><body style="margin:0;background:#fff"><img id="p" src="${src.replace(/"/g, '&quot;')}" style="display:block;max-width:1600px"></body></html>`, { waitUntil: 'load', timeout: 20_000 });
     const el = await scratch.$('#p');
     const box = await el?.boundingBox();
     if (!el || !box || box.width < 2) return null;
-    const shot = (await el.screenshot({ type: 'png' })) as Uint8Array;
-    return { data: Buffer.from(shot), kind: 'png' };
+    const shot = (await el.screenshot(type === 'jpeg' ? { type: 'jpeg', quality: 92 } : { type: 'png' })) as Uint8Array;
+    return { data: Buffer.from(shot), kind: type === 'jpeg' ? 'jpg' : 'png' };
   } catch {
     return null;
-  } finally {
-    await scratch.close().catch(() => undefined);
   }
 }
 
@@ -387,7 +388,7 @@ async function rasterise(page: Page, src: string): Promise<Loaded> {
 export async function generateInspectionReportDocx(
   inspectionId: string,
   authToken: string,
-  meta: { clientName: string; jobNo: string; title: string; kind?: 'construction'; inspectionDate?: string },
+  meta: { clientName: string; jobNo: string; title: string; inspectionDate?: string },
 ): Promise<Buffer> {
   const { extracted, pictures } = await withReportPage(
     inspectionId,
@@ -419,7 +420,7 @@ export async function generateInspectionReportDocx(
           },
         },
         headers: { default: buildHeader() },
-        footers: { default: meta.kind === 'construction' ? buildConstructionFooter(meta.clientName, meta.jobNo, meta.inspectionDate ?? '') : buildFooter(meta.clientName, meta.jobNo) },
+        footers: { default: buildFooter(meta.clientName, meta.jobNo, meta.inspectionDate ?? '') },
         children: body.length ? body : [new Paragraph({ children: [] })],
       },
     ],

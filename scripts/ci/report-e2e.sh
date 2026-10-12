@@ -7,7 +7,7 @@
 #
 #   DATABASE_URL=postgresql://user:pass@localhost:5432/scratch?schema=public scripts/ci/report-e2e.sh
 #
-# Optional: BACKEND_PORT (4010), WEB_PORT (5190), SMOKE_SCRIPT (the check to run, default scripts/ci-report-smoke.mjs; e.g. scripts/photo-layout-samples.mjs).
+# Optional: WAIT_TRIES (60, two seconds each: how long to wait for the servers to start), BACKEND_PORT (4010), WEB_PORT (5190), SMOKE_SCRIPT (the check to run, default scripts/ci-report-smoke.mjs; e.g. scripts/photo-layout-samples.mjs).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -27,7 +27,7 @@ trap cleanup EXIT
 dump_logs() { echo "--- backend log ---"; tail -40 "$LOGS/backend.log" || true; echo "--- web log ---"; tail -20 "$LOGS/web.log" || true; }
 
 wait_for() { # url, name
-  for _ in $(seq 1 60); do
+  for _ in $(seq 1 "${WAIT_TRIES:-60}"); do
     curl -sf -o /dev/null "$1" && return 0
     sleep 2
   done

@@ -23,15 +23,14 @@ export const reportTokens = {
   border: "#e2e6ec",
   placeholderBg: "#fbf3e3",
   placeholderBorder: "#eddcb5",
-  placeholderInk: "#8a6d2f",
+  placeholderInk: "#7a5f26",
   radius: "6px", // every coloured box (title bands, condition tags and pills, placeholders) rounds its corners by this much
 };
 
-/** Houspect brand colours (navy #183966, red #CE2328) for the Dilapidation report. Set on the report page element; anything outside it, and the Construction report, falls back to reportTokens' own values. */
+/** The Dilapidation report's navy (#1b3a6b -- the same as its cover, banner and footer). Set on the report page element; anything outside it, and the Construction report, falls back to reportTokens' own values. */
 export const DILAPIDATION_BRAND = {
-  "--report-accent": "#183966",
-  "--report-accent-soft": "#eaeff6",
-  "--report-brand-red": "#CE2328",
+  "--report-accent": "#1b3a6b",
+  "--report-accent-soft": "#e8eef8",
 } as React.CSSProperties;
 
 /** The one title look shared by every band and page title: same family, weight, case and letter-spacing. Only the size (band vs page title) and the band's own colours differ. */
@@ -321,21 +320,26 @@ export function PhotoGrid({
   compact,
   startNumber,
   caption,
+  maxHeight,
 }: {
   photos: string[];
   compact: boolean;
+  /** Tallest a row may be, in cm (the page default is PAGE_PACK's) -- for a spot, like the cover-page photo, that has to share its page with a lot of text. */
+  maxHeight?: number;
   /** Text that introduces the photos (a defect's sentence, a "Please refer to Photographs…" line). Printed above the first row and kept on the same page as it, so a caption is never left alone at the bottom of a page. */
   caption?: ReactNode;
   /** First number in this batch's sequential "Photo N" captions (see PhotoNumberContext) -- omitted outside the real printed report (e.g. the reviewer's isolated section preview), where a running count across the whole document doesn't make sense. */
   startNumber?: number;
 }) {
   const urls = photos.map((p) => resolveMediaUrl(p));
-  const { aspects, pending } = useImageAspects(urls);
-  const options = compact ? COMPACT_PACK : PAGE_PACK;
-  const rows = useMemo(() => packPhotoRows(aspects, options), [aspects.join(","), compact]);
+  const { aspects, pending, failed } = useImageAspects(urls);
+  const base = compact ? COMPACT_PACK : PAGE_PACK;
+  const options = maxHeight && maxHeight < base.maxHeight ? { ...base, maxHeight, targetHeight: Math.min(base.targetHeight, maxHeight), minHeight: Math.min(base.minHeight, maxHeight) } : base;
+  const rows = useMemo(() => packPhotoRows(aspects, options), [aspects.join(","), compact, options.maxHeight]);
   if (photos.length === 0) return null;
   return (
     <div
+      data-photo-grid=""
       data-photo-grid-pending={pending ? "" : undefined}
       style={{ display: "flex", flexDirection: "column", gap: `${options.gap}cm`, margin: "6px 0 12px" }}
     >
@@ -352,6 +356,26 @@ export function PhotoGrid({
                 row.full ? { flex: `${aspects[i]} 1 0`, minWidth: 0 } : { flex: "0 0 auto", width: `${aspects[i] * row.height}cm` }
               }
             >
+              {failed[i] ? (
+                // A photograph that cannot be loaded: a plain box of the same size, not the browser's broken-picture icon.
+                <div
+                  data-photo-missing=""
+                  style={{
+                    width: "100%",
+                    aspectRatio: `${aspects[i]}`,
+                    boxSizing: "border-box",
+                    border: `1px solid ${reportTokens.border}`,
+                    background: reportTokens.placeholderBg,
+                    color: reportTokens.placeholderInk,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "0.85em",
+                  }}
+                >
+                  Photograph unavailable
+                </div>
+              ) : (
               <a href={urls[i]} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
                 <img
                   src={urls[i]}
@@ -359,12 +383,14 @@ export function PhotoGrid({
                   style={{
                     width: "100%",
                     aspectRatio: `${aspects[i]}`,
-                    objectFit: "cover",
+                    // The box is exactly the photo's own shape, so nothing is cropped; `contain` also guarantees it if the shape were ever off by a pixel.
+                    objectFit: "contain",
                     border: `1px solid ${reportTokens.border}`,
                     display: "block",
                   }}
                 />
               </a>
+              )}
               {startNumber !== undefined && (
                 <span style={{ display: "block", marginTop: "2px", fontSize: "0.82em", color: reportTokens.inkMuted }}>
                   Photo {startNumber + i}
@@ -384,29 +410,33 @@ export function PhotoGrid({
  * in document order, so a section's prose can say "Please refer to
  * Photographs 9 to 12" instead of a generic "Please refer to Photographs:" --
  * matching the reference report's own per-item photo cross-referencing.
- * `next(count)` claims a contiguous block and returns its first number; it
- * must be called in render order (top to bottom) for the numbers to line up
- * with where each photo actually appears, which holds for this report's
- * single synchronous top-down render (both the live page and the Puppeteer
- * PDF render the same component tree once, not interactively).
+ * `next(id, count)` claims a contiguous block the first time a group asks (and returns the same block if it asks again); groups ask in
+ * render order (top to bottom), which is the order they print in.
  */
-export const PhotoNumberContext = createContext<{ next: (count: number) => number } | null>(null);
+export const PhotoNumberContext = createContext<{ next: (id: string, count: number) => number } | null>(null);
 
 export function PhotoNumberProvider({ children }: { children: ReactNode }) {
   const counter = useRef(1);
-  const next = (count: number) => {
+  // Each group of photos asks once and is remembered by its id, so a component that renders twice (React's development double render) or again later (a state change above it) gets the SAME numbers back instead of claiming a fresh block each time.
+  const claimed = useRef(new Map<string, { start: number; count: number }>());
+  const next = (id: string, count: number) => {
+    const known = claimed.current.get(id);
+    if (known && known.count === count) return known.start;
     const start = counter.current;
     counter.current += count;
+    claimed.current.set(id, { start, count });
     return start;
   };
   return <PhotoNumberContext.Provider value={{ next }}>{children}</PhotoNumberContext.Provider>;
 }
 
 /** "Please refer to Photographs 9 to 12:" / "Please refer to Photograph 9:" / falls back to the old generic line when no PhotoNumberProvider is in scope (e.g. the reviewer's isolated single-section preview, which doesn't represent the whole document's running order). */
-export function usePhotoNumbering(count: number): { start?: number; label: string } {
+export function usePhotoNumbering(photos: string[], where: string): { start?: number; label: string } {
   const ctx = useContext(PhotoNumberContext);
+  const count = photos.length;
   if (!ctx || count === 0) return { label: "Please refer to Photographs:" };
-  const start = ctx.next(count);
+  // Named by where the group sits and which photographs it holds, so the same group always gets the same numbers however many times React renders it.
+  const start = ctx.next(`${where}\u0001${photos.join("\u0001")}`, count);
   const end = start + count - 1;
   const label = count === 1 ? `Please refer to Photograph ${start}:` : `Please refer to Photographs ${start} to ${end}:`;
   return { start, label };
