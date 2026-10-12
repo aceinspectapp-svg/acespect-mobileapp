@@ -168,4 +168,16 @@ describe("wording review: sentences that read wrongly", () => {
     const g = draft("residential_house", "garage_carport_sheds", { structures: { shed: { present: "yes", structureName: "Water Tank" } } });
     assert.ok(g.includes("There is a water tank"), g);
   });
+
+  it("keeps the Condition Summary's Notes brief: two defects, then how many more", () => {
+    const d = (n) => Array.from({ length: n }, (_, i) => ({ location: `spot ${i + 1}`, damageType: "Cracking" }));
+    const note = (n) => {
+      const fields = fieldsOf("residential_house", "driveway");
+      const draftOut = flattenSectionToDraft(fields, convert(fields, { present: "yes", locatedAt: "Front left", material: "Concrete", condition: "Fair", damages: d(n) }), "driveway", { inspectionType: "dilapidation", propertyType: "residential_house" });
+      return draftOut.fields.conditionSummary[0].defectNote;
+    };
+    assert.equal(note(1), "Cracking at spot 1");
+    assert.equal(note(2), "Cracking at spot 1; Cracking at spot 2");
+    assert.equal(note(7), "Cracking at spot 1; Cracking at spot 2; and 5 more");
+  });
 });

@@ -12,10 +12,11 @@
 // approves every section, downloads the PDF through the real Puppeteer path and checks
 // what a reader would see. Exit code 1 on any failed expectation.
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { photosOf, startPhotoServer } from "./lib/placeholder-photos.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const API = (process.env.ACESPECT_API ?? "http://localhost:4000/api/v1").replace(/\/$/, "");
@@ -37,6 +38,29 @@ const tpl = (k, p = HOUSE) => SNAP.find((t) => t.inspectionType === p.inspection
 // Photos are served by the web app itself, so the test needs no network access.
 const P1 = `${WEB}/houspect-logo.png`;
 const P2 = `${WEB}/houspect-signature.png`;
+
+// PHOTO_COMBOS=1: instead of the same two logos everywhere, every section and defect gets labelled placeholder photos in a different mix of
+// shapes (two portraits and a landscape, two landscapes and a portrait, ...) -- the sample reports for checking the photo layout.
+// SAMPLES_OUT=<folder> keeps the PDFs there. PHOTO_PORT (default 5198) is where the placeholders are served from.
+const COMBO_MODE = process.env.PHOTO_COMBOS === "1";
+const PHOTO_PORT = Number(process.env.PHOTO_PORT ?? 5198);
+const photoServer = COMBO_MODE ? await startPhotoServer(PHOTO_PORT) : null;
+const MIXES = ["P P L", "L L P", "P P P", "L L L", "P L P L P", "P", "P P P P", "L P", "S W T", "L P P L L P", "L L", "L", "P L L"];
+// Each report draws from the same cycle of mixes, in order, for every photo spot it has (sections, then defects), so that each one
+// shows every mix at least once.
+const mixCounter = {};
+let currentCase = "House";
+const comboPhotos = (what) => {
+  const n = (mixCounter[currentCase] = (mixCounter[currentCase] ?? 0) + 1) - 1;
+  const shapes = MIXES[n % MIXES.length];
+  return photosOf(shapes, `${what} (${shapes})`, PHOTO_PORT);
+};
+/** A defect's own photos: the usual ones, or in combo mode the next mix of shapes. */
+const defectPhotos = (fallback) => (COMBO_MODE ? comboPhotos("Defect photos") : fallback);
+/** Extra defects (combo mode only) to give a report with few photo spots enough of them to show every mix. */
+const extraDefects = (n) => (COMBO_MODE ? Array.from({ length: n }, (_, i) => crack(`extra defect ${i + 1}`, { notes: "" })) : []);
+/** A section's general photos. */
+const sectionPhotos = (c, key) => (c.photoSections.includes(key) ? (COMBO_MODE ? ((currentCase = c.propertyTitle), comboPhotos(`${c.propertyTitle}: ${key}`)) : [P1, P2]) : []);
 
 const OTHER = "__other__:";
 function valueOf(field, label) {
@@ -63,8 +87,9 @@ function convert(fields, answers) {
   return out;
 }
 
-const crack = (location, extra = {}) => ({ location, damageType: "Cracking", sub_cracking: "Fine", direction: "Vertical", widthMm: 2, lengthMm: 300, notes: "", photos: [P1, P2], ...extra });
+const crack = (location, extra = {}) => ({ location, damageType: "Cracking", sub_cracking: "Fine", direction: "Vertical", widthMm: 2, lengthMm: 300, notes: "", photos: defectPhotos([P1, P2]), ...extra });
 
+currentCase = "Residential House";
 const houseAnswers = {
   "job-info": { jobNumber: "HV-26-CI01", inspectionDate: "2026-10-03", assignedInspector: "CI Inspector", clientName: "CI Smoke Client", inspectionAddress: "1 Smoke Test Road, Box Hill VIC 3128", weather: ["Dry"] },
   description: {
@@ -79,7 +104,7 @@ const houseAnswers = {
     present: "yes", locatedAt: "Front left", material: "Concrete", condition: "Fair", crackingSummary: "Several minor cracks", obscuredBy: ["Vegetation"],
     damages: [
       crack("centre of the driveway near the garage entrance", { element: "slab", sub_cracking: "Moderate", crackStartLocation: "the garage entrance", direction: "Horizontal", widthMm: 6, lengthMm: 850, notes: "Likely caused by tree root movement nearby." }),
-      { location: "kerb", damageType: `${OTHER}Rotting edge`, widthMm: 4, photos: [P1] },
+      { location: "kerb", damageType: `${OTHER}Rotting edge`, widthMm: 4, photos: defectPhotos([P1]) },
     ],
   },
   paving_paths: {
@@ -92,7 +117,7 @@ const houseAnswers = {
   },
   fences: {
     items: {
-      front: { present: "yes", material: ["Timber palings", `${OTHER}Hardwood sleepers`], condition: "Poor", obscuredBy: [`${OTHER}Parked trailer`], damages: [{ location: "base of the fence, third panel from the gate", damageType: "Movement / Displacement", sub_movement: "Leaning", notes: "Posts have rotted at ground level.", photos: [P1] }] },
+      front: { present: "yes", material: ["Timber palings", `${OTHER}Hardwood sleepers`], condition: "Poor", obscuredBy: [`${OTHER}Parked trailer`], damages: [{ location: "base of the fence, third panel from the gate", damageType: "Movement / Displacement", sub_movement: "Leaning", notes: "Posts have rotted at ground level.", photos: defectPhotos([P1]) }] },
       left: { present: "yes", material: ["Brick"], condition: "Fair" },
       rear: { present: "yes", material: ["Metal sheets"], condition: "Satisfactory" },
       right: { present: "no" },
@@ -113,7 +138,7 @@ const houseAnswers = {
   pool_spa: {
     present: "yes", position: "Rear", constructed: ["Fibreglass"], paving: ["Tiles"], poolFence: ["Glass panels"], fenceSafety: "Appears to be okay",
     condition: "Satisfactory", obscuredBy: ["Vegetation"],
-    damages: [{ location: "spa deck edge", element: "tiles", damageType: "Surface Damage", sub_surface: "Chips", notes: "Surface chip, non-structural.", photos: [P1, P2] }],
+    damages: [{ location: "spa deck edge", element: "tiles", damageType: "Surface Damage", sub_surface: "Chips", notes: "Surface chip, non-structural.", photos: defectPhotos([P1, P2]) }],
   },
   elevations: {
     sides: {
@@ -135,7 +160,7 @@ const houseAnswers = {
       living_room: { present: "yes", floorLevel: "Ground floor", obscuredBy: ["Furniture"], generalCondition: "Fair", damageSummary: "Several minor gaps and cracks", damages: [crack("ceiling cornice, southwest corner", { element: "cornice", widthMm: 1, lengthMm: 600, notes: "Consistent with seasonal movement." })] },
       kitchen: { present: "yes", floorLevel: "Ground floor", generalCondition: "Poor", damageSummary: "Multiple items of damage throughout" },
       bedroom: { present: "yes", roomName: "Bedroom 1", floorLevel: "1st floor", generalCondition: "Satisfactory", damageSummary: "No visible significant damage" },
-      bathroom: { present: "yes", floorLevel: "1st floor", generalCondition: "Fair", damages: [{ location: "shower base grout line", damageType: "Moisture-Related Evidence", sub_moisture: "Mould", photos: [P1] }] },
+      bathroom: { present: "yes", floorLevel: "1st floor", generalCondition: "Fair", damages: [{ location: "shower base grout line", damageType: "Moisture-Related Evidence", sub_moisture: "Mould", photos: defectPhotos([P1]) }] },
       stairwell: { present: "no" },
     },
   },
@@ -163,6 +188,7 @@ if (!token) throw new Error(`login returned no access token: ${Object.keys(login
 
 
 // A Public Assets survey: no building, just the description and two survey parts (frontage, laneway).
+currentCase = "Public Assets";
 const publicAssetsAnswers = {
   "job-info": { jobNumber: "HV-26-CI02", inspectionDate: "2026-10-03", assignedInspector: "CI Inspector", clientName: "CI Public Assets Client", inspectionAddress: "1 Smoke Test Road, Box Hill VIC 3128", weather: ["Dry"] },
   description: {
@@ -195,6 +221,7 @@ const publicAssetsAnswers = {
 
 // A commercial / industrial site: the House-style sentences, offices and warehouse areas.
 const SAT = "Satisfactory with typical wear and tear";
+currentCase = "Commercial Properties";
 const commercialAnswers = {
   "job-info": { jobNumber: "HV-26-CI03", inspectionDate: "2026-10-03", assignedInspector: "CI Inspector", clientName: "CI Commercial Client", inspectionAddress: "1 Smoke Test Road, Box Hill VIC 3128", weather: ["Dry"] },
   description: {
@@ -218,6 +245,7 @@ const commercialAnswers = {
 };
 
 // An apartment: the unit and building checklist, with the grouped sections.
+currentCase = "Apartment";
 const apartmentAnswers = {
   "job-info": { jobNumber: "HV-26-CI04", inspectionDate: "2026-10-03", assignedInspector: "CI Inspector", clientName: "CI Apartment Client", inspectionAddress: "1 Smoke Test Road, Box Hill VIC 3128", weather: ["Dry"] },
   description: {
@@ -238,6 +266,16 @@ const apartmentAnswers = {
   notes: { structural_structurallySound: "no", structural_describe: "Differential settlement at the north wall", post_project_describe: "No access to the plant room" },
 };
 
+// Combo mode: pad each report with a few more defects so it has enough photo spots to show every mix.
+currentCase = "Residential House";
+houseAnswers.driveway.damages.push(...extraDefects(6));
+currentCase = "Public Assets";
+publicAssetsAnswers.elevations.parts[0].footpaths_damages.push(...extraDefects(9));
+currentCase = "Commercial Properties";
+commercialAnswers.driveway.damages.push(...extraDefects(12));
+currentCase = "Apartment";
+apartmentAnswers.elevations.ext_walls_damages.push(...extraDefects(9));
+
 // One report type, end to end: submit, compose the wording, approve, download the PDF, read what the reader would see.
 async function runCase(c) {
   console.log(`\n== ${c.name}`);
@@ -250,7 +288,7 @@ async function runCase(c) {
     reportText: "",
     fields: {},
     answers: convert(tpl(key, c.profile).fields, a),
-    photos: c.photoSections.includes(key) ? [P1, P2] : [],
+    photos: sectionPhotos(c, key),
     damages: [],
   }));
   const submitted = await (await api("/inspections/submit", {
@@ -295,7 +333,7 @@ async function runCase(c) {
   // every defect photo and section photo should have made it in as an image
   let images = 0;
   try { images = execFileSync("pdfimages", ["-list", pdfPath], { encoding: "utf8" }).split("\n").filter((l) => /^\s*\d+\s+\d+\s+image/.test(l)).length; } catch { /* poppler build without pdfimages */ }
-  expect(images >= c.minImages, `the PDF embeds the photographs (${images} images)`);
+  if (!COMBO_MODE) expect(images >= c.minImages, `the PDF embeds the photographs (${images} images)`);
 
   // The same report as a Word file: a real .docx (a zip with the document inside), holding the same headings and sentences and the photographs.
   const wres = await fetch(`${API}/inspections/${id}/report.docx`, { headers: { Authorization: `Bearer ${token}` } });
@@ -391,6 +429,19 @@ pdfs.push(await runCase({
   ],
   minPages: 6, minImages: 4,
 }));
+
+if (process.env.SAMPLES_OUT) {
+  // Keep the PDFs (and the Word versions beside them), named for the report type, for a person to look at.
+  const out = resolve(process.env.SAMPLES_OUT);
+  mkdirSync(out, { recursive: true });
+  const names = ["1-Dilapidation-Residential-House", "4-Dilapidation-Public-Assets", "2-Dilapidation-Commercial-Properties", "3-Dilapidation-Apartment"]; // the order they are run in
+  pdfs.forEach((pdf, i) => {
+    copyFileSync(pdf, join(out, `${names[i]}.pdf`));
+    copyFileSync(pdf.replace(/report\.pdf$/, "report.docx"), join(out, `${names[i]}.docx`));
+  });
+  console.log(`kept the sample reports in ${out}`);
+}
+photoServer?.close();
 
 if (failures.length) {
   console.error(`\n${failures.length} expectation(s) failed. The PDFs are at ${pdfs.join(", ")}`);

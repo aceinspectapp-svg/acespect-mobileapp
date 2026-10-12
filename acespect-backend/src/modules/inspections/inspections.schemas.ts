@@ -34,7 +34,7 @@ const sectionSchema = z.object({
   icon: z.string().max(16).default(''),
   order: z.number().int().default(0),
   status: z.enum(['complete', 'partial', 'pending']).default('pending'),
-  reportText: z.string().max(20000).default(''),
+  reportText: z.string().max(100000).default(''),
   fields: z.record(z.string(), z.unknown()).default({}),
   /** Raw un-flattened answer tree, kept so the section can be reopened for editing. */
   answers: z.record(z.string(), z.unknown()).optional(),

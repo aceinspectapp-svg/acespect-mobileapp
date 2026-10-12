@@ -427,8 +427,12 @@ export function buildDefectNote(damageField: TemplateField, inst: AnswerTree): s
     const location = asString(d.location);
     return location ? `${typeLabel} ${atLocation(location)}` : typeLabel;
   });
-  return parts.join("; ");
+  // Brief: the first couple of defects, then how many more there are -- the full list is in the section itself.
+  return parts.length > MAX_NOTE_DEFECTS ? `${parts.slice(0, MAX_NOTE_DEFECTS).join("; ")}; and ${parts.length - MAX_NOTE_DEFECTS} more` : parts.join("; ");
 }
+
+/** How many defects the Condition Summary's Notes column names before saying "and N more". */
+const MAX_NOTE_DEFECTS = 2;
 
 /** One Executive Summary row for an instance, or undefined when it has nothing to summarise (no grade answered yet, or marked as not present). */
 function conditionSummaryRow(
