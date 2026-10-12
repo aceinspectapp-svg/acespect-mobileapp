@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import puppeteer, { type Page } from 'puppeteer';
 import { env } from '../config/env';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
 
@@ -15,10 +15,10 @@ import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
  * separate print-only route needed.
  */
 
-const BRAND_NAVY = '#1a2a4a';
-const BRAND_RED = '#dc2626';
-const FOOTER_META_COLOR = '#7b93b5'; // light blue-grey, matching the reference's own meta-line color
-const FOOTER_LABEL_COLOR = '#8a97a8'; // grey "PA / P / E / W" style labels
+export const BRAND_NAVY = '#1a2a4a';
+export const BRAND_RED = '#dc2626';
+export const FOOTER_META_COLOR = '#7b93b5'; // light blue-grey, matching the reference's own meta-line color
+export const FOOTER_LABEL_COLOR = '#8a97a8'; // grey "PA / P / E / W" style labels
 const MARGIN_H = '22mm'; // wider side margins than before, matching the reference
 
 // Acespect Pty Ltd trades AS Houspect Victoria -- this is this business's
@@ -29,12 +29,12 @@ const COMPANY_ABN_ACN = 'ABN 24 237 148 557 ACN 688 819 712';
 // Each address segment as its own {label, value} so the label can render
 // grey and the value navy, matching the reference's own styling (a single
 // plain string couldn't carry that split).
-const ADDRESS_LINE_1: { label: string; value: string }[] = [
+export const ADDRESS_LINE_1: { label: string; value: string }[] = [
   { label: 'PA', value: 'PO BOX 2521 Mt Waverley VIC 3149' },
   { label: 'P', value: '(03) 9808 4000' },
   { label: 'E', value: 'info@houspectvic.com.au' },
 ];
-const ADDRESS_LINE_2: { label: string; value: string }[] = [
+export const ADDRESS_LINE_2: { label: string; value: string }[] = [
   { label: 'W', value: 'www.houspect.com.au/victoria' },
   { label: '', value: `${COMPANY_NAME} ${COMPANY_ABN_ACN}` },
 ];
@@ -125,11 +125,17 @@ function buildFooterTemplate(clientName: string, jobNo: string): string {
   `;
 }
 
-export async function generateInspectionReportPdf(
+/**
+ * Opens the real `/report/:id` page in a headless browser, signed in as the caller, and waits until the report -- and the photo grids
+ * that lay themselves out from each photo's real shape -- has finished drawing. `use` then does what it needs with the page (print it
+ * to PDF, read it out for the Word file). `print`: lay the page out as it prints (the toolbar hidden, the page breaks in place).
+ */
+export async function withReportPage<T>(
   inspectionId: string,
   authToken: string,
-  meta: { clientName: string; jobNo: string },
-): Promise<Buffer> {
+  use: (page: Page) => Promise<T>,
+  options: { print?: boolean; width?: number } = {},
+): Promise<T> {
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -142,6 +148,9 @@ export async function generateInspectionReportPdf(
   });
   try {
     const page = await browser.newPage();
+    if (options.print) await page.emulateMediaType('print');
+    // The width the page prints at (A4 less its side margins), so the page lays out the way the PDF does.
+    if (options.width) await page.setViewport({ width: options.width, height: 1100, deviceScaleFactor: 2 });
 
     // Seed the SPA's own auth session before any of its scripts run, so its
     // client-side API calls (fetching the inspection, its photos, etc.) carry
@@ -166,7 +175,18 @@ export async function generateInspectionReportPdf(
     await page
       .waitForFunction("!document.querySelector('[data-photo-grid-pending]')", { timeout: 15_000 })
       .catch(() => undefined);
+    return await use(page);
+  } finally {
+    await browser.close();
+  }
+}
 
+export async function generateInspectionReportPdf(
+  inspectionId: string,
+  authToken: string,
+  meta: { clientName: string; jobNo: string },
+): Promise<Buffer> {
+  return withReportPage(inspectionId, authToken, async (page) => {
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
@@ -180,7 +200,5 @@ export async function generateInspectionReportPdf(
       margin: { top: '30mm', bottom: '42mm', left: MARGIN_H, right: MARGIN_H },
     });
     return Buffer.from(pdf);
-  } finally {
-    await browser.close();
-  }
+  });
 }

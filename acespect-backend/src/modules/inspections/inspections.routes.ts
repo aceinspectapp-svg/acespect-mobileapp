@@ -20,6 +20,7 @@ router.patch('/:id', requireAuth, validate(updateInspectionSchema), inspectionsC
 router.post('/:id/finalize', requireAuth, inspectionsController.finalize);
 router.get('/:id/baseline-sections', requireAuth, inspectionsController.getBaselineSections);
 router.get('/:id/report.pdf', requireAuth, inspectionsController.downloadReportPdf);
+router.get('/:id/report.docx', requireAuth, inspectionsController.downloadReportDocx);
 router.get('/sections/:sectionId/photos.zip', inspectionsController.downloadSectionPhotos);
 router.get('/:id', requireAuth, inspectionsController.getById);
 

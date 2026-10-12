@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, Printer, Download } from "lucide-react";
+import { ArrowLeft, Printer, Download, FileText } from "lucide-react";
 import type { FormSection } from "../mockData";
 import { buildReportHeader, withExcludedPhotosRemoved } from "../report";
 import { useAppData } from "../data";
@@ -43,27 +43,29 @@ export function ReportView() {
   // uses, and which has none of that branding). Needs a manual fetch with
   // the auth header, since a plain <a href> can't attach one and the
   // endpoint requires it.
-  async function handleDownloadPdf() {
+  // The same report as a PDF or an editable Word file -- both made server-side from this same report page.
+  async function handleDownload(format: "pdf" | "docx") {
     if (!id) return;
     setDownloading(true);
     setDownloadError(null);
     try {
       const token = getToken();
-      const res = await fetch(`${API_BASE}/inspections/${id}/report.pdf`, {
+      const res = await fetch(`${API_BASE}/inspections/${id}/report.${format}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
-      if (!res.ok) throw new Error(`Failed to generate PDF (HTTP ${res.status})`);
+      if (!res.ok) throw new Error(`Failed to generate ${format === "pdf" ? "PDF" : "Word document"} (HTTP ${res.status})`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = construction ? constructionFileName(inspection?.jobNo || id) : `${(inspection?.jobNo || id).replace(/[^a-z0-9.-]+/gi, "-")}-dilapidation-report.pdf`;
+      const pdfName = construction ? constructionFileName(inspection?.jobNo || id) : `${(inspection?.jobNo || id).replace(/[^a-z0-9.-]+/gi, "-")}-dilapidation-report.pdf`;
+      a.download = format === "pdf" ? pdfName : pdfName.replace(/\.pdf$/, ".docx");
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setDownloadError(e instanceof Error ? e.message : "Failed to download PDF");
+      setDownloadError(e instanceof Error ? e.message : `Failed to download the ${format === "pdf" ? "PDF" : "Word document"}`);
     } finally {
       setDownloading(false);
     }
@@ -164,7 +166,7 @@ export function ReportView() {
             <span style={{ fontSize: "12px", color: "#dc2626", fontWeight: 600 }}>{downloadError}</span>
           )}
           <button
-            onClick={handleDownloadPdf}
+            onClick={() => handleDownload("pdf")}
             disabled={downloading}
             title="The real branded report (logo, per-page footer, page breaks) -- generated server-side, not a browser print."
             style={{
@@ -184,6 +186,27 @@ export function ReportView() {
             }}
           >
             <Download size={15} /> {downloading ? "Generating…" : "Download PDF"}
+          </button>
+          <button
+            onClick={() => handleDownload("docx")}
+            disabled={downloading}
+            title="The same report as an editable Word document -- generated server-side."
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "7px",
+              padding: "9px 18px",
+              borderRadius: "8px",
+              border: `1.5px solid ${reportTokens.accent}`,
+              background: "white",
+              color: reportTokens.accent,
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: downloading ? "wait" : "pointer",
+              opacity: downloading ? 0.7 : 1,
+            }}
+          >
+            <FileText size={15} /> {downloading ? "Generating…" : "Download Word"}
           </button>
           <button
             onClick={() => window.print()}

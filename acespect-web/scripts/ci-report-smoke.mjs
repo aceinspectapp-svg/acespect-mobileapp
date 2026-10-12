@@ -296,6 +296,31 @@ async function runCase(c) {
   let images = 0;
   try { images = execFileSync("pdfimages", ["-list", pdfPath], { encoding: "utf8" }).split("\n").filter((l) => /^\s*\d+\s+\d+\s+image/.test(l)).length; } catch { /* poppler build without pdfimages */ }
   expect(images >= c.minImages, `the PDF embeds the photographs (${images} images)`);
+
+  // The same report as a Word file: a real .docx (a zip with the document inside), holding the same headings and sentences and the photographs.
+  const wres = await fetch(`${API}/inspections/${id}/report.docx`, { headers: { Authorization: `Bearer ${token}` } });
+  expect(wres.status === 200, `report.docx returns HTTP 200 (got ${wres.status})`);
+  expect((wres.headers.get("content-type") ?? "").includes("wordprocessingml.document"), "the Word response is a .docx");
+  const wbuf = Buffer.from(await wres.arrayBuffer());
+  expect(wbuf.subarray(0, 2).toString() === "PK", "the Word file is a zip package");
+  const docxPath = join(dir, "report.docx");
+  writeFileSync(docxPath, wbuf);
+  console.log(`saved ${docxPath}`);
+  const xml = execFileSync("unzip", ["-p", docxPath, "word/document.xml"], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+  const wtext = xml
+    .replace(/<\/w:p>/g, " ")
+    .replace(/<w:tab\/>|<w:br\/>/g, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+  for (const heading of c.headings) expect(wtext.includes(heading.toLowerCase()), `the Word file contains "${heading}"`);
+  for (const phrase of c.phrases) expect(wtext.includes(phrase.toLowerCase()), `the Word file prints "${phrase}"`);
+  for (const re of banned) expect(!re.test(wtext.replace(/\s+/g, " ")), `the Word file does not contain ${re}`);
+  const pictures = (xml.match(/<w:drawing>/g) ?? []).length;
+  expect(pictures >= Math.min(c.minImages, 4), `the Word file holds the photographs (${pictures} pictures)`);
+  const footer = execFileSync("unzip", ["-p", docxPath, "word/footer1.xml"], { encoding: "utf8" });
+  expect(footer.includes("Client Name") && footer.includes("PAGE"), "the Word file has the report's footer with page numbers");
   return pdfPath;
 }
 
@@ -339,7 +364,7 @@ pdfs.push(await runCase({
     "It is located on the ground floor.",
     "There is no paving to the left-hand side of property.",
     "There is no front fence.",
-    "Sections of the walls and floor were obscured by shelving and stored goods.",
+    "Sections of the walls and hardstand were obscured by shelving and stored goods.",
     "The left elevation is a party wall abutting the next property at No. 12 and could not be inspected.",
     "Several minor gaps and cracks observed.",
     "the roof underside appears to be in satisfactory and in typical condition. Water stains observed.",
