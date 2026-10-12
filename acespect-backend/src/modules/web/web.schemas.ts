@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const sectionUpdateSchema = z.object({
   reviewStatus: z.enum(['pending', 'approved', 'revision-requested']).optional(),
   reviewComment: z.string().max(2000).optional(),
-  reportText: z.string().max(20000).optional(),
+  reportText: z.string().max(100000).optional(),
   fields: z.record(z.string(), z.unknown()).optional(),
   // Photo URLs (from this section's own `photos`) a reviewer has chosen to
   // leave out of the generated report. Replaces the stored list wholesale --
