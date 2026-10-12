@@ -13,7 +13,7 @@
 //   SMOKE_SCRIPT=scripts/audit-reports.mjs AUDIT_OUT=<folder> PHOTOS_DIR=<folder with man-L.jpg, house-L.jpg, ...> \
 //   DATABASE_URL=postgresql://user:pass@localhost:5432/scratch?schema=public scripts/ci/report-e2e.sh
 //
-// Optional: AUDIT_SCENARIOS=real,mixes (a comma list), AUDIT_TYPES=residential_house,construction, KEEP=1 (keep every PDF and Word file).
+// Optional: AUDIT_SCENARIOS=real,mixes (a comma list), AUDIT_TYPES=residential_house,construction, AUDIT_ONLY=real/residential_house,none/apartment (just those reports), KEEP=1 (keep every PDF and Word file).
 import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -249,6 +249,7 @@ const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"],
 let n = 0;
 for (const scenarioName of chosen) {
   for (const type of TYPES) {
+    if (process.env.AUDIT_ONLY && !process.env.AUDIT_ONLY.split(",").includes(`${scenarioName}/${type.key}`)) continue; // e.g. AUDIT_ONLY=real/residential_house,none/apartment: re-run just those reports
     const label = `${scenarioName} / ${type.key}`;
     const jobNo = `HV-26-AUD${String(++n).padStart(2, "0")}`;
     process.stdout.write(`\n== ${label}: ${SCENARIOS[scenarioName].about}\n`);
