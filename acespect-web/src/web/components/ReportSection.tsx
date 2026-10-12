@@ -110,7 +110,7 @@ function renderParsedItem(item: ParsedItem, compact: boolean, key: number | stri
  */
 function DefectBlock({ text, damage, compact }: { text: string; damage?: DamageRecord; compact: boolean }) {
   const photos = damage?.photos ?? [];
-  const numbering = usePhotoNumbering(photos.length);
+  const numbering = usePhotoNumbering(photos, `defect:${damage?.id ?? text}`);
   const sentence = <Para style={{ margin: "0 0 6px" }}>{text}</Para>;
   if (photos.length === 0) return <div style={{ margin: "0 0 10px" }}>{sentence}</div>;
   return (
@@ -132,7 +132,7 @@ function DefectBlock({ text, damage, compact }: { text: string; damage?: DamageR
 
 /** The section's own general photos (not tied to a defect) -- printed after the defects, with their own photo numbers. */
 function GeneralPhotos({ photos, compact }: { photos: string[]; compact: boolean }) {
-  const numbering = usePhotoNumbering(photos.length);
+  const numbering = usePhotoNumbering(photos, "general");
   if (photos.length === 0) return null;
   return (
     <div style={{ marginTop: "6px" }}>
@@ -235,7 +235,7 @@ function DamageBlock({
   compact: boolean;
   hideDamageText: boolean;
 }) {
-  const numbering = usePhotoNumbering(damage.photos.length);
+  const numbering = usePhotoNumbering(damage.photos, `damage:${damage.id}`);
   return (
     <div style={{ margin: "10px 0 0" }}>
       {!hideDamageText && <Para style={{ margin: "0 0 6px" }}>{describeDamage(damage)}</Para>}

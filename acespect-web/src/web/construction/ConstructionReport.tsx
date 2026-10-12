@@ -1,10 +1,10 @@
 import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { Inspection } from "../mockData";
-import { resolveMediaUrl } from "../api";
 import { formatLongDate, type ReportHeader } from "../report";
 import { fetchActiveTemplate, type AnswerTree, type TemplateField } from "../templateFields";
 import { reportProfileOf } from "../wording/profile";
-import { PhotoNumberProvider, usePhotoNumbering } from "../components/reportKit";
+import { PhotoGrid, PhotoNumberProvider, usePhotoNumbering } from "../components/reportKit";
+import { COVER_COLORS, CoverPage } from "../components/CoverPage";
 import { constructionSectionText } from "./sectionText";
 import { CONDITIONS, SCOPE } from "./scopeText";
 import {
@@ -63,8 +63,7 @@ export const constructionFileName = (jobNo: string) => `${(jobNo || "inspection"
 // ───────────────────────── Look ─────────────────────────
 
 const C = {
-  navy: "#1b3a6b", red: "#d1262b", ink: "#1f2937", grey: "#6b7280", faint: "#9ca3af", rule: "#e5e7eb", band: "#e8eef8",
-  font: "Arial, Helvetica, sans-serif",
+  ...COVER_COLORS, faint: "#9ca3af", band: "#e8eef8", // the cover's colours are the report's colours: one list, in components/CoverPage.tsx
 };
 
 const STATUS: Record<ItemStatus, { label: string; sub: string; stripe: string; bg: string; fg: string }> = {
@@ -109,72 +108,33 @@ function photoRange(start: number | undefined, count: number): string {
   return count === 1 ? `${start}` : `${start} to ${start + count - 1}`;
 }
 
-/** Photographs, three to a line, each numbered; nothing is cropped. */
-function PhotoGrid3({ photos, numbers, indent = 30 }: { photos: string[]; numbers: number | undefined; indent?: number }) {
-  if (photos.length === 0) return null;
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", margin: `10px 0 4px ${indent}px` }}>
-      {photos.map((u, i) => (
-        <div key={u + i} style={{ breakInside: "avoid" }}>
-          <a href={resolveMediaUrl(u)} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
-            <img src={resolveMediaUrl(u)} alt="" style={{ width: "100%", height: "4.6cm", objectFit: "contain", background: "#f8fafc", border: `1px solid ${C.rule}`, display: "block" }} />
-          </a>
-          {numbers !== undefined && <span style={{ display: "block", marginTop: "2px", fontSize: "10.5px", color: C.grey }}>Photo {numbers + i}</span>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ───────────────────────── Cover ─────────────────────────
 
-function Cover({ r, model, inspection }: { r: ReportHeader; model: ConstructionReportModel; inspection: Inspection }) {
+/** The Construction Report's cover: the shared cover page (components/CoverPage.tsx, also the Dilapidation cover) with this report's details. */
+export function Cover({ r, model, inspection }: { r: ReportHeader; model: ConstructionReportModel; inspection: Inspection }) {
   const jobInfo = inspection.sections.find((s) => (s.key ?? s.id).startsWith("job-info"));
   const email = r.clientEmail || String((jobInfo?.fields as Record<string, unknown> | undefined)?.clientEmail ?? "") || undefined;
-  const label: CSSProperties = { fontSize: "10px", fontWeight: 700, letterSpacing: "0.14em", color: C.grey, textTransform: "uppercase" };
-  const rows: [string, ReactNode][] = [
-    ["Property", r.property],
-    ["Inspection Date", r.inspectionDate],
-    ["Weather", r.weather],
-    ["Inspector", `${r.inspector}${r.inspectorRegistration ? ` (Registration No. ${r.inspectorRegistration})` : ""}`],
-    ["Stage", model.stageLabel],
-    ["Report Purpose", model.purpose],
-    ["General", model.general],
-  ];
   return (
-    <div style={{ ...page, fontSize: "14px" }}>
-      <div className="screen-only" style={{ display: "flex", justifyContent: "flex-end", marginBottom: "18px" }}>
-        <img src="/houspect-logo.png" alt="Houspect Building Inspections" style={{ height: "56px", width: "auto", display: "block" }} />
-      </div>
-      <div style={{ fontWeight: 700, fontSize: "15px", margin: "0 0 14px" }}>{r.reportDate}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-        <div>
-          <div style={label}>Client</div>
-          <div style={{ fontSize: "14px", marginTop: "3px" }}>{r.clientName}</div>
-          {email && <div style={{ fontSize: "12px", color: C.grey }}>Via email: {email}</div>}
-        </div>
-        <div>
-          <div style={label}>Our Reference</div>
-          <div style={{ fontSize: "14px", marginTop: "3px" }}>{r.ourReference}</div>
-        </div>
-      </div>
-      <div style={{ background: C.navy, borderRight: `9px solid ${C.red}`, color: "white", padding: "22px 26px 24px", margin: "34px 0 30px" }}>
-        <div style={{ fontSize: "12.5px", fontWeight: 700, letterSpacing: "0.3em", textTransform: "uppercase", opacity: 0.92 }}>Construction Report</div>
-        <div style={{ fontSize: "36px", fontWeight: 700, marginTop: "6px", lineHeight: 1.1 }}>{model.coverTitle}</div>
-      </div>
-      <div>
-        {rows.map(([k, v]) => (
-          <div key={k} style={{ display: "grid", gridTemplateColumns: "166px 1fr", gap: "14px", padding: "9px 0", borderBottom: `1px solid ${C.rule}`, breakInside: "avoid" }}>
-            <div style={{ ...label, paddingTop: "3px" }}>{k}</div>
-            <div style={{ fontSize: "14px" }}>{v}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ marginTop: "28px" }}>
-        <div style={{ color: C.navy, fontSize: "17px" }}>Dinuke De Coonghe</div>
-        <div style={{ color: C.navy, fontSize: "13px", fontWeight: 700 }}>Director – Houspect Victoria</div>
-      </div>
-    </div>
+    <CoverPage
+      logo={<img src="/houspect-logo.png" alt="Houspect Building Inspections" style={{ height: "56px", width: "auto", display: "block" }} />}
+      reportDate={r.reportDate}
+      clientName={r.clientName}
+      clientNotes={email ? [`Via email: ${email}`] : []}
+      references={[["Our Reference", r.ourReference]]}
+      kicker="Construction Report"
+      title={model.coverTitle}
+      rows={[
+        ["Property", r.property],
+        ["Inspection Date", r.inspectionDate],
+        ["Weather", r.weather],
+        ["Inspector", `${r.inspector}${r.inspectorRegistration ? ` (Registration No. ${r.inspectorRegistration})` : ""}`],
+        ["Stage", model.stageLabel],
+        ["Report Purpose", model.purpose],
+        ["General", model.general],
+      ]}
+      signatureName="Dinuke De Coonghe"
+      signatureTitle="Director – Houspect Victoria"
+    />
   );
 }
 
@@ -190,7 +150,7 @@ function SummaryTiles({ model }: { model: ConstructionReportModel }) {
           <>
             <div style={{ fontSize: "26px", fontWeight: 800, color: s.fg, lineHeight: 1.1 }}>{model.totals[k]}</div>
             <div style={{ fontSize: "8.5px", fontWeight: 800, letterSpacing: "0.03em", color: s.fg, margin: "3px 0 4px", whiteSpace: "nowrap", textDecoration: target[k] ? "underline" : "none" }}>{s.label}</div>
-            <div style={{ fontSize: "9.5px", color: C.grey, lineHeight: 1.3 }}>{s.sub}</div>
+            <div style={{ fontSize: "9.5px", color: "#4b5563", lineHeight: 1.3 }}>{s.sub}</div>
           </>
         );
         const box: CSSProperties = { borderTop: `3.5px solid ${s.stripe}`, background: s.bg, padding: "9px 6px 10px", textAlign: "center", display: "block", color: "inherit", textDecoration: "none" };
@@ -212,11 +172,11 @@ function countsLine(t: ChecklistTable): string {
 }
 
 function RowPhotos({ heading, photos }: { heading: string; photos: string[] }) {
-  const numbering = usePhotoNumbering(photos.length);
+  const numbering = usePhotoNumbering(photos, `row:${heading}`);
   return (
     <div style={{ margin: "6px 0 4px", breakInside: "avoid" }}>
       <div style={{ fontSize: "11px", color: C.grey }}>Photographs — {heading}{numbering.start !== undefined ? ` (${photoRange(numbering.start, photos.length)})` : ""}</div>
-      <PhotoGrid3 photos={photos} numbers={numbering.start} indent={0} />
+      <PhotoGrid photos={photos} compact={false} startNumber={numbering.start} />
     </div>
   );
 }
@@ -260,8 +220,8 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
 // ───────────────────────── Defects ─────────────────────────
 
 function Defect({ d }: { d: DefectEntry }) {
-  const numbering = usePhotoNumbering(d.photos.length);
-  const small: CSSProperties = { fontSize: "11px", color: C.grey, marginTop: "2px" };
+  const numbering = usePhotoNumbering(d.photos, `defect:${d.no}`);
+  const small: CSSProperties = { fontSize: "11px", color: "#4b5563", marginTop: "2px" };
   return (
     <div id={`defect-${d.no}`} style={{ margin: "0 0 14px", breakInside: "avoid" }}>
       <div style={{ display: "grid", gridTemplateColumns: "30px 1fr", background: "#fff1f1" }}>
@@ -279,7 +239,7 @@ function Defect({ d }: { d: DefectEntry }) {
           {d.codeTitle && <div style={small}><b style={{ color: C.ink }}>NCC / AS reference:</b> {d.codeTitle}</div>}
         </div>
       </div>
-      <PhotoGrid3 photos={d.photos} numbers={numbering.start} />
+      <div style={{ marginLeft: "30px" }}><PhotoGrid photos={d.photos} compact={false} startNumber={numbering.start} /></div>
     </div>
   );
 }
@@ -304,7 +264,7 @@ function Defects({ model, archiveUrl }: { model: ConstructionReportModel; archiv
 // ───────────────────────── Previous defects / client concerns ─────────────────────────
 
 function ListTable({ heads, intro, na, list, row }: { heads: string[]; intro: string; na: string; list: AttachedList; row: (list: AttachedList) => ReactNode[] }) {
-  const numbering = usePhotoNumbering(list.photos.length);
+  const numbering = usePhotoNumbering(list.photos, "list:" + heads.join("|"));
   const cols = "74px 108px 1fr 112px 150px";
   const cells = list.attached ? row(list) : [];
   return (
@@ -321,7 +281,7 @@ function ListTable({ heads, intro, na, list, row }: { heads: string[]; intro: st
           {list.photos.length > 0 && (
             <div style={{ margin: "8px 0 0" }}>
               <div style={{ fontSize: "11px", color: C.grey }}>Photographs: {photoRange(numbering.start, list.photos.length)}</div>
-              <PhotoGrid3 photos={list.photos} numbers={numbering.start} indent={0} />
+              <PhotoGrid photos={list.photos} compact={false} startNumber={numbering.start} />
             </div>
           )}
         </>
@@ -406,9 +366,7 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           <Heading>General Description</Heading>
           <Bullets items={model.description} />
           {front && (
-            <div style={{ margin: "12px 0 14px", border: `1px solid ${C.rule}`, background: "#f8fafc" }}>
-              <img src={resolveMediaUrl(front)} alt="Front elevation" style={{ display: "block", width: "100%", maxHeight: "7.5cm", objectFit: "contain" }} />
-            </div>
+            <PhotoGrid photos={[front]} compact={false} maxHeight={7.5} />
           )}
           <SubHeading>Photographs</SubHeading>
           <p style={{ margin: "0 0 8px" }}>
@@ -436,7 +394,7 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           {noDefectsPhotos.length > 0 && (
             <>
               <SubHeading>General photographs of the site</SubHeading>
-              <PhotoGrid3 photos={noDefectsPhotos} numbers={undefined} indent={0} />
+              <PhotoGrid photos={noDefectsPhotos} compact={false} />
             </>
           )}
         </div>
@@ -504,7 +462,7 @@ export function ConstructionSectionPreview({ model, sectionKey }: { model: Const
       {isDescription && (
         <>
           <Bullets items={model.description} />
-          <PhotoGrid3 photos={photos} numbers={undefined} indent={0} />
+          <PhotoGrid photos={photos} compact />
         </>
       )}
       {tables.map((t, i) => <Table key={`${t.title}-${i}`} t={t} compact />)}

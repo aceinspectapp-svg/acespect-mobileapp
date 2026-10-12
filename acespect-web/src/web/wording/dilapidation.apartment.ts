@@ -16,7 +16,7 @@ import type { AnswerTree, ConditionSummaryRow, TemplateField } from "../template
 import { asString, buildDefectNote, isGateSatisfied, withPeriod } from "../templateFields";
 import { gradeOf } from "../conditionGrades";
 import type { Composer } from "./shared";
-import { article, capitalize, conditionOf, defectOffsets, joinClauses, joinList, lower, many, one } from "./shared";
+import { article, capitalize, conditionOf, defectOffsets, joinClauses, joinList, lower, many, one, withThe } from "./shared";
 import { houseDamageSentences, residentialHouseComposers as house, typically, wallsOf } from "./dilapidation.residential_house";
 import type { ReportWording } from "./types";
 
@@ -152,7 +152,7 @@ function structureComposer(kind: "fence" | "retaining wall", flags: [string, str
       const predicates = [built, grade ? `is ${grade}` : ""].filter(Boolean);
       text = predicates.length ? `${subject} ${predicates.join(" and ")}.` : `${subject} was inspected.`;
     } else {
-      text = `There is ${article(structure || "retaining")} ${structure ? `${structure} ` : ""}retaining wall${location ? ` to the ${location}` : ""}${material ? `, constructed of ${material}` : ""}.${grade ? ` It is ${grade}.` : ""}`;
+      text = `There is ${article(structure || "retaining")} ${structure ? `${structure} ` : ""}retaining wall${location ? ` to ${withThe(location)}` : ""}${material ? `, constructed of ${material}` : ""}.${grade ? ` It is ${grade}.` : ""}`;
     }
     if (obscured.length) text += ` Sections of the ${noun} were obscured by ${joinList(obscured)}.`;
     parts.push(text);

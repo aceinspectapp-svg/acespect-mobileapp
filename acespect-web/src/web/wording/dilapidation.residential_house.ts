@@ -10,6 +10,7 @@ import {
   article,
   atLocation,
   typedCase,
+  withThe,
   capitalize,
   conditionOf,
   damageLeadIn,
@@ -182,7 +183,7 @@ export function houseDamageSentences(
       }
 
       const measure = [width > 0 ? `approximately ${num(width)} millimetres wide` : "", length > 0 ? `approximately ${num(length)} millimetres long` : ""].filter(Boolean).join(" and ");
-      const sentence = `${defectLead(location, plural)} ${np}${element ? ` to the ${element}` : ""}${start ? ` starting from ${start}` : ""}${
+      const sentence = `${defectLead(location, plural)} ${np}${element ? ` to ${withThe(element)}` : ""}${start ? ` starting from ${start}` : ""}${
         !isCrack && run ? `, running ${DIRECTION_ADVERBS[directionRaw] ?? run}` : ""
       }${runTyped ? `, running ${runTyped}` : ""}${measure ? ` ${measure}` : ""}.`;
       const notes = asString(d.notes).replace(/\s*\n+\s*/g, " ").trim();
@@ -359,7 +360,7 @@ const retainingWalls: Composer = (inst, itemFields) => {
   const grade = cond.word || (details.someGaps ? "satisfactory" : "");
   const parts: string[] = [];
   if (cond.tag) parts.push(cond.tag);
-  const first = `There is a retaining wall${location ? ` to the ${lower(location)}` : ""}${
+  const first = `There is a retaining wall${location ? ` to ${withThe(lower(location))}` : ""}${
     materials.length ? `, constructed of ${joinList(materials)}` : ""
   }.`;
   const second = grade ? ` It is in ${grade} condition${typically(grade, "weathering", details.someGaps)}.` : "";

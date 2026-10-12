@@ -1,7 +1,6 @@
 import type { Inspection } from "../mockData";
 import { DESCRIPTION_PHOTO_PLACEHOLDER, PHOTOGRAPHS_NOTE } from "../report";
-import { Note, Para, Placeholder, reportTextStyle, reportTokens, SectionBand, usePhotoNumbering } from "./reportKit";
-import { resolveMediaUrl } from "../api";
+import { Note, Para, Placeholder, PhotoGrid, reportTextStyle, SectionBand, usePhotoNumbering } from "./reportKit";
 import { reportProfileOf } from "../wording/profile";
 import { wordingFor } from "../wording/registry";
 import { scopeOfInspectionSentences } from "../descriptionScope";
@@ -45,7 +44,7 @@ export function ReportDescription({
   const description = inspection.sections.find((s) => (s.key ?? s.id).startsWith("description"));
   const frontElevation = (description?.answers as Record<string, unknown> | null | undefined)?.front_elevation;
   const photoUrl = Array.isArray(frontElevation) && typeof frontElevation[0] === "string" ? frontElevation[0] : undefined;
-  const frontPhotoNumbering = usePhotoNumbering(photoUrl ? 1 : 0);
+  const frontPhotoNumbering = usePhotoNumbering(photoUrl ? [photoUrl] : [], "front");
   const totalPhotos = countReportPhotos(inspection);
 
   // Scope, Safety and Limitations fields (projectSiteAddress, siteSide,
@@ -85,23 +84,8 @@ export function ReportDescription({
         <Placeholder>Insert property description (storeys, orientation, construction, roof, windows).</Placeholder>
       )}
       {photoUrl ? (
-        // Centred and large: this is the one photo that introduces the property.
-        // Same fixed 4:3 box + `contain` as PhotoGrid, so a portrait photo is
-        // letterboxed instead of cropped.
-        <div style={{ width: compact ? "100%" : "13cm", maxWidth: "100%", margin: "10px auto 14px" }}>
-          <a href={resolveMediaUrl(photoUrl)} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
-            <img
-              src={resolveMediaUrl(photoUrl)}
-              alt="Front of property"
-              style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "contain", background: "#f4f5f7", border: `1px solid ${reportTokens.border}`, display: "block" }}
-            />
-          </a>
-          {frontPhotoNumbering.start !== undefined && (
-            <span style={{ display: "block", marginTop: "2px", fontSize: "0.82em", color: reportTokens.inkMuted, textAlign: "center" }}>
-              Photo {frontPhotoNumbering.start}
-            </span>
-          )}
-        </div>
+        // The front-of-property photo: the same photo grid as every other photo in the report.
+        <PhotoGrid photos={[photoUrl]} compact={compact} startNumber={frontPhotoNumbering.start} />
       ) : (
         <Placeholder>{DESCRIPTION_PHOTO_PLACEHOLDER}</Placeholder>
       )}
