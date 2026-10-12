@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { env } from '../config/env';
 import { prisma } from './prisma';
+import { mergeFolder, resolveInspectionFolder, type EgnyteFs, type Resolution } from './egnyteJobFolders';
 
 // Every photo used in the review UI and the generated report is resized to
 // one consistent size at upload time -- this replaces the old manual
@@ -34,7 +35,7 @@ const REPORT_JPEG_QUALITY = 82;
  * looked up on fetch.
  */
 function egnyteBase(): string {
-  return `https://${env.EGNYTE_DOMAIN}.egnyte.com`;
+  return env.EGNYTE_BASE_URL || `https://${env.EGNYTE_DOMAIN}.egnyte.com`;
 }
 
 function authHeaders(): Record<string, string> {
@@ -99,8 +100,10 @@ export async function ensureBucket(): Promise<boolean> {
  * Derived from the job number alone, so it is always the link for THIS job and
  * needs no per-job setup. Null when photo storage isn't configured.
  */
-export function inspectionFolderUrl(jobNo: string | null | undefined, inspectionId: string): string | null {
+export function inspectionFolderUrl(jobNo: string | null | undefined, inspectionId: string, egnytePath?: string | null): string | null {
   if (!isStorageEnabled()) return null;
+  // The resolved folder (inside its batch) when the job was placed; the old {root}/{job} guess for older records.
+  if (egnytePath) return `${egnyteBase()}/app/index.do#storage/files/1${encodeEgnytePath(egnytePath.startsWith('/') ? egnytePath : `/${egnytePath}`)}`;
   const segment = safeSegment((jobNo ?? '').trim()) || safeSegment(inspectionId);
   const root = env.EGNYTE_ROOT_FOLDER.startsWith('/') ? env.EGNYTE_ROOT_FOLDER : `/${env.EGNYTE_ROOT_FOLDER}`;
   return `${egnyteBase()}/app/index.do#storage/files/1${encodeEgnytePath(`${root}/${segment}`)}`;
@@ -154,7 +157,10 @@ export async function qcJobFolder(projectId: string): Promise<string> {
   return clash > 0 ? `${job}_${short}` : job;
 }
 
-function photoPath(id: string, inspectionId: string | undefined, sectionKey: string | undefined, suffix = '', tenantId?: string, jobFolder?: string): string {
+function photoPath(id: string, inspectionId: string | undefined, sectionKey: string | undefined, suffix = '', tenantId?: string, jobFolder?: string, destination?: string): string {
+  // An inspector's inspection whose job number is known: {batch}/{job}/{section}/{photo} (see lib/egnyteJobFolders.ts).
+  if (destination && sectionKey) return `${destination}/${sectionFolderPath(sectionKey)}/${id}${suffix}`;
+  if (destination) return `${destination}/${id}${suffix}`;
   // Client files live under their own folder so one client's files are never mixed with another's; a QC project's files
   // sit under its job-number folder instead.
   const root = jobFolder
@@ -168,49 +174,127 @@ function photoPath(id: string, inspectionId: string | undefined, sectionKey: str
   return `${root}/inspections/${id}${suffix}`;
 }
 
-/**
- * Move an inspection's Egnyte folder from the draft-local id it was created
- * under (see `photoPath`'s `inspectionId`) to a name based on the job
- * number, once that's known at submit time -- so folders are browsable by
- * job number in Egnyte instead of an opaque UUID. Non-fatal: a collision
- * (two inspections landing on the same job number) or any other failure
- * leaves photos under their existing, still perfectly valid folder rather
- * than blocking submission.
- */
-export async function renameInspectionFolder(oldId: string, jobNo: string): Promise<string | null> {
-  if (!isStorageEnabled()) return null;
-  const oldSegment = safeSegment(oldId);
-  const newSegment = safeSegment(jobNo);
-  if (!newSegment || newSegment === oldSegment) return null;
+// ───────────────────────── Folder placement (see lib/egnyteJobFolders.ts for the rules) ─────────────────────────
 
-  const oldFolder = `${env.EGNYTE_ROOT_FOLDER}/${oldSegment}`;
-  const newFolder = `${env.EGNYTE_ROOT_FOLDER}/${newSegment}`;
+const egnyteRoot = () => (env.EGNYTE_ROOT_FOLDER.startsWith('/') ? env.EGNYTE_ROOT_FOLDER : `/${env.EGNYTE_ROOT_FOLDER}`).replace(/\/+$/, '');
 
-  const res = await withRetry(() =>
-    fetch(`${egnyteBase()}/pubapi/v1/fs${encodeEgnytePath(oldFolder)}`, {
-      method: 'POST',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'move', destination: newFolder }),
+async function egnyteRequest(path: string, init: { method: string; body?: unknown; query?: string }): Promise<Response> {
+  return withRetry(() =>
+    fetch(`${egnyteBase()}/pubapi/v1/fs${encodeEgnytePath(path)}${init.query ?? ''}`, {
+      method: init.method,
+      headers: { ...authHeaders(), ...(init.body ? { 'Content-Type': 'application/json' } : {}) },
+      body: init.body ? JSON.stringify(init.body) : undefined,
     }),
   );
-  if (res.status === 404) return null; // no photos were ever taken -- nothing to move
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    // eslint-disable-next-line no-console
-    console.error(`⚠️  Failed to rename Egnyte folder ${oldFolder} -> ${newFolder} (${res.status}): ${body}`);
-    return null;
-  }
+}
 
-  // The photos table indexes each photo by its full Egnyte path -- repoint
-  // every one that lived under the old folder so future fetches still
-  // resolve to where the file actually moved to.
+/** The Egnyte calls the folder rules need. */
+export const egnyteFs: EgnyteFs = {
+  async list(path) {
+    const folders: string[] = [];
+    const files: string[] = [];
+    const page = 500;
+    for (let offset = 0; ; offset += page) {
+      const res = await egnyteRequest(path, { method: 'GET', query: `?list_content=true&count=${page}&offset=${offset}` });
+      if (res.status === 404) return offset === 0 ? null : { folders, files };
+      if (!res.ok) throw new Error(`Egnyte could not list ${path} (${res.status}): ${await res.text().catch(() => '')}`);
+      const body = (await res.json()) as { folders?: { name: string }[]; files?: { name: string }[]; total_count?: number };
+      for (const f of body.folders ?? []) folders.push(f.name);
+      for (const f of body.files ?? []) files.push(f.name);
+      if (offset + page >= (body.total_count ?? 0)) break;
+    }
+    return { folders, files };
+  },
+  async createFolder(path) {
+    const res = await egnyteRequest(path, { method: 'POST', body: { action: 'add_folder' } });
+    if (res.ok || res.status === 409) return;
+    const body = await res.text().catch(() => '');
+    // This Egnyte instance reports "already exists" as 403 (or 405) rather than 409.
+    if ((res.status === 403 || res.status === 405) && /already exists/i.test(body)) return;
+    throw new Error(`Egnyte could not create ${path} (${res.status}): ${body}`);
+  },
+  async move(from, to) {
+    const res = await egnyteRequest(from, { method: 'POST', body: { action: 'move', destination: to } });
+    if (!res.ok) throw new Error(`Egnyte could not move ${from} to ${to} (${res.status}): ${await res.text().catch(() => '')}`);
+  },
+  async deleteFolder(path) {
+    const res = await egnyteRequest(path, { method: 'DELETE' });
+    if (!res.ok && res.status !== 404) throw new Error(`Egnyte could not delete ${path} (${res.status}): ${await res.text().catch(() => '')}`);
+  },
+};
+
+// One caller at a time per folder to create: in this process by chaining, across instances by a database advisory lock.
+const localChains = new Map<string, Promise<unknown>>();
+async function folderLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const previous = localChains.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const mine = new Promise<void>((r) => { release = r; });
+  const tail = previous.then(() => mine);
+  localChains.set(key, tail);
+  await previous.catch(() => undefined);
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+      return fn();
+    }, { timeout: 60_000, maxWait: 60_000 });
+  } finally {
+    release();
+    if (localChains.get(key) === tail) localChains.delete(key);
+  }
+}
+
+const resolutionCache = new Map<string, { at: number; resolution: Resolution }>();
+const CACHE_MS = 10 * 60 * 1000;
+
+/**
+ * The folder photos for this job go in, created if need be. `draftId` names the staging folder used when the job number cannot
+ * be placed yet. Results are remembered briefly so a burst of uploads for one job lists Egnyte once, not once per photo.
+ */
+export async function resolveInspectionDestination(jobNo: string | null | undefined, draftId?: string, opts: { createJobFolder?: boolean; fresh?: boolean } = {}): Promise<Resolution> {
+  const key = `${(jobNo ?? '').trim().toUpperCase()}|${draftId ?? ''}|${opts.createJobFolder === false ? 'nc' : 'c'}`;
+  const hit = resolutionCache.get(key);
+  if (!opts.fresh && hit && Date.now() - hit.at < CACHE_MS) return hit.resolution;
+  const resolution = await resolveInspectionFolder(egnyteFs, egnyteRoot(), jobNo, { draftId, lock: folderLock, createJobFolder: opts.createJobFolder });
+  if (resolution.status !== 'unassigned') resolutionCache.set(key, { at: Date.now(), resolution });
+  return resolution;
+}
+
+/** Move a folder into another (merging if the target exists) and repoint the photo index. Used by the one-off tidy-up script. */
+export async function moveFolderAndRepoint(from: string, to: string): Promise<void> {
+  await mergeFolder(egnyteFs, from, to);
   await prisma.$executeRaw`
     UPDATE photos
-    SET "storageKey" = ${newFolder} || substring("storageKey" from ${oldFolder.length + 1}::int)
-    WHERE "storageKey" LIKE ${oldFolder + '/%'}
+    SET "storageKey" = ${to} || substring("storageKey" from ${from.length + 1}::int)
+    WHERE "storageKey" LIKE ${from + '/%'}
   `;
+}
 
-  return newSegment;
+export const egnyteRootFolder = egnyteRoot;
+
+/**
+ * Once the job number is final (submit, or an admin correcting it), put the inspection's photos where they belong: move them
+ * out of the draft's own folder (older app builds upload there) or the _Unassigned staging folder into the job's folder, and
+ * repoint the photo index. Safe to repeat. Returns where the inspection's folder is, or null when Egnyte is not configured.
+ */
+export async function settleInspectionFolder(inspectionId: string, jobNo: string | null | undefined, previousPath?: string | null): Promise<Resolution | null> {
+  if (!isStorageEnabled()) return null;
+  const resolution = await resolveInspectionDestination(jobNo, inspectionId, { createJobFolder: false, fresh: true });
+  if (resolution.status === 'unassigned') return resolution;
+
+  const root = egnyteRoot();
+  const seg = safeSegment(inspectionId);
+  const sources = [`${root}/${seg}`, `${root}/_Unassigned/${seg}`, ...(previousPath && previousPath !== resolution.path ? [previousPath] : [])];
+  for (const from of sources) {
+    await mergeFolder(egnyteFs, from, resolution.path);
+    await prisma.$executeRaw`
+      UPDATE photos
+      SET "storageKey" = ${resolution.path} || substring("storageKey" from ${from.length + 1}::int)
+      WHERE "storageKey" LIKE ${from + '/%'}
+    `;
+  }
+  // An inspection that never had photos still gets its folder, so the office finds it.
+  await egnyteFs.createFolder(resolution.path);
+  return resolution;
 }
 
 async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string): Promise<void> {
@@ -247,10 +331,17 @@ export async function uploadPhoto(
   sectionKey?: string,
   tenantId?: string,
   jobFolder?: string,
-): Promise<UploadedPhoto> {
+  opts: { jobNo?: string | null; photoId?: string } = {},
+): Promise<UploadedPhoto & { folder?: { status: string; message?: string; path: string } }> {
   if (!isStorageEnabled() && !useDbStorage()) throw new Error('Photo storage is not configured');
 
-  const id = randomUUID();
+  // The phone gives each photo a fixed id, so sending it again (after a dropped connection) returns the stored copy
+  // instead of making a second one.
+  if (opts.photoId) {
+    const existing = await prisma.photo.findUnique({ where: { id: opts.photoId }, select: { id: true, storageKey: true } });
+    if (existing) return { id: existing.id, storageKey: existing.storageKey ?? `db:${existing.id}`, url: `/api/v1/media/${existing.id}` };
+  }
+  const id = opts.photoId ?? randomUUID();
 
   // rotate() with no args bakes in the EXIF orientation tag (phone photos are
   // often stored sideways/upside-down relative to how they should display)
@@ -270,14 +361,18 @@ export async function uploadPhoto(
     await prisma.photo.create({ data: { id, data: new Uint8Array(resized), contentType: 'image/jpeg' } });
     return { id, storageKey: `db:${id}`, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(resized).digest('hex') };
   }
-  const storageKey = photoPath(id, inspectionId, sectionKey, '.jpg', tenantId, jobFolder);
+  // An inspector's photo with a job number goes straight into {batch}/{job}/; one without (an older app build) goes in the draft's own folder
+  // and is moved at submit (settleInspectionFolder).
+  const place = !tenantId && !jobFolder && inspectionId && opts.jobNo !== undefined ? await resolveInspectionDestination(opts.jobNo, inspectionId) : undefined;
+  const destination = place?.path;
+  const storageKey = photoPath(id, inspectionId, sectionKey, '.jpg', tenantId, jobFolder, destination);
   await uploadToEgnyte(storageKey, resized, 'image/jpeg');
 
   // Full-quality original, alongside the compressed copy above. Non-fatal:
   // every in-app view depends on the compressed copy having uploaded (which
   // already happened by this point), not this one.
   try {
-    await uploadToEgnyte(photoPath(id, inspectionId, sectionKey, `-original.${ext}`, tenantId, jobFolder), buffer, contentType);
+    await uploadToEgnyte(photoPath(id, inspectionId, sectionKey, `-original.${ext}`, tenantId, jobFolder, destination), buffer, contentType);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('⚠️  Failed to store the full-quality original (compressed report copy still saved).', err);
@@ -291,7 +386,10 @@ export async function uploadPhoto(
   // baked-in absolute URL would go dead (and break every already-submitted
   // photo) the next time the tunnel restarts. Clients resolve this path
   // against whatever API host they're currently configured for.
-  return { id, storageKey, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(resized).digest('hex') };
+  return {
+    id, storageKey, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(resized).digest('hex'),
+    ...(place ? { folder: { status: place.status, path: place.path, ...(place.message ? { message: place.message } : {}) } } : {}),
+  };
 }
 
 /**

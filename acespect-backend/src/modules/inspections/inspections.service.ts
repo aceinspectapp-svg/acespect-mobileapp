@@ -71,7 +71,7 @@ async function submit(inspectorId: string, input: SubmitInspectionInput) {
     if (!assignment) throw ApiError.notFound('Assigned job not found');
     if (assignment.inspectorId !== inspectorId) throw ApiError.forbidden('This job is not assigned to you');
     const inspection = await prisma.inspection.update({ where: { id: input.assignmentId }, data });
-    if (input.jobNo) await renameEgnyteFolder(input.assignmentId, input.jobNo);
+    await settleEgnyteFolder(input.assignmentId, input.jobNo);
     return { inspection };
   }
 
@@ -89,18 +89,32 @@ async function submit(inspectorId: string, input: SubmitInspectionInput) {
   // is, rename it so it's browsable in Egnyte by job number instead of a
   // UUID. Skipped when `input.id` is absent (nothing was ever uploaded
   // under a matching folder, e.g. a web-created draft).
-  if (input.jobNo && input.id) await renameEgnyteFolder(input.id, input.jobNo);
+  await settleEgnyteFolder(inspection.id, input.jobNo);
   return { inspection };
 }
 
-/** Non-fatal: a folder-rename failure (or an Egnyte outage) must never block submission. */
-async function renameEgnyteFolder(oldId: string, jobNo: string) {
+/**
+ * Place the inspection's Egnyte folder ({root}/{batch}/{job}) now that its job number is final, and record where it is and
+ * whether the office needs to look at it. Non-fatal: an Egnyte outage must never block submission -- it is recorded as
+ * "failed" and can be re-run from the admin page (POST /web/inspections/:id/egnyte/resolve).
+ */
+export async function settleEgnyteFolder(inspectionId: string, jobNo: string | null | undefined): Promise<void> {
   try {
-    const { renameInspectionFolder } = await import('../../lib/storage');
-    await renameInspectionFolder(oldId, jobNo);
+    const { settleInspectionFolder, isStorageEnabled } = await import('../../lib/storage');
+    if (!isStorageEnabled()) return;
+    const previous = await prisma.inspection.findUnique({ where: { id: inspectionId }, select: { egnytePath: true } });
+    const r = await settleInspectionFolder(inspectionId, jobNo, previous?.egnytePath);
+    if (!r) return;
+    await prisma.inspection.update({
+      where: { id: inspectionId },
+      data: { egnytePath: r.status === 'unassigned' ? previous?.egnytePath ?? null : r.path, egnyteStatus: r.status, egnyteMessage: r.message ?? null, egnyteCheckedAt: new Date() },
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('⚠️  Failed to rename Egnyte folder to job number.', err);
+    console.error('⚠️  Egnyte folder placement failed.', err);
+    await prisma.inspection
+      .update({ where: { id: inspectionId }, data: { egnyteStatus: 'failed', egnyteMessage: err instanceof Error ? err.message.slice(0, 500) : 'Egnyte folder placement failed', egnyteCheckedAt: new Date() } })
+      .catch(() => undefined);
   }
 }
 
@@ -128,7 +142,7 @@ async function requireOwnDraft(id: string, inspectorId: string) {
 async function update(id: string, inspectorId: string, input: UpdateInspectionInput) {
   await requireOwnDraft(id, inspectorId);
 
-  return prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     if (input.sections) {
       // Damages cascade from sections, so deleting sections clears them too.
       await tx.section.deleteMany({ where: { inspectionId: id } });
@@ -147,6 +161,9 @@ async function update(id: string, inspectorId: string, input: UpdateInspectionIn
       },
     });
   });
+  // A corrected job number moves the photo folder to the right batch.
+  if (input.jobNo) await settleEgnyteFolder(id, input.jobNo);
+  return updated;
 }
 
 /**
@@ -263,10 +280,12 @@ async function uploadPhoto(
   originalName: string,
   inspectionId?: string,
   sectionKey?: string,
+  jobNo?: string,
+  photoId?: string,
 ) {
   const { uploadPhoto: store } = await import('../../lib/storage');
   const ext = (originalName.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-  return store(buffer, contentType || 'image/jpeg', ext, inspectionId, sectionKey);
+  return store(buffer, contentType || 'image/jpeg', ext, inspectionId, sectionKey, undefined, undefined, { jobNo, photoId });
 }
 
 /**

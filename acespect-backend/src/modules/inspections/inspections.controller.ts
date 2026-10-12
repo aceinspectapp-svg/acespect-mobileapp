@@ -170,17 +170,23 @@ export const inspectionsController = {
     if (!file) throw ApiError.badRequest('No photo file (field name must be "photo")');
     const inspectionId = typeof req.body.inspectionId === 'string' ? req.body.inspectionId : undefined;
     const sectionKey = typeof req.body.sectionKey === 'string' ? req.body.sectionKey : undefined;
+    // The job number lets the server put the photo straight into its batch/job folder in Egnyte; the photo id (a uuid the phone
+    // makes up from the photo) makes a repeated upload return the stored copy instead of saving a second one.
+    const jobNo = typeof req.body.jobNo === 'string' ? req.body.jobNo : undefined;
+    const photoId = typeof req.body.photoId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.body.photoId) ? req.body.photoId.toLowerCase() : undefined;
     const result = await inspectionsService.uploadPhoto(
       file.buffer,
       file.mimetype,
       file.originalname,
       inspectionId,
       sectionKey,
+      jobNo,
+      photoId,
     );
     logSubmit(
       'photo_uploaded',
       { inspectorId: req.user.id, inspectionId },
-      { sectionKey, bytes: file.buffer.length, photoId: result.id },
+      { sectionKey, bytes: file.buffer.length, photoId: result.id, ...(jobNo ? { jobNo } : {}) },
     );
     res.status(201).json(result);
   }),

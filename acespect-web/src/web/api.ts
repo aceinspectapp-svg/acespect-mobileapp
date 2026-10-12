@@ -317,6 +317,9 @@ export const api = {
   updateDamage: (id: string, patch: { excludedPhotoUrls?: string[]; photos?: string[] }) =>
     req<{ damage: unknown }>(`/web/damages/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
+  /** Re-run the Egnyte folder placement for one inspection (after a failure, or once its job number was corrected). */
+  resolveEgnyte: (id: string) => req<{ inspection: Inspection }>(`/web/inspections/${id}/egnyte/resolve`, { method: "POST" }).then((d) => d.inspection),
+
   updateInspection: (id: string, patch: { status?: InspectionStatus; notes?: string; reviewerId?: string | null }) =>
     req<{ inspection: Inspection }>(`/web/inspections/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 

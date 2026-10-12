@@ -87,7 +87,7 @@ async function deleteLocalFile(uri: string): Promise<void> {
   }
 }
 
-async function uploadAndForget(uri: string, opts: { inspectionId?: string; sectionKey?: string }): Promise<string> {
+async function uploadAndForget(uri: string, opts: { inspectionId?: string; sectionKey?: string; jobNo?: string }): Promise<string> {
   const url = await uploadPhoto(uri, opts);
   void deleteLocalFile(uri);
   return url;
@@ -121,6 +121,7 @@ async function walkAndResolvePhotos(
   folderPath: string[],
   inspectionId: string | undefined,
   urlByUri: Map<string, string>,
+  jobNo?: string,
 ): Promise<void> {
   if (!tree) return;
   for (const [key, value] of Object.entries(tree)) {
@@ -134,19 +135,19 @@ async function walkAndResolvePhotos(
         const uri = arr[i]!;
         if (!isLocalUri(uri)) continue;
         if (!urlByUri.has(uri)) {
-          urlByUri.set(uri, await uploadAndForget(uri, { inspectionId, sectionKey: childPath.join(':') }));
+          urlByUri.set(uri, await uploadAndForget(uri, { inspectionId, sectionKey: childPath.join(':'), jobNo }));
         }
         arr[i] = urlByUri.get(uri)!;
       }
     } else if (Array.isArray(value)) {
       // Repeating-group / damage-list instances (strip/checklist presentation).
       for (const inst of value as AnswerTree[]) {
-        await walkAndResolvePhotos(inst, childPath, inspectionId, urlByUri);
+        await walkAndResolvePhotos(inst, childPath, inspectionId, urlByUri, jobNo);
       }
     } else if (typeof value === 'object') {
       // A single nested compound value, or fixed-tabs' Record<instanceKey, AnswerTree> --
       // either way its own entries recurse the same way, gaining one more folder level.
-      await walkAndResolvePhotos(value as AnswerTree, childPath, inspectionId, urlByUri);
+      await walkAndResolvePhotos(value as AnswerTree, childPath, inspectionId, urlByUri, jobNo);
     }
   }
 }
@@ -169,6 +170,7 @@ async function walkAndResolvePhotos(
  */
 export async function runSubmission(payload: SubmitPayload): Promise<{ inspectionId: string; reviewJobId: string; status: string }> {
   const inspectionId = payload.id;
+  const jobNo = payload.jobNo;
   const urlByUri = new Map<string, string>();
 
   // Primary pass: walk each section's actual answer tree, so every
@@ -176,7 +178,7 @@ export async function runSubmission(payload: SubmitPayload): Promise<{ inspectio
   // that matches its own sub-area, and the field's own stored value is what
   // ends up holding the real URL -- not just a separate flat summary list.
   for (const section of payload.sections) {
-    await walkAndResolvePhotos(section.answers as AnswerTree | undefined, [section.key], inspectionId, urlByUri);
+    await walkAndResolvePhotos(section.answers as AnswerTree | undefined, [section.key], inspectionId, urlByUri, jobNo);
   }
 
   // Fallback safety net: `section.photos` / `damages[].photos` are a flat
@@ -188,13 +190,13 @@ export async function runSubmission(payload: SubmitPayload): Promise<{ inspectio
   for (const section of payload.sections) {
     for (const uri of section.photos ?? []) {
       if (isLocalUri(uri) && !urlByUri.has(uri)) {
-        urlByUri.set(uri, await uploadAndForget(uri, { inspectionId, sectionKey: section.key }));
+        urlByUri.set(uri, await uploadAndForget(uri, { inspectionId, sectionKey: section.key, jobNo }));
       }
     }
     for (const d of section.damages ?? []) {
       for (const uri of d.photos ?? []) {
         if (isLocalUri(uri) && !urlByUri.has(uri)) {
-          urlByUri.set(uri, await uploadAndForget(uri, { inspectionId, sectionKey: section.key }));
+          urlByUri.set(uri, await uploadAndForget(uri, { inspectionId, sectionKey: section.key, jobNo }));
         }
       }
     }

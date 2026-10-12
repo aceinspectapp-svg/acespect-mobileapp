@@ -114,7 +114,11 @@ export function serializeInspection(i: InspectionWithSections, withSections = tr
     overallProgress: i.overallProgress,
     notes: i.notes,
     // Where this job's photos are saved (Egnyte folder named by job number) -- the report's "Click here" link.
-    photoArchiveUrl: inspectionFolderUrl(i.jobNo, i.id),
+    photoArchiveUrl: inspectionFolderUrl(i.jobNo, i.id, i.egnytePath),
+    // Where the photos were placed in Egnyte and whether the office needs to look at it (null before any placement).
+    egnyte: i.egnyteStatus
+      ? { status: i.egnyteStatus, path: i.egnytePath ?? null, message: i.egnyteMessage ?? null, checkedAt: i.egnyteCheckedAt ? i.egnyteCheckedAt.toISOString() : null }
+      : null,
     sections: withSections ? i.sections.map(serializeSection) : [],
   };
 }
