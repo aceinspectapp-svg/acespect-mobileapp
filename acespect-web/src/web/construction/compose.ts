@@ -13,7 +13,7 @@ import type { AnswerTree, TemplateField } from "../templateFields";
 import { asAnswerTree, asString, asStringArray, isGateSatisfied } from "../templateFields";
 import { EXTERNAL_WORDS, STAGES, areaOfSection, kindOfKey, stageOfKey, type StageId } from "./stages";
 import {
-  type Chosen, CATEGORY_LABELS, NOT_APPLICABLE, SATISFACTORY, SEVERITY_LABELS, asList, cap, chosen, headingMap, headingOf, joinList, labelsOf, lower, mapLabels, photosIn, sentence, toneOfOption,
+  type Chosen, CATEGORY_LABELS, NOT_APPLICABLE, SATISFACTORY, SEVERITY_LABELS, asList, cap, chosen, groupOf, headingMap, headingOf, joinList, labelsOf, lower, mapLabels, photosIn, sentence, toneOfOption,
 } from "./words";
 
 export interface ComposedDamage {
@@ -73,7 +73,7 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartm
   if (a.ownersOnSite === "yes" || a.ownersOnSite === "no") out.push(`The owner ${a.ownersOnSite === "no" ? "was not" : "was"} onsite at the time of inspection.`);
   if (a.safetyIssues === "yes") {
     const d = asString(a.safetyDescribe).trim();
-    out.push(d ? `Safety issues were noted: ${sentence(d)}` : "Safety issues were noted on site.");
+    out.push(d ? `Safety issues were noted on site — ${sentence(d)}` : "Safety issues were noted on site.");
   }
   out.push(STAGES[stage].progress);
   return out;
@@ -172,7 +172,7 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
   const headings = headingMap(fields);
   const area = kind === "site" ? "EXTERNAL" : areaOfSection(key);
   const add = (f: TemplateField, heading: string, status: ItemStatus, text: string) => {
-    if (text) rows.push({ group: f.sectionLetter ? headingOf(f.sectionLetter) : undefined, heading, status, text });
+    if (text) rows.push({ group: f.sectionLetter ? groupOf(f.sectionLetter) : undefined, heading, status, text });
   };
   const hasRed = (f: TemplateField) => !!f.options?.some((x) => toneOfOption(x.color) === "bad");
 
@@ -184,7 +184,7 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
     if (!isDefect) return false;
     const d = asAnswerTree(a[`${f.key}${DEFECT_SUFFIX}`]);
     defects.push({
-      sub: f.sectionLetter ? headingOf(f.sectionLetter) : "General", area, location: asString(d.location).trim(),
+      sub: f.sectionLetter ? groupOf(f.sectionLetter) : "General", area, location: asString(d.location).trim(),
       text: defectText(heading, asString(d.location).trim(), asString(d.comments).trim(), mapLabels(d.severity, SEVERITY_LABELS), mapLabels(d.category, CATEGORY_LABELS), asString(d.constructionCode).trim()),
       photos: photosIn(d.photos),
     });
@@ -210,7 +210,7 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
     if (!site) continue;
     const datum = fieldByKey.get(`${base}Datum`);
     const result = fieldByKey.get(`${base}Result`) ?? fieldByKey.get(`${base}StepResult`);
-    const group = f.sectionLetter ? headingOf(f.sectionLetter) : "";
+    const group = f.sectionLetter ? groupOf(f.sectionLetter) : "";
     const baseName = f.label.replace(/\s+on plan( is)?$/i, "").replace(/ \(approx\)$/i, "");
     const name = group && !baseName.toLowerCase().startsWith(group.toLowerCase().split(" ")[0]!) ? `${group} — ${lower(baseName)}` : baseName;
     const plan = asString(a[f.key]);
@@ -320,7 +320,7 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
           if (status === "ok" || status === "na") status = "note";
         }
       }
-      const row: Row = { group: f.sectionLetter ? headingOf(f.sectionLetter) : undefined, heading, status, text };
+      const row: Row = { group: f.sectionLetter ? groupOf(f.sectionLetter) : undefined, heading, status, text };
       rows.push(row);
       rowByKey.set(f.key, row);
       if (isDefect) captureDefect(f, heading);
@@ -390,11 +390,11 @@ function summaryLines(stage: StageId, fields: TemplateField[], a: AnswerTree): s
   const g = asString(a.groundFallsDetail).trim();
   if (g) lines.push(sentence(g));
   const r = asString(a.retainingWallsDetail).trim();
-  if (ticks.includes("retaining_walls")) lines.push(r ? sentence(`Retaining walls are advised: ${r}`) : "Retaining walls are advised.");
+  if (ticks.includes("retaining_walls")) lines.push(r ? sentence(`Retaining walls are advised — ${r}`) : "Retaining walls are advised.");
   const agi = asString(a.agiDrainsDetail).trim();
-  if (ticks.includes("agi_drains")) lines.push(agi ? sentence(`Agi drains are advised: ${agi}`) : "Agi drains are advised.");
+  if (ticks.includes("agi_drains")) lines.push(agi ? sentence(`Agi drains are advised — ${agi}`) : "Agi drains are advised.");
   const roof = asString(a.roofAccessDetail).trim();
-  if (ticks.includes("roof_access")) lines.push(roof ? sentence(`Roof access was limited: ${roof}`) : "Roof access was limited.");
+  if (ticks.includes("roof_access")) lines.push(roof ? sentence(`Roof access was limited — ${roof}`) : "Roof access was limited.");
   const other = asString(a.otherConcerns).trim();
   if (other) lines.push(sentence(other));
   return lines;

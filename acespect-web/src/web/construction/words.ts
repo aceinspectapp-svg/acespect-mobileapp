@@ -33,7 +33,7 @@ export function headingOf(label: string): string {
     const ch = label[i];
     if (ch === "(") depth += 1;
     else if (ch === ")") depth = Math.max(0, depth - 1);
-    else if (ch === ";" && depth === 0) { cut = i; break; }
+    else if ((ch === ";" || (ch === ":" && label[i + 1] === " ")) && depth === 0) { cut = i; break; }
   }
   return label.slice(0, cut).replace(/\s+—\s+material$/i, "").trim().replace(/\s*\?$/, "");
 }
@@ -90,3 +90,6 @@ export const mapLabels = (v: AnswerValue, table: Record<string, string>) => {
 };
 
 export type { AnswerTree };
+
+/** A group's sub-heading: its short name, without the form's own guidance after a colon ("Slab surface: pitted / …" -> "Slab surface"). */
+export const groupOf = (label: string): string => headingOf(label).replace(/:\s.*$/, "");
