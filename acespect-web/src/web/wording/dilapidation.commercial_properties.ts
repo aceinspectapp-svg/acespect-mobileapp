@@ -16,16 +16,20 @@ import type { AnswerTree, ConditionSummaryRow, TemplateField } from "../template
 import { asString, buildDefectNote, isGateSatisfied, withPeriod } from "../templateFields";
 import { gradeOf } from "../conditionGrades";
 import type { Composer } from "./shared";
-import { article, capitalize, conditionOf, defectOffsets, isNotPresent, joinClauses, joinList, lower, many, one, scopeAndSafetyParagraphs, yesNo } from "./shared";
+import { article, capitalize, conditionOf, defectOffsets, isNotPresent, joinClauses, joinList, lower, many, one, scopeAndSafetyParagraphs, typedCase, yesNo } from "./shared";
 import {
   derivedFields,
   descriptionBlocks,
   houseDamageSentences,
+  amp,
   materialWords,
   overviewIfIssue,
+  PRESENCE,
   residentialHouseComposers as house,
   roofStatusSentence,
   typically,
+  wallNoun,
+  wallsOf,
 } from "./dilapidation.residential_house";
 import { templateDamageSentences } from "./templateDamage";
 import type { ReportWording } from "./types";
@@ -83,7 +87,7 @@ const wallMaterial = (m: string): string => m.replace(/\bpanels$/, "panel");
 export const makeDescription =
   (kindOf: (label: string) => string = (l) => l): Composer =>
   (inst, itemFields) => {
-    const constructionType = many(itemFields, inst, ["constructionIs"]).map(lower).map(kindOf);
+    const constructionType = many(itemFields, inst, ["constructionIs"]).map(lower).map(amp).map(kindOf);
     const streetFrontage = one(itemFields, inst, ["streetFrontage"]);
     const blockSlope = one(itemFields, inst, ["blockSlope"]);
     const constructedYear = asString(inst.constructedYear).trim();
@@ -107,7 +111,7 @@ export const makeDescription =
     if (blockSlope) opening.push(`on a ${lower(blockSlope)} block of land`);
     if (constructedYear) opening.push(`estimated to have been constructed around ${constructedYear}`);
     else if (underConstructionStage) {
-      opening.push(`currently under construction at ${lower(underConstructionStage)}${/\bstage\b/i.test(underConstructionStage) ? "" : " stage"}`);
+      opening.push(`currently under construction at ${lower(typedCase(underConstructionStage))}${/\bstage\b/i.test(underConstructionStage) ? "" : " stage"}`);
     }
     if (constructionType.length) {
       const kind = joinList(constructionType);
@@ -118,9 +122,9 @@ export const makeDescription =
     }
 
     const wallsBit = wallGround.length
-      ? `${joinList(wallGround)} walls${wallFirst.length ? ` to the ground floor and ${joinList(wallFirst)} to the first floor` : ""}`
+      ? `${wallsOf(wallGround)}${wallFirst.length ? ` to the ground floor and ${joinList(wallFirst.map(wallNoun))} to the first floor` : ""}`
       : wallFirst.length
-        ? `${joinList(wallFirst)} walls to the first floor`
+        ? `${wallsOf(wallFirst)} to the first floor`
         : "";
     const build: string[] = [];
     if (wallsBit) build.push(`constructed of ${wallsBit}`);
@@ -206,6 +210,11 @@ const garageCarportSheds: Composer = (inst, itemFields, label) => {
     label,
   );
   if (!body) return "";
+  // The Commercial template words what gets obscured as "the walls and hardstand" (a carport: "the hardstand").
+  const floors = Array.isArray(inst.floor) ? (inst.floor as string[]) : [];
+  if (/garage|carport/i.test(name) || floors.some((f) => /hardstand/i.test(f))) {
+    body = body.replace(/Sections of the walls and floor were/, "Sections of the walls and hardstand were").replace(/Sections of the floor were/, "Sections of the hardstand were");
+  }
   if (parked.length) {
     const sentence = parked.length === 1 && /car/.test(parked[0]!) ? "A parked car obscured part of the hardstand." : "Parked vehicles obscured part of the hardstand.";
     body = body.replace(/^(There is [^\n]*)$/m, `$1 ${sentence}`);
@@ -393,7 +402,9 @@ const warehouseAndProduction: Composer = (inst, itemFields) => {
     if (p === "roofin") {
       // What was seen on the underside: only what was ticked.
       const observed = many(itemFields, inst, ["roofin_damageSummary"]).map(lower);
-      if (observed.length) sentences.push(`${capitalize(joinList(observed))} observed.`);
+      // "Items of damage throughout" is said "Items of damage observed throughout."
+      const throughout = observed.some((o) => / throughout$/.test(o));
+      if (observed.length) sentences.push(`${capitalize(joinList(observed.map((o) => o.replace(/ throughout$/, ""))))} observed${throughout ? " throughout" : ""}.`);
     } else {
       // The damage overview is said only when it records an issue; the obstructions follow.
       const overview = overviewIfIssue(itemFields, inst, [`${p}_damageSummary`]);
@@ -458,6 +469,7 @@ export const dilapidationCommercialProperties: ReportWording = {
     notes: house.notes!,
     custom_structure: withDefects(house.custom_structure!, external),
   },
+  presence: PRESENCE,
   absence: {
     driveway: "There is no driveway.",
     paving_paths: "There is no paving to the property.",

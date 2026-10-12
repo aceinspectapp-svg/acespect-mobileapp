@@ -228,8 +228,8 @@ describe("Public Assets: good and bad are worded differently, from the real form
     assert.ok(part({ kerbs_condition: "Fair", kerbs_summary: "Numerous items of deterioration throughout" }).includes("Numerous items of deterioration observed throughout."));
     const strip = paragraphs(draft("elevations", { parts: [{ partName: "A", itemsPresent: ["Nature Strip, Light Posts, Signage, Trees"], naturestrip_condition: "Fair", naturestrip_summary: "Several minor items of deterioration" }] }).reportText);
     assert.ok(strip.includes("Several minor items of deterioration observed."));
-    const foot = paragraphs(draft("elevations", { parts: [{ partName: "A", itemsPresent: ["Footpaths and Crossovers"], footpaths_condition: "Fair", footpaths_summary: "Damage to fence / gate" }] }).reportText);
-    assert.ok(foot.includes("Damage to fence or gate observed."));
+    const foot = paragraphs(draft("elevations", { parts: [{ partName: "A", itemsPresent: ["Footpaths and Crossovers"], footpaths_condition: "Fair", footpaths_summary: "Significant cracks" }] }).reportText);
+    assert.ok(foot.includes("There are significant cracks."));
   });
 
   it("says what is wrong with a street asset in the template's 'with ...' clause", () => {

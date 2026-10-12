@@ -20,6 +20,8 @@ export interface ReportWording {
   composers: Record<string, Composer>;
   /** Section key -> what to say when a section that can legitimately not exist has nothing recorded. */
   absence: Record<string, string>;
+  /** Section key -> what to say when the inspector answered "Yes, there is one" but has recorded nothing about it yet ("There is a driveway to the property."). */
+  presence?: Record<string, string>;
   /** True for a section whose fields are flat (no repeating group) and which its composer writes in one go. */
   isFlatComposed(sectionKey: string, templateFields: TemplateField[]): boolean;
   /** Section-level answers composed into prose ahead of the section's items (Internal Areas). */

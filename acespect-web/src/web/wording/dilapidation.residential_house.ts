@@ -9,6 +9,7 @@ import {
   LOCATION_STARTS_WITH_PREPOSITION_RE,
   article,
   atLocation,
+  typedCase,
   capitalize,
   conditionOf,
   damageLeadIn,
@@ -64,7 +65,7 @@ import type { ReportWording } from "./types";
 // "At the porch there is a chip to the rendered pier."
 
 /** What each defect type / sub-type is called in a sentence ("there is a chip", "there is rot"). `count`: takes "a". */
-const DEFECT_NOUNS: Record<string, { noun: string; count?: boolean }> = {
+const DEFECT_NOUNS: Record<string, { noun: string; count?: boolean; plural?: boolean }> = {
   chips: { noun: "chip", count: true },
   scratches: { noun: "scratch", count: true },
   "impact damage": { noun: "impact damage" },
@@ -92,6 +93,10 @@ const DEFECT_NOUNS: Record<string, { noun: string; count?: boolean }> = {
   "leaning wall": { noun: "leaning wall", count: true },
   "unsafe pool safety barrier": { noun: "unsafe pool safety barrier", count: true },
   "missing balustrades/rails": { noun: "missing balustrades or rails" },
+  "doors tight/not closing": { noun: "doors that are tight or not closing", plural: true },
+  "windows tight/not closing": { noun: "windows that are tight or not closing", plural: true },
+  "gates sagging": { noun: "sagging gates", plural: true },
+  "garage doors out of alignment/not closing": { noun: "garage doors out of alignment or not closing", plural: true },
 };
 const DEFECT_TYPE_NOUNS: Record<string, string> = {
   surface_damage: "surface damage",
@@ -142,7 +147,7 @@ export function houseDamageSentences(
       // "Hairline (<=0.1mm -- Damage Category 0)" -> "hairline": the bracketed category is not sentence wording.
       const sub =
         subTyped !== undefined
-          ? lower(subTyped)
+          ? lower(typedCase(subTyped))
           : subRaw
             ? lower((subField?.options?.find((o) => o.value === subRaw)?.label ?? subRaw).split(" (")[0])
             : "";
@@ -151,7 +156,7 @@ export function houseDamageSentences(
       const directionTyped = otherAnswerText(directionRaw);
       // "vertical" / "diagonal" / "horizontal" sit before the noun ("a diagonal crack"); anything the inspector typed follows it ("running diagonally down").
       const run = RUNS[directionRaw] ?? "";
-      const runTyped = directionTyped ? lower(directionTyped) : "";
+      const runTyped = directionTyped ? lower(typedCase(directionTyped)) : "";
       const start = asString(d.crackStartLocation).trim();
 
       let np: string; // the noun phrase after "there is"
@@ -167,12 +172,12 @@ export function houseDamageSentences(
       } else if (rawType === "other") {
         np = "a defect";
       } else if (typedType !== undefined) {
-        const typed = lower(typedType) || "defect";
+        const typed = lower(typedCase(typedType)) || "defect";
         np = `${article(typed)} ${typed}`;
       } else {
         const known = DEFECT_NOUNS[sub];
         const noun = known?.noun ?? (sub ? sub : DEFECT_TYPE_NOUNS[rawType] ?? lower(damageTypeField?.options?.find((o) => o.value === rawType)?.label ?? rawType));
-        plural = /[^s]s$/.test(noun) && !known?.count;
+        plural = known?.plural ?? (/[^s]s$/.test(noun) && !known?.count);
         np = known?.count ? `${article(noun)} ${noun}` : noun;
       }
 
@@ -199,6 +204,16 @@ export function houseTail(parts: string[], itemFields: TemplateField[], inst: An
 export const amp = (s: string): string => s.replace(/\s&\s/g, " and ");
 
 /** "Mix of" / "Combo of" read as "a mix of ..." / "a combination of ..." inside a list of materials. */
+/** "concrete panels" -> "concrete panel", "weatherboards" -> "weatherboard": the noun that goes in front of "walls". */
+export function wallNoun(material: string): string {
+  return material.replace(/\s+walls?$/, "").replace(/^concrete panels$/, "concrete panel").replace(/^weatherboards$/, "weatherboard").replace(/^render$/, "rendered");
+}
+/** "brick veneer and rendered brick walls"; a mix of materials is not a kind of wall: "walls of a combination of materials". */
+export function wallsOf(materials: string[]): string {
+  const mixed = materials.some((m) => /^(a combination of|a mix of)\b/.test(m));
+  return mixed ? `walls of ${joinList(materials)}` : `${joinList(materials.map(wallNoun))} walls`;
+}
+
 export function materialWords(labels: string[]): string[] {
   return labels.map((m) => {
     if (/^mix of$/i.test(m)) return "a mix of materials";
@@ -238,7 +253,8 @@ const driveway: Composer = (inst, itemFields, label) => {
   const location = one(itemFields, inst, ["location", "locatedAt"]) || part;
   const material = one(itemFields, inst, ["material"]);
   const cond = conditionOf(itemFields, inst);
-  if (!location && !material && !cond.word) return "There is no driveway.";
+  // "Is there a driveway? Yes" with nothing else recorded yet says there is one; it is not "There is no driveway."
+  if (!location && !material && !cond.word) return asString(inst.present) === "yes" ? PRESENCE.driveway! : "There is no driveway.";
   const parts: string[] = [];
   if (cond.tag) parts.push(cond.tag);
 
@@ -270,7 +286,7 @@ const pavingPaths: Composer = (inst, itemFields, label) => {
   const isFixedArea = itemFields.some((f) => f.key === "present");
   const side = isFixedArea && label ? handedSide(label) : "";
   const where = name
-    ? `to the ${lower(name)}`
+    ? `to the ${lower(typedCase(name))}`
     : side
       ? `to the ${side}${/-hand$/.test(side) ? " side" : ""} of the block`
       : "to the block";
@@ -359,11 +375,14 @@ function repairState(word: string): string {
   return word === "new" ? "new" : `generally in ${word} state of repair`;
 }
 
+/** The form's wall choices that are not materials on their own: "timber framed" is a timber frame, "concrete basement" is concrete. */
+const GARAGE_WALL_WORDS: Record<string, string> = { "timber framed": "timber frame", "concrete basement": "concrete" };
+
 const garageCarportSheds: Composer = (inst, itemFields, label) => {
   if (isNotPresent(inst)) return "";
   const isFixedSlot = itemFields.some((f) => f.key === "present");
   // The inspector's own name for the structure ("Pergola") wins over the fixed tab's.
-  let name = asString(inst.structureName).trim() || asString(inst.name) || (isFixedSlot ? label : "") || "structure";
+  let name = typedCase(asString(inst.structureName).trim()) || asString(inst.name) || (isFixedSlot ? label : "") || "structure";
   // The fixed "Shed / other" tab reads as just "shed" mid-sentence; an inspector-added extra tab is labelled "Structures 5", which isn't a name at all.
   name = name.replace(/\s*\/\s*other$/i, "");
   if (/^structures?\s+\d+$/i.test(name)) name = "structure";
@@ -382,9 +401,9 @@ const garageCarportSheds: Composer = (inst, itemFields, label) => {
         : at
           ? ` located at the ${at} of the property`
           : "";
-  const walls = many(itemFields, inst, ["wallConstruction", "walls"]).map(lower).map(amp);
+  const walls = many(itemFields, inst, ["wallConstruction", "walls"]).map(lower).map(amp).map((w) => GARAGE_WALL_WORDS[w] ?? w);
   const roof = many(itemFields, inst, ["roofConstruction", "roof"]).map((r) => ROOF_WORDS[lower(r)] ?? lower(r));
-  const floor = many(itemFields, inst, ["floorType", "floor"]).map(lower).map(amp);
+  const floor = many(itemFields, inst, ["floorType", "floor"]).map(lower).map(amp).map((f) => (f === "pavers" ? "paved" : f));
   const cond = conditionOf(itemFields, inst);
 
   // "with a tiled roof and concrete hardstand" -- a hardstand is not "a hardstand floor".
@@ -419,7 +438,7 @@ const poolSpa: Composer = (inst, itemFields, label) => {
   // A pool / spa divided into parts (Pool, Spa) is called with the part's name as `label`; the older single-item form is called with no label.
   const part = label && itemFields.some((f) => f.key === "present") ? label : "";
   if (isNotPresent(inst)) return part ? "" : "There is no pool or spa to the property.";
-  const name = asString(inst.name) || part || "pool/spa";
+  const name = typedCase(asString(inst.name)) || part || "pool/spa";
   const poolType = one(itemFields, inst, ["poolType"]);
   const position = one(itemFields, inst, ["position"]);
   const construction = many(itemFields, inst, ["construction", "constructed"]).map(lower);
@@ -444,9 +463,13 @@ const poolSpa: Composer = (inst, itemFields, label) => {
       ? fenceSafety
       : /^no, /.test(fenceSafety)
         ? fenceSafety.slice(4)
-        : `appears to be ${fenceSafety || "not observed"}`;
+        : fenceSafety
+          ? `appears to be ${fenceSafety}`
+          : "";
     const fenceName = `The ${part ? lower(part) : "pool"} fence`;
-    parts.push(fenceType.length ? `${fenceName} is constructed of ${joinList(fenceType)} and ${safetyPhrase}.` : `${fenceName} ${safetyPhrase}.`);
+    // With no safety answer, only what the fence is made of is said (never "appears to be not observed").
+    if (fenceType.length) parts.push(`${fenceName} is constructed of ${joinList(fenceType)}${safetyPhrase ? ` and ${safetyPhrase}` : ""}.`);
+    else if (safetyPhrase) parts.push(`${fenceName} ${safetyPhrase}.`);
   }
   return houseTail(parts, itemFields, inst);
 };
@@ -471,6 +494,9 @@ const elevations: Composer = (inst, itemFields, label) => {
   const partyWall = yesNo(inst, "partyWall");
   const partyWallNumber = asString(inst.partyWallNumber).trim();
   const partial = many(itemFields, inst, ["partialInspection"]).map(lower);
+  // "to the front and rear", "to the parapet above the roof line": the options are places, some already worded "To parapet ..."
+  const partialPlaces = partial.map((p) => p.replace(/^to\s+(the\s+)?/, ""));
+  const partialText = partialPlaces.every((p) => !/\s/.test(p)) ? `the ${joinList(partialPlaces)}` : joinList(partialPlaces.map((p) => `the ${p}`));
   const side = lower(label);
   // The elevation's own heading, as the report prints it: "Front Elevation (east)".
   const parts: string[] = [`ROOMHEAD::${capitalize(side)} Elevation${orientation ? ` (${compassPhrase(orientation)})` : ""}`];
@@ -482,14 +508,14 @@ const elevations: Composer = (inst, itemFields, label) => {
   let gradeSaid = false;
   if (partyWall && partial.length) {
     const grade = cond.word ? ` which is in ${cond.word === "satisfactory" ? "satisfactory and in typical" : cond.word} condition` : "";
-    access = `The ${side} elevation is a party wall abutting the next property${at ? ` at ${at}` : ""} and could only be partly inspected to the ${joinList(partial)}${grade}.`;
+    access = `The ${side} elevation is a party wall abutting the next property${at ? ` at ${at}` : ""} and could only be partly inspected to ${partialText}${grade}.`;
     gradeSaid = true;
   } else if (partyWall) {
     // Not inspected at all: there is no condition to state.
     access = `The ${side} elevation is a party wall abutting the next property${at ? ` at ${at}` : ""} and could not be inspected.`;
     gradeSaid = true;
   } else if (partial.length) {
-    access = `Could only be partly inspected to the ${joinList(partial)}.`;
+    access = `Could only be partly inspected to ${partialText}.`;
   }
   parts.push(
     `${[access, gradeSaid ? "" : gradeSentence, overviewIfIssue(itemFields, inst, ["damageSummary"])].filter(Boolean).join(" ")}${
@@ -684,7 +710,7 @@ const description: Composer = (inst, itemFields) => {
     ? `estimated to have been constructed around ${constructedYear}`
     : underConstructionStage
       ? // If the inspector's own typed stage already says "stage" ("Frame Stage"), appending it again used to produce "frame stage stage".
-        `currently under construction at ${lower(underConstructionStage)}${/\bstage\b/i.test(underConstructionStage) ? "" : " stage"}`
+        `currently under construction at ${lower(typedCase(underConstructionStage))}${/\bstage\b/i.test(underConstructionStage) ? "" : " stage"}`
       : "";
   const openingClauses = [frontageBlockBits.join(" "), ageBit].filter(Boolean);
   if (constructionType || openingClauses.length) {
@@ -699,10 +725,10 @@ const description: Composer = (inst, itemFields) => {
   }
 
   const wallsBit = wallGround.length
-    ? `${joinList(wallGround)} walls${wallFirst.length ? ` to the ground floor and ${joinList(wallFirst)} to the first floor` : ""}`
+    ? `${wallsOf(wallGround)}${wallFirst.length ? ` to the ground floor and ${joinList(wallFirst.map(wallNoun))} to the first floor` : ""}`
     : wallFirst.length
       ? // First-floor cladding recorded with no ground-floor answer used to drop the floor distinction entirely, reading as if the whole building were clad in it.
-        `${joinList(wallFirst)} walls to the first floor`
+        `${wallsOf(wallFirst)} to the first floor`
       : "";
   const buildClauses: string[] = [];
   if (wallsBit) buildClauses.push(`constructed of ${wallsBit}`);
@@ -765,7 +791,7 @@ const notes: Composer = (inst, itemFields, label) => {
  * satisfactory state of repair." then its defects and notes.
  */
 const customStructure: Composer = (inst, itemFields) => {
-  const description = lower(asString(inst.description).trim());
+  const description = lower(typedCase(asString(inst.description).trim()));
   const materials = materialWords(many(itemFields, inst, ["material"]).map(lower).map(amp));
   const cond = conditionOf(itemFields, inst);
   const parts: string[] = [];
@@ -789,6 +815,12 @@ export const residentialHouseComposers: Record<string, Composer> = {
   elevations,
   roof_chimneys: roofChimneys,
   internal_areas: internalAreas,
+};
+
+/** What to say when the inspector answered "Yes, there is one" and has recorded nothing about it yet. */
+export const PRESENCE: Record<string, string> = {
+  driveway: "There is a driveway to the property.",
+  retaining_walls: "There are retaining walls to the property.",
 };
 
 /** What to say when a section that can legitimately not exist at a property has nothing recorded. */
@@ -830,6 +862,7 @@ export const dilapidationResidentialHouse: ReportWording = {
   status: "final",
   composers: residentialHouseComposers,
   absence: ABSENCE,
+  presence: PRESENCE,
   // Description is flat (no repeating group). Driveway and Pool / Spa are flat in the published templates, but the original seed wrapped them in a one-item list.
   isFlatComposed: (sectionKey, templateFields) =>
     sectionKey === "description" ||

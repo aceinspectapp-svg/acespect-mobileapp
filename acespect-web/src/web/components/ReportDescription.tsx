@@ -4,6 +4,7 @@ import { Note, Para, Placeholder, reportTextStyle, reportTokens, SectionBand, us
 import { resolveMediaUrl } from "../api";
 import { reportProfileOf } from "../wording/profile";
 import { wordingFor } from "../wording/registry";
+import { scopeOfInspectionSentences } from "../descriptionScope";
 
 /** Every photo that actually appears in the printed report -- general section photos plus each damage/crack's own -- matching what the reader can actually count, for the "full download of N photographs" disclosure. */
 function countReportPhotos(inspection: Inspection): number {
@@ -15,9 +16,6 @@ function countReportPhotos(inspection: Inspection): number {
 
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
-}
-function lower(s: string): string {
-  return s.toLowerCase();
 }
 
 /**
@@ -74,22 +72,9 @@ export function ReportDescription({
   // when no generated link exists). With no photos there is nothing to link to.
   const generatedArchiveUrl = totalPhotos > 0 ? inspection.photoArchiveUrl ?? "" : "";
   const photoArchiveUrl = generatedArchiveUrl || str(f.photoArchiveUrl);
-  const projectSiteAddress = str(f.projectSiteAddress);
-  const siteSide = str(f.siteSide);
-  const siteDirection = str(f.siteDirection);
-  const hasProjectWorksInfo = !!(projectSiteAddress && siteSide && siteDirection);
-  // A report type can word these two sentences itself (Public Assets does); the others keep the standard ones below.
+  // A report type can word the works and scope sentences itself (Public Assets does); the others keep the standard ones (descriptionScope.ts).
   const surveyParts = (inspection.sections.find((s) => (s.key ?? s.id) === "elevations")?.answers as { parts?: unknown } | null | undefined)?.parts;
-  const ownBlocks = wordingFor(reportProfileOf(inspection.type, inspection.propertyType)).descriptionBlocks?.({
-    fields: f,
-    areaCount: Array.isArray(surveyParts) ? surveyParts.length : 0,
-  });
-
-  const scopeForInspection = str(f.scopeForInspection);
-  const scopeDetail = str(f.scopeDetail) || str(f.scopePartDetail);
-  const scopeSentence = scopeForInspection
-    ? `The scope for inspection is ${lower(scopeForInspection)}${scopeDetail ? ` ${scopeDetail}` : ""}.`
-    : undefined;
+  const { works, scope } = scopeOfInspectionSentences(wordingFor(reportProfileOf(inspection.type, inspection.propertyType)), f, Array.isArray(surveyParts) ? surveyParts.length : 0);
 
   return (
     <div style={reportTextStyle(compact)}>
@@ -144,23 +129,16 @@ export function ReportDescription({
       {photoArchiveUrl && <Note>{PHOTOGRAPHS_NOTE}</Note>}
 
       <SectionBand compact={compact}>Scope of Inspection and Comments</SectionBand>
-      {ownBlocks?.works ? (
-        <Para>{ownBlocks.works}</Para>
-      ) : hasProjectWorksInfo ? (
-        <Para>
-          The project works are to the property at {projectSiteAddress}, which is at the {lower(siteSide)} -
-          approximately {lower(siteDirection)} - of the site of this inspection.
-        </Para>
+      {works ? (
+        <Para>{works}</Para>
       ) : (
         <Placeholder>
           The project works are to the property at {property}, which is at the [direction] – approximately
           [compass point] – of the site of this inspection.
         </Placeholder>
       )}
-      {ownBlocks?.scope ? (
-        <Para>{ownBlocks.scope}</Para>
-      ) : scopeSentence ? (
-        <Para>{scopeSentence}</Para>
+      {scope ? (
+        <Para>{scope}</Para>
       ) : (
         <Placeholder>
           The scope for inspection is external and internal to all structures / external and internal to part of

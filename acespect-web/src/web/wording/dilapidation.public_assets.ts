@@ -60,7 +60,7 @@ function descriptionBlocks({ fields, areaCount }: { fields: Record<string, unkno
       : undefined,
     // "The scope for inspection is public assets including paths, nature strip, kerbs, lane surface, posts, signs, trees to the following two areas:" --
     // the inspector's ticked scope items take the place of the template's fixed list; with none ticked the template's own list is used.
-    scope: `The scope for inspection is public assets including ${items.length ? joinList(items) : DEFAULT_SCOPE_ITEMS}${areas || "."}`,
+    scope: `The scope for inspection is public assets including ${items.length ? joinList(items.map((i) => i.replace(/\s&\s/g, " and "))) : DEFAULT_SCOPE_ITEMS}${areas || "."}`,
   };
 }
 
@@ -115,8 +115,12 @@ const CATEGORIES: Category[] = [
     wear: "typical wear and tear",
     obscuredNoun: "nature strip",
     // "There is a grass nature strip which is in typical condition."
-    sentence: ({ material, condition }) =>
-      `There is a${/^[aeiou]/i.test(material) ? "n" : ""} ${material ? `${material} ` : ""}nature strip${condition ? ` which is in ${condition === "satisfactory" ? "typical" : condition} condition` : ""}.`,
+    sentence: ({ material, condition }) => {
+      // "a grass nature strip", but "a nature strip of pavers" / "of a mix of materials" (never "a pavers nature strip", "an a mix of materials nature strip")
+      const plain = /^(grass|asphalt|concrete|gravel|bluestone)(,| and |$)/.test(material) && !/\b(mix|other materials)\b/.test(material);
+      const kind = !material ? "a nature strip" : plain ? `${/^[aeiou]/i.test(material) ? "an" : "a"} ${material} nature strip` : `a nature strip of ${material}`;
+      return `There is ${kind}${condition ? ` which is in ${condition === "satisfactory" ? "typical" : condition} condition` : ""}.`;
+    },
   },
   { prefix: "kerbs", heading: "Kerbs and Channel", wear: "typical wear and tear", obscuredNoun: "", sentence: overview("The kerbs and channel", "are") },
   { prefix: "roadsurface", heading: "Road surface and Parking bays", wear: "typical shrinkage cracks and wear and tear", obscuredNoun: "", sentence: overview("The road surface and parking bays", "are") },
