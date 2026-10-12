@@ -17,7 +17,7 @@ import { asString, buildDefectNote, isGateSatisfied, withPeriod } from "../templ
 import { gradeOf } from "../conditionGrades";
 import type { Composer } from "./shared";
 import { article, capitalize, conditionOf, defectOffsets, joinClauses, joinList, lower, many, one } from "./shared";
-import { houseDamageSentences, residentialHouseComposers as house, typically } from "./dilapidation.residential_house";
+import { houseDamageSentences, residentialHouseComposers as house, typically, wallsOf } from "./dilapidation.residential_house";
 import type { ReportWording } from "./types";
 
 const clean = (v: unknown): string =>
@@ -40,6 +40,13 @@ function scopePhrase(label: string): string {
   if (/^external & internal \(full\)|^external and internal \(full\)/.test(l)) return "external and internal to all structures";
   if (/^partial/.test(l)) return "external and internal to part of the property";
   return l;
+}
+
+/** "Windows are constructed of aluminium." (the form says "Aluminium frame"); double glazing and louvres are what the windows are, not what they are made of. */
+function windowsSentence(windows: string): string {
+  if (/^double[- ]glazed$/.test(windows)) return "Windows are double glazed.";
+  if (/^louvre/.test(windows)) return "Windows are louvre style.";
+  return `Windows are constructed of ${windows.replace(/\s+frames?$/, "")}.`;
 }
 
 /** What kind of complex the form's building type says it is. */
@@ -79,12 +86,12 @@ const description: Composer = (inst, itemFields) => {
   if (buildingType) parts.push(`The complex is ${COMPLEX[buildingType] ?? `${article(buildingType)} ${buildingType}`}.`);
 
   const build: string[] = [];
-  if (walls) build.push(`constructed of ${walls} walls`);
+  if (walls) build.push(`constructed of ${wallsOf([walls])}`);
   if (foundations) build.push(`on ${foundations}`);
   if (roofDesign) build.push(`with a ${roofDesign} roof`);
   if (roofCovering) build.push(`${roofDesign ? "and " : "with "}a covering of ${roofCovering}`);
   if (build.length) parts.push(`It is ${build.join(" ")}.`);
-  if (windows) parts.push(`Windows are constructed of ${windows}.`);
+  if (windows) parts.push(windowsSentence(windows));
 
   const paragraphs = [parts.join(" ")];
   if (works) paragraphs.push(`The proposed works are ${works}.`);
@@ -260,14 +267,14 @@ const SAY: Record<string, Say> = {
   cladding_sigCracking: flag("There are signs of significant cracking to the cladding."),
   cladding_sigWeathering: flag("There are signs of significant weathering to the cladding."),
   cladding_requires: (v) => `The cladding requires ${v}.`,
-  garage_type: (v) => (/^no car space/.test(v) ? "No car space is allocated to this apartment." : `There is a ${v}.`),
+  garage_type: (v) => (/^no car space/.test(v) ? "No car space is allocated to this apartment." : `There is a ${v.replace(/\bin basement$/, "in the basement")}.`),
   garage_reqAttention: flag("The car space requires attention."),
   carspace_type: (v) => SAY.garage_type!(v, false, "", ""),
   carspace_reqAttention: flag("The car space requires attention."),
   front_door_requires: (v) => `The front door requires ${v}.`,
   front_door_secScreen: flag("The front door has a security screen.", "The front door does not have a security screen."),
   front_door_deadlocks: flag("Deadlocks are fitted to the front door.", "Deadlocks are not fitted to the front door."),
-  front_door_doorCloser: (v) => (/^yes/.test(v) ? "The front door closer is working." : /^no/.test(v) ? "The front door closer is not working." : ""),
+  front_door_doorCloser: (v) => (/^yes/.test(v) ? "The front door closer is working." : /^no$/.test(v) ? "The front door closer is not working." : ""),
   other_doors_ext_style: (v) => (/^variety/.test(v) ? "The other external doors are a variety of styles." : `The other external doors are ${v}.`),
   other_doors_ext_requires: (v) => `The other external doors generally require ${v}.`,
   balconies_adequatelyFixed: flag("The balconies appear to be adequately fixed to the building.", "The balconies do not appear to be adequately fixed to the building."),
@@ -301,7 +308,8 @@ const SAY: Record<string, Say> = {
         : "The hand rails to the stairs are not adequate.",
   int_windows_locksGeneral: flag("Locks are generally fitted to the internal windows.", "Locks are not generally fitted to the internal windows."),
   int_windows_flywire: (v) => (/^none/.test(v) ? "No flywire screens are fitted to the windows." : `Flywire screens are fitted to ${v}.`),
-  int_windows_flywireCondition: (v) => `The flywire screens are in ${v} condition.`,
+  int_windows_flywireCondition: (v) =>
+    /^satisfactory with typical wear and tear$/.test(v) ? "The flywire screens are in satisfactory condition with typical wear and tear." : `The flywire screens are in ${v} condition.`,
   int_doors_style: (v) => (/^several/.test(v) ? "The internal doors are of several styles." : `The internal doors are generally ${v}.`),
   plumbing_waterSupplyOn: flag("The water supply was on.", "The water supply was off."),
   plumbing_tapsNormal: flag("All taps, showers and toilets operated normally.", "Not all taps, showers and toilets operated normally."),
@@ -349,8 +357,135 @@ export function apartmentSaysField(key: string, type: string): boolean {
 const groupOf = (key: string, groups: Group[]): Group | undefined =>
   groups.filter((g) => key.startsWith(`${g.prefix}_`)).sort((a, b) => b.prefix.length - a.prefix.length)[0];
 const hasAnswer = (v: unknown): boolean => (Array.isArray(v) ? v.length > 0 : typeof v === "string" ? v !== "" : typeof v === "number");
-/** "Observations" read as the sentences they are: "Cracking to walls." */
-const sentenceOf = (option: string): string => capitalize(withPeriod(option.replace(/\s+$/, "")));
+/**
+ * What each checklist observation says as a full sentence. The form words them as the inspector's shorthand ("Loose bricks",
+ * "Drummy render", "Typical wear and tear"); the report says each as a sentence of its own, advice split off into a second one.
+ * Keyed by the option's label, lower case.
+ */
+const OBSERVATION_SENTENCES: Record<string, string> = {
+  // External walls
+  "minor cracking visible consistent with age – not structural": "Minor cracking is visible, consistent with age, and is not structural.",
+  "cracking over window/door heads – typical, not structural unless bricks loose": "There is cracking over the window and door heads, which is typical and not structural unless the bricks are loose.",
+  "major cracking requiring repairs – not yet structural but attend soon": "There is major cracking requiring repairs. It is not yet structural but should be attended to soon.",
+  "immediate repairs required – consider consulting structural engineer": "Immediate repairs are required. Consider consulting a structural engineer.",
+  "loose bricks": "There are loose bricks.",
+  "drummy render": "The render is drummy.",
+  "fretting mortar requires repointing": "There is fretting mortar that requires repointing.",
+  "evidence of rising damp": "There is evidence of rising damp.",
+  "patching and re-pointing where appliances/fittings removed": "There is patching and re-pointing where appliances or fittings have been removed.",
+  "mortar out of joints at lower courses – needs repointing": "There is mortar missing from the joints at the lower courses, which needs repointing.",
+  "spalling to some bricks": "There is spalling to some bricks.",
+  "weep holes not visible": "The weep holes are not visible.",
+  "weep holes covered or partly covered – keep clear": "The weep holes are covered or partly covered and should be kept clear.",
+  "sub-floor vents covered or partly covered – keep clear": "The sub-floor vents are covered or partly covered and should be kept clear.",
+  // Cladding
+  "some weathering visible – requires maintenance or replacement": "There is some weathering visible, which requires maintenance or replacement.",
+  "breakage visible to cement sheet wall cladding": "There is breakage visible to the cement sheet wall cladding.",
+  "cladding may contain asbestos": "The cladding may contain asbestos.",
+  // Car space
+  "cracking to walls": "There is cracking to the walls.",
+  "repairs required": "Repairs are required.",
+  "damp visible to external walls": "There is damp visible to the external walls.",
+  "minor cracking to hardstand – monitor from time to time": "There is minor cracking to the hardstand, which should be monitored from time to time.",
+  "storage cage in basement": "There is a storage cage in the basement.",
+  // Other external doors
+  "doors are binding – require 2mm clearance": "The doors are binding and require 2mm clearance.",
+  "edges of door require sealing to avoid water damage": "The edges of the doors require sealing to avoid water damage.",
+  "door latch not engaging": "A door latch is not engaging.",
+  // Balconies
+  "there is decay to hand rails": "There is decay to the hand rails.",
+  "hand rails do not comply with current australian standards": "The hand rails do not comply with current Australian Standards.",
+  "balustrade is loose and requires maintenance": "The balustrade is loose and requires maintenance.",
+  "handrail/balustrade height is less than 1000mm – non-compliant": "The handrail or balustrade height is less than 1000mm, which is non-compliant.",
+  "balustrade spacing between railings more than 125mm – non-compliant": "The spacing between the balustrade railings is more than 125mm, which is non-compliant.",
+  "water appears to pond on balcony floor – floor falls not channelling to drain": "Water appears to pond on the balcony floor because the floor falls are not channelling to the drain.",
+  "balcony floor drainage may be blocked – recommend cleaning as maintenance": "The balcony floor drainage may be blocked. Cleaning is recommended as maintenance.",
+  // Party walls, ceilings, internal walls, floors
+  "roof timbers passing through party wall – brickwork does not go to underside of roof covering": "Roof timbers pass through the party wall because the brickwork does not extend to the underside of the roof covering.",
+  "ceiling not adequately attached to ceiling frame – has deflected significantly": "The ceiling is not adequately attached to the ceiling frame and has deflected significantly.",
+  "minor imperfections / hairline cracks consistent with age – not a significant defect": "There are minor imperfections and hairline cracks consistent with age, which are not a significant defect.",
+  "flaking / mould / mildew to paintwork from excessive moisture in wet areas – install mechanical ventilation": "There is flaking, mould or mildew to the paintwork from excessive moisture in the wet areas. Mechanical ventilation should be installed.",
+  "minor paint flaking": "There is minor paint flaking.",
+  "watermarks and staining visible due to a water leak": "There are watermarks and staining visible due to a water leak.",
+  "minor cracking over doorways and/or windows consistent with age – not a structural concern": "There is minor cracking over the doorways or windows, consistent with age, which is not a structural concern.",
+  "minor cracking consistent with age, due to normal settlement/movement": "There is minor cracking consistent with age, due to normal settlement or movement.",
+  "structural cracks requiring investigation by a structural engineer": "There are structural cracks requiring investigation by a structural engineer.",
+  "drummy / loose / flaking plaster": "The plaster is drummy, loose or flaking.",
+  "damp from shower/bath in adjacent room to the base of the wall": "There is damp to the base of the wall from the shower or bath in the adjacent room.",
+  "floor tiling drummy": "The floor tiling is drummy.",
+  "concrete floor has minor cracking caused by rate of drying – not of a structural nature": "The concrete floor has minor cracking caused by the rate of drying, which is not of a structural nature.",
+  "timber floors are creaking / bouncy and require refixing": "The timber floors are creaking or bouncy and require refixing.",
+  "floors unlevel": "The floors are unlevel.",
+  // Stairs
+  "handrail/balustrade height is less than 1000mm – does not comply with aust standards": "The handrail or balustrade height is less than 1000mm and does not comply with Australian Standards.",
+  "balustrade spacing between railings is more than 125mm – does not comply with aust standards": "The spacing between the balustrade railings is more than 125mm and does not comply with Australian Standards.",
+  "balustrade has horizontal rails that may be climbable by a child – add to safety matters": "The balustrade has horizontal rails that may be climbable by a child. This has been added to Safety Matters.",
+  "stair treads / risers are not equal – do not comply with current aust standards": "The stair treads or risers are not equal and do not comply with current Australian Standards.",
+  "stair risers are higher than the maximum 190mm – do not comply with current aust standards": "The stair risers are higher than the maximum 190mm and do not comply with current Australian Standards.",
+  "stair treads are less than the minimum 240mm – do not comply with current aust standards": "The stair treads are less than the minimum 240mm and do not comply with current Australian Standards.",
+  // Windows, doors, cabinets
+  "at upper windows, restrictors need to be fitted to maximum opening of 125mm – safety concern": "At the upper windows, restrictors need to be fitted to limit the opening to a maximum of 125mm, which is a safety concern.",
+  "doors binding and need maintenance": "The doors are binding and need maintenance.",
+  "door furniture is loose / not latching": "The door furniture is loose or not latching.",
+  "cabinet drawers are binding and need adjustment": "The cabinet drawers are binding and need adjustment.",
+  "cabinet / robe doors are binding and need adjustment": "The cabinet and robe doors are binding and need adjustment.",
+  "cabinet / robe doors do not close properly – need adjustment": "The cabinet and robe doors do not close properly and need adjustment.",
+  "water damage / swelling to cabinet": "There is water damage or swelling to the cabinet.",
+  // Gas, electrical, fireplace
+  "consult a licensed gas fitter": "A licensed gas fitter should be consulted.",
+  "add to safety matters": "This has been added to Safety Matters.",
+  "nil rcds installed – add to safety matters": "There are no RCDs installed. This has been added to Safety Matters.",
+  "smoke alarms not correctly located – refer to safety matters": "The smoke alarms are not correctly located. Please refer to Safety Matters.",
+  "recommend urgent servicing": "Urgent servicing of the fireplace is recommended.",
+  // Safety
+  "smoke alarms not installed in required locations per as 3.7.2.3": "Smoke alarms are not installed in the required locations as per AS 3.7.2.3.",
+  "insulation touching/covering recessed light fittings – fire hazard": "Insulation is touching or covering the recessed light fittings, which is a fire hazard.",
+  "fibre cement sheeting that may contain asbestos (construction 1930s–mid 1980s)": "There is fibre cement sheeting that may contain asbestos (construction 1930s–mid 1980s).",
+  "refer to pool safety concerns": "Please refer to the Pool safety concerns.",
+  "refer to stairs safety concerns": "Please refer to the Stairs safety concerns.",
+  "refer to trip hazard concerns": "Please refer to the Trip hazard concerns.",
+  // Common areas
+  "minor cracking": "There is minor cracking.",
+  "major cracking or subsidence – may cause tripping hazard": "There is major cracking or subsidence, which may cause a tripping hazard.",
+  "significant cracking or subsidence – may cause tripping hazard": "There is significant cracking or subsidence, which may cause a tripping hazard.",
+  "pool safety barrier is compromised": "The pool safety barrier is compromised.",
+  "pool gates are not self-latching – do not meet pool regulations": "The pool gates are not self-latching and do not meet pool regulations.",
+  "pool gate does not swing in the correct direction": "The pool gate does not swing in the correct direction.",
+  "latch height of pool gate is too low": "The latch height of the pool gate is too low.",
+  // Roof
+  "visible damage to roof covering": "There is visible damage to the roof covering.",
+  "refer to strata/body corporate for roof maintenance": "Please refer to the strata or body corporate for roof maintenance.",
+  "evidence of overflowing gutters – engage a licensed plumber": "There is evidence of overflowing gutters. A licensed plumber should be engaged.",
+  "the downpipes are leaking – engage a licensed plumber": "The downpipes are leaking. A licensed plumber should be engaged.",
+};
+
+/** The observations whose subject is the part of the building they are ticked under ("Need normal maintenance" under Gutters). */
+function observationAbout(option: string, subject: string, plural: boolean): string | undefined {
+  const s = capitalize(subject.startsWith("The ") ? subject : `The ${lower(subject)}`);
+  const need = plural ? "need" : "needs";
+  const require = plural ? "require" : "requires";
+  const o = option.toLowerCase().replace(/\s+$/, "");
+  if (o === "typical wear and tear") return `${s} ${plural ? "show" : "shows"} typical wear and tear.`;
+  if (o === "need normal maintenance") return `${s} ${need} normal maintenance.`;
+  if (o === "decayed and need repair") return `${s} ${plural ? "are" : "is"} decayed and ${need} repair.`;
+  if (o === "require repair" || o === "require replacement" || o === "require partial replacement" || o === "require normal maintenance" || o === "require maintenance to the joints")
+    return `${s} ${require} ${o.slice("require ".length)}.`;
+  if (o === "requires normal maintenance") return `${s} ${require} normal maintenance.`;
+  if (o === "no attention required") return `${s} ${require} no attention.`;
+  return undefined;
+}
+
+/** One ticked observation, as the full sentence(s) the report says. */
+const sentenceOf = (option: string, subject = "", plural = false): string => {
+  const key = option.toLowerCase().replace(/\s+$/, "");
+  return OBSERVATION_SENTENCES[key] ?? observationAbout(option, subject, plural) ?? capitalize(withPeriod(option.replace(/\s+$/, "")));
+};
+
+/** What a ticked observation reads as in the report (tested for every option on the form). */
+export function apartmentObservation(sectionKey: string, fieldKey: string, option: string): string {
+  const group = groupOf(fieldKey, GROUPS[sectionKey] ?? []);
+  return sentenceOf(option, group?.subject, !!group?.plural);
+}
 
 /** "There is significant cracking / damage. The most significant items are:" in whichever of the template's words fits what was recorded. */
 function significantLead(list: AnswerTree[]): string {
@@ -420,12 +555,12 @@ function checklistComposer(sectionKey: string): Composer {
           continue;
         }
         if (field.type === "chip-multiselect" || field.type === "tile-multiselect") {
-          for (const item of many(itemFields, inst, [key])) sentences.push(sentenceOf(item));
+          for (const item of many(itemFields, inst, [key])) sentences.push(sentenceOf(item, group.subject, !!group.plural));
           continue;
         }
         const say = SAY[key];
         if (!say) continue;
-        const value = lower(one(itemFields, inst, [key]));
+        const value = lower(one(itemFields, inst, [key])).replace(/\bpaneled\b/g, "panelled");
         // A choice of "Other" with nothing typed says nothing (rather than a sentence with a gap in it).
         if (field.type !== "yesno" && (!value || value === "other")) continue;
         const sentence = say(value, asString(inst[key]) === "yes", group.subject, be);

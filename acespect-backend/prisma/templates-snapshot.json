@@ -85404,10 +85404,6 @@
                 "value": "item2"
               },
               {
-                "label": "Damage to fence / gate",
-                "value": "damage_to_fence_gate"
-              },
-              {
                 "label": "Significant cracks",
                 "value": "significant_cracks"
               },

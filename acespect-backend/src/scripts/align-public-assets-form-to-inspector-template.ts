@@ -16,7 +16,6 @@ const SECTIONS = ['job-info', 'elevations'] as const;
 
 /** What each category's "Details" line offers, beyond the choices the form already has (the real form words them differently per category). */
 const SUMMARY_EXTRAS: Record<string, string[]> = {
-  footpaths_summary: ['Damage to fence / gate'], // "... / is damage to fence/gate at ... / other"
   naturestrip_summary: ['Several minor items of deterioration', 'Numerous items of deterioration throughout'], // "no visible significant damage / are several minor items of deterioration / are numerous items of deterioration throughout"
   kerbs_summary: ['Numerous items of deterioration throughout'],
   roadsurface_summary: ['Numerous items of deterioration throughout'],

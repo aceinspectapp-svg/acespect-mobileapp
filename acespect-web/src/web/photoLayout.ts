@@ -81,5 +81,9 @@ export function packPhotoRows(aspects: number[], o: PackOptions): PackedRow[] {
     rows.push({ indices: Array.from({ length: k }, (_, j) => i + j), height: r.height, full: r.full });
     i += k;
   }
+  // A short last row (a lone photo) is drawn at the same height as the rows above it, not blown up to the maximum; the grid centres it.
+  // Only when it is all there is (one photo in the section) does it keep the larger size.
+  const last = rows[rows.length - 1];
+  if (rows.length > 1 && last && !last.full) last.height = Math.min(last.height, rows[rows.length - 2].height);
   return rows;
 }

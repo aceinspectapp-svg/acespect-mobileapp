@@ -157,7 +157,7 @@ describe("published templates: fixed-slot sections (Paving, Fences, Garage)", ()
     });
     assert.ok(
       out.includes(
-        "There is a shed located at the rear of the property, constructed of metal with a colorbond roof and a concrete floor, and is generally in fair state of repair.",
+        "There is a shed located at the rear of the property, constructed of metal with a Colorbond roof and a concrete floor, and is generally in fair state of repair.",
       ),
     );
   });
@@ -314,7 +314,7 @@ describe("Description & Overview", () => {
   });
 
   it("keeps the floor distinction when only first-floor cladding is answered", () => {
-    assert.ok(desc({ wallCladdingFirst: ["hebel"] }).includes("hebel walls to the first floor"));
+    assert.ok(desc({ wallCladdingFirst: ["hebel"] }).includes("Hebel walls to the first floor"));
   });
 
   it("ignores 'Not applicable' first-floor cladding", () => {

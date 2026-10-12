@@ -7,7 +7,7 @@
 #
 #   DATABASE_URL=postgresql://user:pass@localhost:5432/scratch?schema=public scripts/ci/report-e2e.sh
 #
-# Optional: BACKEND_PORT (4010), WEB_PORT (5190).
+# Optional: BACKEND_PORT (4010), WEB_PORT (5190), SMOKE_SCRIPT (the check to run, default scripts/ci-report-smoke.mjs; e.g. scripts/photo-layout-samples.mjs).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -68,4 +68,4 @@ wait_for "http://localhost:$WEB_PORT/" "the web app"
 echo "== building an inspection, generating the PDF and checking what it says"
 ACESPECT_API="http://localhost:$BACKEND_PORT/api/v1" ACESPECT_WEB="http://localhost:$WEB_PORT" \
   SMOKE_EMAIL="$SMOKE_EMAIL" SMOKE_PASSWORD="$SMOKE_PASSWORD" \
-  node scripts/ci-report-smoke.mjs || { dump_logs; exit 1; }
+  node "${SMOKE_SCRIPT:-scripts/ci-report-smoke.mjs}" || { dump_logs; exit 1; }

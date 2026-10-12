@@ -52,7 +52,7 @@ describe("Commercial: Description and Overview", () => {
     });
     assert.equal(
       d.reportText,
-      "The property is a warehouse, facing north on a mostly flat block of land and estimated to have been constructed around 1990. It is constructed of concrete panel walls on concrete slab with a pitched roof and a covering of colorbond. Windows are constructed of aluminium.",
+      "The property is a warehouse, facing north on a mostly flat block of land and estimated to have been constructed around 1990. It is constructed of concrete panel walls on concrete slab with a pitched roof and a covering of Colorbond. Windows are constructed of aluminium.",
     );
   });
 });
@@ -70,7 +70,7 @@ describe("Commercial: driveway and paving", () => {
 
   it("splits the real form's obstructions: parked cars, trailer, caravan", () => {
     const p = paras(draft("driveway", { present: "yes", locatedAt: "Side", material: "Gravel", condition: SAT, obscuredBy: ["Parked cars", "Trailer", "Caravan"] }));
-    assert.ok(p.join(" ").includes("Sections of the driveway were obscured by parked cars, trailer and caravan."));
+    assert.ok(p.join(" ").includes("Sections of the driveway were obscured by parked cars, a trailer and a caravan."));
   });
 
   it("names each paving side, says when there is none, and states a defect", () => {
@@ -128,7 +128,7 @@ describe("Commercial: garage, sheds and loading dock", () => {
     });
     const p = paras(d);
     assert.ok(p.includes("ROOMHEAD::Garage"));
-    assert.ok(p.includes("There is a garage located at the front of the property, constructed of brick with a metal roof and concrete hardstand, and is generally in satisfactory state of repair. Sections of the walls and floor were obscured by shelving and stored goods. A parked car obscured part of the hardstand."));
+    assert.ok(p.includes("There is a garage located at the front of the property, constructed of brick with a metal roof and concrete hardstand, and is generally in satisfactory state of repair. Sections of the walls and hardstand were obscured by shelving and stored goods. A parked car obscured part of the hardstand."));
     assert.ok(p.includes("ROOMHEAD::Sheds"));
     assert.ok(p.includes("There is a shed located at the rear of the property, constructed of metal with a metal roof and a gravel floor, and is generally in fair state of repair. Sections of the walls and floor were obscured by stored goods."));
     assert.ok(p.some((x) => x.startsWith("DEFECT::0::At the slab near the door, there is a vertical fine crack")));
@@ -169,11 +169,11 @@ describe("Commercial: main structure", () => {
 describe("Commercial: roof", () => {
   it("words the roof from the checklist the real form has", () => {
     const sat = paras(draft("roof_chimneys", { inspectionStatus: ["Limited observations from ground level using camera zoom", "No chimney/s"], coveringType: ["Kliplock decking"], generalCondition: SAT, generalObservations: ["Satisfactory to fair with typical weathering", "Some surface rust"] })).join(" ");
-    assert.ok(sat.includes("The roof covering of kliplock decking appears to be in satisfactory to fair condition with typical weathering and some surface rust. Comments are based on limited observations from the ground only and using a camera zoom. There are no chimneys visible."));
+    assert.ok(sat.includes("The roof covering of Kliplock decking appears to be in satisfactory to fair condition with typical weathering and some surface rust. Comments are based on limited observations from the ground only and using a camera zoom. There are no chimneys visible."));
     const poor = paras(draft("roof_chimneys", { inspectionStatus: ["Could not observe due to flat roof"], generalCondition: "Poor", generalObservations: ["Chimney appears unstable"] })).join(" ");
     assert.ok(poor.includes("The roof covering appears to be in poor condition. Could not observe due to flat roof. Chimney appears unstable."));
     const ladder = paras(draft("roof_chimneys", { inspectionStatus: ["Inspected from ladder", "Not inspected - multi-level building complex (common property)"], coveringType: ["Colorbond"], generalCondition: "Poor" })).join(" ");
-    assert.ok(ladder.includes("The roof covering of colorbond appears to be in poor condition. Comments are based on limited observations standing on a ladder to the lower roof and from the ground using a camera zoom."));
+    assert.ok(ladder.includes("The roof covering of Colorbond appears to be in poor condition. Comments are based on limited observations standing on a ladder to the lower roof and from the ground using a camera zoom."));
     assert.ok(ladder.includes("The roof could not be inspected as the building is a multi-level building complex. Roof coverings in a building complex are common property and need to be maintained through the Owners Corporation."));
     assert.ok(paras(draft("roof_chimneys", { coveringType: ["Tile"], generalCondition: SAT })).join(" ").includes("The roof covering of tile appears to be in satisfactory condition with typical weathering."));
   });
@@ -245,7 +245,7 @@ describe("Commercial: warehouse and production", () => {
       roofin_coveringOf: ["Kliplock", "Corrugated metal"], roofin_frameOf: "Steel", roofin_generalCondition: SAT, roofin_damageSummary: [],
     }));
     assert.ok(q.includes("Satisfactory and in typical condition. It is located on the mezzanine."));
-    assert.ok(q.some((x) => x.startsWith("The roof covering is kliplock and corrugated metal, on a steel frame.")));
+    assert.ok(q.some((x) => x.startsWith("The roof covering is Kliplock and corrugated metal, on a steel frame.")));
   });
 });
 
@@ -257,7 +257,7 @@ describe("Commercial: the Description's scope and safety answers", () => {
     });
     assert.equal(
       d.reportText,
-      "The property is a warehouse, facing north on a mostly flat block of land and estimated to have been constructed around 1990. It is constructed of concrete panel walls on concrete slab with a pitched roof and a covering of colorbond. Windows are constructed of aluminium.",
+      "The property is a warehouse, facing north on a mostly flat block of land and estimated to have been constructed around 1990. It is constructed of concrete panel walls on concrete slab with a pitched roof and a covering of Colorbond. Windows are constructed of aluminium.",
     );
   });
 
@@ -311,7 +311,7 @@ describe("Commercial: the Industrial-Commercial template's own rules", () => {
 
   it("says a parked vehicle obscured the hardstand as its own sentence", () => {
     const structure = (obscuredBy) => paras(draft("garage_carport_sheds", { structures: { garage: { present: "yes", attachment: "Separate to building", position: "Front", walls: ["Brick"], wallsCondition: SAT, obscuredBy } } })).join(" ");
-    assert.ok(structure(["Stored goods", "Parked car/s"]).includes("Sections of the walls and floor were obscured by stored goods. A parked car obscured part of the hardstand."));
+    assert.ok(structure(["Stored goods", "Parked car/s"]).includes("Sections of the walls and hardstand were obscured by stored goods. A parked car obscured part of the hardstand."));
     assert.ok(structure(["Parked vehicles"]).includes("Parked vehicles obscured part of the hardstand."));
   });
 

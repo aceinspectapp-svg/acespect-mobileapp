@@ -342,13 +342,13 @@ export function PhotoGrid({
       {rows.map((row, ri) => (
         <div key={ri} style={{ breakInside: "avoid" }}>
           {ri === 0 && caption}
-          <div style={{ display: "flex", gap: `${options.gap}cm`, alignItems: "flex-start" }}>
+          <div style={{ display: "flex", gap: `${options.gap}cm`, alignItems: "flex-start", justifyContent: row.full ? undefined : "center" }}>
           {row.indices.map((i) => (
             <div
               key={i}
               style={
                 // Full row: widths share the row in proportion to each photo's shape, which makes every height equal.
-                // Short last row: each photo at the row's height, left-aligned.
+                // Short last row: each photo at the row's height (the same as the rows above it), centred.
                 row.full ? { flex: `${aspects[i]} 1 0`, minWidth: 0 } : { flex: "0 0 auto", width: `${aspects[i] * row.height}cm` }
               }
             >
