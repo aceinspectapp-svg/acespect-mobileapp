@@ -148,6 +148,10 @@ export const inspectionsController = {
       clientName: inspection.client ?? '',
       jobNo: inspection.jobNo ?? '',
       title: `${kind === 'construction' ? 'Construction' : 'Dilapidation'} Report ${inspection.jobNo ?? ''}`.trim(),
+      // The Construction Report's footer carries the inspection date, as its PDF footer does.
+      ...(kind === 'construction'
+        ? { kind: 'construction' as const, inspectionDate: new Date(inspection.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) }
+        : {}),
     });
 
     const fileName = `${inspection.jobNo || id}-${kind}-report.docx`.replace(/[^a-z0-9.-]+/gi, '-');

@@ -20,7 +20,7 @@ import {
 } from 'docx';
 import type { Page } from 'puppeteer';
 import { REPORT_EXTRACT_SOURCE } from './reportDocxExtract';
-import { ADDRESS_LINE_1, ADDRESS_LINE_2, BRAND_NAVY, BRAND_RED, FOOTER_LABEL_COLOR, FOOTER_META_COLOR, withReportPage } from './reportPdf';
+import { ADDRESS_LINE_1, ADDRESS_LINE_2, BRAND_NAVY, BRAND_RED, COMPANY_ABN_ACN, COMPANY_NAME, FOOTER_LABEL_COLOR, FOOTER_META_COLOR, withReportPage } from './reportPdf';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
 
 /**
@@ -305,6 +305,45 @@ function buildFooter(clientName: string, jobNo: string): Footer {
 }
 const hex2 = (css: string): string => css.replace('#', '').toUpperCase();
 
+/**
+ * The Construction Report's footer, the same as its PDF footer (reportPdf.ts buildConstructionFooterTemplate): a thin rule, then Client /
+ * Date (the inspection date) / Job No / Page, the company details, and a red and a navy bar.
+ */
+function buildConstructionFooter(clientName: string, jobNo: string, inspectionDate: string): Footer {
+  const grey = '6B7280';
+  const text = (t: string, bold = false, size = 13) => new TextRun({ text: t, bold, color: grey, size, font: 'Arial' });
+  const sep = () => text('  |  ');
+  const line = (children: TextRun[], size: number, before: number) => new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before, after: 0 }, children: children.length ? children : [text('', false, size)] });
+  return new Footer({
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 0 },
+        border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'E5E7EB', space: 4 } },
+        children: [
+          text('Client:', true),
+          text(` ${clientName || '—'}`),
+          sep(),
+          text('Date:', true),
+          text(` ${inspectionDate || '—'}`),
+          sep(),
+          text('Job No:', true),
+          text(` ${jobNo || '—'}`),
+          sep(),
+          text('Page', true),
+          new TextRun({ children: [' ', PageNumber.CURRENT], color: grey, size: 13, font: 'Arial' }),
+          text(' of '),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], color: grey, size: 13, font: 'Arial' }),
+        ],
+      }),
+      line([text('PO BOX 2521 Mt Waverley VIC 3149', false, 12), sep(), text('P (03) 9808 4000', false, 12), sep(), text('E info@houspectvic.com.au', false, 12), sep(), text('W www.houspect.com.au/victoria', false, 12)], 12, 60),
+      line([text(`${COMPANY_NAME}  ${COMPANY_ABN_ACN}`, false, 12)], 12, 20),
+      new Paragraph({ spacing: { before: 90, after: 0, line: 68, lineRule: LineRuleType.EXACT }, shading: { type: ShadingType.CLEAR, fill: hex2(BRAND_RED), color: 'auto' }, children: [] }),
+      new Paragraph({ spacing: { before: 0, after: 0, line: 136, lineRule: LineRuleType.EXACT }, shading: { type: ShadingType.CLEAR, fill: '1B3A6B', color: 'auto' }, children: [] }),
+    ],
+  });
+}
+
 /** Every picture the report shows, as bytes Word can hold. A format Word does not take (SVG, WebP...) is drawn by the browser itself and kept as a PNG. */
 async function loadPictures(blocks: Block[], page: Page, token: string): Promise<Map<string, Loaded>> {
   const srcs = new Set<string>();
@@ -348,7 +387,7 @@ async function rasterise(page: Page, src: string): Promise<Loaded> {
 export async function generateInspectionReportDocx(
   inspectionId: string,
   authToken: string,
-  meta: { clientName: string; jobNo: string; title: string },
+  meta: { clientName: string; jobNo: string; title: string; kind?: 'construction'; inspectionDate?: string },
 ): Promise<Buffer> {
   const { extracted, pictures } = await withReportPage(
     inspectionId,
@@ -380,7 +419,7 @@ export async function generateInspectionReportDocx(
           },
         },
         headers: { default: buildHeader() },
-        footers: { default: buildFooter(meta.clientName, meta.jobNo) },
+        footers: { default: meta.kind === 'construction' ? buildConstructionFooter(meta.clientName, meta.jobNo, meta.inspectionDate ?? '') : buildFooter(meta.clientName, meta.jobNo) },
         children: body.length ? body : [new Paragraph({ children: [] })],
       },
     ],

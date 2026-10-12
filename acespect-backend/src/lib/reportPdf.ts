@@ -24,8 +24,8 @@ const MARGIN_H = '22mm'; // wider side margins than before, matching the referen
 // Acespect Pty Ltd trades AS Houspect Victoria -- this is this business's
 // own real identity on the report, not a third party's. Real details taken
 // straight off Houspect Victoria's own master report template's footer.
-const COMPANY_NAME = 'Acespect Pty Ltd trading as Houspect Victoria';
-const COMPANY_ABN_ACN = 'ABN 24 237 148 557 ACN 688 819 712';
+export const COMPANY_NAME = 'Acespect Pty Ltd trading as Houspect Victoria';
+export const COMPANY_ABN_ACN = 'ABN 24 237 148 557 ACN 688 819 712';
 // Each address segment as its own {label, value} so the label can render
 // grey and the value navy, matching the reference's own styling (a single
 // plain string couldn't carry that split).
