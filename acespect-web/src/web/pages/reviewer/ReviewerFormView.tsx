@@ -682,12 +682,63 @@ function ReviewStatusPill({ status }: { status: SectionReviewStatus }) {
 }
 
 /* ─── main component ─────────────────────────────────────────────── */
+/** The three review columns can be dragged wider or narrower (down to closed); the widths are remembered on this computer. */
+function usePersistedWidth(key: string, initial: number): [number, (w: number) => void] {
+  const [w, setW] = useState<number>(() => {
+    try { const v = Number(localStorage.getItem(key)); return Number.isFinite(v) && v >= 0 && localStorage.getItem(key) !== null ? v : initial; } catch { return initial; }
+  });
+  const set = (n: number) => { setW(n); try { localStorage.setItem(key, String(Math.round(n))); } catch { /* not saved */ } };
+  return [w, set];
+}
+
+function ResizeHandle({ width, onChange, min, max, grows, initial }: { width: number; onChange: (w: number) => void; min: number; max: number; grows: "right" | "left"; initial: number }) {
+  const [active, setActive] = useState(false);
+  function start(e: React.PointerEvent) {
+    e.preventDefault();
+    const x0 = e.clientX;
+    const w0 = width;
+    setActive(true);
+    const prevSelect = document.body.style.userSelect;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - x0;
+      const next = grows === "right" ? w0 + dx : w0 - dx;
+      onChange(Math.min(max, Math.max(min, next < 60 ? 0 : next)));
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.style.userSelect = prevSelect;
+      document.body.style.cursor = prevCursor;
+      setActive(false);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      title="Drag to resize · double-click to reset"
+      onPointerDown={start}
+      onDoubleClick={() => onChange(initial)}
+      style={{ width: "7px", flexShrink: 0, cursor: "col-resize", background: active ? "#93c5fd" : "transparent", margin: "0 -3px", zIndex: 5, position: "relative", touchAction: "none", transition: "background 0.15s" }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "#bfdbfe"; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+    />
+  );
+}
+
 export function ReviewerFormView() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { currentUser, loading, getInspectionById, getUser, patchSection, patchDamage } = useAppData();
   const inspection = getInspectionById(id ?? "");
   // The Construction Report as it will print (every section counted), so each section's "Report Content" matches the final report.
+  const [areasW, setAreasW] = usePersistedWidth("reviewer.areasWidth", 220);
+  const [reportW, setReportW] = usePersistedWidth("reviewer.reportWidth", 360);
   const constructionModel = useConstructionReport(inspection, { includeUnapproved: true });
 
   const [selectedSectionId, setSelectedSectionId] = useState<string>("");
@@ -1043,7 +1094,7 @@ export function ReviewerFormView() {
 
         {/* ═══ Column 1 — Areas list (220px, white) ═══ */}
         <div style={{
-          width: "220px",
+          width: `${areasW}px`,
           flexShrink: 0,
           background: "white",
           display: "flex",
@@ -1111,10 +1162,12 @@ export function ReviewerFormView() {
           </div>
         </div>
 
+        <ResizeHandle width={areasW} onChange={setAreasW} min={0} max={520} grows="right" initial={220} />
+
         {/* ═══ Column 2 — Inspector's Form (flex:1) ═══ */}
         <div style={{
           flex: 1,
-          minWidth: "380px",
+          minWidth: "240px",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -1308,9 +1361,11 @@ export function ReviewerFormView() {
           </div>
         </div>
 
+        <ResizeHandle width={reportW} onChange={setReportW} min={0} max={900} grows="left" initial={360} />
+
         {/* ═══ Column 3 — Report Editor (360px, white) ═══ */}
         <div style={{
-          width: "360px",
+          width: `${reportW}px`,
           flexShrink: 0,
           background: "white",
           display: "flex",
