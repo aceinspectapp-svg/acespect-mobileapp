@@ -22,6 +22,7 @@ import { ReportSection } from "../../components/ReportSection";
 import { buildReportHeader, defaultPurposeFor, withExcludedPhotosRemoved } from "../../report";
 import { SectionFieldEditor, PhotoUploadContext } from "../../components/SectionFieldEditor";
 import { constructionSectionText, isConstructionKey } from "../../construction/sectionText";
+import { ConstructionSectionPreview, useConstructionReport } from "../../construction/ConstructionReport";
 import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSectionToDraft, fetchActiveTemplate, listMissingItems } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { reportProfileOf } from "../../wording/profile";
@@ -686,6 +687,8 @@ export function ReviewerFormView() {
   const { id } = useParams<{ id: string }>();
   const { currentUser, loading, getInspectionById, getUser, patchSection, patchDamage } = useAppData();
   const inspection = getInspectionById(id ?? "");
+  // The Construction Report as it will print (every section counted), so each section's "Report Content" matches the final report.
+  const constructionModel = useConstructionReport(inspection, { includeUnapproved: true });
 
   const [selectedSectionId, setSelectedSectionId] = useState<string>("");
   const [reviewComments, setReviewComments] = useState<Record<string, string>>({});
@@ -1467,7 +1470,9 @@ export function ReviewerFormView() {
                       padding: "16px 18px",
                       borderLeft: "3px solid #2563eb",
                     }}>
-                      <ReportSection section={withExcludedPhotosRemoved(shownSection)} compact />
+                      {constructionView && constructionModel
+                        ? <ConstructionSectionPreview model={constructionModel} sectionKey={selectedKey} />
+                        : <ReportSection section={withExcludedPhotosRemoved(shownSection)} compact />}
                       <button
                         onClick={() => {
                           const newText = prompt("Edit report text:", shownSection.reportText);

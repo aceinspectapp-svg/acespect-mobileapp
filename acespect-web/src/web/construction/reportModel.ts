@@ -35,6 +35,8 @@ export interface ChecklistItem {
 }
 export interface ChecklistGroup { heading?: string; items: ChecklistItem[] }
 export interface ChecklistTable {
+  /** The section this table was built from (the reviewer portal shows one section at a time). */
+  sectionKey: string;
   title: string;
   groups: ChecklistGroup[];
   counts: Record<ItemStatus, number>;
@@ -54,6 +56,8 @@ export interface DefectEntry {
   photos: string[];
   /** Where it came from: the checklist row's anchor, so the defect can link back. */
   fromId?: string;
+  /** The section that recorded it. */
+  sectionKey: string;
 }
 export interface DefectGroup { heading: string; defects: DefectEntry[] }
 
@@ -75,10 +79,14 @@ export interface ConstructionReportModel {
   defectGroups: DefectGroup[];
   defectCount: number;
   notes: string[];
+  /** The same notes by the section that wrote them (Summary, Site & Facilities), for the reviewer portal's one-section view. */
+  notesBySection: Record<string, string[]>;
   previous: AttachedList;
   clientConcerns: AttachedList;
   /** Sections that were submitted but not yet approved, so they are not printed. */
   waitingSections: string[];
+  /** The section keys of the Previous Defects / Client Concerns lists, when present. */
+  attachedKeys: { previous?: string; client?: string };
 }
 
 export interface SectionInput {
@@ -203,11 +211,13 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
   const tables: ChecklistTable[] = [];
   let summaryLines: string[] = [];
   const siteNotes: string[] = [];
+  const notesBySection: Record<string, string[]> = {};
+  const attachedKeys: ConstructionReportModel["attachedKeys"] = {};
   const noList = (): AttachedList => ({ attached: false, text: "", photos: [] });
   let previous = noList();
   let clientConcerns = noList();
 
-  interface Raised { sub: string; text: string; photos: string[]; fromId?: string }
+  interface Raised { key: string; sub: string; text: string; photos: string[]; fromId?: string }
   const raised: Raised[] = [];
   /** Checklist rows that say "refer defects", per section, to be tied to their defects once those are numbered. */
   const pending: { item: ChecklistItem; raisedIndex: number }[] = [];
@@ -224,7 +234,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
     for (const l of lines) {
       if (l.kind !== "defect") continue;
       const dmg = s.damages[l.index];
-      raised.push({ sub: dmg?.type || "General", text: l.text, photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)) });
+      raised.push({ key: s.key, sub: dmg?.type || "General", text: l.text, photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)) });
     }
 
     if (kind === "description") {
@@ -243,7 +253,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
           if (!inDefects) { current = { heading: l.text, items: [] }; groups.push(current); }
           continue;
         }
-        if (l.kind === "note") { siteNotes.push(l.text); continue; }
+        if (l.kind === "note") { siteNotes.push(l.text); (notesBySection[s.key] ??= []).push(l.text); continue; }
         if (inDefects || l.kind !== "item") continue;
         if (!current) { current = { items: [] }; groups.push(current); }
         const item: ChecklistItem = { id: `item-${++itemSeq}`, heading: l.heading, status: l.status, text: l.text };
@@ -271,16 +281,17 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       if (kept.length || photos.length) {
         const counts = emptyCounts();
         for (const g of kept) for (const it of g.items) counts[it.status] += 1;
-        tables.push({ title, groups: kept, counts, photos });
+        tables.push({ sectionKey: s.key, title, groups: kept, counts, photos });
       }
     } else if (kind === "summary") {
       summaryLines = paragraphs(lines);
+      notesBySection[s.key] = [...summaryLines];
     } else if (kind === "client" || kind === "previous") {
       const text = paragraphs(lines);
       const entry: AttachedList = text.length
         ? { attached: true, text: text.slice(1).join(" "), photos: a ? photosIn(a[`${kind === "client" ? "clientList" : "previousDefects"}Photos`], excluded) : [] }
         : noList();
-      if (kind === "client") clientConcerns = entry; else previous = entry;
+      if (kind === "client") { clientConcerns = entry; attachedKeys.client = s.key; } else { previous = entry; attachedKeys.previous = s.key; }
     }
   }
 
@@ -297,7 +308,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       n += 1;
       numberOf.set(i, n);
       const parts = splitDefect(d.text);
-      group.defects.push({ no: n, text: parts.sentence, severity: parts.severity, category: parts.category, code: parts.code, codeTitle: parts.code ? codeTitle(parts.code) : "", photos: d.photos });
+      group.defects.push({ no: n, text: parts.sentence, severity: parts.severity, category: parts.category, code: parts.code, codeTitle: parts.code ? codeTitle(parts.code) : "", photos: d.photos, sectionKey: d.key });
     });
     defectGroups.push(group);
   }
@@ -314,6 +325,6 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
 
   return {
     stage, stageLabel, coverTitle: coverTitleOf(stage), purpose: PURPOSE, general: GENERAL, description, streetPhotos, otherPhotos, tables, totals,
-    defectGroups, defectCount: n, notes, previous, clientConcerns, waitingSections,
+    defectGroups, defectCount: n, notes, notesBySection, previous, clientConcerns, waitingSections, attachedKeys,
   };
 }

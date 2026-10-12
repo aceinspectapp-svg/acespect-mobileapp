@@ -17,9 +17,10 @@ const isConstruction = (inspection?: Inspection) => !!inspection && /constructio
  * Loads each submitted section's template and builds the report model from each section's wording (the same text the
  * reviewer portal shows). Returns undefined while loading, null for an inspection that is not a Construction Stage one.
  */
-export function useConstructionReport(inspection?: Inspection): ConstructionReportModel | null | undefined {
+export function useConstructionReport(inspection?: Inspection, opts?: { includeUnapproved?: boolean }): ConstructionReportModel | null | undefined {
+  const all = !!opts?.includeUnapproved;
   const [model, setModel] = useState<ConstructionReportModel | null | undefined>(isConstruction(inspection) ? undefined : null);
-  const key = inspection ? `${inspection.id}:${inspection.sections.map((s) => `${s.key ?? s.id}:${s.reviewStatus}:${s.reportText.length}`).join(",")}` : "";
+  const key = inspection ? `${all ? "all" : "approved"}:${inspection.id}:${inspection.sections.map((s) => `${s.key ?? s.id}:${s.reviewStatus}:${s.reportText.length}`).join(",")}` : "";
 
   useEffect(() => {
     if (!inspection || !isConstruction(inspection)) { setModel(null); return; }
@@ -35,7 +36,7 @@ export function useConstructionReport(inspection?: Inspection): ConstructionRepo
         const input: SectionInput = {
           key: sectionKey,
           name: s.name,
-          approved: s.reviewStatus === "approved",
+          approved: all || s.reviewStatus === "approved",
           reportText: text.reportText,
           damages: text.damages,
           answers: (s.answers as AnswerTree | null | undefined) ?? null,
@@ -220,7 +221,7 @@ function RowPhotos({ heading, photos }: { heading: string; photos: string[] }) {
   );
 }
 
-function Table({ t }: { t: ChecklistTable }) {
+function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
   return (
     <div style={{ margin: "0 0 20px" }}>
       <div style={{ background: C.navy, color: "white", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", breakAfter: "avoid" }}>
@@ -237,13 +238,13 @@ function Table({ t }: { t: ChecklistTable }) {
             const href = it.status === "defect" && it.defectNo ? `#defect-${it.defectNo}` : it.status === "note" ? "#notes" : undefined;
             const name = <span style={{ fontWeight: 700, fontSize: "13px", color: href ? C.navy : C.ink, textDecoration: href ? "underline" : "none" }}>{it.heading}</span>;
             return (
-              <div key={it.id} id={it.id} style={{ display: "grid", gridTemplateColumns: "6px 1fr 146px", borderBottom: `1px solid ${C.rule}`, breakInside: "avoid" }}>
+              <div key={it.id} id={it.id} style={{ display: "grid", gridTemplateColumns: compact ? "5px 1fr 88px" : "6px 1fr 146px", borderBottom: `1px solid ${C.rule}`, breakInside: "avoid" }}>
                 <div style={{ background: s.stripe }} />
                 <div style={{ padding: "6px 10px 7px" }}>
                   <div>{href ? <a href={href} style={{ textDecoration: "none" }}>{name}</a> : name}</div>
                   <div style={{ fontSize: "11.5px", color: C.grey, marginTop: "1px" }}>{it.text}</div>
                 </div>
-                <div style={{ background: s.bg, color: s.fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 800, letterSpacing: "0.1em", textAlign: "center", padding: "0 6px" }}>
+                <div style={{ background: s.bg, color: s.fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: compact ? "8.5px" : "10px", fontWeight: 800, letterSpacing: compact ? "0.04em" : "0.1em", textAlign: "center", padding: "0 4px" }}>
                   {href ? <a href={href} style={{ color: s.fg, textDecoration: "underline" }}>{s.label} ›</a> : s.label}
                 </div>
               </div>
@@ -267,7 +268,7 @@ function Defect({ d }: { d: DefectEntry }) {
         <div style={{ background: C.red, color: "white", fontWeight: 700, fontSize: "12px", padding: "6px 0 0", textAlign: "center" }}>{d.no}</div>
         <div style={{ padding: "6px 10px 7px" }}>
           <div style={{ fontSize: "13.5px" }}>{d.text}</div>
-          {d.photos.length > 0 && <div style={small}><b style={{ color: C.ink }}>Photographs:</b> {photoRange(numbering.start, d.photos.length)}</div>}
+          {d.photos.length > 0 && numbering.start !== undefined && <div style={small}><b style={{ color: C.ink }}>Photographs:</b> {photoRange(numbering.start, d.photos.length)}</div>}
           {(d.severity || d.category) && (
             <div style={small}>
               {d.severity && <><b style={{ color: C.ink }}>Severity:</b> {d.severity}</>}
@@ -478,6 +479,71 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           Not printed yet — awaiting reviewer approval: {model.waitingSections.join(", ")}.
         </p>
       )}
+    </div>
+  );
+}
+
+
+// ───────────────────────── One section, for the reviewer portal ─────────────────────────
+
+/**
+ * The reviewer portal's "Report Content" for one Construction Stage section: the same rows, defect cards, notes and tables
+ * the final report prints (the report is built from every section, so defect numbers match what will print).
+ */
+export function ConstructionSectionPreview({ model, sectionKey }: { model: ConstructionReportModel; sectionKey: string }) {
+  const tables = model.tables.filter((t) => t.sectionKey === sectionKey);
+  const defects = model.defectGroups.map((g) => ({ heading: g.heading, defects: g.defects.filter((d) => d.sectionKey === sectionKey) })).filter((g) => g.defects.length > 0);
+  const notes = model.notesBySection[sectionKey] ?? [];
+  const isDescription = /_description$/.test(sectionKey);
+  const showPrevious = model.attachedKeys.previous === sectionKey;
+  const showClient = model.attachedKeys.client === sectionKey;
+  const empty = !isDescription && !tables.length && !defects.length && !notes.length && !showPrevious && !showClient;
+  const photos = [...model.streetPhotos, ...model.otherPhotos];
+  return (
+    <div style={{ ...page, fontSize: "12.5px" }}>
+      {isDescription && (
+        <>
+          <Bullets items={model.description} />
+          <PhotoGrid3 photos={photos} numbers={undefined} indent={0} />
+        </>
+      )}
+      {tables.map((t, i) => <Table key={`${t.title}-${i}`} t={t} compact />)}
+      {defects.length > 0 && (
+        <>
+          <SubHeading>Identified defects</SubHeading>
+          {defects.map((g) => (
+            <div key={g.heading}>
+              <div style={{ color: C.navy, fontWeight: 700, fontSize: "13.5px", borderBottom: `1px solid ${C.rule}`, margin: "10px 0 8px", paddingBottom: "3px" }}>{g.heading}</div>
+              {g.defects.map((d) => <Defect key={d.no} d={d} />)}
+            </div>
+          ))}
+        </>
+      )}
+      {notes.length > 0 && (
+        <>
+          <SubHeading>Notes</SubHeading>
+          <Bullets items={notes} />
+        </>
+      )}
+      {showPrevious && (
+        <ListTable
+          heads={["Defect No", "Report Reference", "Defect Description", "Current Status", "Remarks / Photos"]}
+          intro="Where a previous report exists, each defect from that report is updated below with its current status."
+          na="Not applicable where no previous report exists."
+          list={model.previous}
+          row={(l) => ["1", "—", "Defects listed in the previous report (attached)", "Updated", l.text || "See the attached list."]}
+        />
+      )}
+      {showClient && (
+        <ListTable
+          heads={["Concern No", "Date Raised", "Client Concern", "Current Status", "Remarks / Photos"]}
+          intro="Concerns listed by the client are answered below with the inspector’s findings."
+          na="Not applicable where the client has not supplied a list of concerns."
+          list={model.clientConcerns}
+          row={(l) => ["1", "—", "Concerns as listed by the client (attached)", "Answered", l.text || "See the attached list."]}
+        />
+      )}
+      {empty && <p style={{ margin: 0, color: C.faint, fontStyle: "italic" }}>Nothing from this section is printed in the report.</p>}
     </div>
   );
 }
