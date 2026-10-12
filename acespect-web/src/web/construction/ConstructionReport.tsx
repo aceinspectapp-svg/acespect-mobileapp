@@ -406,8 +406,8 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           <Heading>General Description</Heading>
           <Bullets items={model.description} />
           {front && (
-            <div style={{ margin: "14px 0 18px", border: `1px solid ${C.rule}`, background: "#f8fafc" }}>
-              <img src={resolveMediaUrl(front)} alt="Front elevation" style={{ display: "block", width: "100%", maxHeight: "10.5cm", objectFit: "contain" }} />
+            <div style={{ margin: "12px 0 14px", border: `1px solid ${C.rule}`, background: "#f8fafc" }}>
+              <img src={resolveMediaUrl(front)} alt="Front elevation" style={{ display: "block", width: "100%", maxHeight: "7.5cm", objectFit: "contain" }} />
             </div>
           )}
           <SubHeading>Photographs</SubHeading>

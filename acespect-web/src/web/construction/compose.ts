@@ -152,7 +152,7 @@ function statusOf(c: Chosen, isDefect: boolean): ItemStatus {
 function textFor(status: ItemStatus, c: Chosen, hasRedOption: boolean, plainYesNo: boolean): string {
   if (status === "defect") return "Refer defects.";
   if (status === "ok" && (SATISFACTORY.test(c.label) || hasRedOption || (plainYesNo && /^(yes|no)$/i.test(c.label)))) return "Checked and okay.";
-  if (status === "note" && /note/i.test(c.label)) return "Refer notes.";
+  if (status === "note" && /note|^other$/i.test(c.label)) return "Refer notes.";
   if (status === "na" && NOT_APPLICABLE.test(c.label)) return "Not applicable.";
   return sentence(c.label);
 }
@@ -238,14 +238,21 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
     emitAt.set(anchorOf(datum, f, site, result), () => add(f, name, status, text));
   }
 
-  // The upper-roof rows carry a limitation sentence in the office template.
+  /** An observation as it reads after "… is": "Satisfactory" -> "satisfactory", "Refer defects" -> "defective", "Refer notes" -> "noted for attention". */
+const observed = (c: Chosen): string => {
+  if (c.tone === "bad" || /defect/i.test(c.label)) return "defective";
+  if (/note/i.test(c.label)) return "noted for attention (refer notes)";
+  return lower(c.label);
+};
+
+// The upper-roof rows carry a limitation sentence in the office template.
   const roofFrom = fieldByKey.get("upperRoofFrom");
   if (roofFrom && a.upperRoofFrom && !used.has("upperRoofFrom")) {
     const from = chosen(roofFrom, asString(a.upperRoofFrom)).label;
     const appears = fieldByKey.get("upperRoofAppears");
     const lowerRoof = fieldByKey.get("lowerRoofLadder");
-    const up = appears && a.upperRoofAppears ? lower(chosen(appears, asString(a.upperRoofAppears)).label) : "";
-    const low = lowerRoof && a.lowerRoofLadder ? lower(chosen(lowerRoof, asString(a.lowerRoofLadder)).label) : "";
+    const up = appears && a.upperRoofAppears ? observed(chosen(appears, asString(a.upperRoofAppears))) : "";
+    const low = lowerRoof && a.lowerRoofLadder ? observed(chosen(lowerRoof, asString(a.lowerRoofLadder))) : "";
     const ground = /ground/i.test(from);
     const parts = [
       ground ? "Due to OH&S constraints the upper roof could not be safely accessed." : /scaffold/i.test(from) ? "The upper roof covering was inspected from the scaffold." : "",
@@ -266,8 +273,8 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
     const noAccess = /no/i.test(chosen(gutterAccess, asString(a.safeAccessGuttering)).label);
     const g = fieldByKey.get("upperGutteringGround");
     const l = fieldByKey.get("lowerGutteringLadder");
-    const up = g && a.upperGutteringGround ? lower(chosen(g, asString(a.upperGutteringGround)).label) : "";
-    const low = l && a.lowerGutteringLadder ? lower(chosen(l, asString(a.lowerGutteringLadder)).label) : "";
+    const up = g && a.upperGutteringGround ? observed(chosen(g, asString(a.upperGutteringGround))) : "";
+    const low = l && a.lowerGutteringLadder ? observed(chosen(l, asString(a.lowerGutteringLadder))) : "";
     const parts = [
       noAccess ? "Due to OH&S constraints the upper guttering could not be safely accessed." : "",
       up ? `Observations from the ground indicate that the guttering is ${up}.` : "",
