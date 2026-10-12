@@ -6,6 +6,7 @@ import { ApiError } from '../../utils/ApiError';
 import { inspectionsService } from './inspections.service';
 import { fetchPhotoStream } from '../../lib/storage';
 import { generateInspectionReportPdf } from '../../lib/reportPdf';
+import { generateInspectionReportDocx } from '../../lib/reportDocx';
 import { recordSubmissionEvent } from '../../lib/submissionLog';
 
 /** A photo URL is this backend's own `/api/v1/media/:id` proxy link -- pull the id back off the end of it. */
@@ -131,6 +132,32 @@ export const inspectionsController = {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(pdf);
+  }),
+
+  // The same report as an editable Word file -- built from the same `/report/:id` page the PDF is printed from (lib/reportDocx.ts).
+  downloadReportDocx: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    const authHeader = req.headers.authorization ?? '';
+    const token = authHeader.slice('Bearer '.length).trim();
+
+    const inspection = await inspectionsService.getById(id);
+    const kind = /construction/i.test(inspection.inspectionType ?? '') ? 'construction' : 'dilapidation';
+    const docx = await generateInspectionReportDocx(id, token, {
+      clientName: inspection.client ?? '',
+      jobNo: inspection.jobNo ?? '',
+      title: `${kind === 'construction' ? 'Construction' : 'Dilapidation'} Report ${inspection.jobNo ?? ''}`.trim(),
+      // The Construction Report's footer carries the inspection date, as its PDF footer does.
+      ...(kind === 'construction'
+        ? { kind: 'construction' as const, inspectionDate: new Date(inspection.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) }
+        : {}),
+    });
+
+    const fileName = `${inspection.jobNo || id}-${kind}-report.docx`.replace(/[^a-z0-9.-]+/gi, '-');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(docx);
   }),
 
   // multipart/form-data with a "photo" file, plus optional "inspectionId"/

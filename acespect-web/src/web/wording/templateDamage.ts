@@ -7,7 +7,7 @@
 // when a crack card shows the size in a photo). Every defect carries `DEFECT::<n>::` so its photos print under it.
 import type { AnswerTree, TemplateField } from "../templateFields";
 import { asString, otherAnswerText, withPeriod } from "../templateFields";
-import { LOCATION_STARTS_WITH_PREPOSITION_RE, article, capitalize, lower } from "./shared";
+import { LOCATION_STARTS_WITH_PREPOSITION_RE, article, capitalize, lower, typedCase } from "./shared";
 import { houseDamageSentences } from "./dilapidation.residential_house";
 
 const num = (n: number): string => String(Number(n.toFixed(2)));
@@ -43,7 +43,7 @@ export function templateDamageSentences(config: { approximately: boolean }) {
         const subField = subFields.find((f) => f.gate?.fieldKey === "damageType" && f.gate.equals === "cracking");
         const subRaw = subField ? asString(d[subField.key]) : "";
         const subTyped = otherAnswerText(subRaw);
-        const severity = subTyped !== undefined ? lower(subTyped) : subRaw ? lower((subField?.options?.find((o) => o.value === subRaw)?.label ?? subRaw).split(" (")[0]) : "";
+        const severity = subTyped !== undefined ? lower(typedCase(subTyped)) : subRaw ? lower((subField?.options?.find((o) => o.value === subRaw)?.label ?? subRaw).split(" (")[0]) : "";
         const element = asString(d.element).trim();
         const start = asString(d.crackStartLocation).trim();
         const end = asString(d.crackEndLocation).trim();

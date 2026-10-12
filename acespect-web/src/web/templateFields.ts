@@ -1,5 +1,5 @@
 import { API_BASE, getToken } from "./api";
-import { atLocation, damageSentences, isNotPresent } from "./wording/shared";
+import { atLocation, damageSentences, isNotPresent, stripKeepMarks } from "./wording/shared";
 import { toSlug, type ReportProfile } from "./wording/profile";
 import { wordingFor } from "./wording/registry";
 import { composeSection, composerFor, type ReportWording } from "./wording/types";
@@ -464,6 +464,33 @@ function conditionSummaryRow(
   };
 }
 
+function scrubMarks(v: unknown): unknown {
+  if (typeof v === "string") return stripKeepMarks(v);
+  if (Array.isArray(v)) return v.map(scrubMarks);
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, scrubMarks(x)]));
+  return v;
+}
+
+/**
+ * An item marked not present ("Is there a driveway? No") is reported as not present, whatever else is still stored on it: answers
+ * and defects entered before it was changed to "No" stay saved but hidden on the form, and must not reach the report.
+ */
+function liveScope(inst: AnswerTree, itemFields: TemplateField[]): AnswerTree {
+  const gateKey = asString(inst.present) === "no" ? "present" : asString(inst.available) === "no" ? "available" : "";
+  if (!gateKey) return inst;
+  const hidden = new Set<string>();
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const f of itemFields) {
+      if (f.gate && (f.gate.fieldKey === gateKey || hidden.has(f.gate.fieldKey)) && !hidden.has(f.key)) {
+        hidden.add(f.key);
+        grew = true;
+      }
+    }
+  }
+  return Object.fromEntries(Object.entries(inst).filter(([k]) => !hidden.has(k)));
+}
+
 /**
  * Derives the flattened report `fields`, the flat `damages[]` array, and a
  * summary `reportText` from a raw answer tree -- the same walk
@@ -481,7 +508,9 @@ export function flattenSectionToDraft(
   profile: ReportProfile,
 ): FlattenedSection {
   // The report type is resolved first; the sentences come from that report type's own wording, never from the section name alone.
-  return walk(templateFields, answers, [], sectionKey, wordingFor(profile));
+  const draft = walk(templateFields, answers, [], sectionKey, wordingFor(profile));
+  // The wording marks the capitals of typed names and places so `lower` keeps them (wording/shared.ts); the finished text has no marks.
+  return { ...draft, reportText: stripKeepMarks(draft.reportText), fields: scrubMarks(draft.fields) as Record<string, unknown> };
 }
 
 function walk(
@@ -621,7 +650,7 @@ function walk(
             if (row) conditionSummaryRows.push(row);
           }
         }
-        const composedSentence = composed ? composeSection(wording, composed, inst, field.itemFields ?? [], label) : undefined;
+        const composedSentence = composed ? composeSection(wording, composed, liveScope(inst, field.itemFields ?? []), field.itemFields ?? [], label) : undefined;
         // `undefined` means "no composer registered for this section" (fall
         // back to the generic label/value text); an empty string means "a
         // composer ran and deliberately has nothing to say" (e.g. the
@@ -656,7 +685,11 @@ function walk(
       // driveway." convention.
       if (composed && composedCount === 0) {
         const absence = wording.absence[composed];
-        if (absence) textParts.push(absence);
+        // "Are there any retaining walls? Yes" with none entered yet is not "there are no retaining walls": it says there are some.
+        if (asString(scope.present) === "yes") {
+          const presence = wording.presence?.[composed];
+          if (presence) textParts.push(presence);
+        } else if (absence) textParts.push(absence);
       } else if (absentLines.length > 0) {
         // Back to front, so each insertion point is still where it was recorded.
         for (const { at, text } of [...absentLines].reverse()) textParts.splice(at, 0, text);
@@ -725,7 +758,7 @@ function walk(
   if (ancestorLabels.length === 0 && sectionKey && wording.derivedFields) Object.assign(fields, wording.derivedFields(sectionKey, scope, templateFields));
 
   if (isFlatComposedSection) {
-    const composed = composeSection(wording, sectionKey!, scope, templateFields, "");
+    const composed = composeSection(wording, sectionKey!, liveScope(scope, templateFields), templateFields, "");
     // A flat section is a single instance, so the whole section is one summary row (no sub-label) -- unless this report type gives that section no summary row at all.
     const noSummary = wording.noSummarySections.includes(sectionKey!);
     // A flat section can hold several graded areas (Warehouse & Production); that report type then writes its own rows.

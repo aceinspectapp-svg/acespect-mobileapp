@@ -63,6 +63,17 @@ describe("photo grid row packing", () => {
     }
   });
 
+  it("draws a lone last photo at the same height as the rows above it (it is centred, not enlarged)", () => {
+    for (const aspects of [[L, L, L], [P, P, L, L], [1, 3, 0.5], [P, L, P, L, P, L, L]]) {
+      const r = rows(aspects.flat());
+      const last = r[r.length - 1];
+      if (!last.full) assert.ok(last.height <= r[r.length - 2].height + 1e-9, `last ${last.height} vs ${r[r.length - 2].height}`);
+    }
+    const [two] = [rows([L, L, L])];
+    assert.deepEqual(two.map((row) => row.indices.length), [2, 1]);
+    assert.equal(two[1].height, two[0].height);
+  });
+
   it("only ever leaves the LAST row short", () => {
     const r = rows([P, L, L, P, L, L, L]);
     r.slice(0, -1).forEach((row) => assert.ok(row.full));

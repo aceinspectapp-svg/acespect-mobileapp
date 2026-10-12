@@ -37,8 +37,8 @@ export function keyOf(itemFields: TemplateField[], inst: AnswerTree, keys: strin
  */
 export function labelFor(itemFields: TemplateField[], inst: AnswerTree, key: string, raw: string): string {
   const typed = otherAnswerText(raw);
-  if (typed !== undefined) return typed;
-  if (raw === "other") return asString(inst[`${key}Other`]).trim();
+  if (typed !== undefined) return typedCase(typed);
+  if (raw === "other") return typedCase(asString(inst[`${key}Other`]).trim());
   return optionLabel(itemFields, key, raw);
 }
 
@@ -64,8 +64,51 @@ export function many(itemFields: TemplateField[], inst: AnswerTree, keys: string
  * deliberately, so it is left as typed instead of being flattened to "upvc".
  */
 export function lower(s: string): string {
-  return s.replace(/[A-Za-z][A-Za-z']*/g, (word) => (/[A-Z]/.test(word.slice(1)) ? word : word.toLowerCase()));
+  return s.replace(/[A-Za-z][A-Za-z']*/g, (word, offset: number, whole: string) => {
+    if (/[A-Z]/.test(word.slice(1)) || whole[offset + word.length] === KEEP_CAPITAL) return word;
+    const low = word.toLowerCase();
+    return BRAND_NAMES.has(low) ? capitalize(low) : low;
+  });
 }
+
+/** An invisible mark after a word that keeps its capital (a name or a place the inspector typed); `lower` leaves such a word alone and the finished report text has the marks removed. */
+export const KEEP_CAPITAL = "\u200d";
+export const stripKeepMarks = (s: string): string => s.split(KEEP_CAPITAL).join("");
+
+/** Words that make a typed phrase a place ("Collins Street", "Highlands Estate"), so its capitals are real. */
+const PLACE_WORDS = new Set([
+  "street", "st", "road", "rd", "avenue", "ave", "drive", "dr", "court", "ct", "lane", "place", "pl", "crescent", "cres", "highway", "hwy", "boulevard",
+  "parade", "terrace", "estate", "park", "creek", "river", "lake", "mount", "mt", "bridge", "station", "square", "reserve", "gardens", "grove", "close", "way",
+  "plaza", "circuit", "esplanade", "track", "trail", "freeway", "tunnel", "oval", "village", "heights", "hill", "hills", "beach",
+]);
+
+/**
+ * Text the inspector typed, put mid-sentence: ordinary words go lower case ("Water Tank" -> "water tank"), but the capitals of a name or a
+ * place are kept ("Collins Street", "the shed behind Smith Street"). A capital that is only the start of what was typed, or a Title Case
+ * phrase with nothing to say it is a place, is just typing habit.
+ */
+export function typedCase(text: string): string {
+  const parts = text.split(/(\s+)/);
+  const words = parts.filter((p) => /^[A-Za-z]/.test(p));
+  const place = words.some((w) => PLACE_WORDS.has(w.toLowerCase().replace(/[^a-z]/g, "")));
+  const capitalised = (w: string) => /^[A-Z][a-z']*$/.test(w);
+  const titleCase = words.length >= 2 && words.every((w) => capitalised(w) || !/^[A-Za-z]/.test(w));
+  let index = 0;
+  return parts
+    .map((p) => {
+      if (!/^[A-Za-z]/.test(p)) return p;
+      const i = index++;
+      if (!capitalised(p)) return p; // already lower case, or an acronym / brand spelt on purpose (lower() leaves those)
+      // A place in the phrase makes its capitals real -- except a first word that only starts the phrase ("Shed behind Smith Street").
+      const nextIsCapitalised = capitalised(words[i + 1] ?? "");
+      const keep = place ? i > 0 || nextIsCapitalised : titleCase ? false : i > 0;
+      return keep ? `${p}${KEEP_CAPITAL}` : p.toLowerCase();
+    })
+    .join("");
+}
+
+/** Product names that keep their capital mid-sentence ("a covering of Colorbond"), as the Houspect reports write them. */
+const BRAND_NAMES = new Set(["colorbond", "zincalume", "kliplock", "hebel", "scyon", "linea"]);
 
 /** "paint flaking" -> "Paint flaking" -- for an already-lowercased (mid-sentence-style) phrase that's actually being used to START a new sentence, so it needs its own capital letter back. */
 export function capitalize(s: string): string {
@@ -236,7 +279,7 @@ export function damageSentences(
       const typedType = otherAnswerText(rawType);
       const wordingType = typedType === undefined ? rawType : typedType ? "__custom__" : "other";
       const typeLabel = typedType
-        ? lower(typedType)
+        ? lower(typedCase(typedType))
         : damageTypeField && rawType
           ? lower(damageTypeField.options?.find((o) => o.value === rawType)?.label ?? rawType)
           : "crack";
@@ -246,7 +289,7 @@ export function damageSentences(
       const subTyped = otherAnswerText(subRaw);
       const subLabel =
         subTyped !== undefined
-          ? lower(subTyped)
+          ? lower(typedCase(subTyped))
           : subRaw
             ? lower((subField?.options?.find((o) => o.value === subRaw)?.label ?? subRaw).split(" (")[0])
             : "";
@@ -257,7 +300,7 @@ export function damageSentences(
         const start = asString(d.crackStartLocation).trim();
         const directionRaw = asString(d.direction);
         const directionTyped = otherAnswerText(directionRaw);
-        const direction = directionTyped !== undefined ? lower(directionTyped) : DIRECTION_ADVERBS[directionRaw];
+        const direction = directionTyped !== undefined ? lower(typedCase(directionTyped)) : DIRECTION_ADVERBS[directionRaw];
         if (start) extras.push(`starting from ${start}`);
         if (direction) extras.push(`running ${direction}`);
       }
@@ -281,7 +324,11 @@ export function damageSentences(
 }
 
 export function obstructionsSentence(itemFields: TemplateField[], inst: AnswerTree, noun: string): string {
-  const labels = many(itemFields, inst, ["obstructions", "obscuredBy", "obstruction"]).map(lower).map((l) => l.replace(/\bcar\/s\b/g, "cars"));
+  const labels = many(itemFields, inst, ["obstructions", "obscuredBy", "obstruction"])
+    .map(lower)
+    .map((l) => l.replace(/\bcar\/s\b/g, "cars"))
+    // "obscured by a trailer", not "by trailer"
+    .map((l) => (/^(trailer|caravan|bench|boat)$/.test(l) ? `a ${l}` : l));
   if (labels.length === 0) return "";
   return ` Sections ${noun ? `of the ${noun} ` : ""}were obscured by ${joinList(labels)}.`;
 }

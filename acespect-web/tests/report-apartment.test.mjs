@@ -53,7 +53,7 @@ describe("Apartment: Description and Overview", () => {
 
   it("words the apartment as the template does, from the form's answers", () => {
     const p = paras(draft("description", answers));
-    assert.equal(p[0], "The property is a single-storey apartment in a multi-level complex, on a flat block of land and estimated to have been constructed around 2010. The complex is an apartment block. It is constructed of brick veneer walls on concrete slab with a flat roof and a covering of membrane. Windows are constructed of aluminium frame.");
+    assert.equal(p[0], "The property is a single-storey apartment in a multi-level complex, on a flat block of land and estimated to have been constructed around 2010. The complex is an apartment block. It is constructed of brick veneer walls on concrete slab with a flat roof and a covering of membrane. Windows are constructed of aluminium.");
     assert.ok(p.includes("The proposed works are excavation."));
     assert.ok(p.includes("There were limitations to the scope of the inspection. Roof space not accessible."));
     assert.ok(p.includes("There were safety issues at the property. Loose balustrade on level 2."));
