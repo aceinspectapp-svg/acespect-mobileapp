@@ -119,12 +119,15 @@ export const inspectionsController = {
     const token = authHeader.slice('Bearer '.length).trim();
 
     const inspection = await inspectionsService.getById(id);
+    const kind = /construction/i.test(inspection.inspectionType ?? '') ? 'construction' : 'dilapidation';
     const pdf = await generateInspectionReportPdf(id, token, {
       clientName: inspection.client ?? '',
       jobNo: inspection.jobNo ?? '',
+      ...(kind === 'construction'
+        ? { kind: 'construction' as const, inspectionDate: new Date(inspection.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) }
+        : {}),
     });
 
-    const kind = /construction/i.test(inspection.inspectionType ?? '') ? 'construction' : 'dilapidation';
     const fileName = `${inspection.jobNo || id}-${kind}-report.pdf`.replace(/[^a-z0-9.-]+/gi, '-');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);

@@ -58,7 +58,14 @@ function isRequired(f: FieldSpec, value: Record<string, unknown>): boolean {
 }
 
 export function SpecForm({ form, value, onChange, errors = {}, refOptions = {}, fieldOptions = {}, hide = [], files = {}, onFiles }: SpecFormProps) {
-  const set = (key: string, v: unknown) => onChange({ ...value, [key]: v });
+  // "Postal address is the same as the registered office": ticked from the start unless a different postal address was already saved.
+  const hasRegistered = form.fields.some((x) => x.key === "registered_office_address");
+  const [samePostal, setSamePostal] = useState(() => hasRegistered && sameAddress(value.postal_address as Address | undefined, value.registered_office_address as Address | undefined));
+  const set = (key: string, v: unknown) => {
+    const next = { ...value, [key]: v };
+    if (hasRegistered && key === "registered_office_address" && samePostal) next.postal_address = v;
+    onChange(next);
+  };
   const visible = form.fields.filter((f) => !f.system && !f.hidden && !hide.includes(f.key));
 
   let lastGroup = "";
@@ -82,7 +89,20 @@ export function SpecForm({ form, value, onChange, errors = {}, refOptions = {}, 
                 {isRequired(f, value) && <span style={{ color: "#dc2626" }}> *</span>}
                 {f.req === "C" && !f.requiredWhen && <span style={{ color: "#94a3b8", fontWeight: 500 }}> (conditional)</span>}
               </label>
-              <FieldInput
+              {hasRegistered && f.key === "postal_address" && f.kind === "address" && (
+                <label style={{ fontSize: 12, color: "#374151", display: "flex", gap: 6, alignItems: "center", cursor: "pointer", marginBottom: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={samePostal}
+                    onChange={(e) => {
+                      setSamePostal(e.target.checked);
+                      if (e.target.checked) onChange({ ...value, postal_address: value.registered_office_address });
+                    }}
+                  />
+                  Same as the registered office address
+                </label>
+              )}
+              {hasRegistered && f.key === "postal_address" && samePostal ? null : <FieldInput
                 f={f}
                 v={value[f.key]}
                 onChange={(v) => set(f.key, v)}
@@ -90,7 +110,7 @@ export function SpecForm({ form, value, onChange, errors = {}, refOptions = {}, 
                 files={files[f.key] ?? []}
                 onFiles={(list) => onFiles?.(f.key, list)}
                 invalid={!!err}
-              />
+              />}
               {err ? <div style={{ ...helpStyle, color: "#dc2626" }}>{err}</div> : helpText(f) && <div style={helpStyle}>{helpText(f)}</div>}
             </div>
           </Fragment>
@@ -98,6 +118,13 @@ export function SpecForm({ form, value, onChange, errors = {}, refOptions = {}, 
       })}
     </div>
   );
+}
+
+const addressText = (a?: Address) => [a?.unit, a?.streetNumber, a?.streetName, a?.streetType, a?.suburb, a?.state, a?.postcode].map((x) => (x ?? "").trim().toLowerCase()).join("|");
+/** True when there is no separate postal address: it is empty, or identical to the registered office. */
+function sameAddress(postal?: Address, registered?: Address): boolean {
+  const p = addressText(postal);
+  return /^\|*$/.test(p) || p === addressText(registered);
 }
 
 function helpText(f: FieldSpec): string {
@@ -119,6 +146,8 @@ interface FieldInputProps {
 function FieldInput({ f, v, onChange, options, files, onFiles, invalid }: FieldInputProps) {
   const style: React.CSSProperties = { ...inputStyle, borderColor: invalid ? "#fca5a5" : "#e5e7eb" };
   const str = typeof v === "string" || typeof v === "number" ? String(v) : "";
+
+  if (f.key === "first_client_admin_name_and_email") return <NameAndEmail v={str} onChange={onChange} style={style} />;
 
   switch (f.kind) {
     case "longtext":
@@ -230,6 +259,19 @@ function FieldInput({ f, v, onChange, options, files, onFiles, invalid }: FieldI
     default:
       return <input style={style} value={str} onChange={(e) => onChange(e.target.value)} />;
   }
+}
+
+/** The first Client Admin: two boxes, saved as "Jane Smith, jane@example.com" (the form's single name-and-email value). */
+function NameAndEmail({ v, onChange, style }: { v: string; onChange: (v: string) => void; style: React.CSSProperties }) {
+  const [name, setName] = useState(() => { const i = v.lastIndexOf(","); return i === -1 ? "" : v.slice(0, i).trim(); });
+  const [email, setEmail] = useState(() => { const i = v.lastIndexOf(","); return i === -1 ? v.trim() : v.slice(i + 1).trim(); });
+  const push = (n: string, e: string) => onChange(n.trim() || e.trim() ? `${n.trim()}, ${e.trim()}` : "");
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      <input style={style} placeholder="Full name, e.g. Jane Smith" aria-label="First Client Admin name" value={name} onChange={(e) => { setName(e.target.value); push(e.target.value, email); }} />
+      <input style={style} type="email" placeholder="Email, e.g. jane@example.com" aria-label="First Client Admin email" value={email} onChange={(e) => { setEmail(e.target.value); push(name, e.target.value); }} />
+    </div>
+  );
 }
 
 function AddressInput({ v, onChange }: { v: Address; onChange: (a: Address) => void }) {

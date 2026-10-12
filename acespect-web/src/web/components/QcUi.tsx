@@ -21,7 +21,8 @@ export function Modal({ title, onClose, width = 760, children, footer }: {
   title: string; onClose: () => void; width?: number; children: React.ReactNode; footer?: React.ReactNode;
 }) {
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
+    // A click on the dark backdrop does not close the dialog: it would throw away whatever has been typed. Close, Cancel and Save are the ways out.
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "white", borderRadius: 14, width, maxWidth: "calc(100vw - 32px)", maxHeight: "calc(100vh - 48px)", display: "flex", flexDirection: "column", boxShadow: "0 20px 50px rgba(0,0,0,0.25)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #f1f5f9" }}>
           <h3 style={{ fontSize: 15, fontWeight: 700, color: "#1a2a4a", margin: 0 }}>{title}</h3>

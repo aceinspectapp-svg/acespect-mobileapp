@@ -12,6 +12,8 @@ const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const server = await createServer({ root: webRoot, server: { middlewareMode: true }, logLevel: "error" });
 after(() => server.close());
 const { buildConstructionReport, stageOfSectionKeys, referencedCodes } = await server.ssrLoadModule("/src/web/construction/reportModel.ts");
+const { flattenSectionToDraft } = await server.ssrLoadModule("/src/web/templateFields.ts");
+const { wordingFor } = await server.ssrLoadModule("/src/web/wording/registry.ts");
 
 const OK = "#1FA463", BAD = "#E63329", WARN = "#E8A33D", NA = "#94A1B2";
 const row = (key, label, order, extra = {}) => ({
@@ -22,7 +24,11 @@ const row = (key, label, order, extra = {}) => ({
 const photos = (n) => Array.from({ length: n }, (_, i) => `/p${i}.jpg`);
 const defect = (over = {}) => ({ location: "Front left roof", category: ["workmanship_outside_tolerance"], severity: ["major", "safety"], photos: photos(2), comments: "Needs repair.", constructionCode: "2.04", ...over });
 
-const section = (key, name, fields, answers, approved = true) => ({ key, name, fields, answers, approved });
+/** A section as the reviewer portal shows it: the report text and defects the Construction Stage wording writes from its answers. */
+const section = (key, name, fields, answers, approved = true) => {
+  const derived = flattenSectionToDraft(fields, answers, key, { inspectionType: "construction_stage", propertyType: "residential_house" });
+  return { key, name, fields, answers, approved, reportText: derived.reportText, damages: derived.damages };
+};
 
 const description = section("pci_description", "Description & Overview",
   [
@@ -63,56 +69,62 @@ describe("construction report", () => {
     assert.equal(stageOfSectionKeys(["driveway"]), null);
   });
 
-  const model = buildConstructionReport([description, roof, internal, summary], jobInfo, false);
+  const model = buildConstructionReport([description, roof, internal, summary], jobInfo);
 
   it("writes the General Description sentences", () => {
     assert.ok(model.description.includes("The property is being constructed by Metricon."));
-    assert.ok(model.description.includes("The construction is a single storey house."));
-    assert.ok(model.description.includes("The owners were not present for the inspection."));
+    assert.ok(model.description.includes("The construction is a single storey on a concrete slab."));
+    assert.ok(model.description.includes("The owner was not onsite at the time of inspection."));
     assert.ok(model.description.some((l) => /approaching|handover/i.test(l)));
     assert.equal(model.stageLabel, "Handover");
   });
 
-  it("gives every checklist row one sentence, drops N/A rows, and tells repeated names apart", () => {
-    const items = model.blocks.flatMap((b) => b.groups.flatMap((g) => g.items));
-    assert.ok(!items.some((i) => /skylights/i.test(i.heading)), "N/A rows are left out");
+  it("gives every checklist row a status and one sentence, keeps N/A rows, and tells repeated names apart", () => {
+    const items = model.tables.flatMap((b) => b.groups.flatMap((g) => g.items));
+    assert.equal(items.find((i) => /skylights/i.test(i.heading)).status, "na", "N/A rows stay, as Not applicable");
+    assert.equal(items.find((i) => /skylights/i.test(i.heading)).text, "Not applicable.");
     const gutters = items.filter((i) => /^gutters/i.test(i.heading));
     assert.equal(gutters.length, 2);
     assert.notEqual(gutters[0].heading, gutters[1].heading);
-    assert.equal(items.find((i) => /^covering/i.test(i.heading)).text, "Checked and satisfactory.");
+    assert.equal(items.find((i) => /^covering/i.test(i.heading)).text, "Checked and okay.");
+    assert.equal(items.find((i) => /^covering/i.test(i.heading)).status, "ok");
   });
 
-  it("numbers defects EXTERNAL first, ties each checklist row to its defect, and keeps photos and details", () => {
-    assert.equal(model.defects.length, 2);
-    assert.deepEqual(model.defects.map((d) => [d.no, d.area]), [[1, "EXTERNAL"], [2, "INTERNAL"]]);
-    const d1 = model.defects[0];
+  it("numbers defects in checklist order under their topic, with photos, details and the code, and ties each row to its defect", () => {
+    const defects = model.defectGroups.flatMap((g) => g.defects);
+    assert.equal(model.defectCount, 2);
+    assert.deepEqual(defects.map((d) => d.no), [1, 2]);
+    assert.deepEqual(model.defectGroups.map((g) => g.heading), ["Roof", "Internal"]);
+    const d1 = defects[0];
     assert.match(d1.text, /Gutters/);
     assert.match(d1.text, /Front left roof/);
-    assert.deepEqual(d1.severities, ["Major", "Safety"]);
-    assert.deepEqual(d1.categories, ["Workmanship outside tolerance"]);
+    assert.equal(d1.severity, "Major, Safety");
+    assert.equal(d1.category, "Workmanship outside tolerance");
+    assert.equal(d1.code, "2.04");
+    assert.match(d1.codeTitle, /^2\.04 External building dimensions/);
     assert.equal(d1.photos.length, 2);
-    const row1 = model.blocks.flatMap((b) => b.groups.flatMap((g) => g.items)).find((i) => /debris/i.test(i.heading));
-    assert.equal(row1.text, "Refer to Defects (Defect 1).");
-    assert.deepEqual(row1.defectNos, [1]);
+    const row = model.tables.flatMap((b) => b.groups.flatMap((g) => g.items)).find((i) => /debris/i.test(i.heading));
+    assert.equal(row.text, "Refer defects.");
+    assert.equal(row.status, "defect");
+    assert.equal(row.defectNo, 1);
   });
 
-  it("puts the codes the inspector typed into the references, with the standing normal-viewing block", () => {
+  it("reads construction codes against the library, and has no standards appendix", () => {
     assert.deepEqual(referencedCodes("see 2.04 and 8.01, also 99.99").sort(), ["2.04", "8.01"]);
-    assert.ok(model.references.some((s) => s.codes.some((c) => c.code === "2.04")));
-    assert.ok(model.blocksRef.some((b) => /normal viewing/i.test(b.title)));
+    assert.equal(model.references, undefined);
   });
 
   it("writes the Notes: the workmanship statement, the PCI appliances note for the chosen status and the standing notes", () => {
     assert.ok(model.notes.includes("The workmanship is generally to a satisfactory industry standard, except for the defects noted above."));
     assert.ok(model.notes.some((n) => /^Appliances are installed, except for/.test(n)));
     assert.ok(model.notes.some((n) => /Certificate of Occupancy/.test(n)));
-    const practical = buildConstructionReport([description, summary], { stageOptionPci: "practical_completion_appliances_not_yet_installed" }, false);
+    const practical = buildConstructionReport([description, summary], { stageOptionPci: "practical_completion_appliances_not_yet_installed" });
     assert.ok(practical.notes.some((n) => /not yet installed/.test(n)));
   });
 
   it("prints only approved sections and says which are waiting", () => {
-    const waiting = buildConstructionReport([description, { ...roof, approved: false }, summary], jobInfo, false);
-    assert.equal(waiting.blocks.length, 0);
+    const waiting = buildConstructionReport([description, { ...roof, approved: false }, summary], jobInfo);
+    assert.equal(waiting.tables.length, 0);
     assert.deepEqual(waiting.waitingSections, ["PCI Checklist: External — Roof"]);
   });
 
@@ -123,18 +135,32 @@ describe("construction report", () => {
       { key: "frontSite", label: "Front setback on site (approx)", type: "numeric", unit: "mm", order: 2, sectionLetter: "Front setback" },
       { key: "frontResult", label: "Front setback — result", type: "pill-select", order: 3, sectionLetter: "Front setback", options: [{ value: "ok", label: "OK", color: OK }] },
     ];
-    const m = buildConstructionReport([section("sd_measurements", "Slab Down: Site & Slab Measurements", fields, { frontDatum: "pegs", frontPlan: "4500", frontSite: "4510", frontResult: "ok" })], null, false);
-    const item = m.blocks[0].groups[0].items[0];
-    assert.equal(m.blocks[0].banner, "SLAB DOWN");
-    assert.match(item.text, /As estimated from pegs\. Setbacks on plan are 4500 millimetres and on site are approximately 4510 millimetres\. Checked and satisfactory\./);
+    const m = buildConstructionReport([section("sd_measurements", "Slab Down: Site & Slab Measurements", fields, { frontDatum: "pegs", frontPlan: "4500", frontSite: "4510", frontResult: "ok" })], null);
+    const item = m.tables[0].groups[0].items[0];
+    assert.equal(m.tables[0].title, "SITE & SLAB MEASUREMENTS");
+    assert.match(item.text, /As estimated from pegs\. Setbacks on plan are 4500 millimetres and on site are approximately 4510 millimetres\. Checked and okay\./);
   });
 
-  it("lists defects as one numbered list for the early stages and under EXTERNAL / INTERNAL from Lock Up on", () => {
-    const early = buildConstructionReport([section("fr_defects", "Defects", [], { defects: [{ location: "Roof frame", description: "Truss not strapped", photos: photos(1) }, { location: "Bedroom 2", description: "Stud bowed", photos: [] }] })], null, false);
-    assert.equal(early.groupedDefects, false);
-    assert.deepEqual(early.defects.map((d) => d.no), [1, 2]);
-    const late = buildConstructionReport([section("lu_defects", "Defects", [], { defects: [{ location: "Bedroom 2", description: "Stud bowed", photos: [] }, { location: "Roof gutter", description: "Not fixed", photos: [] }] })], null, false);
-    assert.equal(late.groupedDefects, true);
-    assert.deepEqual(late.defects.map((d) => d.area), ["EXTERNAL", "INTERNAL"]);
+  it("numbers defects in order across stages and groups them by topic", () => {
+    const early = buildConstructionReport([section("fr_defects", "Defects", [], { defects: [{ location: "Roof frame", description: "Truss not strapped", photos: photos(1) }, { location: "Bedroom 2", description: "Stud bowed", photos: [] }] })], null);
+    assert.deepEqual(early.defectGroups.flatMap((g) => g.defects).map((d) => d.no), [1, 2]);
+    assert.equal(early.defectGroups[0].heading, "General");
+    assert.match(early.defectGroups[0].defects[0].text, /Roof frame/);
+  });
+
+  it("describes the construction the way the design sample words it", () => {
+    assert.ok(model.description.includes("The construction is a single storey on a concrete slab."));
+    assert.ok(model.description.includes("The owner was not onsite at the time of inspection."));
+  });
+
+  it("leaves the form's instructions out of sub-headings and drops a sub-heading that repeats the table title", () => {
+    const fields = [
+      { ...row("brickClean", "Brickwork clean", 0), sectionLetter: "External walls — use a digital level and measuring devices and show them in the photos" },
+      { ...row("brickPlumb", "Brickwork plumb", 1), sectionLetter: "Masonry / brick work" },
+      { ...row("planCheck", "Plaster complete", 2), sectionLetter: "Plaster — rough ins done but plaster not? Check the brief and office" },
+    ];
+    const m = buildConstructionReport([section("lu_external_walls", "Lock Up Stage: External Walls", fields, { brickClean: "ok", brickPlumb: "ok", planCheck: "ok" })], null);
+    assert.deepEqual(m.tables[0].groups.map((g) => g.heading), [undefined, "Masonry / brick work", "Plaster"]);
+    assert.equal(m.tables[0].title, "EXTERNAL WALLS");
   });
 });

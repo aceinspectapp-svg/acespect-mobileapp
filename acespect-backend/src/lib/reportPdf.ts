@@ -192,7 +192,9 @@ export async function generateInspectionReportPdf(
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: HEADER_TEMPLATE,
-      footerTemplate: buildFooterTemplate(meta.clientName, meta.jobNo),
+      footerTemplate: meta.kind === 'construction'
+        ? buildConstructionFooterTemplate(meta.clientName, meta.jobNo, meta.inspectionDate ?? '')
+        : buildFooterTemplate(meta.clientName, meta.jobNo),
       // Wider side margins and a taller bottom margin than before (the
       // previous 34mm let body text on several content-heavy pages run
       // into the footer bars) -- the top margin grew slightly too, to fit

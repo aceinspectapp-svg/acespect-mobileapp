@@ -42,6 +42,8 @@ export interface ReportWording {
   summaryRows?(sectionKey: string, inst: AnswerTree, itemFields: TemplateField[], label: string): ConditionSummaryRow[] | undefined;
   /** Extra values worked out from a section's answers and stored with its fields (e.g. the list of labels a sentence needs). */
   derivedFields?(sectionKey: string, scope: AnswerTree, templateFields: TemplateField[]): Record<string, unknown>;
+  /** The defect records a flat-composed section raises from its answers (Construction Stage: each checklist row answered "Defect", the Defects table, the ticked typical defects), with their photos. */
+  derivedDamages?(sectionKey: string, scope: AnswerTree, templateFields: TemplateField[]): { type: string; location: string; direction: string; widthMm: number; lengthMm: number; notes: string; photos: string[] }[];
   /**
    * The two Description-page sentences this report type words itself -- where the project works are and what the scope is.
    * A report type that leaves this out keeps the standard sentences.

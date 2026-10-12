@@ -767,7 +767,7 @@ function walk(
     if (ownRows) fields.conditionSummary = ownRows;
     else if (row) fields.conditionSummary = [row];
     else if (!noSummary && templateFields.some((f) => f.type === "color-select")) fields.conditionSummary = [];
-    return { fields, damages, reportText: composed ?? textParts.join("\n\n") };
+    return { fields, damages: wording.derivedDamages?.(sectionKey!, scope, templateFields) ?? damages, reportText: composed ?? textParts.join("\n\n") };
   }
 
   // "\n\n" so multiple instances (several driveways, each elevation, each
