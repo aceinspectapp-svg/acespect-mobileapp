@@ -62,10 +62,14 @@ let unique = 0;
 const tag = (url) => `${url}${url.includes("?") ? "&" : "?"}n=${++unique}`; // every spot's photographs are distinct URLs, so a missing one can be told
 const shapesToUrls = (mix, set) => photosOf(mix, set, SVG_PORT).map(tag);
 const realMix = (mix) => mix.split(" ").map((s, i) => tag(real(s, i + unique)));
+const REAL_MIXES = ["L L", "P P L", "L L L", "L P", "L P P", "S L", "P P P", "L", "L L P", "P L P L", "P", "L P L P L P"];
 const MIX13 = ["P P L", "L L P", "P P P", "L L L", "P L P L P", "P", "P P P P", "L P", "S W T", "L P P L L P", "L L", "L", "P L L"];
 const SCENARIOS = {
   // the supplied photographs, in every mix of portrait / landscape / square
-  real: { about: "the supplied photographs in every mix of shapes", photos: (ctx, n) => realMix(["L L", "P P L", "L L L", "L P", "L P P", "S L", "P P P", "L", "L L P", "P L P L", "P", "L P L P L P"][n % 12]) },
+  real: { about: "the supplied photographs in every mix of shapes", photos: (ctx, n) => realMix(REAL_MIXES[n % 12]) },
+  // the same photo places and the same number of photographs in each, but all portrait / all horizontal
+  portrait: { about: "the supplied photographs, every one portrait (same places and counts as 'real')", photos: (ctx, n) => realMix(REAL_MIXES[n % 12].replace(/[A-Z]/g, "P")) },
+  landscape: { about: "the supplied photographs, every one horizontal (same places and counts as 'real')", photos: (ctx, n) => realMix(REAL_MIXES[n % 12].replace(/[A-Z]/g, "L")) },
   // labelled placeholders of each shape, one distinct set per spot
   mixes: { about: "labelled placeholders in all 13 mixes", photos: (ctx, n) => shapesToUrls(MIX13[n % 13], `${ctx.path ?? "spot"} (${MIX13[n % 13]})`) },
   // nothing to draw
@@ -83,7 +87,7 @@ const SCENARIOS = {
   // a short report
   minimal: { about: "a short report: only the first few sections, one photo each", photos: (ctx, n) => [tag(real("LPS"[n % 3], n))], sections: 4 },
 };
-const chosen = (process.env.AUDIT_SCENARIOS ?? Object.keys(SCENARIOS).join(",")).split(",").filter((s) => SCENARIOS[s]);
+const chosen = (process.env.AUDIT_SCENARIOS ?? Object.keys(SCENARIOS).filter((k) => !["portrait", "landscape"].includes(k)).join(",")).split(",").filter((s) => SCENARIOS[s]);
 
 // a phone-style JPEG: pixels stored landscape, EXIF orientation 6 (to be shown portrait)
 {
