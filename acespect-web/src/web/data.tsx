@@ -65,12 +65,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
+    // A load that fails (the server refusing with 429 or 401, a restart, a network blip) must leave what is already on screen alone:
+    // this runs every time the tab regains focus, and replacing the lists with empty ones made the whole app go blank
+    // ("Inspection not found") until the next successful load. The only failure that really means "empty" is a 403 on the users list
+    // (inspectors may not list users).
     const [ins, us] = await Promise.all([
-      api.getInspections().catch(() => [] as Inspection[]),
-      api.getUsers().catch(() => [] as User[]), // 403 for inspectors — fine
+      api.getInspections().catch((): Inspection[] | null => null),
+      api.getUsers().catch((e: { status?: number }): User[] | null => (e?.status === 403 ? [] : null)),
     ]);
-    setInspections(ins);
-    setUsers(us);
+    if (ins) setInspections(ins);
+    if (us) setUsers(us);
   }, []);
 
   // On mount: if a token exists, validate it and load data.
