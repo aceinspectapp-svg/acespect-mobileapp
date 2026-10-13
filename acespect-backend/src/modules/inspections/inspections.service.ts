@@ -202,6 +202,10 @@ async function update(id: string, inspectorId: string, input: UpdateInspectionIn
 
   const updated = await prisma.$transaction(async (tx) => {
     if (input.sections) {
+      // Saves of the same draft take turns. The editor autosaves a second after typing stops and has a Save Draft button (and a draft
+      // can be open in two tabs), so two saves can overlap: each would delete the sections it can see and then add a full set, leaving
+      // every section twice. Locking the row makes the second save wait until the first has committed, then replace that set.
+      await tx.$queryRaw`SELECT id FROM inspections WHERE id = ${id} FOR UPDATE`;
       // Damages cascade from sections, so deleting sections clears them too.
       await tx.section.deleteMany({ where: { inspectionId: id } });
     }
@@ -325,6 +329,16 @@ async function getById(id: string) {
 }
 
 /**
+ * The job number a report prints (its footer): the one a reviewer typed into Job Information when they corrected it, otherwise the
+ * inspection's own. The inspection's own job number (its folder, its lists) is not touched by that correction.
+ */
+async function reportJobNo(id: string, jobNo: string | null): Promise<string> {
+  const section = await prisma.section.findFirst({ where: { inspectionId: id, key: { startsWith: 'job-info' } }, select: { fields: true } });
+  const typed = (section?.fields as Record<string, unknown> | null)?.jobNo;
+  return typeof typed === 'string' && typed.trim() ? typed.trim() : jobNo ?? '';
+}
+
+/**
  * Upload one inspection photo; returns a URL that proxies through this
  * backend. `inspectionId`/`sectionKey`, when given, group the file under
  * that inspection's own section folder in Egnyte -- mobile passes them
@@ -366,6 +380,7 @@ export const inspectionsService = {
   update,
   finalize,
   getById,
+  reportJobNo,
   uploadPhoto,
   listAssigned,
   getBaselineSections,

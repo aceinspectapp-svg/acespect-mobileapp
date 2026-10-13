@@ -34,7 +34,7 @@ export function InspectorDashboard() {
     <>
     <PageShell
       title="My Inspections"
-      subtitle="James Thompson — Inspector"
+      subtitle={`${currentUser?.name ?? "Inspector"} — Inspector`}
       actions={
         <PrimaryBtn color="#e63329" onClick={() => setShowNewModal(true)}>
           <Plus size={15} strokeWidth={2.5} />

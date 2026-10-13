@@ -1,9 +1,15 @@
 import rateLimit from 'express-rate-limit';
 import type { Request, Response } from 'express';
 import { verifyAccessToken } from '../utils/jwt';
+import { env } from '../config/env';
 
 // Only the local test harness sets this; it is never set in a deployed environment.
 const off = () => process.env.RATE_LIMIT_OFF === '1';
+
+/*
+ * `req.ip` below is the visitor's real address: middleware/clientIp.ts replaces Express's own guess (behind Railway, often one of Railway's
+ * own servers, shared by every visitor) with the address in X-Real-IP, which Railway's edge sets on every request.
+ */
 
 /**
  * Who a request counts against: the signed-in user when the token is valid (the signature is checked, so this cannot be forged to
@@ -69,10 +75,10 @@ export const refreshLimiter = rateLimit({
   handler: refuse('Too many session renewals.'),
 });
 
-/** The rest of the API: counted per signed-in user (1500 requests / 15 min), or per address when not signed in (300). */
+/** The rest of the API: counted per signed-in user (API_RATE_LIMIT_USER, 1500 requests / 15 min), or per address when not signed in (API_RATE_LIMIT_ANON, 300). */
 export const apiLimiter = rateLimit({
   ...base,
-  limit: (req) => (who(req).startsWith('user:') ? 1500 : 300),
+  limit: (req) => (who(req).startsWith('user:') ? env.API_RATE_LIMIT_USER : env.API_RATE_LIMIT_ANON),
   keyGenerator: who,
   handler: refuse('Too many requests.'),
 });

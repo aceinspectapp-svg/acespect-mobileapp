@@ -86,7 +86,7 @@ interface Defect { sub: string; area: "EXTERNAL" | "INTERNAL"; location: string;
 function defectText(heading: string, location: string, comments: string, severities: string[], categories: string[], code: string): string {
   const head = heading ? cap(heading) : "";
   const where = location && heading ? ` — ${location}` : location;
-  const lead = head || where ? `${head}${where}.` : "";
+  const lead = head || where ? sentence(`${head}${where}`) : ""; // a label that already ends in a full stop is not given a second one
   const parts = [
     lead,
     comments ? sentence(comments) : "",

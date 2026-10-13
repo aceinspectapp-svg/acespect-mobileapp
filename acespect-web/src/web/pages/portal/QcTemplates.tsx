@@ -5,7 +5,7 @@ import { ErrorNote, Field, FormDialog, Modal, Select, btnDanger, btnGhost, btnLi
 import { inputStyle } from "../../components/SpecForm";
 import { qcx, type StageDef, type TemplateItem, type TemplateRow } from "../../qcApi";
 import { useQc } from "../../qcContext";
-import { API_BASE, getActiveClientId, getToken } from "../../api";
+import { API_BASE, fetchWithRefresh, getActiveClientId, getToken } from "../../api";
 import type { QcProjectRow } from "../../qcTypes";
 import { api } from "../../api";
 
@@ -98,7 +98,7 @@ export function QcTemplateDetail() {
   const sections = [...new Set(items.map((i) => i.section ?? "General"))];
 
   async function exportXlsx() {
-    const res = await fetch(qcx.templates.exportUrl(id), { headers: { Authorization: `Bearer ${getToken()}`, ...(getActiveClientId() ? { "X-Client-Id": getActiveClientId()! } : {}) } });
+    const res = await fetchWithRefresh(qcx.templates.exportUrl(id), { headers: { Authorization: `Bearer ${getToken()}`, ...(getActiveClientId() ? { "X-Client-Id": getActiveClientId()! } : {}) } });
     if (!res.ok) return setError(`Export failed (${res.status})`);
     const url = URL.createObjectURL(await res.blob());
     const a = document.createElement("a");

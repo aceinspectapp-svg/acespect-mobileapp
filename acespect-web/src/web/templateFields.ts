@@ -1,4 +1,4 @@
-import { API_BASE, getToken } from "./api";
+import { API_BASE, fetchWithRefresh, getToken } from "./api";
 import { atLocation, damageSentences, isNotPresent, stripKeepMarks } from "./wording/shared";
 import { toSlug, type ReportProfile } from "./wording/profile";
 import { wordingFor } from "./wording/registry";
@@ -112,7 +112,7 @@ export async function fetchActiveTemplate(
   if (!inspectionType || !propertyType) return null;
   try {
     const token = getToken();
-    const res = await fetch(
+    const res = await fetchWithRefresh(
       `${API_BASE}/templates/active/${encodeURIComponent(toSlug(inspectionType))}/${encodeURIComponent(toSlug(propertyType))}/${encodeURIComponent(sectionKey)}`,
       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     );

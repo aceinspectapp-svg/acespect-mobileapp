@@ -20,7 +20,7 @@ jobs:
           POSTGRES_DB: qc_scratch
         ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U acespect" --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "pg_isready -U acespect -d qc_scratch" --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7
         ports: ['6379:6379']
