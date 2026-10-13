@@ -250,6 +250,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
         'Saved on this device',
         "No connection right now — this inspection will upload automatically once you're back online.",
         [{ text: 'OK', onPress: goHome }],
+        { cancelable: false },
       );
       return;
     }
@@ -261,6 +262,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
         'Saved to your dashboard',
         `Inspection saved as a draft (ref ${res.inspectionId.slice(0, 8)}…). Review and edit it on your dashboard, then finalize it to send for review.`,
         [{ text: 'OK', onPress: () => { draft.reset(); goHome(); } }],
+        { cancelable: false },
       );
     } catch (err) {
       // A live attempt failed partway (e.g. connection dropped mid-upload) --
@@ -273,6 +275,8 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
         'Saved on this device',
         `Couldn't reach the server (${e?.response?.data?.error?.message ?? e?.message ?? 'connection issue'}) — this inspection will upload automatically once you're back online.`,
         [{ text: 'OK', onPress: goHome }],
+        // Tapping outside the box must not dismiss it: staying on this screen leaves Submit pressable on an already-cleared draft.
+        { cancelable: false },
       );
     } finally {
       setSubmitting(false);
