@@ -353,7 +353,7 @@ export function PhotoGrid({
               style={
                 // Full row: widths share the row in proportion to each photo's shape, which makes every height equal.
                 // Short last row: each photo at the row's height (the same as the rows above it), centred.
-                row.full ? { flex: `${aspects[i]} 1 0`, minWidth: 0 } : { flex: "0 0 auto", width: `${aspects[i] * row.height}cm` }
+                row.full ? { flex: `${aspects[i]} 1 0`, minWidth: 0 } : { flex: "0 0 auto", width: `${aspects[i] * row.height}cm`, maxWidth: "100%" } // (the cap only matters in a column narrower than the page, like the reviewer's preview)
               }
             >
               {failed[i] ? (
