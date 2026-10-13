@@ -3,7 +3,8 @@ import { Readable } from 'node:stream';
 import { ZipArchive } from 'archiver';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
-import { inspectionsService } from './inspections.service';
+import { inspectionsService, receiptFor } from './inspections.service';
+import { alertAdmins } from '../../lib/submissionAlerts';
 import { fetchPhotoStream } from '../../lib/storage';
 import { generateInspectionReportPdf } from '../../lib/reportPdf';
 import { generateInspectionReportDocx } from '../../lib/reportDocx';
@@ -26,7 +27,7 @@ function photoIdFromUrl(url: string): string | null {
  * back at yesterday's failed job is left without an answer.
  */
 function logSubmit(
-  event: 'received' | 'saved' | 'updated' | 'finalized' | 'photo_uploaded',
+  event: 'received' | 'saved' | 'updated' | 'finalized' | 'photo_uploaded' | 'warning',
   ctx: { inspectorId?: string | null; inspectionId?: string | null; jobNo?: string | null },
   detail: Record<string, unknown>,
 ): void {
@@ -43,7 +44,7 @@ export const inspectionsController = {
   // Saves as a DRAFT the inspector still owns — review only starts at finalize.
   submit: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
-    const body = req.body as { jobNo?: string; id?: string; sections?: unknown[] };
+    const body = req.body as { jobNo?: string; id?: string; sections?: { key?: string }[] };
     logSubmit(
       'received',
       { inspectorId: req.user.id, jobNo: body.jobNo },
@@ -55,7 +56,34 @@ export const inspectionsController = {
       { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo },
       { status: inspection.status },
     );
-    res.status(201).json({ inspectionId: inspection.id, status: inspection.status });
+    // Only Job Information arrived: the inspection's real sections and photos are not in this submission (a blank draft was sent, or the
+    // full one is still waiting on the phone). The admin Troubleshoot page lists these.
+    if (!(body.sections ?? []).some((s) => s.key && s.key !== 'job-info')) {
+      logSubmit(
+        'warning',
+        { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo },
+        { reason: 'only_job_information', message: 'Only Job Information was received -- no sections or photos came with this submission.' },
+      );
+      void alertAdmins(`blank:${inspection.id}`, `Submission ${inspection.jobNo ?? ''} contains only Job Information`, ['No sections or photos came with this submission; the full inspection may still be waiting on the inspector\'s phone.'], { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo });
+    }
+    // The receipt: what the server actually stored. The phone keeps its copy until this matches what it sent.
+    const receipt = await receiptFor(inspection.id);
+    const expected = (req.body as { expected?: { sections: number; photos: number } }).expected;
+    if (expected && (expected.sections !== receipt.sections || expected.photos !== receipt.photos)) {
+      const message = `The phone sent ${expected.sections} section(s) and ${expected.photos} photo(s); the server stored ${receipt.sections} and ${receipt.photos}.`;
+      logSubmit('warning', { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo }, { reason: 'receipt_mismatch', message });
+      void alertAdmins(`mismatch:${inspection.id}`, `Submission ${inspection.jobNo ?? ''} arrived incomplete`, [message], { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo });
+    }
+    res.status(201).json({ inspectionId: inspection.id, status: inspection.status, receipt });
+  }),
+
+  // Saves one section while the inspector is still working (see inspectionsService.syncSection).
+  syncSection: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    const result = await inspectionsService.syncSection(req.user.id, id, req.body);
+    res.status(200).json(result);
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
@@ -172,6 +200,8 @@ export const inspectionsController = {
     // makes up from the photo) makes a repeated upload return the stored copy instead of saving a second one.
     const jobNo = typeof req.body.jobNo === 'string' ? req.body.jobNo : undefined;
     const photoId = typeof req.body.photoId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.body.photoId) ? req.body.photoId.toLowerCase() : undefined;
+    const n = Number(req.body.photoNumber);
+    const photoNumber = Number.isInteger(n) && n >= 1 && n <= 99999 ? n : undefined;
     const result = await inspectionsService.uploadPhoto(
       file.buffer,
       file.mimetype,
@@ -180,6 +210,7 @@ export const inspectionsController = {
       sectionKey,
       jobNo,
       photoId,
+      photoNumber,
     );
     logSubmit(
       'photo_uploaded',

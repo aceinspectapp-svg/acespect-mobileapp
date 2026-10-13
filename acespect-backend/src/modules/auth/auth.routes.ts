@@ -29,7 +29,7 @@ router.post('/refresh', refreshLimiter, validate(refreshSchema), authController.
 router.post('/logout', validate(logoutSchema), authController.logout);
 
 // MFA (REQ-AUT-002)
-router.post('/mfa/verify', authLimiter, validate(mfaVerifySchema), authController.mfaVerify);
+router.post('/mfa/verify', loginByAddress, validate(mfaVerifySchema), authController.mfaVerify);
 router.post('/mfa/enroll/start', authLimiter, authController.mfaEnrollStartLogin);
 router.post('/mfa/enroll/complete', authLimiter, validate(mfaVerifySchema), authController.mfaEnrollCompleteLogin);
 
@@ -43,8 +43,8 @@ router.post('/password/reset', authLimiter, validate(resetPasswordSchema), authC
 
 // SSO (REQ-AUT-006): existing accounts only
 router.get('/sso/config', authController.ssoConfig);
-router.post('/sso/google', authLimiter, validate(ssoSchema), authController.ssoGoogle);
-router.post('/sso/microsoft', authLimiter, validate(ssoSchema), authController.ssoMicrosoft);
+router.post('/sso/google', loginByAddress, validate(ssoSchema), authController.ssoGoogle);
+router.post('/sso/microsoft', loginByAddress, validate(ssoSchema), authController.ssoMicrosoft);
 
 // Protected.
 router.post('/password/change', requireAuth, validate(changePasswordSchema), authController.changePassword);

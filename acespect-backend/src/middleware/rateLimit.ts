@@ -50,6 +50,22 @@ const tooMany = { error: { message: 'Too many requests -- please wait a few minu
  * Tight limiter for credential endpoints (login/register/password reset/invitations/MFA) to blunt brute-force and
  * credential-stuffing. Counted per address AND per account (or per one-time token), so a shared office connection does not share it.
  */
+export const loginByAccount = rateLimit({
+  ...base,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => `${req.ip}|${String((req.body as { email?: unknown })?.email ?? '').trim().toLowerCase()}`,
+  handler: refuse('Too many failed sign-in attempts for this account.'),
+});
+export const loginByAddress = rateLimit({
+  ...base,
+  limit: 80,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => `${req.ip}`,
+  handler: refuse('Too many failed sign-in attempts from this network.'),
+});
+
+/** The rest of the credential endpoints (sign-up, password reset, invitations): tight, by address. */
 export const authLimiter = rateLimit({
   windowMs: WINDOW_MS,
   max: 20,

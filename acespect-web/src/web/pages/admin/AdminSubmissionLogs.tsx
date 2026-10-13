@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { RefreshCw, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { api } from "../../api";
-import type { SubmissionLogEntry } from "../../api";
+import type { SubmissionHealth, SubmissionLogEntry } from "../../api";
 import { PageShell, TableCard, StatusBadge, GhostBtn } from "../../components/WebLayout";
 
 const EVENT_META: Record<SubmissionLogEntry["event"], { label: string; color: string; bg: string }> = {
@@ -12,6 +12,8 @@ const EVENT_META: Record<SubmissionLogEntry["event"], { label: string; color: st
   finalized: { label: "Finalized", color: "#7c3aed", bg: "#faf5ff" },
   photo_uploaded: { label: "Photo Uploaded", color: "#ca8a04", bg: "#fefce8" },
   rejected: { label: "Rejected", color: "#dc2626", bg: "#fef2f2" },
+  failed: { label: "Server error", color: "#b91c1c", bg: "#fee2e2" },
+  warning: { label: "Warning", color: "#b45309", bg: "#fffbeb" },
 };
 
 const EVENT_OPTIONS: { key: string; label: string }[] = [
@@ -22,6 +24,8 @@ const EVENT_OPTIONS: { key: string; label: string }[] = [
   { key: "finalized", label: "Finalized" },
   { key: "photo_uploaded", label: "Photo Uploaded" },
   { key: "rejected", label: "Rejected" },
+  { key: "failed", label: "Server error" },
+  { key: "warning", label: "Warning" },
 ];
 
 function formatTime(iso: string): string {
@@ -33,6 +37,83 @@ function formatTime(iso: string): string {
     second: "2-digit",
   });
 }
+
+/** Is email set up on the server? Alerts about failed or incomplete submissions are sent by email, so this shows the state and lets an admin send a test. */
+function MailPanel() {
+  const [st, setSt] = useState<{ configured: boolean; from: string; host: string | null; recipients: string[]; customRecipients: boolean } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.getMailStatus().then(setSt).catch(() => undefined); }, []);
+  if (!st) return null;
+  return (
+    <div style={{ ...card, borderColor: st.configured ? "#bbf7d0" : "#fecaca", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ flex: 1, minWidth: "240px", fontSize: "12px", color: "#374151" }}>
+        <strong style={{ color: st.configured ? "#15803d" : "#b91c1c" }}>Email alerts: {st.configured ? "set up" : "NOT set up"}</strong>
+        {st.configured
+          ? ` — sent from ${st.from} through ${st.host}.`
+          : " — alerts are recorded here but nobody is emailed. Set SMTP_URL (and MAIL_FROM) on the server."}
+        <div style={{ marginTop: "3px", color: "#64748b" }}>
+          Alerts go to: {st.recipients.length ? st.recipients.join(", ") : "nobody (no active admin accounts)"}{st.customRecipients ? "" : " (the admin accounts' own email addresses; set ALERT_EMAILS on the server to use others)"}.
+        </div>
+      </div>
+      {msg && <span style={{ fontSize: "12px", color: msg.ok ? "#15803d" : "#b91c1c", maxWidth: "420px" }}>{msg.text}</span>}
+      <GhostBtn
+        onClick={async () => {
+          setBusy(true); setMsg(null);
+          try {
+            const r = await api.sendTestMail();
+            setMsg(r.result === "SENT" ? { ok: true, text: `Test email sent to ${r.to}. Check that inbox (and spam).` } : { ok: false, text: r.error ?? (r.result === "SKIPPED" ? "Email is not set up on the server." : "Sending failed.") });
+          } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : "Could not send" }); }
+          setBusy(false);
+        }}
+      >
+        {busy ? "Sending…" : "Send test email"}
+      </GhostBtn>
+    </div>
+  );
+}
+
+/** What looks wrong right now: submissions that came in incomplete, Egnyte folders that need a look, and photos whose inspection never arrived. */
+function HealthPanel() {
+  const [health, setHealth] = useState<SubmissionHealth | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const navigate = useNavigate();
+  useEffect(() => { api.getSubmissionHealth().then(setHealth).catch((e) => setErr(e instanceof Error ? e.message : "Could not load")); }, []);
+  if (err) return <div style={{ ...card, color: "#dc2626" }}>Could not load submission health: {err}</div>;
+  if (!health) return null;
+  const clean = health.flagged.length === 0 && health.orphanUploads.length === 0;
+  return (
+    <div style={{ ...card, borderColor: clean ? "#bbf7d0" : "#fde68a" }}>
+      <div style={{ fontWeight: 700, fontSize: "13px", color: "#1a2a4a", marginBottom: "6px" }}>
+        Needs attention {clean ? "— nothing right now" : `— ${health.flagged.length} inspection${health.flagged.length === 1 ? "" : "s"}, ${health.orphanUploads.length} upload${health.orphanUploads.length === 1 ? "" : "s"} without an inspection`}
+      </div>
+      {health.flagged.map((f) => (
+        <div key={f.id} style={{ display: "flex", gap: "10px", padding: "6px 0", borderTop: "1px solid #f1f5f9", fontSize: "12px", alignItems: "baseline" }}>
+          <button onClick={() => navigate(`/admin/inspections/${f.id}`)} style={{ ...linkBtn, minWidth: "96px" }}>{f.jobNo || f.id.slice(0, 8)}</button>
+          <span style={{ color: "#94a3b8", minWidth: "120px" }}>{formatTime(f.createdAt)} · {f.inspector}</span>
+          <span style={{ flex: 1, color: "#374151" }}>{f.reasons.join(" ")}</span>
+        </div>
+      ))}
+      {health.orphanUploads.length > 0 && (
+        <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: "1px solid #e5e7eb" }}>
+          <div style={{ fontSize: "12px", fontWeight: 600, color: "#92400e", marginBottom: "4px" }}>
+            Photos uploaded to Egnyte whose inspection never arrived (the phone uploaded them, but the submission did not land — the full inspection may still be waiting in that phone's sync queue):
+          </div>
+          {health.orphanUploads.map((o) => (
+            <div key={o.draftId} style={{ display: "flex", gap: "10px", fontSize: "12px", padding: "3px 0", color: "#374151" }}>
+              <code style={{ minWidth: "96px" }}>{o.draftId.slice(0, 8)}…</code>
+              <span style={{ minWidth: "120px", color: "#94a3b8" }}>{formatTime(o.lastAt)}</span>
+              <span>{o.photos} photo{o.photos === 1 ? "" : "s"} · {o.sections.join(", ")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const card: React.CSSProperties = { background: "white", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "12px 16px", marginBottom: "16px" };
+const linkBtn: React.CSSProperties = { background: "none", border: "none", padding: 0, color: "#2563eb", fontWeight: 600, cursor: "pointer", textAlign: "left", fontSize: "12px" };
 
 /**
  * Admin-only troubleshooting view of acespect-backend's SubmissionLogEntry
@@ -81,6 +162,8 @@ export function AdminSubmissionLogs() {
         </GhostBtn>
       }
     >
+      <MailPanel />
+      <HealthPanel />
       <div style={{ display: "flex", gap: "10px", marginBottom: "16px", flexWrap: "wrap", alignItems: "center" }}>
         <select value={event} onChange={(e) => setEvent(e.target.value)} style={selectStyle}>
           {EVENT_OPTIONS.map((o) => (

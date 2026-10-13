@@ -28,7 +28,7 @@ const damageSchema = z.object({
 });
 
 /** One filled-in section of the inspection form. */
-const sectionSchema = z.object({
+export const sectionSchema = z.object({
   key: z.string().trim().min(1).max(120),
   name: z.string().trim().min(1).max(200),
   icon: z.string().max(16).default(''),
@@ -46,6 +46,22 @@ const sectionSchema = z.object({
  * Structured inspection submission from the mobile app. Top-level job fields +
  * the filled sections. `payload` is kept optional for the AI review pipeline.
  */
+/**
+ * One finished (or partly finished) section, saved to the server while the inspector is still working, so the server already holds
+ * the inspection when "Submit" is pressed. Carries the job's top-level fields too, so the first call can create the inspection.
+ */
+export const syncSectionSchema = z.object({
+  inspectionType: z.string().trim().min(1).max(120),
+  propertyType: z.string().trim().min(1).max(120),
+  jobNo: z.string().max(120).optional(),
+  address: z.string().max(300).optional(),
+  suburb: z.string().max(200).optional(),
+  client: z.string().max(300).optional(),
+  date: z.string().max(40).optional(),
+  section: sectionSchema,
+});
+export type SyncSectionInput = z.infer<typeof syncSectionSchema>;
+
 export const submitInspectionSchema = z.object({
   /** Mobile's own draft-local id, generated when the inspection starts (well
    *  before submit) so photos captured along the way can already be
@@ -66,6 +82,10 @@ export const submitInspectionSchema = z.object({
   overallProgress: z.number().int().min(0).max(100).optional(),
 
   sections: z.array(sectionSchema).max(50).default([]),
+
+  /** What the phone believes it is sending (sections other than Job Information, and distinct uploaded photos): the server answers with
+   *  what it actually stored, and both sides raise an alarm if they differ. Optional so older app builds keep working. */
+  expected: z.object({ sections: z.number().int().min(0), photos: z.number().int().min(0) }).optional(),
 
   /** Set when submitting a Post-Dilapidation job the inspector picked up from
    *  their assigned list (GET /inspections/assigned) -- the id of the

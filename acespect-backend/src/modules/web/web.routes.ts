@@ -19,6 +19,7 @@ router.patch(
   validate(inspectionUpdateSchema),
   webController.updateInspection,
 );
+router.post('/inspections/:id/approve-all', requireAuth, reviewers, webController.approveAll);
 router.post('/inspections/:id/egnyte/resolve', requireAuth, reviewers, webController.resolveEgnyte);
 router.patch(
   '/sections/:id',
@@ -35,5 +36,8 @@ router.patch(
   webController.updateDamage,
 );
 router.get('/submission-logs', requireAuth, admins, webController.listSubmissionLogs);
+router.get('/mail-status', requireAuth, admins, webController.mailStatus);
+router.post('/mail-test', requireAuth, admins, webController.mailTest);
+router.get('/submission-health', requireAuth, admins, webController.submissionHealth);
 
 export const webRouter = router;

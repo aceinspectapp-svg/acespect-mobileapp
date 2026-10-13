@@ -18,6 +18,9 @@ export interface DraftSnapshot {
    *  the draft, distinct from the long-lived opportunistic cache below, so a
    *  resumed draft keeps rendering the exact version it started with. */
   templates: Record<string, ActiveTemplate>;
+  /** Photo numbers given so far in this inspection (see photoNumbers.ts). */
+  photoNumbers?: Record<string, number>;
+  photoSeq?: number;
 }
 
 export interface QueuedSubmission {

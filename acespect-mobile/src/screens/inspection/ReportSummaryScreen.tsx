@@ -20,7 +20,7 @@ import { getSectionGroupsForProperty } from '../../constants/inspectionSections'
 import { INSPECTION_TYPES } from '../../constants/inspectionData';
 import { AppScreenProps } from '../../navigation/types';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
-import { runSubmission, enqueueSubmission } from '../../services/syncManager';
+import { runSubmission, enqueueSubmission, receiptMatches } from '../../services/syncManager';
 import { JobSetupData } from '../../types/jobSetup';
 
 const PROPERTY_LABELS: Record<string, string> = {
@@ -125,6 +125,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
   const [signed, setSigned] = useState(false);
   const draft = useInspectionDraft();
   const [submitting, setSubmitting] = useState(false);
+  const startedRef = useRef(false);
   const [submitStatus, setSubmitStatus] = useState('');
 
   // `route.params.data` has been seen arriving undefined here -- every
@@ -176,7 +177,9 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
   const isOnline = net.isInternetReachable ?? net.isConnected ?? false;
 
   const onGenerate = async () => {
-    if (!canSubmit || submitting) return;
+    // A second tap (or one made after a failed attempt cleared the draft) must never send a blank inspection under this job number.
+    if (!canSubmit || submitting || startedRef.current) return;
+    startedRef.current = true;
     setSubmitting(true);
 
     // Build the structured payload from the section draft once, with photos
@@ -188,6 +191,17 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
     // one reconstructed from scratch.
     const inspectionId = draft.getFolderId();
     const payload = draft.buildPayload((u) => u);
+    // Nothing but Job Information in the draft: there is no inspection to send. (This happened when a failed attempt had already moved the
+    // inspection into the sync queue and cleared the draft, and the Submit button was pressed again: a blank one was saved under the same job.)
+    if (!payload.sections.some((s) => s.key !== 'job-info')) {
+      startedRef.current = false;
+      setSubmitting(false);
+      Alert.alert(
+        'Nothing to submit',
+        'No inspection sections are saved on this device. If the inspection was already sent, or is waiting in the sync queue (the orange banner on the first screen), it does not need to be submitted again.',
+      );
+      return;
+    }
     // Reuse the same id photos get uploaded under, so the created row's
     // Egnyte folder matches without needing anything moved.
     payload.id = inspectionId;
@@ -233,9 +247,10 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
       draft.reset();
       setSubmitting(false);
       Alert.alert(
-        'Saved on this device',
-        "No connection right now — this inspection will upload automatically once you're back online.",
+        'NOT SENT YET — saved on this device',
+        "No connection right now. This inspection has NOT reached the office. It will upload automatically once you're back online; the orange banner on the first screen shows it until it has.",
         [{ text: 'OK', onPress: goHome }],
+        { cancelable: false },
       );
       return;
     }
@@ -243,10 +258,14 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
     try {
       setSubmitStatus(payload.sections.some((s) => (s.photos?.length ?? 0) > 0) ? 'Uploading photos…' : 'Saving inspection…');
       const res = await runSubmission(payload);
+      const ok = receiptMatches(payload, res);
       Alert.alert(
-        'Saved to your dashboard',
-        `Inspection saved as a draft (ref ${res.inspectionId.slice(0, 8)}…). Review and edit it on your dashboard, then finalize it to send for review.`,
+        ok ? 'Sent ✓' : 'Sent — please check',
+        ok
+          ? `The server confirmed ${res.receipt!.sections} section${res.receipt!.sections === 1 ? '' : 's'} and ${res.receipt!.photos} photo${res.receipt!.photos === 1 ? '' : 's'} (ref ${res.inspectionId.slice(0, 8)}…). Review it on your dashboard, then finalize it to send for review.`
+          : `The server saved the inspection (ref ${res.inspectionId.slice(0, 8)}…) but its copy may be incomplete${res.receipt && payload.expected ? ` (sent ${payload.expected.sections} sections / ${payload.expected.photos} photos, stored ${res.receipt.sections} / ${res.receipt.photos})` : ''}. The office has been told; open it on your dashboard to check.`,
         [{ text: 'OK', onPress: () => { draft.reset(); goHome(); } }],
+        { cancelable: false },
       );
     } catch (err) {
       // A live attempt failed partway (e.g. connection dropped mid-upload) --
@@ -256,9 +275,11 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
       draft.reset();
       const e = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
       Alert.alert(
-        'Saved on this device',
-        `Couldn't reach the server (${e?.response?.data?.error?.message ?? e?.message ?? 'connection issue'}) — this inspection will upload automatically once you're back online.`,
+        'NOT SENT YET — saved on this device',
+        `The inspection did not reach the server (${e?.response?.data?.error?.message ?? e?.message ?? 'connection issue'}). It is kept safely on this phone and will retry automatically; the orange banner on the first screen shows it until it has been sent. Do not submit it again.`,
         [{ text: 'OK', onPress: goHome }],
+        // Tapping outside the box must not dismiss it: staying on this screen leaves Submit pressable on an already-cleared draft.
+        { cancelable: false },
       );
     } finally {
       setSubmitting(false);

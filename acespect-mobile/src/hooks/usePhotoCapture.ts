@@ -7,6 +7,7 @@ import { CapturedPhoto } from '../types/photo';
 import { database } from '../db';
 import { persistPhoto } from '../db/photoRepo';
 import { useInspectionDraft } from '../context/InspectionDraftContext';
+import { numberPhoto } from '../services/photoNumbers';
 
 /**
  * Camera + gallery capture via the OS pickers (works in Expo Go).
@@ -121,6 +122,7 @@ export function usePhotoCapture() {
       });
       if (result.canceled || !result.assets?.length) return null;
       const photos = toCapturedPhotos(result.assets, opts);
+      photos.forEach((p) => numberPhoto(p.uri)); // photo 1, 2, 3 ... in the order taken
       await register(photos, opts);
       return photos;
     },
@@ -147,6 +149,7 @@ export function usePhotoCapture() {
       });
       if (result.canceled || !result.assets?.length) return null;
       const photos = toCapturedPhotos(result.assets, opts);
+      photos.forEach((p) => numberPhoto(p.uri)); // in the order they were picked
       await register(photos, opts);
       return photos;
     },

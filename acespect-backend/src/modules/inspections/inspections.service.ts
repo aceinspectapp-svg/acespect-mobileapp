@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { reviewQueue, reviewJobKey } from '../../lib/queue';
-import { SubmitInspectionInput, UpdateInspectionInput } from './inspections.schemas';
+import { SubmitInspectionInput, SyncSectionInput, UpdateInspectionInput } from './inspections.schemas';
 
 const SEC_STATUS: Record<string, 'COMPLETE' | 'PARTIAL' | 'PENDING'> = {
   complete: 'COMPLETE',
@@ -46,7 +46,62 @@ function sectionCreateData(s: SubmitInspectionInput['sections'][number]) {
  * went straight to SUBMITTED and into the review queue, leaving no chance to
  * correct a mistake.)
  */
+/**
+ * Save ONE section of an inspection (creating the inspection on the first call). This is what keeps the server holding the inspection
+ * while the inspector works: if the phone is lost or the final submit fails, everything up to the last saved section is already here.
+ * Saving the same section again replaces it, so retries are safe.
+ */
+async function syncSection(inspectorId: string, id: string, input: SyncSectionInput) {
+  const existing = await prisma.inspection.findUnique({ where: { id }, select: { id: true, inspectorId: true, status: true, jobNo: true, egnyteStatus: true } });
+  if (existing && existing.inspectorId !== inspectorId) throw ApiError.forbidden('You can only change your own inspections');
+  if (existing && existing.status !== 'DRAFT') throw new ApiError(409, 'This inspection has already been sent for review', 'NOT_A_DRAFT');
+
+  const top = {
+    inspectionType: input.inspectionType,
+    propertyType: input.propertyType,
+    ...(input.jobNo !== undefined ? { jobNo: input.jobNo } : {}),
+    ...(input.address !== undefined ? { address: input.address } : {}),
+    ...(input.suburb !== undefined ? { suburb: input.suburb } : {}),
+    ...(input.client !== undefined ? { client: input.client } : {}),
+    ...(input.date ? { date: new Date(input.date) } : {}),
+  };
+  let created = false;
+  if (!existing) {
+    try {
+      await prisma.inspection.create({ data: { id, inspectorId, status: 'DRAFT', ...top } });
+      created = true;
+    } catch (e) {
+      if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')) throw e; // another save created it a moment ago: carry on as an update
+    }
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.section.deleteMany({ where: { inspectionId: id, key: input.section.key } });
+    await tx.inspection.update({ where: { id }, data: { ...top, sections: { create: sectionCreateData(input.section) } } });
+  });
+  // The photo folder is placed once, when the inspection is first created or its job number changes -- not on every section.
+  if (input.jobNo && (created || existing?.jobNo !== input.jobNo || !existing?.egnyteStatus)) await settleEgnyteFolder(id, input.jobNo);
+  return { inspectionId: id, ...(await receiptFor(id)) };
+}
+
+/** What was actually stored for an inspection: its sections (other than Job Information) and the distinct uploaded photos they reference. */
+export async function receiptFor(inspectionId: string): Promise<{ sections: number; photos: number }> {
+  const secs = await prisma.section.findMany({ where: { inspectionId }, select: { key: true, answers: true, photos: true, damages: { select: { photos: true } } } });
+  const ids = new Set<string>();
+  for (const s of secs) for (const m of JSON.stringify([s.answers, s.photos, s.damages]).matchAll(/\/api\/v1\/media\/([0-9a-f-]{36})/gi)) ids.add(m[1]!.toLowerCase());
+  const found = ids.size ? await prisma.photo.count({ where: { id: { in: [...ids] } } }) : 0;
+  return { sections: secs.filter((s) => s.key !== 'job-info').length, photos: found };
+}
+
 async function submit(inspectorId: string, input: SubmitInspectionInput) {
+  // A blank (Job-Information-only) submission for a job that already has a real inspection from this inspector is a leftover, not a new
+  // inspection: refuse it, so it cannot sit beside -- or stand in for -- the real one.
+  if (input.jobNo && !input.sections.some((s) => s.key !== 'job-info')) {
+    const real = await prisma.inspection.findFirst({
+      where: { inspectorId, jobNo: { equals: input.jobNo, mode: 'insensitive' }, createdAt: { gte: new Date(Date.now() - 14 * 24 * 3600 * 1000) }, sections: { some: { key: { not: 'job-info' } } } },
+      select: { id: true },
+    });
+    if (real) throw new ApiError(409, `An inspection for ${input.jobNo} with real content already exists; this blank one was not saved.`, 'BLANK_DUPLICATE');
+  }
   const data = {
     inspectionType: input.inspectionType,
     propertyType: input.propertyType,
@@ -62,26 +117,29 @@ async function submit(inspectorId: string, input: SubmitInspectionInput) {
     sections: { create: input.sections.map(sectionCreateData) },
   };
 
-  if (input.assignmentId) {
-    // Picked up from the inspector's assigned list -- fill in the
-    // placeholder row admin created rather than creating a second
-    // Inspection, so baselineInspectionId (and the job metadata admin
-    // already set) stay on the one record.
-    const assignment = await prisma.inspection.findUnique({ where: { id: input.assignmentId } });
-    if (!assignment) throw ApiError.notFound('Assigned job not found');
-    if (assignment.inspectorId !== inspectorId) throw ApiError.forbidden('This job is not assigned to you');
-    const inspection = await prisma.inspection.update({ where: { id: input.assignmentId }, data });
-    await settleEgnyteFolder(input.assignmentId, input.jobNo);
+  // The inspection may already be on the server: the phone saves each section as it is finished (syncSection), and an assigned
+  // Post-Dilapidation job is a row admin made. Either way this call completes that one row -- it replaces its sections with the
+  // full set and never makes a second inspection. Sending it again (a retry after a lost reply) is harmless.
+  const targetId = input.assignmentId ?? input.id;
+  const existing = targetId ? await prisma.inspection.findUnique({ where: { id: targetId }, select: { id: true, inspectorId: true, status: true } }) : null;
+  if (input.assignmentId && !existing) throw ApiError.notFound('Assigned job not found');
+  if (existing && existing.inspectorId !== inspectorId) throw ApiError.forbidden(input.assignmentId ? 'This job is not assigned to you' : 'You can only change your own inspections');
+  if (existing && existing.status !== 'DRAFT') {
+    // Already finalised: this is a retry of something that has already arrived. Leave it exactly as it is.
+    return { inspection: await prisma.inspection.findUniqueOrThrow({ where: { id: existing.id } }) };
+  }
+  if (existing) {
+    const { sections: _sections, ...fields } = data;
+    const inspection = await prisma.$transaction(async (tx) => {
+      await tx.section.deleteMany({ where: { inspectionId: existing.id } });
+      return tx.inspection.update({ where: { id: existing.id }, data: { ...fields, sections: data.sections } });
+    });
+    await settleEgnyteFolder(existing.id, input.jobNo);
     return { inspection };
   }
 
   const inspection = await prisma.inspection.create({
-    // A client-supplied id (mobile's draft-local id, generated at the start
-    // of the inspection) is what its photos were already uploaded under --
-    // using the same id here is what makes those Egnyte folders line up
-    // with this row instead of needing every photo moved/renamed at submit
-    // time. Falls back to Prisma's own uuid() default when absent (e.g. a
-    // web-created draft).
+    // A client-supplied id (the phone's draft id, made at the start of the inspection) is what its photos were uploaded under.
     data: { ...data, inspectorId, ...(input.id ? { id: input.id } : {}) },
   });
   // The folder was created under that draft-local id the moment the first
@@ -286,10 +344,11 @@ async function uploadPhoto(
   sectionKey?: string,
   jobNo?: string,
   photoId?: string,
+  photoNumber?: number,
 ) {
   const { uploadPhoto: store } = await import('../../lib/storage');
   const ext = (originalName.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-  return store(buffer, contentType || 'image/jpeg', ext, inspectionId, sectionKey, undefined, undefined, { jobNo, photoId });
+  return store(buffer, contentType || 'image/jpeg', ext, inspectionId, sectionKey, undefined, undefined, { jobNo, photoId, photoNumber });
 }
 
 /**
@@ -306,6 +365,7 @@ async function getSectionPhotos(sectionId: string): Promise<{ name: string; phot
 }
 
 export const inspectionsService = {
+  syncSection,
   submit,
   update,
   finalize,

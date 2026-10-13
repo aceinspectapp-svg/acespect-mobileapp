@@ -14,6 +14,22 @@ function transport(): Transporter {
 
 export type MailResult = 'SENT' | 'SKIPPED' | 'FAILED';
 
+/** Why the last send failed, so the admin "Send test email" button can say more than "failed". Never contains the password. */
+export let lastMailError: string | null = null;
+
+/** What the admin page shows: whether email is set up, from where, through which server (the address only, never the credentials). */
+export function mailStatus(): { configured: boolean; from: string; host: string | null } {
+  let host: string | null = null;
+  try { if (env.SMTP_URL) { const u = new URL(env.SMTP_URL); host = `${u.hostname}${u.port ? ':' + u.port : ''}`; } } catch { host = 'unreadable SMTP_URL'; }
+  return { configured: !!env.SMTP_URL, from: env.MAIL_FROM, host };
+}
+
+/** Checks the connection and sign-in to the mail server without sending anything. Returns null when fine, else the reason. */
+export async function verifyMail(): Promise<string | null> {
+  if (!isMailConfigured()) return 'No mail server is set up (SMTP_URL is empty).';
+  try { await transport().verify(); return null; } catch (err) { return err instanceof Error ? err.message : String(err); }
+}
+
 /**
  * Send an email. With no SMTP_URL configured the message is skipped (not an
  * error), so every flow still works with in-app notifications only.
@@ -28,10 +44,12 @@ export async function sendMail(to: string, subject: string, text: string, html?:
   if (!isMailConfigured()) return 'SKIPPED';
   try {
     await transport().sendMail({ from: env.MAIL_FROM, to, subject, text, html });
+    lastMailError = null;
     return 'SENT';
   } catch (err) {
+    lastMailError = err instanceof Error ? err.message : String(err);
     // eslint-disable-next-line no-console
-    console.warn('[mailer] send failed', err instanceof Error ? err.message : err);
+    console.warn('[mailer] send failed', lastMailError);
     return 'FAILED';
   }
 }

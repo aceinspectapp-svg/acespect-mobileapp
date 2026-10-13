@@ -66,6 +66,8 @@ const schema = z.object({
   // Empty SMTP_URL = email is skipped (in-app notifications still work).
   // Example: smtp://user:pass@smtp.example.com:587
   SMTP_URL: z.string().default(''),
+  // Who is emailed about failed or incomplete submissions (comma separated). Empty = every active admin account's own email.
+  ALERT_EMAILS: z.string().default(''),
   MAIL_FROM: z.string().default('ACE SPECT <no-reply@acespect.app>'),
   // Optional SMS gateway for Safety Hazard alerts: a webhook that accepts
   // POST { to, message }. Empty = SMS skipped. Needs a sub-processor

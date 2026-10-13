@@ -400,8 +400,8 @@ export function SelectInspectionTypeScreen({
             <Text style={styles.pendingBannerText}>
               {syncing
                 ? `Syncing ${pendingQueue.length} inspection${pendingQueue.length === 1 ? '' : 's'}… this can take a minute`
-                : `${pendingQueue.length} inspection${pendingQueue.length === 1 ? '' : 's'} waiting to sync${
-                    waitingForWifi ? ' — waiting for Wi-Fi (tap to sync now anyway)' : ' — tap to retry now'
+                : `${pendingQueue.length} inspection${pendingQueue.length === 1 ? '' : 's'} NOT SENT YET${
+                    waitingForWifi ? ' — waiting for Wi-Fi (tap to send now anyway)' : ' — tap to send now'
                   } (long-press for details)`}
             </Text>
           </Pressable>

@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError';
 import { isProd } from '../config/env';
 import { isSubmissionPath, recordSubmissionEvent } from '../lib/submissionLog';
 import { logSecurityEvent } from '../lib/securityLog';
+import { alertAdmins } from '../lib/submissionAlerts';
 
 /** 404 for unmatched routes. */
 export function notFound(req: Request, _res: Response, next: NextFunction): void {
@@ -45,6 +46,21 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   if (status >= 500) {
     // eslint-disable-next-line no-console
     console.error('[error]', err);
+    // A failed photo upload or submit used to leave no trace outside the live server log, which scrolls away: keep it.
+    if (isSubmissionPath(req.originalUrl)) {
+      void recordSubmissionEvent({
+        event: 'failed',
+        inspectorId: req.user?.id ?? null,
+        statusCode: status,
+        message: (err instanceof Error ? err.message : 'Internal server error').slice(0, 400),
+        detail: { method: req.method, path: req.originalUrl.split('?')[0], ...(typeof req.body?.jobNo === 'string' ? { jobNo: req.body.jobNo } : {}) },
+      });
+      // One email per inspector per half hour, however many photos fail in a row.
+      void alertAdmins(`failed:${req.user?.id ?? 'anon'}:${Math.floor(Date.now() / (30 * 60_000))}`, 'A photo upload or submission failed on the server', [
+        `${req.method} ${req.originalUrl.split('?')[0]} answered ${status}: ${(err instanceof Error ? err.message : 'Internal server error').slice(0, 300)}`,
+        ...(typeof req.body?.jobNo === 'string' ? [`Job: ${req.body.jobNo}`] : []),
+      ], { inspectorId: req.user?.id ?? null });
+    }
   } else {
     // 4xx never used to be logged at all -- a mobile submission rejected by
     // validate() (schema mismatch, bad field) failed completely silently

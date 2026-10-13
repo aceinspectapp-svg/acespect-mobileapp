@@ -184,6 +184,15 @@ async function updateDamage(id: string, input: DamageUpdateInput) {
 }
 
 /** Status / notes / reviewer-assignment changes on an inspection. */
+/** Approve every section of an inspection in one go (the reviewer's "Approve All"). Sections already approved are left alone. */
+async function approveAllSections(id: string) {
+  const exists = await prisma.inspection.findUnique({ where: { id }, select: { id: true } });
+  if (!exists) throw ApiError.notFound('Inspection not found');
+  await prisma.section.updateMany({ where: { inspectionId: id, reviewStatus: { not: 'APPROVED' } }, data: { reviewStatus: 'APPROVED' } });
+  const fresh = await prisma.inspection.findUnique({ where: { id }, include: SECTIONS_INCLUDE });
+  return serializeInspection(fresh!);
+}
+
 /** Re-run the Egnyte folder placement for one inspection (after a failure, or once its job number was corrected). */
 async function resolveEgnyte(id: string) {
   const row = await prisma.inspection.findUnique({ where: { id }, select: { id: true, jobNo: true } });
@@ -239,7 +248,47 @@ async function listSubmissionLogs(filters: {
   return rows;
 }
 
+/**
+ * What an admin needs to see at a glance: submissions that look wrong, and photos that reached Egnyte for an inspection that
+ * never arrived. Both are derived from the data, so they stay true without anyone writing log lines.
+ */
+async function getSubmissionHealth() {
+  const since = new Date(Date.now() - 60 * 24 * 3600 * 1000);
+  const rows = await prisma.inspection.findMany({
+    where: { createdAt: { gte: since } },
+    orderBy: { createdAt: 'desc' },
+    take: 300,
+    select: {
+      id: true, jobNo: true, status: true, inspectionType: true, createdAt: true, egnyteStatus: true, egnyteMessage: true,
+      inspector: { select: { name: true, email: true } },
+      sections: { select: { key: true } },
+    },
+  });
+  const flagged = rows
+    .map((i) => {
+      const reasons: string[] = [];
+      // A draft with only Job Information is normal at the start of an inspection (the phone saves sections as they are finished);
+      // it is only a problem once submitted, or when it has sat that way for a day.
+      const stale = i.status !== 'DRAFT' || i.createdAt.getTime() < Date.now() - 24 * 3600 * 1000;
+      if (stale && !i.sections.some((s) => s.key !== 'job-info')) reasons.push('Only Job Information arrived: no sections or photos were saved with it.');
+      if (i.egnyteStatus === 'failed') reasons.push(`Egnyte folder not placed: ${i.egnyteMessage ?? 'unknown error'}`);
+      else if (i.egnyteStatus === 'needs_review') reasons.push(`Egnyte folder needs a look: ${i.egnyteMessage ?? ''}`);
+      else if (i.egnyteStatus === 'unassigned') reasons.push(`Photos are waiting for a valid job number: ${i.egnyteMessage ?? ''}`);
+      return { id: i.id, jobNo: i.jobNo ?? '', type: i.inspectionType, status: i.status, createdAt: i.createdAt.toISOString(), inspector: i.inspector.name ?? i.inspector.email, egnyteStatus: i.egnyteStatus, reasons };
+    })
+    .filter((x) => x.reasons.length > 0);
+
+  // Photos stored in a draft-id folder whose inspection never reached the server: the phone uploaded them, then the submission did not land.
+  const { findOrphanUploads } = await import('../../lib/submissionAlerts');
+  const orphans = await findOrphanUploads(0, 50);
+  return {
+    flagged,
+    orphanUploads: orphans.map((o) => ({ draftId: o.folder, photos: o.photos, firstAt: o.firstAt.toISOString(), lastAt: o.lastAt.toISOString(), sections: o.sections.filter(Boolean) })),
+  };
+}
+
 export const webService = {
+  getSubmissionHealth,
   listInspections,
   getInspection,
   listUsers,
@@ -248,5 +297,6 @@ export const webService = {
   updateDamage,
   updateInspection,
   resolveEgnyte,
+  approveAllSections,
   listSubmissionLogs,
 };

@@ -1,3 +1,4 @@
+import { prisma } from '../../lib/prisma';
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
@@ -41,6 +42,34 @@ export const webController = {
     if (!id) throw ApiError.badRequest('Inspection id is required');
     const inspection = await webService.updateInspection(id, req.body);
     res.status(200).json({ inspection });
+  }),
+
+  submissionHealth: asyncHandler(async (_req: Request, res: Response) => {
+    res.status(200).json(await webService.getSubmissionHealth());
+  }),
+
+  approveAll: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    res.status(200).json({ inspection: await webService.approveAllSections(id) });
+  }),
+
+  mailStatus: asyncHandler(async (_req: Request, res: Response) => {
+    const { mailStatus } = await import('../../lib/mailer');
+    const { env } = await import('../../config/env');
+    const recipients = env.ALERT_EMAILS.split(',').map((e) => e.trim()).filter(Boolean);
+    res.status(200).json({ ...mailStatus(), recipients: recipients.length ? recipients : (await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { email: true } })).map((u) => u.email), customRecipients: recipients.length > 0 });
+  }),
+
+  /** Sends a test email to the signed-in admin so the setup can be checked from the portal. */
+  mailTest: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { sendMail, verifyMail, lastMailError } = await import('../../lib/mailer');
+    const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { email: true } });
+    const problem = await verifyMail();
+    if (problem) return void res.status(200).json({ result: 'FAILED', error: problem });
+    const result = await sendMail(me!.email, '[ACE SPECT] Test email', 'This is a test email from the ACE SPECT server. If you can read it, email alerts are working.');
+    res.status(200).json({ result, to: me!.email, ...(result === 'FAILED' ? { error: lastMailError } : {}) });
   }),
 
   resolveEgnyte: asyncHandler(async (req: Request, res: Response) => {

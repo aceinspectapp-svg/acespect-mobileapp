@@ -175,16 +175,27 @@ export async function fetchWithRefresh(url: string, init: RequestInit): Promise<
 export async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const token = getToken();
   const client = getActiveClientId();
-  const res = await fetchWithRefresh(`${API_BASE}${path}`, {
-    ...opts,
-    headers: {
-      "Content-Type": "application/json",
-      "X-App-Client": "web",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(client ? { "X-Client-Id": client } : {}),
-      ...(opts.headers ?? {}),
-    },
-  });
+  // A short "too many requests" (HTTP 429) is waited out and retried (twice at most) instead of failing the action: the server says how long
+  // to wait. Longer waits, and sign-in attempts, are reported to the person instead.
+  let res: Response;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetchWithRefresh(`${API_BASE}${path}`, {
+      ...opts,
+      headers: {
+        "Content-Type": "application/json",
+        "X-App-Client": "web",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(client ? { "X-Client-Id": client } : {}),
+        ...(opts.headers ?? {}),
+      },
+    });
+    const waitSeconds = Number(res.headers.get("Retry-After"));
+    if (res.status === 429 && attempt < 2 && waitSeconds > 0 && waitSeconds <= 20 && !path.startsWith("/auth/login")) {
+      await new Promise((r) => setTimeout(r, waitSeconds * 1000));
+      continue;
+    }
+    break;
+  }
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     let code: string | undefined;
@@ -346,6 +357,9 @@ export const api = {
   /** A damage record's own photo-exclusion list -- see updateSection above for the same idea, one level down. */
   updateDamage: (id: string, patch: { excludedPhotoUrls?: string[]; photos?: string[] }) =>
     req<{ damage: unknown }>(`/web/damages/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+
+  /** Approve every section of an inspection in one request (the reviewer's "Approve All"). */
+  approveAllSections: (id: string) => req<{ inspection: Inspection }>(`/web/inspections/${id}/approve-all`, { method: "POST" }).then((d) => d.inspection),
 
   /** Re-run the Egnyte folder placement for one inspection (after a failure, or once its job number was corrected). */
   resolveEgnyte: (id: string) => req<{ inspection: Inspection }>(`/web/inspections/${id}/egnyte/resolve`, { method: "POST" }).then((d) => d.inspection),
@@ -601,6 +615,14 @@ export const api = {
   },
 
   /** Admin-only troubleshooting feed: the mobile submit/update/finalize/photo pipeline's own trail. See acespect-backend's SubmissionLogEntry. */
+  /** Admin-only: is outbound email (alerts, invitations, resets) set up on the server? */
+  getMailStatus: () => req<{ configured: boolean; from: string; host: string | null; recipients: string[]; customRecipients: boolean }>("/web/mail-status"),
+  /** Admin-only: sends a test email to the signed-in admin. */
+  sendTestMail: () => req<{ result: "SENT" | "SKIPPED" | "FAILED"; to?: string; error?: string | null }>("/web/mail-test", { method: "POST" }),
+
+  /** Admin-only: submissions that look wrong, and uploaded photos whose inspection never arrived. */
+  getSubmissionHealth: () => req<SubmissionHealth>("/web/submission-health"),
+
   getSubmissionLogs: (filters: { event?: string; jobNo?: string; inspectorId?: string; limit?: number } = {}) => {
     const params = new URLSearchParams();
     if (filters.event) params.set("event", filters.event);
@@ -611,9 +633,16 @@ export const api = {
   },
 };
 
+export interface SubmissionHealth {
+  /** Inspections that look wrong: only Job Information arrived, or the Egnyte folder needs attention. */
+  flagged: { id: string; jobNo: string; type: string; status: string; createdAt: string; inspector: string; egnyteStatus: string | null; reasons: string[] }[];
+  /** Photos that reached Egnyte for an inspection that never reached the server (the submission did not land). */
+  orphanUploads: { draftId: string; photos: number; firstAt: string; lastAt: string; sections: string[] }[];
+}
+
 export interface SubmissionLogEntry {
   id: string;
-  event: "received" | "saved" | "updated" | "finalized" | "photo_uploaded" | "rejected";
+  event: "received" | "saved" | "updated" | "finalized" | "photo_uploaded" | "rejected" | "failed" | "warning";
   inspector: { id: string; name: string | null; email: string } | null;
   inspectorId: string | null;
   inspectionId: string | null;
