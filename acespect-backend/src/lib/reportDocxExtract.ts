@@ -12,7 +12,8 @@
  *   { k: "img",   src, w, h, align }
  *   { k: "table", width, center, rows: [{ cells: [{ w, bg, blocks }], border }] }
  *   { k: "break" }
- * Run: { t, b, i, u, color, size (px), bg, href }
+ *   { k: "cover", ... }   the report's first page, read from the marks (data-cover) that components/CoverPage.tsx puts on its parts
+ * Run: { t, b, i, u, color, size (px), bg, href, ls (letter-spacing, px) }
  */
 export const REPORT_EXTRACT_SOURCE = String.raw`
 (() => {
@@ -45,6 +46,7 @@ export const REPORT_EXTRACT_SOURCE = String.raw`
       size: px(cs.fontSize),
       bg: isClear(cs.backgroundColor) ? null : cs.backgroundColor,
       upper: cs.textTransform === 'uppercase',
+      ls: px(cs.letterSpacing),
     };
   }
 
@@ -58,7 +60,7 @@ export const REPORT_EXTRACT_SOURCE = String.raw`
         let text = norm(node.textContent);
         if (!text) continue;
         if (style.upper) text = text.toUpperCase();
-        out.push({ t: text, b: style.b, i: style.i, u: style.u, color: style.color, size: style.size, bg: style.bg, href });
+        out.push({ t: text, b: style.b, i: style.i, u: style.u, color: style.color, size: style.size, bg: style.bg, href, ls: style.ls });
       } else if (node.nodeType === 1) {
         if (hidden(node)) continue;
         if (node.tagName === 'BR') { out.push({ t: '\n' }); continue; }
@@ -119,6 +121,50 @@ export const REPORT_EXTRACT_SOURCE = String.raw`
     return { k: 'img', src: el.currentSrc || el.src, w: rect.width, h: rect.height, border: boxOf(getComputedStyle(el)) };
   }
 
+  // The first page. It is drawn from CoverPage's own parts (marked data-cover) rather than from the generic walk below, which has no
+  // way to say "navy banner with a red edge" or "two columns with a rule under each row" -- the banner came out as white text on a white page.
+  function coverBlock(root) {
+    const one = (el, sel) => el.querySelector('[data-cover="' + sel + '"]');
+    const all = (el, sel) => [...el.querySelectorAll('[data-cover="' + sel + '"]')];
+    const para = (el) => (el ? paragraph(el, runsOf(el, { el, style: runStyle(el) })) : null);
+    const paras = (el) => { const l = []; if (el) blocksInto(el, l); return l.filter((b) => b.k === 'para'); };
+    const style = (el) => getComputedStyle(el);
+    const sides = (cs, prefix) => ({ t: px(cs[prefix + 'Top']), r: px(cs[prefix + 'Right']), b: px(cs[prefix + 'Bottom']), l: px(cs[prefix + 'Left']) });
+    const banner = one(root, 'banner');
+    const bs = style(banner);
+    const kicker = one(banner, 'kicker');
+    const rows = all(root, 'row');
+    const rowCs = rows.length ? style(rows[0]) : null;
+    const sig = one(root, 'signature');
+    return {
+      k: 'cover',
+      date: para(one(root, 'date')),
+      dateGap: px(style(one(root, 'date')).marginBottom),
+      clientLabel: para(one(one(root, 'client'), 'label')),
+      clientName: para(one(one(root, 'client'), 'value')),
+      clientNameGap: px(style(one(one(root, 'client'), 'value')).marginTop),
+      clientNotes: all(one(root, 'client'), 'note').map(para).filter(Boolean),
+      refs: all(root, 'ref').map((r) => ({ gap: px(style(r).marginTop), label: para(one(r, 'label')), value: para(one(r, 'value')), valueGap: px(style(one(r, 'value')).marginTop) })),
+      banner: {
+        bg: bs.backgroundColor,
+        edge: px(bs.borderRightWidth) > 0 ? { w: px(bs.borderRightWidth), color: bs.borderRightColor } : null,
+        pad: sides(bs, 'padding'),
+        marginTop: px(bs.marginTop),
+        marginBottom: px(bs.marginBottom),
+        kicker: para(kicker),
+        kickerOpacity: parseFloat(style(kicker).opacity),
+        title: para(one(banner, 'title')),
+        titleGap: px(style(one(banner, 'title')).marginTop),
+      },
+      rows: rows.map((r) => ({ label: para(one(r, 'row-label')), labelGap: px(style(one(r, 'row-label')).paddingTop), value: paras(one(r, 'row-value')) })),
+      rowPad: rowCs ? { t: px(rowCs.paddingTop), b: px(rowCs.paddingBottom) } : { t: 9, b: 9 },
+      rule: rowCs && px(rowCs.borderBottomWidth) > 0 ? { w: px(rowCs.borderBottomWidth), color: rowCs.borderBottomColor } : null,
+      // the label column and the gap after it (the grid's first column + its column-gap)
+      labelColumn: rows.length ? one(rows[0], 'row-value').getBoundingClientRect().left - rows[0].getBoundingClientRect().left : 180,
+      signature: sig ? { gap: px(style(sig).marginTop), name: para(one(sig, 'sig-name')), title: para(one(sig, 'sig-title')) } : null,
+    };
+  }
+
   const breaksBefore = (el) => ['page', 'always', 'left', 'right'].includes(getComputedStyle(el).breakBefore);
 
   // A row of side-by-side things (a flex row, a table row) becomes one table row; each child is a cell.
@@ -146,6 +192,8 @@ export const REPORT_EXTRACT_SOURCE = String.raw`
     const cs = getComputedStyle(el);
     if (breaksBefore(el) && list.length) list.push({ k: 'break' });
     const tag = el.tagName;
+
+    if (el.getAttribute('data-cover') === 'page') { list.push(coverBlock(el)); return; }
 
     if (tag === 'IMG') { const b = image(el); if (b) list.push(b); return; }
 
