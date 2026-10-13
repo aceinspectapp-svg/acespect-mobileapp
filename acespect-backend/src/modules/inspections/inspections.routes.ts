@@ -7,8 +7,8 @@ import { submitInspectionSchema, syncSectionSchema, updateInspectionSchema } fro
 
 const router = Router();
 
-// In-memory upload (buffer forwarded to Egnyte); 15 MB cap per photo.
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+// In-memory upload (buffer forwarded to Egnyte); 40 MB cap per photo (a 50-megapixel phone photo can pass 20 MB).
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024 } });
 
 router.post('/submit', requireAuth, validate(submitInspectionSchema), inspectionsController.submit);
 router.put('/:id/sync', requireAuth, validate(syncSectionSchema), inspectionsController.syncSection);

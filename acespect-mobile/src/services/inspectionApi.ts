@@ -1,5 +1,6 @@
 import * as Crypto from 'expo-crypto';
-import { api } from './apiClient';
+import type { AxiosRequestConfig } from 'axios';
+import { api, ensureFreshAccessToken, refreshAccessToken } from './apiClient';
 import type { SubmitPayload } from '../context/InspectionDraftContext';
 
 /**
@@ -26,30 +27,46 @@ export async function uploadPhoto(
   const rawExt = (name.split('.').pop() || 'jpg').toLowerCase();
   const mime = rawExt === 'jpg' ? 'image/jpeg' : `image/${rawExt}`;
 
-  const form = new FormData();
-  // React Native's FormData accepts { uri, name, type } for file parts.
-  form.append('photo', { uri, name, type: mime } as unknown as Blob);
-  if (opts?.inspectionId) form.append('inspectionId', opts.inspectionId);
-  if (opts?.sectionKey) form.append('sectionKey', opts.sectionKey);
-  // The job number lets the server file the photo straight into its batch / job folder in Egnyte.
-  if (opts?.jobNo) form.append('jobNo', opts.jobNo);
-  // The photo's number in this inspection (1, 2, 3 ...): it becomes the file's name in Egnyte.
-  if (opts?.photoNumber) form.append('photoNumber', String(opts.photoNumber));
-  if (opts?.inspectionId) form.append('photoId', await stablePhotoId(opts.inspectionId, opts.sectionKey, uri));
+  const photoId = opts?.inspectionId ? await stablePhotoId(opts.inspectionId, opts.sectionKey, uri) : undefined;
+  // A fresh FormData for every attempt: one that has already been sent cannot be sent again (that is what showed up as "Network Error").
+  const buildForm = (): FormData => {
+    const form = new FormData();
+    // React Native's FormData accepts { uri, name, type } for file parts.
+    form.append('photo', { uri, name, type: mime } as unknown as Blob);
+    if (opts?.inspectionId) form.append('inspectionId', opts.inspectionId);
+    if (opts?.sectionKey) form.append('sectionKey', opts.sectionKey);
+    // The job number lets the server file the photo straight into its batch / job folder in Egnyte.
+    if (opts?.jobNo) form.append('jobNo', opts.jobNo);
+    // The photo's number in this inspection (1, 2, 3 ...): it becomes the file's name in Egnyte.
+    if (opts?.photoNumber) form.append('photoNumber', String(opts.photoNumber));
+    if (photoId) form.append('photoId', photoId);
+    return form;
+  };
 
-  const { data } = await api.post<{ url: string }>('/inspections/photos', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    // The shared client's default (15s, apiClient.ts) is fine for small JSON
-    // calls but nowhere near enough for a full-resolution phone photo: the
-    // backend uploads it to Egnyte twice (compressed + full-quality
-    // original, storage.ts) before responding, and over a slow/tunnelled
-    // dev connection a single ~9MB photo has been measured taking 45s+.
-    // Without this override every upload of a real (not test-sized) photo
-    // would spuriously fail as a "Network Error" well before it was actually
-    // done -- not a flaky connection, just too short a clock for the payload.
-    timeout: 120000,
-  });
-  return data.url;
+  // Renew the sign-in first if it is about to run out (a long run of photos outlives a 15-minute sign-in), send, and if the sign-in still
+  // expired or the connection dropped, renew / wait and send again with a new form. Safe to repeat: the server keeps one copy per photoId.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await ensureFreshAccessToken();
+      const config: AxiosRequestConfig & { _noAutoRetry?: boolean } = {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        _noAutoRetry: true,
+        timeout: 180000,
+      };
+      const { data } = await api.post<{ url: string }>('/inspections/photos', buildForm(), config);
+      return data.url;
+    } catch (err) {
+      const status = (err as { response?: { status?: number } }).response?.status;
+      if (attempt >= 3) throw err;
+      if (status === 401) {
+        if (!(await refreshAccessToken())) throw err; // signed out for real: the app sends the person to sign in
+        continue;
+      }
+      const transient = status === undefined || status >= 500 || status === 429; // no reply at all (network / timeout), a server hiccup, or "slow down"
+      if (!transient) throw err;
+      await new Promise((r) => setTimeout(r, [2000, 6000, 15000][attempt]!));
+    }
+  }
 }
 
 export interface SubmitResult {

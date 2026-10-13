@@ -95,12 +95,22 @@ async function deleteLocalFile(uri: string): Promise<void> {
  */
 const photoCache = new Map<string, string>();
 
+/** Photos being sent right now: the background saver and the final submit can reach the same photo together, and it must only be sent once. */
+const photoInFlight = new Map<string, Promise<string>>();
+
 async function uploadAndForget(uri: string, opts: { inspectionId?: string; sectionKey?: string; jobNo?: string }): Promise<string> {
   const hit = photoCache.get(uri);
   if (hit) return hit;
-  const url = await uploadPhoto(uri, { ...opts, photoNumber: getPhotoNumber(uri) });
-  photoCache.set(uri, url);
-  return url;
+  const running = photoInFlight.get(uri);
+  if (running) return running;
+  const work = uploadPhoto(uri, { ...opts, photoNumber: getPhotoNumber(uri) })
+    .then((url) => {
+      photoCache.set(uri, url);
+      return url;
+    })
+    .finally(() => photoInFlight.delete(uri));
+  photoInFlight.set(uri, work);
+  return work;
 }
 
 /** Removes the local copies of photos that are safely on the server, once the inspection that holds them has been accepted. */

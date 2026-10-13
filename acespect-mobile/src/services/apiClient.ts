@@ -53,14 +53,42 @@ async function performRefresh(): Promise<string | null> {
   }
 }
 
+/** Renews the sign-in (one renewal shared by everything that asks at the same moment). Null when it cannot be renewed. */
+export function refreshAccessToken(): Promise<string | null> {
+  if (!refreshing) {
+    refreshing = performRefresh().finally(() => {
+      refreshing = null;
+    });
+  }
+  return refreshing;
+}
+
+/** Seconds until an access token expires (read from the token itself); 0 when it cannot be read. */
+function secondsLeft(token: string): number {
+  try {
+    const part = token.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/');
+    const exp = JSON.parse(globalThis.atob(part)).exp as number;
+    return exp - Date.now() / 1000;
+  } catch {
+    return 0;
+  }
+}
+
+/** Renews the sign-in BEFORE a long job (a photo upload) if it is about to run out, instead of finding out half way through. */
+export async function ensureFreshAccessToken(minSeconds = 180): Promise<void> {
+  const token = await tokenStorage.getAccessToken();
+  if (token && secondsLeft(token) < minSeconds) await refreshAccessToken();
+}
+
 api.interceptors.response.use(
   (res) => res,
   async (error: AxiosError) => {
     const original = error.config as
-      | (InternalAxiosRequestConfig & { _retry?: boolean })
+      | (InternalAxiosRequestConfig & { _retry?: boolean; _noAutoRetry?: boolean })
       | undefined;
 
-    if (error.response?.status === 401 && original && !original._retry) {
+    // `_noAutoRetry`: the caller renews the sign-in and re-sends by itself (a photo upload must rebuild its form data, which cannot be re-sent as is).
+    if (error.response?.status === 401 && original && !original._retry && !original._noAutoRetry) {
       original._retry = true;
       if (!refreshing) {
         refreshing = performRefresh().finally(() => {

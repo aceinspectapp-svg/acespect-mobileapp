@@ -39,6 +39,10 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
       code = 'DB_REQUEST_ERROR';
       message = 'Database request error';
     }
+  } else if ((err as { code?: string })?.code === 'LIMIT_FILE_SIZE') {
+    status = 413;
+    code = 'FILE_TOO_LARGE';
+    message = 'That photo is larger than 40 MB and cannot be uploaded.';
   } else if (err instanceof Error && !isProd) {
     message = err.message;
   }
