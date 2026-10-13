@@ -340,10 +340,11 @@ async function uploadPhoto(
   sectionKey?: string,
   jobNo?: string,
   photoId?: string,
+  photoNumber?: number,
 ) {
   const { uploadPhoto: store } = await import('../../lib/storage');
   const ext = (originalName.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-  return store(buffer, contentType || 'image/jpeg', ext, inspectionId, sectionKey, undefined, undefined, { jobNo, photoId });
+  return store(buffer, contentType || 'image/jpeg', ext, inspectionId, sectionKey, undefined, undefined, { jobNo, photoId, photoNumber });
 }
 
 /**

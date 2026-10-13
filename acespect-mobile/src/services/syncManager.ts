@@ -4,6 +4,7 @@ import type { SubmitPayload } from '../context/InspectionDraftContext';
 import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
 import { getSyncQueue, setSyncQueue, getWifiOnlySync, QueuedSubmission } from './offlineStorage';
 import { submitInspection, uploadPhoto, type SubmitResult } from './inspectionApi';
+import { getPhotoNumber, mergePhotoNumbers } from './photoNumbers';
 
 /**
  * Foreground-only sync: an inspection finished offline is queued here and
@@ -97,7 +98,7 @@ const photoCache = new Map<string, string>();
 async function uploadAndForget(uri: string, opts: { inspectionId?: string; sectionKey?: string; jobNo?: string }): Promise<string> {
   const hit = photoCache.get(uri);
   if (hit) return hit;
-  const url = await uploadPhoto(uri, opts);
+  const url = await uploadPhoto(uri, { ...opts, photoNumber: getPhotoNumber(uri) });
   photoCache.set(uri, url);
   return url;
 }
@@ -221,6 +222,7 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
   const inspectionId = payload.id;
   const jobNo = payload.jobNo;
   const urlByUri = photoCache;
+  mergePhotoNumbers(payload.photoNumbers); // a queued submission keeps the numbers its photos were given
 
   // Primary pass: walk each section's actual answer tree, so every
   // photos-type field (wherever it's nested) gets uploaded under a folder

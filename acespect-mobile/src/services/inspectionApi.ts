@@ -20,7 +20,7 @@ async function stablePhotoId(inspectionId: string, sectionKey: string | undefine
 
 export async function uploadPhoto(
   uri: string,
-  opts?: { inspectionId?: string; sectionKey?: string; jobNo?: string },
+  opts?: { inspectionId?: string; sectionKey?: string; jobNo?: string; photoNumber?: number },
 ): Promise<string> {
   const name = uri.split('/').pop() || 'photo.jpg';
   const rawExt = (name.split('.').pop() || 'jpg').toLowerCase();
@@ -33,6 +33,8 @@ export async function uploadPhoto(
   if (opts?.sectionKey) form.append('sectionKey', opts.sectionKey);
   // The job number lets the server file the photo straight into its batch / job folder in Egnyte.
   if (opts?.jobNo) form.append('jobNo', opts.jobNo);
+  // The photo's number in this inspection (1, 2, 3 ...): it becomes the file's name in Egnyte.
+  if (opts?.photoNumber) form.append('photoNumber', String(opts.photoNumber));
   if (opts?.inspectionId) form.append('photoId', await stablePhotoId(opts.inspectionId, opts.sectionKey, uri));
 
   const { data } = await api.post<{ url: string }>('/inspections/photos', form, {

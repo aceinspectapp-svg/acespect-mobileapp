@@ -176,10 +176,10 @@ export async function qcJobFolder(projectId: string): Promise<string> {
   return clash > 0 ? `${job}_${short}` : job;
 }
 
-function photoPath(id: string, inspectionId: string | undefined, sectionKey: string | undefined, suffix = '', tenantId?: string, jobFolder?: string, destination?: string): string {
+function photoPath(id: string, inspectionId: string | undefined, sectionKey: string | undefined, suffix = '', tenantId?: string, jobFolder?: string, destination?: string, name: string = id): string {
   // An inspector's inspection whose job number is known: {batch}/{job}/{section}/{photo} (see lib/egnyteJobFolders.ts).
-  if (destination && sectionKey) return `${destination}/${sectionFolderPath(sectionKey)}/${id}${suffix}`;
-  if (destination) return `${destination}/${id}${suffix}`;
+  if (destination && sectionKey) return `${destination}/${sectionFolderPath(sectionKey)}/${name}${suffix}`;
+  if (destination) return `${destination}/${name}${suffix}`;
   // Client files live under their own folder so one client's files are never mixed with another's; a QC project's files
   // sit under its job-number folder instead.
   const root = jobFolder
@@ -188,7 +188,7 @@ function photoPath(id: string, inspectionId: string | undefined, sectionKey: str
       ? `${env.EGNYTE_ROOT_FOLDER}/tenants/${safeSegment(tenantId)}`
       : env.EGNYTE_ROOT_FOLDER;
   if (inspectionId && sectionKey) {
-    return `${root}/${safeSegment(inspectionId)}/${sectionFolderPath(sectionKey)}/${id}${suffix}`;
+    return `${root}/${safeSegment(inspectionId)}/${sectionFolderPath(sectionKey)}/${name}${suffix}`;
   }
   return `${root}/inspections/${id}${suffix}`;
 }
@@ -358,7 +358,7 @@ export async function uploadPhoto(
   sectionKey?: string,
   tenantId?: string,
   jobFolder?: string,
-  opts: { jobNo?: string | null; photoId?: string } = {},
+  opts: { jobNo?: string | null; photoId?: string; photoNumber?: number } = {},
 ): Promise<UploadedPhoto & { folder?: { status: string; message?: string; path: string } }> {
   if (!isStorageEnabled() && !useDbStorage()) throw new Error('Photo storage is not configured');
 
@@ -392,14 +392,22 @@ export async function uploadPhoto(
   // and is moved at submit (settleInspectionFolder).
   const place = !tenantId && !jobFolder && inspectionId && opts.jobNo !== undefined ? await resolveInspectionDestination(opts.jobNo, inspectionId) : undefined;
   const destination = place?.path;
-  const storageKey = photoPath(id, inspectionId, sectionKey, '.jpg', tenantId, jobFolder, destination);
+  // The photo's number in its inspection is its file name (1.jpg, 2.jpg ...). If another photo already has that exact name in the same folder
+  // (a second inspection of the same job and section), the id is added so nothing is ever overwritten.
+  let name = id;
+  if (opts.photoNumber && !tenantId && !jobFolder) {
+    name = String(opts.photoNumber);
+    const taken = await prisma.photo.findFirst({ where: { storageKey: photoPath(id, inspectionId, sectionKey, '.jpg', tenantId, jobFolder, destination, name), id: { not: id } }, select: { id: true } });
+    if (taken) name = `${opts.photoNumber}-${id.slice(0, 8)}`;
+  }
+  const storageKey = photoPath(id, inspectionId, sectionKey, '.jpg', tenantId, jobFolder, destination, name);
   await uploadToEgnyte(storageKey, resized, 'image/jpeg');
 
   // Full-quality original, alongside the compressed copy above. Non-fatal:
   // every in-app view depends on the compressed copy having uploaded (which
   // already happened by this point), not this one.
   try {
-    await uploadToEgnyte(photoPath(id, inspectionId, sectionKey, `-original.${ext}`, tenantId, jobFolder, destination), buffer, contentType);
+    await uploadToEgnyte(photoPath(id, inspectionId, sectionKey, `-original.${ext}`, tenantId, jobFolder, destination, name), buffer, contentType);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('⚠️  Failed to store the full-quality original (compressed report copy still saved).', err);

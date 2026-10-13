@@ -95,6 +95,24 @@ async function main() {
     assert.ok(!folders.has(`${ROOT}/${draftA}`), 'no draft-id folder is made');
   });
 
+  await check('photos are named by their number in the inspection (1.jpg, 2.jpg ... with the original beside), and a clash never overwrites', async () => {
+    const draft = randomUUID();
+    const job = `V2601${String(10 + Math.floor(Math.random() * 89))}`; // a fresh job each run: the scratch database keeps earlier runs' photo rows
+    const p1 = await uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pci_description:street', undefined, undefined, { jobNo: job, photoId: randomUUID(), photoNumber: 1 });
+    const p2 = await uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pci_description:elevation', undefined, undefined, { jobNo: job, photoId: randomUUID(), photoNumber: 2 });
+    const p100 = await uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pci_description:street', undefined, undefined, { jobNo: job, photoId: randomUUID(), photoNumber: 100 });
+    const dir = `${ROOT}/V260101-V260200/${job}`;
+    assert.equal(p1.storageKey, `${dir}/pci_description/street/1.jpg`);
+    assert.equal(p2.storageKey, `${dir}/pci_description/elevation/2.jpg`);
+    assert.equal(p100.storageKey, `${dir}/pci_description/street/100.jpg`);
+    assert.ok(files.has(`${dir}/pci_description/street/1-original.jpg`));
+    // a second inspection of the same job and section starts numbering at 1 again: it must not replace photo 1
+    const again = await uploadPhoto(jpeg, 'image/jpeg', 'jpg', randomUUID(), 'pci_description:street', undefined, undefined, { jobNo: job, photoId: randomUUID(), photoNumber: 1 });
+    assert.notEqual(again.storageKey, p1.storageKey);
+    assert.match(again.storageKey, /\/street\/1-[0-9a-f]{8}\.jpg$/);
+    assert.ok(files.has(p1.storageKey), 'the first photo 1 is untouched');
+  });
+
   await check('sending the same photo again stores nothing new', async () => {
     const before = files.size; const writes = log.filter((l) => l.startsWith('POST content')).length;
     const again = await uploadPhoto(jpeg, 'image/jpeg', 'jpg', draftA, 'pp_description:street', undefined, undefined, { jobNo: 'VIC-260105', photoId });

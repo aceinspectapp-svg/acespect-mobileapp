@@ -4,6 +4,7 @@ import type { ActiveTemplate } from '../services/templateApi';
 import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
 import { DraftSnapshot, clearDraftSnapshot, saveDraftSnapshot } from '../services/offlineStorage';
 import { attachDraft, resetLiveSync, scheduleSectionSync } from '../services/liveSync';
+import { resetPhotoNumbers, restorePhotoNumbers, snapshotPhotoNumbers } from '../services/photoNumbers';
 
 /**
  * In-memory draft of the inspection being filled. Each section screen writes its
@@ -79,6 +80,8 @@ export interface SubmitPayload extends DraftTop {
    *  photo was already uploaded into along the way. */
   id?: string;
   sections: DraftSection[];
+  /** The number each photo file was given when it was taken (see services/photoNumbers.ts): it becomes the photo's name in Egnyte. */
+  photoNumbers?: Record<string, number>;
   /** What this phone believes it is sending (sections other than Job Information, distinct uploaded photos). The server answers with what it
    *  stored; the inspection is only treated as safely sent when both agree. */
   expected?: { sections: number; photos: number };
@@ -181,6 +184,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
         photos: photosRef.current,
         answers: answersRef.current,
         templates: templatesRef.current,
+        ...snapshotPhotoNumbers(),
       };
       void saveDraftSnapshot(snapshot);
     }, 800);
@@ -221,6 +225,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     templatesRef.current = {};
     answersRef.current = {};
     baselineSectionsRef.current = null;
+    resetPhotoNumbers();
     resetLiveSync();
     void clearDraftSnapshot();
   }, []);
@@ -231,6 +236,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     photosRef.current = snapshot.photos;
     answersRef.current = snapshot.answers;
     templatesRef.current = snapshot.templates;
+    restorePhotoNumbers(snapshot.photoNumbers, snapshot.photoSeq);
   }, []);
 
   const getActiveTemplate = useCallback(
@@ -299,6 +305,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
   const buildPayload = useCallback(
     (resolve: (uri: string) => string): SubmitPayload => ({
       ...topRef.current,
+      photoNumbers: snapshotPhotoNumbers().photoNumbers,
       sections: Object.values(sectionsRef.current)
         .sort((a, b) => a.order - b.order)
         .map((s) => {

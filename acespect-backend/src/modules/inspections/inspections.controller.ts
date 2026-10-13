@@ -200,6 +200,8 @@ export const inspectionsController = {
     // makes up from the photo) makes a repeated upload return the stored copy instead of saving a second one.
     const jobNo = typeof req.body.jobNo === 'string' ? req.body.jobNo : undefined;
     const photoId = typeof req.body.photoId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.body.photoId) ? req.body.photoId.toLowerCase() : undefined;
+    const n = Number(req.body.photoNumber);
+    const photoNumber = Number.isInteger(n) && n >= 1 && n <= 99999 ? n : undefined;
     const result = await inspectionsService.uploadPhoto(
       file.buffer,
       file.mimetype,
@@ -208,6 +210,7 @@ export const inspectionsController = {
       sectionKey,
       jobNo,
       photoId,
+      photoNumber,
     );
     logSubmit(
       'photo_uploaded',

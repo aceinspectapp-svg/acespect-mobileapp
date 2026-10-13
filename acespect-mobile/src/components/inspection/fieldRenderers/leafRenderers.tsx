@@ -7,6 +7,7 @@ import { ChipMultiSelect, ColorSelect, FieldLabel, PillSelect, PlainTextInput } 
 import { colors, radius, spacing } from '../../../theme';
 import { usePhotoCapture } from '../../../hooks/usePhotoCapture';
 import { PhotoAnnotator } from '../PhotoAnnotator';
+import { getPhotoNumber, transferPhotoNumber } from '../../../services/photoNumbers';
 import type { AnswerValue, FieldRendererProps } from './types';
 
 const asString = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -269,6 +270,7 @@ export function PhotosFieldRenderer({ field, value, onChange, path, missing }: F
   // version -- same position in the array, so it stays wherever it already
   // was relative to the others.
   function onAnnotated(newUri: string) {
+    if (annotating) transferPhotoNumber(annotating, newUri); // the marked-up copy keeps the photo's number
     onChange(uris.map((u) => (u === annotating ? newUri : u)));
     setAnnotating(null);
   }
@@ -283,6 +285,11 @@ export function PhotosFieldRenderer({ field, value, onChange, path, missing }: F
             <View style={styles.photoThumbBadge}>
               <Ionicons name="create-outline" size={12} color={colors.white} />
             </View>
+            {getPhotoNumber(uri) !== undefined && (
+              <View style={{ position: 'absolute', left: 4, bottom: 4, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 }}>
+                <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{getPhotoNumber(uri)}</Text>
+              </View>
+            )}
           </Pressable>
         ))}
         <Pressable style={styles.photoAddBtn} onPress={onTakePhoto} disabled={busy}>
