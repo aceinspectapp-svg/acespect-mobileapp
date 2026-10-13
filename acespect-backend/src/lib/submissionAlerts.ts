@@ -15,7 +15,8 @@ export async function alertAdmins(alertKey: string, subject: string, lines: stri
   try {
     const seen = await prisma.submissionLogEntry.findFirst({ where: { event: 'warning', detail: { path: ['alertKey'], equals: alertKey } }, select: { id: true } });
     if (seen) return;
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true, email: { not: '' } }, select: { email: true } });
+    const listed = env.ALERT_EMAILS.split(',').map((e) => e.trim()).filter(Boolean).map((email) => ({ email }));
+    const admins = listed.length ? listed : await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true, email: { not: '' } }, select: { email: true } });
     const text = [...lines, '', 'Open the Troubleshoot page in the review portal for details.'].join('\n');
     let sent = 0;
     for (const a of admins) if ((await sendMail(a.email, `[ACE SPECT] ${subject}`, text)) === 'SENT') sent++;

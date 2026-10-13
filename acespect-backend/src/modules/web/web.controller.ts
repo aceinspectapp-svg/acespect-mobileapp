@@ -50,7 +50,9 @@ export const webController = {
 
   mailStatus: asyncHandler(async (_req: Request, res: Response) => {
     const { mailStatus } = await import('../../lib/mailer');
-    res.status(200).json(mailStatus());
+    const { env } = await import('../../config/env');
+    const recipients = env.ALERT_EMAILS.split(',').map((e) => e.trim()).filter(Boolean);
+    res.status(200).json({ ...mailStatus(), recipients: recipients.length ? recipients : (await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { email: true } })).map((u) => u.email), customRecipients: recipients.length > 0 });
   }),
 
   /** Sends a test email to the signed-in admin so the setup can be checked from the portal. */

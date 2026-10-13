@@ -572,7 +572,7 @@ export const api = {
 
   /** Admin-only troubleshooting feed: the mobile submit/update/finalize/photo pipeline's own trail. See acespect-backend's SubmissionLogEntry. */
   /** Admin-only: is outbound email (alerts, invitations, resets) set up on the server? */
-  getMailStatus: () => req<{ configured: boolean; from: string; host: string | null }>("/web/mail-status"),
+  getMailStatus: () => req<{ configured: boolean; from: string; host: string | null; recipients: string[]; customRecipients: boolean }>("/web/mail-status"),
   /** Admin-only: sends a test email to the signed-in admin. */
   sendTestMail: () => req<{ result: "SENT" | "SKIPPED" | "FAILED"; to?: string; error?: string | null }>("/web/mail-test", { method: "POST" }),
 

@@ -40,7 +40,7 @@ function formatTime(iso: string): string {
 
 /** Is email set up on the server? Alerts about failed or incomplete submissions are sent by email, so this shows the state and lets an admin send a test. */
 function MailPanel() {
-  const [st, setSt] = useState<{ configured: boolean; from: string; host: string | null } | null>(null);
+  const [st, setSt] = useState<{ configured: boolean; from: string; host: string | null; recipients: string[]; customRecipients: boolean } | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { api.getMailStatus().then(setSt).catch(() => undefined); }, []);
@@ -52,6 +52,9 @@ function MailPanel() {
         {st.configured
           ? ` — sent from ${st.from} through ${st.host}.`
           : " — alerts are recorded here but nobody is emailed. Set SMTP_URL (and MAIL_FROM) on the server."}
+        <div style={{ marginTop: "3px", color: "#64748b" }}>
+          Alerts go to: {st.recipients.length ? st.recipients.join(", ") : "nobody (no active admin accounts)"}{st.customRecipients ? "" : " (the admin accounts' own email addresses; set ALERT_EMAILS on the server to use others)"}.
+        </div>
       </div>
       {msg && <span style={{ fontSize: "12px", color: msg.ok ? "#15803d" : "#b91c1c", maxWidth: "420px" }}>{msg.text}</span>}
       <GhostBtn
