@@ -153,7 +153,7 @@ export const inspectionsController = {
     const kind = /construction/i.test(inspection.inspectionType ?? '') ? 'construction' : 'dilapidation';
     const pdf = await generateInspectionReportPdf(id, token, {
       clientName: inspection.client ?? '',
-      jobNo: inspection.jobNo ?? '',
+      jobNo: await inspectionsService.reportJobNo(id, inspection.jobNo),
       inspectionDate: footerDate(inspection.date),
     });
 
@@ -173,10 +173,11 @@ export const inspectionsController = {
 
     const inspection = await inspectionsService.getById(id);
     const kind = /construction/i.test(inspection.inspectionType ?? '') ? 'construction' : 'dilapidation';
+    const reportJobNo = await inspectionsService.reportJobNo(id, inspection.jobNo);
     const docx = await generateInspectionReportDocx(id, token, {
       clientName: inspection.client ?? '',
-      jobNo: inspection.jobNo ?? '',
-      title: `${kind === 'construction' ? 'Construction' : 'Dilapidation'} Report ${inspection.jobNo ?? ''}`.trim(),
+      jobNo: reportJobNo,
+      title: `${kind === 'construction' ? 'Construction' : 'Dilapidation'} Report ${reportJobNo}`.trim(),
       inspectionDate: footerDate(inspection.date),
     });
 
