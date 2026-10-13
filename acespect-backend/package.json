@@ -25,9 +25,7 @@
     "check:draft-save": "tsx src/scripts/check-draft-save.ts",
     "check:refresh-reuse": "tsx src/scripts/check-refresh-reuse.ts",
     "check:rate-limits": "tsx src/scripts/check-rate-limits.ts",
-    "egnyte:reconcile": "tsx src/scripts/egnyte-reconcile.ts",
-    "inspections:delete-drafts": "tsx src/scripts/delete-draft-inspections.ts",
-    "inspections:dedupe-sections": "tsx src/scripts/dedupe-draft-sections.ts"
+    "egnyte:reconcile": "tsx src/scripts/egnyte-reconcile.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
