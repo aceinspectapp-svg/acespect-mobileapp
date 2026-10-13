@@ -35,5 +35,6 @@ router.patch(
   webController.updateDamage,
 );
 router.get('/submission-logs', requireAuth, admins, webController.listSubmissionLogs);
+router.get('/submission-health', requireAuth, admins, webController.submissionHealth);
 
 export const webRouter = router;

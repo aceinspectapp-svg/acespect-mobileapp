@@ -26,7 +26,7 @@ function photoIdFromUrl(url: string): string | null {
  * back at yesterday's failed job is left without an answer.
  */
 function logSubmit(
-  event: 'received' | 'saved' | 'updated' | 'finalized' | 'photo_uploaded',
+  event: 'received' | 'saved' | 'updated' | 'finalized' | 'photo_uploaded' | 'warning',
   ctx: { inspectorId?: string | null; inspectionId?: string | null; jobNo?: string | null },
   detail: Record<string, unknown>,
 ): void {
@@ -40,7 +40,7 @@ export const inspectionsController = {
   // Saves as a DRAFT the inspector still owns — review only starts at finalize.
   submit: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
-    const body = req.body as { jobNo?: string; id?: string; sections?: unknown[] };
+    const body = req.body as { jobNo?: string; id?: string; sections?: { key?: string }[] };
     logSubmit(
       'received',
       { inspectorId: req.user.id, jobNo: body.jobNo },
@@ -52,6 +52,15 @@ export const inspectionsController = {
       { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo },
       { status: inspection.status },
     );
+    // Only Job Information arrived: the inspection's real sections and photos are not in this submission (a blank draft was sent, or the
+    // full one is still waiting on the phone). The admin Troubleshoot page lists these.
+    if (!(body.sections ?? []).some((s) => s.key && s.key !== 'job-info')) {
+      logSubmit(
+        'warning',
+        { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo },
+        { reason: 'only_job_information', message: 'Only Job Information was received -- no sections or photos came with this submission.' },
+      );
+    }
     res.status(201).json({ inspectionId: inspection.id, status: inspection.status });
   }),
 

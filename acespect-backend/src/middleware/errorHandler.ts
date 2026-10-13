@@ -45,6 +45,16 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   if (status >= 500) {
     // eslint-disable-next-line no-console
     console.error('[error]', err);
+    // A failed photo upload or submit used to leave no trace outside the live server log, which scrolls away: keep it.
+    if (isSubmissionPath(req.originalUrl)) {
+      void recordSubmissionEvent({
+        event: 'failed',
+        inspectorId: req.user?.id ?? null,
+        statusCode: status,
+        message: (err instanceof Error ? err.message : 'Internal server error').slice(0, 400),
+        detail: { method: req.method, path: req.originalUrl.split('?')[0], ...(typeof req.body?.jobNo === 'string' ? { jobNo: req.body.jobNo } : {}) },
+      });
+    }
   } else {
     // 4xx never used to be logged at all -- a mobile submission rejected by
     // validate() (schema mismatch, bad field) failed completely silently

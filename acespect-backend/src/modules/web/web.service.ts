@@ -239,7 +239,53 @@ async function listSubmissionLogs(filters: {
   return rows;
 }
 
+/**
+ * What an admin needs to see at a glance: submissions that look wrong, and photos that reached Egnyte for an inspection that
+ * never arrived. Both are derived from the data, so they stay true without anyone writing log lines.
+ */
+async function getSubmissionHealth() {
+  const since = new Date(Date.now() - 60 * 24 * 3600 * 1000);
+  const rows = await prisma.inspection.findMany({
+    where: { createdAt: { gte: since } },
+    orderBy: { createdAt: 'desc' },
+    take: 300,
+    select: {
+      id: true, jobNo: true, status: true, inspectionType: true, createdAt: true, egnyteStatus: true, egnyteMessage: true,
+      inspector: { select: { name: true, email: true } },
+      sections: { select: { key: true } },
+    },
+  });
+  const flagged = rows
+    .map((i) => {
+      const reasons: string[] = [];
+      if (!i.sections.some((s) => s.key !== 'job-info')) reasons.push('Only Job Information arrived: no sections or photos were saved with it.');
+      if (i.egnyteStatus === 'failed') reasons.push(`Egnyte folder not placed: ${i.egnyteMessage ?? 'unknown error'}`);
+      else if (i.egnyteStatus === 'needs_review') reasons.push(`Egnyte folder needs a look: ${i.egnyteMessage ?? ''}`);
+      else if (i.egnyteStatus === 'unassigned') reasons.push(`Photos are waiting for a valid job number: ${i.egnyteMessage ?? ''}`);
+      return { id: i.id, jobNo: i.jobNo ?? '', type: i.inspectionType, status: i.status, createdAt: i.createdAt.toISOString(), inspector: i.inspector.name ?? i.inspector.email, egnyteStatus: i.egnyteStatus, reasons };
+    })
+    .filter((x) => x.reasons.length > 0);
+
+  // Photos stored in a draft-id folder whose inspection never reached the server: the phone uploaded them, then the submission did not land.
+  const { egnyteRootFolder } = await import('../../lib/storage');
+  const root = egnyteRootFolder();
+  const orphans = await prisma.$queryRaw<{ folder: string; photos: number; firstAt: Date; lastAt: Date; sections: string[] }[]>`
+    SELECT split_part(substring(p."storageKey" from ${root.length + 2}::int), '/', 1) AS folder,
+           count(*)::int AS photos, min(p."createdAt") AS "firstAt", max(p."createdAt") AS "lastAt",
+           array_agg(DISTINCT split_part(substring(p."storageKey" from ${root.length + 2}::int), '/', 2)) AS sections
+    FROM photos p
+    WHERE p."storageKey" LIKE ${root + '/%'}
+      AND split_part(substring(p."storageKey" from ${root.length + 2}::int), '/', 1) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      AND NOT EXISTS (SELECT 1 FROM inspections i WHERE i.id = split_part(substring(p."storageKey" from ${root.length + 2}::int), '/', 1))
+    GROUP BY 1 ORDER BY max(p."createdAt") DESC LIMIT 50`;
+  return {
+    flagged,
+    orphanUploads: orphans.map((o) => ({ draftId: o.folder, photos: o.photos, firstAt: o.firstAt.toISOString(), lastAt: o.lastAt.toISOString(), sections: o.sections.filter(Boolean) })),
+  };
+}
+
 export const webService = {
+  getSubmissionHealth,
   listInspections,
   getInspection,
   listUsers,

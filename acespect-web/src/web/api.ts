@@ -571,6 +571,9 @@ export const api = {
   },
 
   /** Admin-only troubleshooting feed: the mobile submit/update/finalize/photo pipeline's own trail. See acespect-backend's SubmissionLogEntry. */
+  /** Admin-only: submissions that look wrong, and uploaded photos whose inspection never arrived. */
+  getSubmissionHealth: () => req<SubmissionHealth>("/web/submission-health"),
+
   getSubmissionLogs: (filters: { event?: string; jobNo?: string; inspectorId?: string; limit?: number } = {}) => {
     const params = new URLSearchParams();
     if (filters.event) params.set("event", filters.event);
@@ -581,9 +584,16 @@ export const api = {
   },
 };
 
+export interface SubmissionHealth {
+  /** Inspections that look wrong: only Job Information arrived, or the Egnyte folder needs attention. */
+  flagged: { id: string; jobNo: string; type: string; status: string; createdAt: string; inspector: string; egnyteStatus: string | null; reasons: string[] }[];
+  /** Photos that reached Egnyte for an inspection that never reached the server (the submission did not land). */
+  orphanUploads: { draftId: string; photos: number; firstAt: string; lastAt: string; sections: string[] }[];
+}
+
 export interface SubmissionLogEntry {
   id: string;
-  event: "received" | "saved" | "updated" | "finalized" | "photo_uploaded" | "rejected";
+  event: "received" | "saved" | "updated" | "finalized" | "photo_uploaded" | "rejected" | "failed" | "warning";
   inspector: { id: string; name: string | null; email: string } | null;
   inspectorId: string | null;
   inspectionId: string | null;

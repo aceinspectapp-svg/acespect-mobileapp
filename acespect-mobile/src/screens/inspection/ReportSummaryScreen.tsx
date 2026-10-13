@@ -125,6 +125,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
   const [signed, setSigned] = useState(false);
   const draft = useInspectionDraft();
   const [submitting, setSubmitting] = useState(false);
+  const startedRef = useRef(false);
   const [submitStatus, setSubmitStatus] = useState('');
 
   // `route.params.data` has been seen arriving undefined here -- every
@@ -176,7 +177,9 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
   const isOnline = net.isInternetReachable ?? net.isConnected ?? false;
 
   const onGenerate = async () => {
-    if (!canSubmit || submitting) return;
+    // A second tap (or one made after a failed attempt cleared the draft) must never send a blank inspection under this job number.
+    if (!canSubmit || submitting || startedRef.current) return;
+    startedRef.current = true;
     setSubmitting(true);
 
     // Build the structured payload from the section draft once, with photos
@@ -188,6 +191,17 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
     // one reconstructed from scratch.
     const inspectionId = draft.getFolderId();
     const payload = draft.buildPayload((u) => u);
+    // Nothing but Job Information in the draft: there is no inspection to send. (This happened when a failed attempt had already moved the
+    // inspection into the sync queue and cleared the draft, and the Submit button was pressed again: a blank one was saved under the same job.)
+    if (!payload.sections.some((s) => s.key !== 'job-info')) {
+      startedRef.current = false;
+      setSubmitting(false);
+      Alert.alert(
+        'Nothing to submit',
+        'No inspection sections are saved on this device. If the inspection was already sent, or is waiting in the sync queue (the orange banner on the first screen), it does not need to be submitted again.',
+      );
+      return;
+    }
     // Reuse the same id photos get uploaded under, so the created row's
     // Egnyte folder matches without needing anything moved.
     payload.id = inspectionId;

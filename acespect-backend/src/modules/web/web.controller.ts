@@ -43,6 +43,10 @@ export const webController = {
     res.status(200).json({ inspection });
   }),
 
+  submissionHealth: asyncHandler(async (_req: Request, res: Response) => {
+    res.status(200).json(await webService.getSubmissionHealth());
+  }),
+
   resolveEgnyte: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');

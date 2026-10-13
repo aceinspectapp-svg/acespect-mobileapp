@@ -16,7 +16,7 @@ import { prisma } from './prisma';
  * itself never rejects -- it swallows its own errors after a console.error.
  */
 export async function recordSubmissionEvent(entry: {
-  event: 'received' | 'saved' | 'updated' | 'finalized' | 'photo_uploaded' | 'rejected';
+  event: 'received' | 'saved' | 'updated' | 'finalized' | 'photo_uploaded' | 'rejected' | 'failed' | 'warning';
   inspectorId?: string | null;
   inspectionId?: string | null;
   jobNo?: string | null;
