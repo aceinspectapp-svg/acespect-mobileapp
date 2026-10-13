@@ -438,6 +438,61 @@ export async function uploadDocument(buffer: Buffer, contentType: string, ext: s
   return { id, storageKey, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(buffer).digest('hex') };
 }
 
+// ---- serving photos back ---------------------------------------------------------------------------------------------------
+// A report page (and so a PDF or Word build) asks for all of its photographs at the same moment, and Egnyte allows only about two
+// requests a second -- so a download goes through the same spacing and 429 wait as an upload (`egnyteFetch`), and the photographs are
+// kept in memory once fetched: a photograph never changes, so a second request (the PDF after the preview, the Word file after the PDF,
+// the same photograph used twice) is answered without asking Egnyte again, and requests for one photograph that arrive together share
+// a single call.
+const PHOTO_CACHE_MAX_BYTES = 100 * 1024 * 1024;
+/** Report photographs are resized to a few hundred KB; anything bigger (a QC document, say) is streamed through and not kept. */
+const PHOTO_CACHE_MAX_ITEM_BYTES = 4 * 1024 * 1024;
+
+type FetchedPhoto =
+  | { kind: 'bytes'; bytes: Buffer; contentType: string }
+  | { kind: 'stream'; body: ReadableStream; contentType: string }
+  | { kind: 'none' };
+
+const photoCache = new Map<string, { bytes: Buffer; contentType: string }>(); // oldest first
+let photoCacheBytes = 0;
+const photoInFlight = new Map<string, Promise<FetchedPhoto>>();
+
+/** Empties the in-memory photo cache (for tests). */
+export function clearPhotoCache(): void {
+  photoCache.clear();
+  photoCacheBytes = 0;
+}
+
+function keepPhoto(id: string, bytes: Buffer, contentType: string): void {
+  photoCache.set(id, { bytes, contentType });
+  photoCacheBytes += bytes.length;
+  for (const [oldId, old] of photoCache) {
+    if (photoCacheBytes <= PHOTO_CACHE_MAX_BYTES) break;
+    photoCache.delete(oldId);
+    photoCacheBytes -= old.bytes.length;
+  }
+}
+
+async function loadPhotoFromEgnyte(id: string): Promise<FetchedPhoto> {
+  // Look up the real Egnyte path from the index; fall back to the old flat
+  // guess for photos uploaded before this index existed.
+  const indexed = await prisma.photo.findUnique({ where: { id } });
+  const path = indexed?.storageKey ?? photoPath(id, undefined, undefined, '.jpg');
+
+  const res = await withRetry(() => egnyteFetch(`${egnyteBase()}/pubapi/v1/fs-content${encodeEgnytePath(path)}`, { headers: authHeaders() }));
+  if (res.status === 404) return { kind: 'none' };
+  if (!res.ok || !res.body) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Egnyte fetch failed (${res.status}): ${body}`);
+  }
+  const contentType = indexed?.contentType ?? res.headers.get('content-type') ?? 'image/jpeg';
+  const length = Number(res.headers.get('content-length'));
+  if (Number.isFinite(length) && length > PHOTO_CACHE_MAX_ITEM_BYTES) return { kind: 'stream', body: res.body, contentType };
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (bytes.length <= PHOTO_CACHE_MAX_ITEM_BYTES) keepPhoto(id, bytes, contentType);
+  return { kind: 'bytes', bytes, contentType };
+}
+
 /** Streams the resized report copy for a given photo id straight from Egnyte. Used by the media proxy route. */
 export async function fetchPhotoStream(
   id: string,
@@ -450,20 +505,23 @@ export async function fetchPhotoStream(
   }
   if (!isStorageEnabled()) return null;
 
-  // Look up the real Egnyte path from the index; fall back to the old flat
-  // guess for photos uploaded before this index existed.
-  const indexed = await prisma.photo.findUnique({ where: { id } });
-  const path = indexed?.storageKey ?? photoPath(id, undefined, undefined, '.jpg');
-
-  const res = await withRetry(() =>
-    fetch(`${egnyteBase()}/pubapi/v1/fs-content${encodeEgnytePath(path)}`, {
-      headers: authHeaders(),
-    }),
-  );
-  if (res.status === 404) return null;
-  if (!res.ok || !res.body) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Egnyte fetch failed (${res.status}): ${body}`);
+  const cached = photoCache.get(id);
+  if (cached) {
+    photoCache.delete(id); // most recently used goes last
+    photoCache.set(id, cached);
+    return { body: new Response(cached.bytes).body as unknown as ReadableStream, contentType: cached.contentType };
   }
-  return { body: res.body, contentType: indexed?.contentType ?? res.headers.get('content-type') ?? 'image/jpeg' };
+
+  let pending = photoInFlight.get(id);
+  const owner = !pending;
+  if (!pending) {
+    pending = loadPhotoFromEgnyte(id).finally(() => photoInFlight.delete(id));
+    photoInFlight.set(id, pending);
+  }
+  let photo = await pending;
+  // A streamed (large) file can be read only once, by whoever asked first; anyone else who was waiting fetches their own.
+  if (!owner && photo.kind === 'stream') photo = await loadPhotoFromEgnyte(id);
+  if (photo.kind === 'none') return null;
+  if (photo.kind === 'stream') return { body: photo.body, contentType: photo.contentType };
+  return { body: new Response(photo.bytes).body as unknown as ReadableStream, contentType: photo.contentType };
 }
