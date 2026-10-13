@@ -33,7 +33,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: acespect-web/package-lock.json
+          cache-dependency-path: |
+            acespect-mobile/package-lock.json
+            acespect-web/package-lock.json
+      - run: npm ci
+        working-directory: acespect-mobile
       - run: npm ci
       - run: npx tsc --noEmit -p .
       - run: npm test
