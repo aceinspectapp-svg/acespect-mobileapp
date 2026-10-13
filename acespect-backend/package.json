@@ -21,7 +21,8 @@
     "check:platform": "tsx src/scripts/qc-platform-check.ts",
     "check:egnyte-folders": "tsx src/scripts/check-egnyte-folders.ts",
     "check:egnyte-upload": "tsx src/scripts/check-egnyte-upload.ts",
-    "egnyte:reconcile": "tsx src/scripts/egnyte-reconcile.ts"
+    "egnyte:reconcile": "tsx src/scripts/egnyte-reconcile.ts",
+    "inspections:delete-drafts": "tsx src/scripts/delete-draft-inspections.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
