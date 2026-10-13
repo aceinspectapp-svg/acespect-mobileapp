@@ -38,6 +38,38 @@ function formatTime(iso: string): string {
   });
 }
 
+/** Is email set up on the server? Alerts about failed or incomplete submissions are sent by email, so this shows the state and lets an admin send a test. */
+function MailPanel() {
+  const [st, setSt] = useState<{ configured: boolean; from: string; host: string | null } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.getMailStatus().then(setSt).catch(() => undefined); }, []);
+  if (!st) return null;
+  return (
+    <div style={{ ...card, borderColor: st.configured ? "#bbf7d0" : "#fecaca", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ flex: 1, minWidth: "240px", fontSize: "12px", color: "#374151" }}>
+        <strong style={{ color: st.configured ? "#15803d" : "#b91c1c" }}>Email alerts: {st.configured ? "set up" : "NOT set up"}</strong>
+        {st.configured
+          ? ` — sent from ${st.from} through ${st.host}.`
+          : " — alerts are recorded here but nobody is emailed. Set SMTP_URL (and MAIL_FROM) on the server."}
+      </div>
+      {msg && <span style={{ fontSize: "12px", color: msg.ok ? "#15803d" : "#b91c1c", maxWidth: "420px" }}>{msg.text}</span>}
+      <GhostBtn
+        onClick={async () => {
+          setBusy(true); setMsg(null);
+          try {
+            const r = await api.sendTestMail();
+            setMsg(r.result === "SENT" ? { ok: true, text: `Test email sent to ${r.to}. Check that inbox (and spam).` } : { ok: false, text: r.error ?? (r.result === "SKIPPED" ? "Email is not set up on the server." : "Sending failed.") });
+          } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : "Could not send" }); }
+          setBusy(false);
+        }}
+      >
+        {busy ? "Sending…" : "Send test email"}
+      </GhostBtn>
+    </div>
+  );
+}
+
 /** What looks wrong right now: submissions that came in incomplete, Egnyte folders that need a look, and photos whose inspection never arrived. */
 function HealthPanel() {
   const [health, setHealth] = useState<SubmissionHealth | null>(null);
@@ -127,6 +159,7 @@ export function AdminSubmissionLogs() {
         </GhostBtn>
       }
     >
+      <MailPanel />
       <HealthPanel />
       <div style={{ display: "flex", gap: "10px", marginBottom: "16px", flexWrap: "wrap", alignItems: "center" }}>
         <select value={event} onChange={(e) => setEvent(e.target.value)} style={selectStyle}>

@@ -1,3 +1,4 @@
+import { prisma } from '../../lib/prisma';
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
@@ -45,6 +46,22 @@ export const webController = {
 
   submissionHealth: asyncHandler(async (_req: Request, res: Response) => {
     res.status(200).json(await webService.getSubmissionHealth());
+  }),
+
+  mailStatus: asyncHandler(async (_req: Request, res: Response) => {
+    const { mailStatus } = await import('../../lib/mailer');
+    res.status(200).json(mailStatus());
+  }),
+
+  /** Sends a test email to the signed-in admin so the setup can be checked from the portal. */
+  mailTest: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { sendMail, verifyMail, lastMailError } = await import('../../lib/mailer');
+    const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { email: true } });
+    const problem = await verifyMail();
+    if (problem) return void res.status(200).json({ result: 'FAILED', error: problem });
+    const result = await sendMail(me!.email, '[ACE SPECT] Test email', 'This is a test email from the ACE SPECT server. If you can read it, email alerts are working.');
+    res.status(200).json({ result, to: me!.email, ...(result === 'FAILED' ? { error: lastMailError } : {}) });
   }),
 
   resolveEgnyte: asyncHandler(async (req: Request, res: Response) => {
