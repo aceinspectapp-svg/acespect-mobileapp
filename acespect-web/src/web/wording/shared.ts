@@ -190,6 +190,12 @@ export function damageOverviewSentence(itemFields: TemplateField[], inst: Answer
 }
 
 /** A typed location starting with its own preposition ("above the front window", "near the meter box") used to get a second one stacked in front of it ("At the above the front window..."); this detects that case so the lead-in can drop "At the" and just capitalise the typed text instead ("Above the front window, there is..."), while a plain noun-phrase location ("centre of the driveway") still gets "At the" as before. */
+/** "the rear corner" for "rear corner", and "the rear corner" left alone -- for a template sentence that supplies the "the" itself ("running to the ...") when the inspector may have typed it already. */
+export function withThe(text: string): string {
+  const t = text.trim();
+  return /^(the|a|an|this|that|these|those|its|their|his|her|our|your|my)\s/i.test(t) ? t : `the ${t}`;
+}
+
 export const LOCATION_STARTS_WITH_PREPOSITION_RE =
   /^(above|below|near|beside|under|over|behind|within|along|across|adjacent to|between|next to|around|at|in|on|outside|inside|opposite|beyond)\b/i;
 
@@ -306,7 +312,7 @@ export function damageSentences(
       }
       const parts: string[] = [];
       parts.push(
-        `${damageLeadIn(location, wording.plural)} ${wording.phrase}${element ? ` to the ${element}` : ""}${
+        `${damageLeadIn(location, wording.plural)} ${wording.phrase}${element ? ` to ${withThe(element)}` : ""}${
           extras.length ? `, ${extras.join(" and ")}` : ""
         }.`,
       );

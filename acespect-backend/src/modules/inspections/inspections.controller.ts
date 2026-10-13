@@ -36,6 +36,9 @@ function logSubmit(
 }
 
 /** Thin HTTP layer for inspection submission + lookup. */
+/** The inspection date as the report footer prints it: "3 October 2026". */
+const footerDate = (date: Date | string): string => new Date(date).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+
 export const inspectionsController = {
   // Saves as a DRAFT the inspector still owns — review only starts at finalize.
   submit: asyncHandler(async (req: Request, res: Response) => {
@@ -132,9 +135,7 @@ export const inspectionsController = {
     const pdf = await generateInspectionReportPdf(id, token, {
       clientName: inspection.client ?? '',
       jobNo: inspection.jobNo ?? '',
-      ...(kind === 'construction'
-        ? { kind: 'construction' as const, inspectionDate: new Date(inspection.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) }
-        : {}),
+      inspectionDate: footerDate(inspection.date),
     });
 
     const fileName = `${inspection.jobNo || id}-${kind}-report.pdf`.replace(/[^a-z0-9.-]+/gi, '-');
@@ -157,10 +158,7 @@ export const inspectionsController = {
       clientName: inspection.client ?? '',
       jobNo: inspection.jobNo ?? '',
       title: `${kind === 'construction' ? 'Construction' : 'Dilapidation'} Report ${inspection.jobNo ?? ''}`.trim(),
-      // The Construction Report's footer carries the inspection date, as its PDF footer does.
-      ...(kind === 'construction'
-        ? { kind: 'construction' as const, inspectionDate: new Date(inspection.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) }
-        : {}),
+      inspectionDate: footerDate(inspection.date),
     });
 
     const fileName = `${inspection.jobNo || id}-${kind}-report.docx`.replace(/[^a-z0-9.-]+/gi, '-');

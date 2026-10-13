@@ -11,7 +11,7 @@ import type { ConditionSummaryRow } from "../templateFields";
 import { asString, buildDefectNote, isGateSatisfied, otherAnswerText, withPeriod } from "../templateFields";
 import { gradeOf } from "../conditionGrades";
 import type { Composer } from "./shared";
-import { LOCATION_STARTS_WITH_PREPOSITION_RE, article, capitalize, conditionOf, defectOffsets, joinList, lower, many, observedSentence, one, scopeAndSafetyParagraphs } from "./shared";
+import { LOCATION_STARTS_WITH_PREPOSITION_RE, article, capitalize, conditionOf, defectOffsets, joinList, lower, many, observedSentence, one, scopeAndSafetyParagraphs, withThe } from "./shared";
 import { residentialHouseComposers as house } from "./dilapidation.residential_house";
 import { templateDamageSentences } from "./templateDamage";
 import type { ReportWording } from "./types";
@@ -232,9 +232,9 @@ const surveyPart: Composer = (inst, itemFields, label) => {
   const endRef = asString(inst.endRef).trim();
   // "The following observations commenced from {name of road / lane} and proceeded {north} to the {north end} at {3 metres past house number}."
   const roadName = asString(inst.roadName).trim();
-  const startBit = start ? ` at the ${lower(start)}${startRef ? ` (${startRef})` : ""}` : startRef ? ` at ${startRef}` : "";
-  const from = roadName ? `${roadName}${startBit}` : start ? `the ${lower(start)}${startRef ? ` at ${startRef}` : ""}` : startRef;
-  const to = end ? `the ${lower(end)}${endRef ? ` at ${endRef}` : ""}` : endRef;
+  const startBit = start ? ` at ${withThe(lower(start))}${startRef ? ` (${startRef})` : ""}` : startRef ? ` at ${startRef}` : "";
+  const from = roadName ? `${roadName}${startBit}` : start ? `${withThe(lower(start))}${startRef ? ` at ${startRef}` : ""}` : startRef;
+  const to = end ? `${withThe(lower(end))}${endRef ? ` at ${endRef}` : ""}` : endRef;
   // Which way the road or lane runs.
   const runs = clean(one(itemFields, inst, ["runsDirection"]));
   if (runs) blocks.push(`The road / lane runs ${lower(runs)}.`);

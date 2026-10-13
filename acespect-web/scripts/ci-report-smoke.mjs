@@ -358,7 +358,7 @@ async function runCase(c) {
   const pictures = (xml.match(/<w:drawing>/g) ?? []).length;
   expect(pictures >= Math.min(c.minImages, 4), `the Word file holds the photographs (${pictures} pictures)`);
   const footer = execFileSync("unzip", ["-p", docxPath, "word/footer1.xml"], { encoding: "utf8" });
-  expect(footer.includes("Client Name") && footer.includes("PAGE"), "the Word file has the report's footer with page numbers");
+  expect(footer.includes("Client:") && footer.includes("PAGE"), "the Word file has the report's footer with page numbers");
   return pdfPath;
 }
 

@@ -5,7 +5,8 @@ import { STATUS_CONFIG } from "../../mockData";
 import type { InspectionStatus } from "../../mockData";
 import { useAppData } from "../../data";
 import { PageShell, StatusBadge, TableCard, PrimaryBtn } from "../../components/WebLayout";
-import { INSPECTION_TYPES, PROPERTY_TYPES, TEMPLATABLE_SECTIONS, isValidCombo } from "../../constants/inspectionData";
+import { INSPECTION_TYPES, PROPERTY_TYPES, isValidCombo } from "../../constants/inspectionData";
+import { CONSTRUCTION_STAGES, CONSTRUCTION_STAGE_BY_ID, jobInfoAnswersForNewInspection, sectionsForNewInspection } from "../../constants/sectionLayout";
 
 type TabFilter = "all" | InspectionStatus;
 
@@ -370,6 +371,7 @@ function NewInspectionModal({ onClose }: { onClose: () => void }) {
   const { createInspection } = useAppData();
   const [inspectionTypeId, setInspectionTypeId] = useState(INSPECTION_TYPES[0].id);
   const [propertyTypeId, setPropertyTypeId] = useState("");
+  const [stageId, setStageId] = useState("");
   const [jobNo, setJobNo] = useState("");
   const [client, setClient] = useState("");
   const [address, setAddress] = useState("");
@@ -390,6 +392,10 @@ function NewInspectionModal({ onClose }: { onClose: () => void }) {
       setError("That property type isn't available for this inspection type");
       return;
     }
+    if (inspectionTypeId === "construction_stage" && !stageId) {
+      setError("Choose the construction stage");
+      return;
+    }
     if (!jobNo.trim() || !address.trim() || !client.trim()) {
       setError("Job number, address and client are required");
       return;
@@ -398,7 +404,9 @@ function NewInspectionModal({ onClose }: { onClose: () => void }) {
     setError(null);
     try {
       const propertyType = PROPERTY_TYPES.find((p) => p.id === propertyTypeId)!;
-      const sections = TEMPLATABLE_SECTIONS.map((s, idx) => ({
+      // The sections this report type starts with -- the same list the mobile app shows (for Construction Stage, the chosen stage's).
+      const jobInfoAnswers = jobInfoAnswersForNewInspection(inspectionTypeId, stageId);
+      const sections = sectionsForNewInspection(inspectionTypeId, propertyTypeId, stageId).map((s, idx) => ({
         key: s.key,
         name: s.name,
         icon: s.icon,
@@ -406,6 +414,7 @@ function NewInspectionModal({ onClose }: { onClose: () => void }) {
         status: "pending" as const,
         reportText: "",
         fields: {},
+        ...(s.key === "job-info" && jobInfoAnswers ? { answers: jobInfoAnswers } : {}),
         photos: [],
         damages: [],
       }));
@@ -449,6 +458,7 @@ function NewInspectionModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => {
                 setInspectionTypeId(e.target.value);
                 setPropertyTypeId(""); // selected property may not apply to the new type
+                setStageId("");
               }}
               style={modalFieldStyle}
             >
@@ -466,6 +476,20 @@ function NewInspectionModal({ onClose }: { onClose: () => void }) {
               ))}
             </select>
           </div>
+          {inspectionTypeId === "construction_stage" && (
+            <div>
+              <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>Construction Stage</label>
+              <select value={stageId} onChange={(e) => setStageId(e.target.value)} style={modalFieldStyle}>
+                <option value="">Select…</option>
+                {CONSTRUCTION_STAGES.map((st) => (
+                  <option key={st.id} value={st.id}>{st.title}</option>
+                ))}
+              </select>
+              {stageId && (
+                <p style={{ fontSize: "11px", color: "#94a3b8", margin: "4px 0 0" }}>{CONSTRUCTION_STAGE_BY_ID[stageId]?.subtitle}</p>
+              )}
+            </div>
+          )}
           <div>
             <label style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: "4px" }}>Job Number</label>
             <input value={jobNo} onChange={(e) => setJobNo(e.target.value)} style={modalFieldStyle} placeholder="e.g. VIC-124" />

@@ -348,14 +348,14 @@ export function ReportView() {
              this section entirely rather than printing a page of "Observed?
              No" boilerplate). */
           <>
-            <p style={{ fontWeight: 700, margin: "0 0 10px", color: reportTokens.ink }}>NOTES</p>
+            <p style={{ fontWeight: 700, margin: "0 0 10px", color: reportTokens.ink, breakAfter: "avoid" }}>NOTES</p>
             <ol style={{ margin: "0 0 10px", paddingLeft: "20px" }}>
               {s.reportText
                 .split(/\n{2,}|\n/)
                 .map((para) => para.trim())
                 .filter(Boolean)
                 .map((para, j) => (
-                  <li key={j} style={{ margin: "0 0 6px", lineHeight: 1.45 }}>
+                  <li key={j} style={{ margin: "0 0 6px", lineHeight: 1.45, breakInside: "avoid" }}>
                     {para}
                   </li>
                 ))}
