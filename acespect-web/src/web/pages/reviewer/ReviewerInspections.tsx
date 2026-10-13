@@ -46,7 +46,7 @@ export function ReviewerInspections() {
   });
 
   return (
-    <PageShell title="All Inspections" subtitle="Assigned to Sarah Chen">
+    <PageShell title="All Inspections" subtitle={`Assigned to ${currentUser?.name ?? "you"}`}>
       {/* Toolbar */}
       <div
         style={{

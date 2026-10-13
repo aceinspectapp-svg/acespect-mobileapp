@@ -13,6 +13,7 @@
 //   SMOKE_SCRIPT=scripts/audit-reports.mjs AUDIT_OUT=<folder> PHOTOS_DIR=<folder with man-L.jpg, house-L.jpg, ...> \
 //   DATABASE_URL=postgresql://user:pass@localhost:5432/scratch?schema=public scripts/ci/report-e2e.sh
 //
+// AUDIT_VIA_UI=1 makes every report the way a person does: through New Inspection, the inspector's Submit, the reviewer's Approve All and the report's Download buttons (scripts/lib/ui-lifecycle.mjs; scratch databases only).
 // Optional: AUDIT_SCENARIOS=real,mixes (a comma list), AUDIT_TYPES=residential_house,construction, AUDIT_ONLY=real/residential_house,none/apartment (just those reports), KEEP=1 (keep every PDF and Word file).
 import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -22,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { makeFiller } from "./lib/form-filler.mjs";
 import { photosOf, serveFolder, startPhotoServer } from "./lib/placeholder-photos.mjs";
+import { makeLifecycle } from "./lib/ui-lifecycle.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const API = (process.env.ACESPECT_API ?? "http://localhost:4000/api/v1").replace(/\/$/, "");
@@ -52,7 +54,15 @@ const TYPES = [
     sections: ["job-info", ...SNAP.filter((t) => t.inspectionType === "construction_stage" && t.propertyType === "residential_house" && t.sectionKey.startsWith("lf_")).map((t) => t.sectionKey)],
     kicker: "CONSTRUCTION REPORT", bannerTitle: "Lock-up & Fixing Stage",
   },
-].filter((t) => !process.env.AUDIT_TYPES || process.env.AUDIT_TYPES.split(",").includes(t.key));
+  // the other construction stages (only when named in AUDIT_TYPES, e.g. construction_pre_pour): the sections of one stage, and the title that stage prints on its cover
+  ...[["pre_pour", "pp_", "Pre-Pour Stage"], ["slab", "sd_", "Slab Down Stage"], ["framework", "fr_", "Frame Stage"], ["lock_up", "lu_", "Lock-up Stage"], ["fixing", "fx_", "Fixing Stage"], ["pci", "pci_", "Practical Completion / Handover"], ["slab_frame", "sf_", "Slab Down & Frame Stage"]].map(([stage, prefix, bannerTitle]) => ({
+    key: `construction_${stage}`, stage, title: "Residential House", inspection: "construction_stage", inspectionTitle: "Construction Stage", propertyType: "residential_house",
+    sections: ["job-info", ...SNAP.filter((t) => t.inspectionType === "construction_stage" && t.propertyType === "residential_house" && t.sectionKey.startsWith(prefix)).map((t) => t.sectionKey)],
+    kicker: "CONSTRUCTION REPORT", bannerTitle,
+  })),
+  { key: "construction_pci_apartment", stage: "pci", title: "Apartment", inspection: "construction_stage", inspectionTitle: "Construction Stage", propertyType: "apartment",
+    sections: ["job-info", ...SNAP.filter((t) => t.inspectionType === "construction_stage" && t.propertyType === "apartment" && t.sectionKey.startsWith("pci_")).map((t) => t.sectionKey)], kicker: "CONSTRUCTION REPORT", bannerTitle: "Practical Completion / Handover" },
+].filter((t) => (process.env.AUDIT_TYPES ? process.env.AUDIT_TYPES.split(",").includes(t.key) : !t.stage));
 const typeOf = (typeKey) => TYPES.find((t) => t.key === typeKey);
 const tplOf = (typeKey, key) => { const type = typeOf(typeKey); return SNAP.find((t) => t.inspectionType === type.inspection && t.propertyType === type.propertyType && t.sectionKey === key); };
 
@@ -117,9 +127,44 @@ const spotOf = new Map();
 let inSection = new Map();
 let curKey = "";
 const keyOfSpot = (u) => (spotOf.get(u) ?? "").split("::")[0];
+let lifecycle; // AUDIT_VIA_UI=1: the inspection is made, submitted, reviewed and downloaded through the real screens (lib/ui-lifecycle.mjs)
+const uiFiles = new Map();
+const STAGE_OF = { construction: "lock_fix" };
 async function buildInspection(type, scenarioName, jobNo) {
   await signIn();
   inSection = new Map();
+  if (lifecycle) {
+    const scenario = SCENARIOS[scenarioName];
+    let spot = 0;
+    const supplied = new Set();
+    const filler = makeFiller({
+      tplOf,
+      photosFor: (ctx) => {
+        let urls = scenario.photos(ctx, spot++);
+        if (!ctx.defect) { urls = urls.slice(0, Math.max(0, 190 - (inSection.get(curKey) ?? 0))); inSection.set(curKey, (inSection.get(curKey) ?? 0) + urls.length); }
+        for (const u of urls) spotOf.set(u, `${curKey}::${ctx.path ?? "?"}`);
+        return ctx.defect ? urls.slice(0, ctx.defectNo < 2 ? urls.length : Math.min(urls.length, 1)) : urls;
+      },
+    });
+    const fill = (key, existing = {}) => {
+      curKey = key;
+      if (!tplOf(type.key, key)) return { answers: {}, photos: [] };
+      const f = filler.fillSection(type.key, key, { jobNo, client: "Audit Client" });
+      // Job Information asks for the stage's own option (Pre-pour for slab / Base, Frame, ...) only for the stage the dialog chose: answer that one, as an inspector would
+      if (key === "job-info" && existing.constructionStage) {
+        for (const fld of tplOf(type.key, key).fields ?? []) {
+          if (fld.gate?.fieldKey !== "constructionStage") continue;
+          if (fld.gate.equals === existing.constructionStage) f.answers[fld.key] = fld.options?.[0]?.value ?? f.answers[fld.key];
+          else delete f.answers[fld.key];
+        }
+      }
+      for (const u of [...f.photos, ...collectUrls(f.answers)]) supplied.add(u);
+      return { answers: f.answers, photos: f.photos };
+    };
+    const { id, files } = await lifecycle.run({ label: `${scenarioName} / ${type.key}`, typeKey: type.key, inspectionId: type.inspection, propertyId: type.propertyType, stage: type.stage ?? STAGE_OF[type.key], jobNo, fill });
+    uiFiles.set(id, files);
+    return { id, supplied: [...supplied] };
+  }
   const scenario = SCENARIOS[scenarioName];
   let spot = 0;
   const filler = makeFiller({
@@ -236,7 +281,7 @@ const DOM_AUDIT = String.raw`
 
 // colours that belong to an earlier look of the report -- none may be left in it (#dc2626 is not one: it is the "Poor" condition grade's own colour)
 const OLD_COLORS = ["#1a2a4a", "#183966", "#0f1d35", "#ce2328"];
-const BANNED = [/__other__/, /DEFECT::/, /COND::/, /ROOMHEAD::/, /\bitem\d+\b/, /\bundefined\b/, /\[object Object\]/, /\bNaN\b/, /\bnull\b/, /of \./, /[a-z]\.\.(?!\.)/, /\bother\b\s*\./i, /,,/, /\s[.,;]\s*(?=[A-Z])/, /\b([a-z]{3,}) \1\b/];
+const BANNED = [/__other__/, /DEFECT::/, /COND::/, /ROOMHEAD::/, /\bitem\d+\b/, /\bundefined\b/, /\[object Object\]/, /\bNaN\b/, /\bnull\b/, /of \./, /[a-z]\.\.(?!\.)/, /(?<!\d\s)\bother\b\s*\./i, /,,/, /\s[.,;]\s*(?=[A-Z])/, /\b([a-z]{3,}) \1\b/];
 const FOOTER_WORDS = new Set("client name date job page of houspect victoria com box vic info www trading acespect pty ltd abn acn waverley houspectvic".split(" "));
 
 const results = [];
@@ -250,6 +295,7 @@ const record = (scenario, type, check, ok, detail = "") => {
 const wordsOf = (t) => (t.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []).filter((w) => !FOOTER_WORDS.has(w) && !/^\d+$/.test(w) && !/^(hv|ci|aud)\d*/.test(w));
 
 const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"], protocolTimeout: 900_000 });
+if (process.env.AUDIT_VIA_UI) lifecycle = await makeLifecycle({ browser, API: API.replace(/\/$/, ""), WEB, record, backendDir: new URL("../../acespect-backend/", import.meta.url) });
 let n = 0;
 for (const scenarioName of chosen) {
   for (const type of TYPES) {
@@ -310,7 +356,7 @@ for (const scenarioName of chosen) {
       record(label, type.key, "cover: navy banner with red edge, kicker and title", !!dom.banner && dom.banner.bg === "#1b3a6b" && dom.banner.edge === "#d1262b" && dom.banner.text.toUpperCase().startsWith(type.kicker) && dom.banner.text.includes(type.bannerTitle), JSON.stringify(dom.banner));
 
       // the PDF
-      const pdfRes = await fetch(`${API}/inspections/${id}/report.pdf`, { headers: { Authorization: `Bearer ${token}` } });
+      const pdfRes = uiFiles.get(id)?.pdf ? { status: 200, arrayBuffer: async () => uiFiles.get(id).pdf } : await fetch(`${API}/inspections/${id}/report.pdf`, { headers: { Authorization: `Bearer ${token}` } });
       record(label, type.key, "pdf: generated", pdfRes.status === 200, `HTTP ${pdfRes.status}`);
       const pdfPath = `${base}.pdf`;
       writeFileSync(pdfPath, Buffer.from(await pdfRes.arrayBuffer()));
@@ -323,7 +369,7 @@ for (const scenarioName of chosen) {
       record(label, type.key, "wording: no leaked markers or broken punctuation in the PDF", hits.length === 0, hits.join(" "));
 
       // the Word file
-      const wres = await fetch(`${API}/inspections/${id}/report.docx`, { headers: { Authorization: `Bearer ${token}` } });
+      const wres = uiFiles.get(id)?.docx ? { status: 200, arrayBuffer: async () => uiFiles.get(id).docx } : await fetch(`${API}/inspections/${id}/report.docx`, { headers: { Authorization: `Bearer ${token}` } });
       record(label, type.key, "word: generated", wres.status === 200, `HTTP ${wres.status}`);
       const docxPath = `${base}.docx`;
       writeFileSync(docxPath, Buffer.from(await wres.arrayBuffer()));
@@ -333,7 +379,10 @@ for (const scenarioName of chosen) {
       // every sentence the page shows is in the PDF (compared on letters and digits only, by its first and last 30, so a line broken across a page still counts)
       const squash = (t) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
       const pdfSquashed = squash(execFileSync("pdftotext", [pdfPath, "-"], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 })); // reading order, so a sentence wrapped inside a table cell stays whole
-      const lost = dom.leaves.filter((t) => { const q = squash(t); return q.length >= 20 && !(pdfSquashed.includes(q.slice(0, 30)) && pdfSquashed.includes(q.slice(-30))); });
+      // a sentence wrapped inside a table cell can be read out in pieces with the other cells between them, so the pdf's content-stream order is tried too
+      const pdfRawSquashed = squash(execFileSync("pdftotext", ["-raw", pdfPath, "-"], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 }));
+      const found = (hay, q) => hay.includes(q.slice(0, 30)) && hay.includes(q.slice(-30));
+      const lost = dom.leaves.filter((t) => { const q = squash(t); return q.length >= 20 && !found(pdfSquashed, q) && !found(pdfRawSquashed, q); });
       record(label, type.key, "pdf: every sentence on the page is in the PDF", lost.length === 0, `${lost.length} of ${dom.leaves.length} missing${lost.length ? `, e.g. "${lost[0].slice(0, 70)}"` : ""}`);
       // Word carries the same words as the page
       const wtext = execFileSync("textutil", ["-convert", "txt", "-stdout", docxPath], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
@@ -356,6 +405,7 @@ for (const scenarioName of chosen) {
     }
   }
 }
+await lifecycle?.close();
 await browser.close();
 
 // ---- the report -----------------------------------------------------------------------------------------------------------------------------

@@ -329,6 +329,16 @@ async function getById(id: string) {
 }
 
 /**
+ * The job number a report prints (its footer): the one a reviewer typed into Job Information when they corrected it, otherwise the
+ * inspection's own. The inspection's own job number (its folder, its lists) is not touched by that correction.
+ */
+async function reportJobNo(id: string, jobNo: string | null): Promise<string> {
+  const section = await prisma.section.findFirst({ where: { inspectionId: id, key: { startsWith: 'job-info' } }, select: { fields: true } });
+  const typed = (section?.fields as Record<string, unknown> | null)?.jobNo;
+  return typeof typed === 'string' && typed.trim() ? typed.trim() : jobNo ?? '';
+}
+
+/**
  * Upload one inspection photo; returns a URL that proxies through this
  * backend. `inspectionId`/`sectionKey`, when given, group the file under
  * that inspection's own section folder in Egnyte -- mobile passes them
@@ -370,6 +380,7 @@ export const inspectionsService = {
   update,
   finalize,
   getById,
+  reportJobNo,
   uploadPhoto,
   listAssigned,
   getBaselineSections,
