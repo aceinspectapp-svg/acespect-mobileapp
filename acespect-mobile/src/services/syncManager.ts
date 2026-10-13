@@ -87,10 +87,47 @@ async function deleteLocalFile(uri: string): Promise<void> {
   }
 }
 
+/**
+ * Every photo that has reached the server on this phone, by its local file. The background saver (liveSync.ts) uploads photos as each
+ * section is saved; the final submit then finds them here instead of sending them again. The local files are kept until the whole
+ * inspection has been accepted (cleanupUploadedFiles), because the inspector may still reopen a section and look at them.
+ */
+const photoCache = new Map<string, string>();
+
 async function uploadAndForget(uri: string, opts: { inspectionId?: string; sectionKey?: string; jobNo?: string }): Promise<string> {
+  const hit = photoCache.get(uri);
+  if (hit) return hit;
   const url = await uploadPhoto(uri, opts);
-  void deleteLocalFile(uri);
+  photoCache.set(uri, url);
   return url;
+}
+
+/** Removes the local copies of photos that are safely on the server, once the inspection that holds them has been accepted. */
+export function cleanupUploadedFiles(): void {
+  for (const uri of photoCache.keys()) void deleteLocalFile(uri);
+  photoCache.clear();
+}
+
+/**
+ * A copy of one section with every local photo replaced by its uploaded URL (uploading what has not been sent yet). The section itself is
+ * left untouched, so the screens keep showing the local files. Used by the background saver.
+ */
+export async function resolveSectionForServer<T extends { key: string; answers?: unknown; photos?: string[]; damages?: { photos?: string[] }[] }>(
+  section: T,
+  inspectionId: string | undefined,
+  jobNo?: string,
+): Promise<T> {
+  const copy = JSON.parse(JSON.stringify(section)) as T;
+  await walkAndResolvePhotos(copy.answers as AnswerTree | undefined, [copy.key], inspectionId, photoCache, jobNo);
+  for (const key of ['photos'] as const) {
+    const list = copy[key] as string[] | undefined;
+    if (list) for (let i = 0; i < list.length; i++) if (isLocalUri(list[i]!)) list[i] = await uploadAndForget(list[i]!, { inspectionId, sectionKey: copy.key, jobNo });
+  }
+  for (const d of copy.damages ?? []) {
+    const list = d.photos;
+    if (list) for (let i = 0; i < list.length; i++) if (isLocalUri(list[i]!)) list[i] = await uploadAndForget(list[i]!, { inspectionId, sectionKey: copy.key, jobNo });
+  }
+  return copy;
 }
 
 /**
@@ -183,7 +220,7 @@ function expectedContent(payload: SubmitPayload): { sections: number; photos: nu
 export async function runSubmission(payload: SubmitPayload): Promise<SubmitResult> {
   const inspectionId = payload.id;
   const jobNo = payload.jobNo;
-  const urlByUri = new Map<string, string>();
+  const urlByUri = photoCache;
 
   // Primary pass: walk each section's actual answer tree, so every
   // photos-type field (wherever it's nested) gets uploaded under a folder
@@ -221,7 +258,10 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
   }
 
   payload.expected = expectedContent(payload);
-  return submitInspection(payload);
+  const result = await submitInspection(payload);
+  // The server has it: the local copies of the photos are no longer needed.
+  cleanupUploadedFiles();
+  return result;
 }
 
 /** True when the Wi-Fi-only preference is on and the device isn't currently on Wi-Fi -- automatic sync should hold off. */

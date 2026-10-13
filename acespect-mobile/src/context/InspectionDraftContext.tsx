@@ -1,8 +1,9 @@
-import React, { createContext, useCallback, useContext, useMemo, useRef } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import * as Crypto from 'expo-crypto';
 import type { ActiveTemplate } from '../services/templateApi';
 import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
 import { DraftSnapshot, clearDraftSnapshot, saveDraftSnapshot } from '../services/offlineStorage';
+import { attachDraft, resetLiveSync, scheduleSectionSync } from '../services/liveSync';
 
 /**
  * In-memory draft of the inspection being filled. Each section screen writes its
@@ -195,6 +196,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
   const setSection = useCallback((section: DraftSection) => {
     sectionsRef.current = { ...sectionsRef.current, [section.key]: section };
     schedulePersist();
+    scheduleSectionSync(section.key); // the server keeps a copy while the inspector works (services/liveSync.ts)
   }, [schedulePersist]);
 
   const getSection = useCallback((key: string) => sectionsRef.current[key], []);
@@ -219,6 +221,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     templatesRef.current = {};
     answersRef.current = {};
     baselineSectionsRef.current = null;
+    resetLiveSync();
     void clearDraftSnapshot();
   }, []);
 
@@ -357,6 +360,12 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
       hydrateFromSnapshot,
     ],
   );
+
+  // The background saver (services/liveSync.ts) reads the draft through these.
+  useEffect(() => {
+    attachDraft({ buildPayload, getFolderId, getTop, getAnswers });
+    return () => attachDraft(null);
+  }, [buildPayload, getFolderId, getTop, getAnswers]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

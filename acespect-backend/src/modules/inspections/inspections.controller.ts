@@ -77,6 +77,15 @@ export const inspectionsController = {
     res.status(201).json({ inspectionId: inspection.id, status: inspection.status, receipt });
   }),
 
+  // Saves one section while the inspector is still working (see inspectionsService.syncSection).
+  syncSection: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    const result = await inspectionsService.syncSection(req.user.id, id, req.body);
+    res.status(200).json(result);
+  }),
+
   update: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;

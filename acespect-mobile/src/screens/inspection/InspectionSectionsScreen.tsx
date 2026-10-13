@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -14,6 +14,7 @@ import {
 } from '../../constants/inspectionSections';
 import { AppScreenProps } from '../../navigation/types';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
+import { getLiveSyncStatus, subscribeLiveSync, type LiveSyncStatus } from '../../services/liveSync';
 import { JobSetupData } from '../../types/jobSetup';
 
 /**
@@ -36,6 +37,8 @@ export function InspectionSectionsScreen({
   route,
 }: AppScreenProps<'InspectionSections'>) {
   const draft = useInspectionDraft();
+  const [backup, setBackup] = useState<LiveSyncStatus>(getLiveSyncStatus());
+  useEffect(() => subscribeLiveSync(setBackup), []);
   const { propertyTypeId, inspectionTypeId, stageId } = draft.getTop();
 
   // `route.params.data` has arrived here undefined in practice -- some path
@@ -168,6 +171,15 @@ export function InspectionSectionsScreen({
           {completedCount} of {totalSections} sections completed
           {partialCount > 0 ? ` · ${partialCount} partially done` : ''}
         </Text>
+        {backup.state !== 'idle' && (
+          <Text style={[styles.progressMeta, { color: backup.state === 'waiting' ? colors.warning : colors.success }]}>
+            {backup.state === 'saving'
+              ? '☁ Backing up to the office…'
+              : backup.state === 'waiting'
+                ? '☁ Not backed up yet — will retry (everything is safe on this phone)'
+                : `☁ Backed up to the office · ${backup.savedSections} section${backup.savedSections === 1 ? '' : 's'}`}
+          </Text>
+        )}
       </View>
 
       <ScrollView

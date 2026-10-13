@@ -258,7 +258,10 @@ async function getSubmissionHealth() {
   const flagged = rows
     .map((i) => {
       const reasons: string[] = [];
-      if (!i.sections.some((s) => s.key !== 'job-info')) reasons.push('Only Job Information arrived: no sections or photos were saved with it.');
+      // A draft with only Job Information is normal at the start of an inspection (the phone saves sections as they are finished);
+      // it is only a problem once submitted, or when it has sat that way for a day.
+      const stale = i.status !== 'DRAFT' || i.createdAt.getTime() < Date.now() - 24 * 3600 * 1000;
+      if (stale && !i.sections.some((s) => s.key !== 'job-info')) reasons.push('Only Job Information arrived: no sections or photos were saved with it.');
       if (i.egnyteStatus === 'failed') reasons.push(`Egnyte folder not placed: ${i.egnyteMessage ?? 'unknown error'}`);
       else if (i.egnyteStatus === 'needs_review') reasons.push(`Egnyte folder needs a look: ${i.egnyteMessage ?? ''}`);
       else if (i.egnyteStatus === 'unassigned') reasons.push(`Photos are waiting for a valid job number: ${i.egnyteMessage ?? ''}`);
