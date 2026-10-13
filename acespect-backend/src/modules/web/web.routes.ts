@@ -19,6 +19,7 @@ router.patch(
   validate(inspectionUpdateSchema),
   webController.updateInspection,
 );
+router.post('/inspections/:id/approve-all', requireAuth, reviewers, webController.approveAll);
 router.post('/inspections/:id/egnyte/resolve', requireAuth, reviewers, webController.resolveEgnyte);
 router.patch(
   '/sections/:id',

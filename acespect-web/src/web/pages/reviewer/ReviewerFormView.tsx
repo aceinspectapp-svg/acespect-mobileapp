@@ -988,9 +988,11 @@ export function ReviewerFormView() {
   async function approveAll() {
     setBusy(true);
     try {
-      for (const s of sections) {
-        await patchSection(inspection!.id, s.id, { reviewStatus: "approved" });
-      }
+      // One request approves every section; then the inspection is refreshed once (not once per section).
+      await api.approveAllSections(inspection!.id);
+      await patchInspection(inspection!.id, {});
+    } catch (e) {
+      alert((e as Error).message || "Could not approve the sections.");
     } finally {
       setBusy(false);
     }

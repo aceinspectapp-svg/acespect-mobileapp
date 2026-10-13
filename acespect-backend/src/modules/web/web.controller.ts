@@ -48,6 +48,12 @@ export const webController = {
     res.status(200).json(await webService.getSubmissionHealth());
   }),
 
+  approveAll: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    res.status(200).json({ inspection: await webService.approveAllSections(id) });
+  }),
+
   mailStatus: asyncHandler(async (_req: Request, res: Response) => {
     const { mailStatus } = await import('../../lib/mailer');
     const { env } = await import('../../config/env');

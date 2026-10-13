@@ -145,16 +145,27 @@ async function fetchWithRefresh(url: string, init: RequestInit): Promise<Respons
 export async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const token = getToken();
   const client = getActiveClientId();
-  const res = await fetchWithRefresh(`${API_BASE}${path}`, {
-    ...opts,
-    headers: {
-      "Content-Type": "application/json",
-      "X-App-Client": "web",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(client ? { "X-Client-Id": client } : {}),
-      ...(opts.headers ?? {}),
-    },
-  });
+  // A short "too many requests" (HTTP 429) is waited out and retried (twice at most) instead of failing the action: the server says how long
+  // to wait. Longer waits, and sign-in attempts, are reported to the person instead.
+  let res: Response;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetchWithRefresh(`${API_BASE}${path}`, {
+      ...opts,
+      headers: {
+        "Content-Type": "application/json",
+        "X-App-Client": "web",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(client ? { "X-Client-Id": client } : {}),
+        ...(opts.headers ?? {}),
+      },
+    });
+    const waitSeconds = Number(res.headers.get("Retry-After"));
+    if (res.status === 429 && attempt < 2 && waitSeconds > 0 && waitSeconds <= 20 && !path.startsWith("/auth/login")) {
+      await new Promise((r) => setTimeout(r, waitSeconds * 1000));
+      continue;
+    }
+    break;
+  }
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     let code: string | undefined;
@@ -316,6 +327,9 @@ export const api = {
   /** A damage record's own photo-exclusion list -- see updateSection above for the same idea, one level down. */
   updateDamage: (id: string, patch: { excludedPhotoUrls?: string[]; photos?: string[] }) =>
     req<{ damage: unknown }>(`/web/damages/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+
+  /** Approve every section of an inspection in one request (the reviewer's "Approve All"). */
+  approveAllSections: (id: string) => req<{ inspection: Inspection }>(`/web/inspections/${id}/approve-all`, { method: "POST" }).then((d) => d.inspection),
 
   /** Re-run the Egnyte folder placement for one inspection (after a failure, or once its job number was corrected). */
   resolveEgnyte: (id: string) => req<{ inspection: Inspection }>(`/web/inspections/${id}/egnyte/resolve`, { method: "POST" }).then((d) => d.inspection),
