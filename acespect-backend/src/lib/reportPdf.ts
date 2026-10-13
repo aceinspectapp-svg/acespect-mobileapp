@@ -70,6 +70,14 @@ function buildFooterTemplate(clientName: string, jobNo: string, inspectionDate: 
 }
 
 /**
+ * How long the report page may take to load (and then settle its photo layout). The photographs come from Egnyte, which allows about
+ * two requests a second (see egnyteFetch in storage.ts), so a report with a hundred photographs needs close to a minute on a cold
+ * cache -- the old 30 / 15 seconds cut those reports short and left their photographs out. A photograph that fails settles at once
+ * (the page shows "Photograph unavailable" for it), so this is a ceiling, not a delay.
+ */
+const PHOTO_LOAD_TIMEOUT_MS = 240_000;
+
+/**
  * Opens the real `/report/:id` page in a headless browser, signed in as the caller, and waits until the report -- and the photo grids
  * that lay themselves out from each photo's real shape -- has finished drawing. `use` then does what it needs with the page (print it
  * to PDF, read it out for the Word file). `print`: lay the page out as it prints (the toolbar hidden, the page breaks in place).
@@ -107,7 +115,7 @@ export async function withReportPage<T>(
 
     await page.goto(`${env.WEB_APP_URL}/report/${inspectionId}`, {
       waitUntil: 'networkidle0',
-      timeout: 30_000,
+      timeout: PHOTO_LOAD_TIMEOUT_MS,
     });
     // Past the "Loading…" / "Inspection not found." placeholder -- the real
     // document only exists once this class mounts.
@@ -117,7 +125,7 @@ export async function withReportPage<T>(
     // (a grid marks itself data-photo-grid-pending until then). Bounded, so one
     // photo that never loads can't stop the report from being produced.
     await page
-      .waitForFunction("!document.querySelector('[data-photo-grid-pending]')", { timeout: 15_000 })
+      .waitForFunction("!document.querySelector('[data-photo-grid-pending]')", { timeout: PHOTO_LOAD_TIMEOUT_MS })
       .catch(() => undefined);
     return await use(page);
   } finally {
