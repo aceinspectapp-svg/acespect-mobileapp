@@ -1,54 +1,50 @@
-import crypto from 'node:crypto';
-import type { Request } from 'express';
 import rateLimit from 'express-rate-limit';
-import { env } from '../config/env';
+import type { Request, Response } from 'express';
 import { verifyAccessToken } from '../utils/jwt';
+import { env } from '../config/env';
 
-/**
- * Rate limits. Two things decide whether they are fair:
- *
- *  - WHO a request is counted against. `req.ip` is the visitor's real address (middleware/clientIp.ts); a request carrying a valid login
- *    is counted against that USER, not their address, so a team sharing one office connection, or one person with several tabs open,
- *    does not share a single allowance.
- *  - What a limit is FOR. The strict one guards the sign-in endpoints against password guessing, so it counts per address AND per
- *    account: one person's failed attempts never lock out a colleague. Renewing a login (refresh) happens every few minutes for every
- *    signed-in tab and uses a long random token that cannot be guessed, so it gets a generous limit of its own.
+// Only the local test harness sets this; it is never set in a deployed environment.
+const off = () => process.env.RATE_LIMIT_OFF === '1';
+
+/*
+ * `req.ip` below is the visitor's real address: middleware/clientIp.ts replaces Express's own guess (behind Railway, often one of Railway's
+ * own servers, shared by every visitor) with the address in X-Real-IP, which Railway's edge sets on every request.
  */
 
-const WINDOW_MS = 15 * 60 * 1000;
-// Only the local test harness sets this; it is never set in a deployed environment.
-const skip = () => process.env.RATE_LIMIT_OFF === '1';
-
-/** The signed-in user a request belongs to, by a valid access token; null for no token, an expired one or a forged one. */
-function userOf(req: Request): string | null {
+/**
+ * Who a request counts against: the signed-in user when the token is valid (the signature is checked, so this cannot be forged to
+ * dodge the limit), otherwise the network address. A whole office usually shares ONE address, so counting by address alone let
+ * one busy reviewer -- or one person mistyping a password -- lock out everyone else at the same desk.
+ */
+function who(req: Request): string {
   const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) return null;
-  try {
-    return verifyAccessToken(header.slice('Bearer '.length).trim()).sub;
-  } catch {
-    return null;
+  if (header?.startsWith('Bearer ')) {
+    try {
+      return `user:${verifyAccessToken(header.slice('Bearer '.length).trim()).sub}`;
+    } catch {
+      /* an invalid token is treated as anonymous */
+    }
   }
+  return `ip:${req.ip}`;
 }
 
-const address = (req: Request): string => req.ip ?? 'unknown';
-const shortHash = (value: string): string => crypto.createHash('sha256').update(value).digest('hex').slice(0, 16);
+const wait = (seconds: number): string => (seconds < 90 ? `${seconds} second${seconds === 1 ? '' : 's'}` : `${Math.ceil(seconds / 60)} minutes`);
 
-/** Who a sign-in style request is about: the account's email, or the one-time token it carries. Empty when it names neither. */
-function subjectOf(req: Request): string {
-  const body = (req.body ?? {}) as Record<string, unknown>;
-  if (typeof body.email === 'string' && body.email.trim()) return `e:${body.email.trim().toLowerCase()}`;
-  for (const key of ['mfaToken', 'token']) {
-    if (typeof body[key] === 'string' && body[key]) return `t:${shortHash(body[key] as string)}`;
-  }
-  const param = req.params?.token;
-  return typeof param === 'string' && param ? `t:${shortHash(param)}` : '';
+/** A 429 that says how long to wait (message, Retry-After header and retryAfterSeconds), so the apps can show it or retry by themselves. */
+function refuse(what: string) {
+  return (req: Request, res: Response): void => {
+    const reset = (req as Request & { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime;
+    const seconds = Math.max(1, Math.ceil(((reset?.getTime() ?? Date.now() + 60_000) - Date.now()) / 1000));
+    res.set('Retry-After', String(seconds));
+    res.status(429).json({ error: { message: `${what} Please wait ${wait(seconds)} and try again.`, code: 'RATE_LIMITED', retryAfterSeconds: seconds } });
+  };
 }
 
-const tooMany = { error: { message: 'Too many requests -- please wait a few minutes and try again', code: 'RATE_LIMITED' } };
+const base = { windowMs: 15 * 60 * 1000, skip: off, standardHeaders: true, legacyHeaders: false } as const;
 
 /**
- * Tight limiter for credential endpoints (login/register/password reset/invitations/MFA) to blunt brute-force and
- * credential-stuffing. Counted per address AND per account (or per one-time token), so a shared office connection does not share it.
+ * Sign-in: only FAILED attempts count (a correct password never uses up the allowance), per account and address together -- so
+ * mistyping one person's password cannot lock the others out -- plus a much looser per-address ceiling against credential stuffing.
  */
 export const loginByAccount = rateLimit({
   ...base,
@@ -67,36 +63,22 @@ export const loginByAddress = rateLimit({
 
 /** The rest of the credential endpoints (sign-up, password reset, invitations): tight, by address. */
 export const authLimiter = rateLimit({
-  windowMs: WINDOW_MS,
-  max: 20,
-  keyGenerator: (req) => `${address(req)}|${subjectOf(req)}`,
-  skip,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: { message: 'Too many attempts, please try again later', code: 'RATE_LIMITED' } },
+  ...base,
+  limit: 20,
+  handler: refuse('Too many attempts.'),
 });
 
-/** Renewing a login. Every signed-in tab does this every few minutes, so it must not share the strict credential limit. */
+/** Renewing a session happens on its own every few minutes in every open tab, so it gets its own, generous allowance. */
 export const refreshLimiter = rateLimit({
-  windowMs: WINDOW_MS,
-  max: 300,
-  keyGenerator: (req) => address(req),
-  skip,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: tooMany,
+  ...base,
+  limit: 200,
+  handler: refuse('Too many session renewals.'),
 });
 
-/** Default limiter for the rest of the API: per signed-in user, or per address for requests with no valid login. */
+/** The rest of the API: counted per signed-in user (API_RATE_LIMIT_USER, 1500 requests / 15 min), or per address when not signed in (API_RATE_LIMIT_ANON, 300). */
 export const apiLimiter = rateLimit({
-  windowMs: WINDOW_MS,
-  limit: (req) => (userOf(req) ? env.API_RATE_LIMIT_USER : env.API_RATE_LIMIT_ANON),
-  keyGenerator: (req) => {
-    const user = userOf(req);
-    return user ? `user:${user}` : `ip:${address(req)}`;
-  },
-  skip,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: tooMany,
+  ...base,
+  limit: (req) => (who(req).startsWith('user:') ? env.API_RATE_LIMIT_USER : env.API_RATE_LIMIT_ANON),
+  keyGenerator: who,
+  handler: refuse('Too many requests.'),
 });

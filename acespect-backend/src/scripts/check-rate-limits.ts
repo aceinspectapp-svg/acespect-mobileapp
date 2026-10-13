@@ -31,7 +31,7 @@ async function main() {
   const server: Server = await new Promise((ok) => { const s = createApp().listen(0, () => ok(s)); });
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/v1`;
 
-  const hit = async (path: string, init: { ip?: string; token?: string; method?: string; body?: unknown } = {}): Promise<{ status: number; code?: string }> => {
+  const hit = async (path: string, init: { ip?: string; token?: string; method?: string; body?: unknown } = {}): Promise<{ status: number; code?: string; wait?: number }> => {
     const res = await fetch(`${base}${path}`, {
       method: init.method ?? 'GET',
       headers: { 'Content-Type': 'application/json', ...(init.ip ? { 'X-Real-IP': init.ip } : {}), ...(init.token ? { Authorization: `Bearer ${init.token}` } : {}) },
@@ -39,10 +39,11 @@ async function main() {
     });
     const text = await res.text();
     let code: string | undefined;
-    try { code = JSON.parse(text)?.error?.code; } catch { /* plain text */ }
-    return { status: res.status, code };
+    let wait: number | undefined;
+    try { const e = JSON.parse(text)?.error; code = e?.code; wait = e?.retryAfterSeconds; } catch { /* plain text */ }
+    return { status: res.status, code, wait };
   };
-  const run = async (n: number, f: () => Promise<{ status: number; code?: string }>) => { const out = []; for (let i = 0; i < n; i++) out.push(await f()); return out; };
+  const run = async (n: number, f: () => Promise<{ status: number; code?: string; wait?: number }>) => { const out = []; for (let i = 0; i < n; i++) out.push(await f()); return out; };
   const statuses = (r: { status: number }[]) => r.map((x) => x.status).join(' ');
 
   try {
@@ -51,7 +52,7 @@ async function main() {
     check(a.slice(0, 30).every((x) => x.status !== 429) && a.slice(30).every((x) => x.status === 429), 'one visitor is limited after its own 30 requests', `${a.filter((x) => x.status === 429).length} of 32 refused`);
     const b = await run(3, () => hit('/web/users', { ip: '203.0.113.11' }));
     check(b.every((x) => x.status !== 429), 'a different visitor is not affected by the first one', statuses(b));
-    check(a[31]!.code === 'RATE_LIMITED', 'the refusal is a readable JSON error (RATE_LIMITED), not a bare "HTTP 429"');
+    check(a[31]!.code === 'RATE_LIMITED' && (a[31]!.wait ?? 0) > 0, 'the refusal is a readable JSON error (RATE_LIMITED) that says how long to wait, not a bare "HTTP 429"', `wait ${a[31]!.wait}s`);
 
     // 2. a signed-in user is counted as that user, from any address; another user has their own allowance
     const tokenU = signAccessToken({ sub: 'user-aaaa', role: 'INSPECTOR', tv: 0 });
@@ -73,15 +74,16 @@ async function main() {
 
     // 5. sign-in is limited per account: one account's failed attempts do not stop another
     const login = (email: string) => hit('/auth/login', { ip: '203.0.113.50', method: 'POST', body: { email, password: 'wrong-password-123' } });
-    const l1 = await run(22, () => login('one@example.com'));
-    check(l1.slice(0, 20).every((x) => x.status !== 429) && l1.slice(20).every((x) => x.status === 429), 'sign-in: one account is limited after 20 tries', statuses(l1.slice(18)));
+    // only FAILED attempts count, 10 per account and address
+    const l1 = await run(12, () => login('one@example.com'));
+    check(l1.slice(0, 10).every((x) => x.status !== 429) && l1.slice(10).every((x) => x.status === 429), 'sign-in: one account is limited after 10 failed tries', statuses(l1.slice(8)));
     const l2 = await login('two@example.com');
     check(l2.status !== 429, 'sign-in: a different account from the same address is not locked out', String(l2.status));
 
     // 6. renewing a login has its own generous limit
-    // 28 renewals: past the sign-in limit of 20 (which they must not share), under the general limit of 30 that every request to the API counts toward
+    // 28 renewals: well past the sign-in limit (which they must not share), under the general limit of 30 that every request to the API counts toward
     const r = await run(28, () => hit('/auth/refresh', { ip: '203.0.113.60', method: 'POST', body: { refreshToken: 'x'.repeat(96) } }));
-    check(r.every((x) => x.status !== 429), '28 login renewals from one address are all allowed (more than the sign-in limit of 20)', `${r.filter((x) => x.status === 429).length} refused`);
+    check(r.every((x) => x.status !== 429), '28 login renewals from one address are all allowed (renewing has its own, larger limit)', `${r.filter((x) => x.status === 429).length} refused`);
 
     // 7. photos are never limited
     const m = await run(30, () => hit('/media/00000000-0000-0000-0000-000000000000', { ip: '203.0.113.70' }));

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authController } from './auth.controller';
 import { validate } from '../../middleware/validate';
 import { requireAuth } from '../../middleware/auth';
-import { authLimiter, refreshLimiter } from '../../middleware/rateLimit';
+import { authLimiter, loginByAccount, loginByAddress, refreshLimiter } from '../../middleware/rateLimit';
 import {
   acceptInvitationSchema,
   changePasswordSchema,
@@ -23,8 +23,8 @@ const router = Router();
 
 // Credential endpoints are rate-limited.
 router.post('/register', authLimiter, validate(registerSchema), authController.register);
-router.post('/login', authLimiter, validate(loginSchema), authController.login);
-router.post('/google', authLimiter, validate(googleSchema), authController.google);
+router.post('/login', loginByAddress, loginByAccount, validate(loginSchema), authController.login);
+router.post('/google', loginByAddress, validate(googleSchema), authController.google);
 router.post('/refresh', refreshLimiter, validate(refreshSchema), authController.refresh);
 router.post('/logout', validate(logoutSchema), authController.logout);
 

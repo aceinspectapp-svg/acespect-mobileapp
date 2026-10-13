@@ -27,7 +27,7 @@ const schema = z.object({
   // development, tests). Defaults to x-real-ip when running on Railway.
   CLIENT_IP_HEADER: z.string().default(process.env.RAILWAY_ENVIRONMENT ? 'x-real-ip' : ''),
   // API requests allowed per 15 minutes: per signed-in user, and per address for requests with no valid login.
-  API_RATE_LIMIT_USER: z.coerce.number().int().positive().default(1000),
+  API_RATE_LIMIT_USER: z.coerce.number().int().positive().default(1500),
   API_RATE_LIMIT_ANON: z.coerce.number().int().positive().default(300),
 
   // Allowed Google OAuth client IDs (comma-separated) that may appear as the
