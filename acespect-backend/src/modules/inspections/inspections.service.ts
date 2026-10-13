@@ -46,7 +46,25 @@ function sectionCreateData(s: SubmitInspectionInput['sections'][number]) {
  * went straight to SUBMITTED and into the review queue, leaving no chance to
  * correct a mistake.)
  */
+/** What was actually stored for an inspection: its sections (other than Job Information) and the distinct uploaded photos they reference. */
+export async function receiptFor(inspectionId: string): Promise<{ sections: number; photos: number }> {
+  const secs = await prisma.section.findMany({ where: { inspectionId }, select: { key: true, answers: true, photos: true, damages: { select: { photos: true } } } });
+  const ids = new Set<string>();
+  for (const s of secs) for (const m of JSON.stringify([s.answers, s.photos, s.damages]).matchAll(/\/api\/v1\/media\/([0-9a-f-]{36})/gi)) ids.add(m[1]!.toLowerCase());
+  const found = ids.size ? await prisma.photo.count({ where: { id: { in: [...ids] } } }) : 0;
+  return { sections: secs.filter((s) => s.key !== 'job-info').length, photos: found };
+}
+
 async function submit(inspectorId: string, input: SubmitInspectionInput) {
+  // A blank (Job-Information-only) submission for a job that already has a real inspection from this inspector is a leftover, not a new
+  // inspection: refuse it, so it cannot sit beside -- or stand in for -- the real one.
+  if (input.jobNo && !input.sections.some((s) => s.key !== 'job-info')) {
+    const real = await prisma.inspection.findFirst({
+      where: { inspectorId, jobNo: { equals: input.jobNo, mode: 'insensitive' }, createdAt: { gte: new Date(Date.now() - 14 * 24 * 3600 * 1000) }, sections: { some: { key: { not: 'job-info' } } } },
+      select: { id: true },
+    });
+    if (real) throw new ApiError(409, `An inspection for ${input.jobNo} with real content already exists; this blank one was not saved.`, 'BLANK_DUPLICATE');
+  }
   const data = {
     inspectionType: input.inspectionType,
     propertyType: input.propertyType,

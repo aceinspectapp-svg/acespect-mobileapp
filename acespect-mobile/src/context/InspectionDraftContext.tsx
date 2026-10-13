@@ -78,6 +78,9 @@ export interface SubmitPayload extends DraftTop {
    *  photo was already uploaded into along the way. */
   id?: string;
   sections: DraftSection[];
+  /** What this phone believes it is sending (sections other than Job Information, distinct uploaded photos). The server answers with what it
+   *  stored; the inspection is only treated as safely sent when both agree. */
+  expected?: { sections: number; photos: number };
 }
 
 interface DraftValue {

@@ -50,10 +50,18 @@ export async function uploadPhoto(
   return data.url;
 }
 
-/** Submit the structured inspection. Returns the created inspection id. */
+export interface SubmitResult {
+  inspectionId: string;
+  reviewJobId: string;
+  status: string;
+  /** What the server actually stored. */
+  receipt?: { sections: number; photos: number };
+}
+
+/** Submit the structured inspection. Returns the created inspection id and the server's receipt for it. */
 export async function submitInspection(
   payload: SubmitPayload,
-): Promise<{ inspectionId: string; reviewJobId: string; status: string }> {
+): Promise<SubmitResult> {
   const { data } = await api.post('/inspections/submit', payload, {
     // Same reasoning as uploadPhoto's override above: the payload itself is
     // small (photos are already-uploaded URLs by this point), but creating

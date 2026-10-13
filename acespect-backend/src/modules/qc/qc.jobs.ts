@@ -8,6 +8,7 @@ import { sendDigests, notify } from './qc.notify';
 import { runSlaScan } from './qc.sla.service';
 import { runDlpScan } from './qc.dlp.service';
 import { enforceRetention } from './qc.privacy.service';
+import { scanOrphanUploads } from '../../lib/submissionAlerts';
 
 const MIN = 60_000;
 let registered = false;
@@ -18,6 +19,8 @@ export function registerQcJobs(): void {
 
   registerJob({ name: 'qc.sla-scan', everyMs: 5 * MIN, run: async () => void (await runSlaScan()) });
   registerJob({ name: 'qc.dlp-scan', everyMs: 60 * MIN, run: async () => void (await runDlpScan()) });
+  // Photos that reached Egnyte for an inspection that never arrived are mailed to the admins (lib/submissionAlerts.ts).
+  registerJob({ name: 'submissions.orphan-scan', everyMs: 10 * MIN, run: async () => void (await scanOrphanUploads()) });
   registerJob({ name: 'qc.digests', everyMs: 15 * MIN, run: async () => void (await sendDigests()) });
 
   // Safety Hazards repeat until someone acknowledges them (REQ-NOT-003).

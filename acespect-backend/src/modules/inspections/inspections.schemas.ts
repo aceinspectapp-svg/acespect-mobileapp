@@ -67,6 +67,10 @@ export const submitInspectionSchema = z.object({
 
   sections: z.array(sectionSchema).max(50).default([]),
 
+  /** What the phone believes it is sending (sections other than Job Information, and distinct uploaded photos): the server answers with
+   *  what it actually stored, and both sides raise an alarm if they differ. Optional so older app builds keep working. */
+  expected: z.object({ sections: z.number().int().min(0), photos: z.number().int().min(0) }).optional(),
+
   /** Set when submitting a Post-Dilapidation job the inspector picked up from
    *  their assigned list (GET /inspections/assigned) -- the id of the
    *  placeholder Inspection admin created via

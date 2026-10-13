@@ -3,7 +3,8 @@ import { Readable } from 'node:stream';
 import { ZipArchive } from 'archiver';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
-import { inspectionsService } from './inspections.service';
+import { inspectionsService, receiptFor } from './inspections.service';
+import { alertAdmins } from '../../lib/submissionAlerts';
 import { fetchPhotoStream } from '../../lib/storage';
 import { generateInspectionReportPdf } from '../../lib/reportPdf';
 import { generateInspectionReportDocx } from '../../lib/reportDocx';
@@ -63,8 +64,17 @@ export const inspectionsController = {
         { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo },
         { reason: 'only_job_information', message: 'Only Job Information was received -- no sections or photos came with this submission.' },
       );
+      void alertAdmins(`blank:${inspection.id}`, `Submission ${inspection.jobNo ?? ''} contains only Job Information`, ['No sections or photos came with this submission; the full inspection may still be waiting on the inspector\'s phone.'], { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo });
     }
-    res.status(201).json({ inspectionId: inspection.id, status: inspection.status });
+    // The receipt: what the server actually stored. The phone keeps its copy until this matches what it sent.
+    const receipt = await receiptFor(inspection.id);
+    const expected = (req.body as { expected?: { sections: number; photos: number } }).expected;
+    if (expected && (expected.sections !== receipt.sections || expected.photos !== receipt.photos)) {
+      const message = `The phone sent ${expected.sections} section(s) and ${expected.photos} photo(s); the server stored ${receipt.sections} and ${receipt.photos}.`;
+      logSubmit('warning', { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo }, { reason: 'receipt_mismatch', message });
+      void alertAdmins(`mismatch:${inspection.id}`, `Submission ${inspection.jobNo ?? ''} arrived incomplete`, [message], { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo });
+    }
+    res.status(201).json({ inspectionId: inspection.id, status: inspection.status, receipt });
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {

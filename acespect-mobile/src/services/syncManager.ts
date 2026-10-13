@@ -3,7 +3,7 @@ import { File } from 'expo-file-system';
 import type { SubmitPayload } from '../context/InspectionDraftContext';
 import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
 import { getSyncQueue, setSyncQueue, getWifiOnlySync, QueuedSubmission } from './offlineStorage';
-import { submitInspection, uploadPhoto } from './inspectionApi';
+import { submitInspection, uploadPhoto, type SubmitResult } from './inspectionApi';
 
 /**
  * Foreground-only sync: an inspection finished offline is queued here and
@@ -168,7 +168,19 @@ async function walkAndResolvePhotos(
  * re-uploading -- and creating a second Egnyte copy of -- every photo that
  * already made it up.
  */
-export async function runSubmission(payload: SubmitPayload): Promise<{ inspectionId: string; reviewJobId: string; status: string }> {
+/** True when the server's receipt matches what this phone sent. */
+export function receiptMatches(payload: SubmitPayload, result: { receipt?: { sections: number; photos: number } }): boolean {
+  return !!result.receipt && !!payload.expected && result.receipt.sections === payload.expected.sections && result.receipt.photos === payload.expected.photos;
+}
+
+/** What the payload claims to contain: sections other than Job Information, and the distinct uploaded photos they reference. */
+function expectedContent(payload: SubmitPayload): { sections: number; photos: number } {
+  const ids = new Set<string>();
+  for (const m of JSON.stringify(payload.sections.map((s) => [s.answers, s.photos, s.damages])).matchAll(/\/api\/v1\/media\/([0-9a-f-]{36})/gi)) ids.add(m[1]!.toLowerCase());
+  return { sections: payload.sections.filter((s) => s.key !== 'job-info').length, photos: ids.size };
+}
+
+export async function runSubmission(payload: SubmitPayload): Promise<SubmitResult> {
   const inspectionId = payload.id;
   const jobNo = payload.jobNo;
   const urlByUri = new Map<string, string>();
@@ -208,6 +220,7 @@ export async function runSubmission(payload: SubmitPayload): Promise<{ inspectio
     section.damages = (section.damages ?? []).map((d) => ({ ...d, photos: (d.photos ?? []).map(resolve) }));
   }
 
+  payload.expected = expectedContent(payload);
   return submitInspection(payload);
 }
 
@@ -265,6 +278,12 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
         queueCache = queueCache.filter((e) => e.id !== id);
         await persist();
       } catch (err) {
+        // The server already holds a real inspection for this job and refused this blank leftover: nothing to send, so stop retrying it.
+        if ((err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code === 'BLANK_DUPLICATE') {
+          queueCache = queueCache.filter((e) => e.id !== id);
+          await persist();
+          continue;
+        }
         const message = err instanceof Error ? err.message : 'Unknown error';
         queueCache = queueCache.map((e) => (e.id === id ? { ...e, attempts: e.attempts + 1, lastError: message } : e));
         await persist();

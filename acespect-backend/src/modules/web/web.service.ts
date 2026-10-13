@@ -267,17 +267,8 @@ async function getSubmissionHealth() {
     .filter((x) => x.reasons.length > 0);
 
   // Photos stored in a draft-id folder whose inspection never reached the server: the phone uploaded them, then the submission did not land.
-  const { egnyteRootFolder } = await import('../../lib/storage');
-  const root = egnyteRootFolder();
-  const orphans = await prisma.$queryRaw<{ folder: string; photos: number; firstAt: Date; lastAt: Date; sections: string[] }[]>`
-    SELECT split_part(substring(p."storageKey" from ${root.length + 2}::int), '/', 1) AS folder,
-           count(*)::int AS photos, min(p."createdAt") AS "firstAt", max(p."createdAt") AS "lastAt",
-           array_agg(DISTINCT split_part(substring(p."storageKey" from ${root.length + 2}::int), '/', 2)) AS sections
-    FROM photos p
-    WHERE p."storageKey" LIKE ${root + '/%'}
-      AND split_part(substring(p."storageKey" from ${root.length + 2}::int), '/', 1) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-      AND NOT EXISTS (SELECT 1 FROM inspections i WHERE i.id = split_part(substring(p."storageKey" from ${root.length + 2}::int), '/', 1))
-    GROUP BY 1 ORDER BY max(p."createdAt") DESC LIMIT 50`;
+  const { findOrphanUploads } = await import('../../lib/submissionAlerts');
+  const orphans = await findOrphanUploads(0, 50);
   return {
     flagged,
     orphanUploads: orphans.map((o) => ({ draftId: o.folder, photos: o.photos, firstAt: o.firstAt.toISOString(), lastAt: o.lastAt.toISOString(), sections: o.sections.filter(Boolean) })),
