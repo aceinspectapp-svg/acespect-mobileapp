@@ -124,6 +124,9 @@ model RefreshToken {
   userId    String
   expiresAt DateTime
   revokedAt DateTime?
+  /// Set when the token was swapped for a new one at a refresh (and cleared if the person is signed out everywhere afterwards): for a short
+  /// leeway after this, presenting it again still renews the login, so a renewal whose answer was lost does not end the session.
+  rotatedAt DateTime?
   createdAt DateTime  @default(now())
 
   @@index([userId])

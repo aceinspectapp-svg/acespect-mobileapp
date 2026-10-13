@@ -83,6 +83,8 @@ async function issueTokens(user: User): Promise<AuthResult> {
 export async function revokeAllSessions(userId: string, reason: string): Promise<void> {
   await prisma.user.update({ where: { id: userId }, data: { tokenVersion: { increment: 1 } } });
   await prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+  // A token swapped a moment ago must not be usable again either (see `refresh`'s leeway).
+  await prisma.refreshToken.updateMany({ where: { userId, rotatedAt: { not: null } }, data: { rotatedAt: null } });
   clearAuthCache(userId);
   await logSecurityEvent({ type: 'SESSION_REVOKED', userId, detail: { reason } });
 }
@@ -368,22 +370,38 @@ export const authService = {
     return issueTokens(user);
   },
 
-  /** Rotate a refresh token: validate, revoke the old, issue a fresh pair. */
+  /**
+   * Rotate a refresh token: validate, revoke the old, issue a fresh pair.
+   *
+   * A refresh token works once. If the answer to a renewal never arrives (the server restarted mid-request, the connection dropped) or two
+   * tabs renew at the same moment, the person's browser is left holding a token already used, and without a leeway that ends the session
+   * for good. So for REFRESH_REUSE_LEEWAY_SEC after a token was swapped, presenting it again still gets a new pair. A token revoked any
+   * other way (sign-out, sign-out everywhere, deactivation) never gets this.
+   */
   async refresh(rawToken: string, info: RequestInfo = {}): Promise<AuthResult> {
     const tokenHash = hashRefreshToken(rawToken);
     const stored = await prisma.refreshToken.findUnique({ where: { tokenHash }, include: { user: true } });
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date() || !stored.user.isActive) {
-      throw ApiError.unauthorized('Invalid or expired refresh token', 'INVALID_REFRESH_TOKEN');
-    }
+    const invalid = () => ApiError.unauthorized('Invalid or expired refresh token', 'INVALID_REFRESH_TOKEN');
+    if (!stored || stored.expiresAt < new Date() || !stored.user.isActive) throw invalid();
+    const withinLeeway = (rotatedAt: Date | null): boolean => !!rotatedAt && env.REFRESH_REUSE_LEEWAY_SEC > 0 && Date.now() - rotatedAt.getTime() <= env.REFRESH_REUSE_LEEWAY_SEC * 1000;
+    if (stored.revokedAt && !withinLeeway(stored.rotatedAt)) throw invalid();
     // Web sessions end after the client's idle timeout; the refresh token's age is time since last activity.
     if (info.appClient === 'web' && stored.user.role !== 'ADMIN') {
       const idle = await idleMinutes(stored.userId);
       if (Date.now() - stored.createdAt.getTime() > idle * 60_000) {
-        await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
+        if (!stored.revokedAt) await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
         throw ApiError.unauthorized('Your session timed out because of inactivity', 'SESSION_IDLE');
       }
     }
-    await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
+    if (!stored.revokedAt) {
+      // Claim the token: of two renewals arriving together only one gets to swap it; the other finds it already swapped and uses the leeway.
+      const now = new Date();
+      const claimed = await prisma.refreshToken.updateMany({ where: { id: stored.id, revokedAt: null }, data: { revokedAt: now, rotatedAt: now } });
+      if (claimed.count === 0) {
+        const fresh = await prisma.refreshToken.findUnique({ where: { id: stored.id }, select: { rotatedAt: true } });
+        if (!withinLeeway(fresh?.rotatedAt ?? null)) throw invalid();
+      }
+    }
     return issueTokens(stored.user);
   },
 

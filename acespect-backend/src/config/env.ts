@@ -16,6 +16,19 @@ const schema = z.object({
   JWT_REFRESH_SECRET: z.string().min(16, 'JWT_REFRESH_SECRET must be at least 16 chars'),
   ACCESS_TOKEN_TTL_MIN: z.coerce.number().int().positive().default(15),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  // A refresh token is single-use (each refresh hands out a new one), so a renewal whose answer never arrived -- a restart mid-request,
+  // a dropped connection, two tabs renewing together -- would otherwise end the session for good. For this many seconds after a token was
+  // swapped, presenting it again is answered with another new pair instead of "invalid". 0 turns it off.
+  REFRESH_REUSE_LEEWAY_SEC: z.coerce.number().int().min(0).default(60),
+
+  // Which request header carries the visitor's real address, for rate limits and the security log. Behind Railway's edge, Express's own
+  // `req.ip` is unreliable (Railway does not fix how many proxies sit in front, and the address it finds is often one of Railway's own
+  // servers, shared by every visitor), and Railway sets X-Real-IP itself on every request. Empty = use Express's `req.ip` (local
+  // development, tests). Defaults to x-real-ip when running on Railway.
+  CLIENT_IP_HEADER: z.string().default(process.env.RAILWAY_ENVIRONMENT ? 'x-real-ip' : ''),
+  // API requests allowed per 15 minutes: per signed-in user, and per address for requests with no valid login.
+  API_RATE_LIMIT_USER: z.coerce.number().int().positive().default(1000),
+  API_RATE_LIMIT_ANON: z.coerce.number().int().positive().default(300),
 
   // Allowed Google OAuth client IDs (comma-separated) that may appear as the
   // `aud` of an incoming Google ID token. Empty = Google sign-in disabled.

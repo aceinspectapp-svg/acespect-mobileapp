@@ -1,5 +1,5 @@
 /** API calls for the platform layer: context, SLA, templates, inspections, reports, notifications, audit and privacy. */
-import { req, reqForm, API_BASE, getToken, getActiveClientId } from "./api";
+import { req, reqForm, API_BASE, fetchWithRefresh, getToken, getActiveClientId } from "./api";
 
 export type Json = Record<string, any>;
 const j = (body: unknown) => JSON.stringify(body ?? {});
@@ -193,7 +193,7 @@ export const qcx = {
     placeHold: (body: Json) => req<Json>("/qc/legal-holds", { method: "POST", body: j(body) }),
     releaseHold: (id: string, reason: string) => req<Json>(`/qc/legal-holds/${id}/release`, { method: "POST", body: j({ reason }) }),
     exportTenant: async (clientId: string, contents: string[]) => {
-      const res = await fetch(`${API_BASE}/qc/clients/${clientId}/export`, {
+      const res = await fetchWithRefresh(`${API_BASE}/qc/clients/${clientId}/export`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}`, ...(getActiveClientId() ? { "X-Client-Id": getActiveClientId()! } : {}) },
         body: j({ export_contents: contents }),
@@ -210,7 +210,7 @@ export const qcx = {
     createRequest: (body: Json) => req<Json>("/qc/privacy/requests", { method: "POST", body: j(body) }),
     updateRequest: (id: string, body: Json) => req<Json>(`/qc/privacy/requests/${id}`, { method: "PATCH", body: j(body) }),
     exportPersonal: async (id: string, userId: string) => {
-      const res = await fetch(`${API_BASE}/qc/privacy/requests/${id}/export`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` }, body: j({ userId }) });
+      const res = await fetchWithRefresh(`${API_BASE}/qc/privacy/requests/${id}/export`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` }, body: j({ userId }) });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error?.message ?? `HTTP ${res.status}`);
       return res.blob();
     },

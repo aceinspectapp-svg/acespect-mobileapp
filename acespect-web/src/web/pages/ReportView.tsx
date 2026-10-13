@@ -4,7 +4,7 @@ import { ArrowLeft, Printer, Download, FileText } from "lucide-react";
 import type { FormSection } from "../mockData";
 import { buildReportHeader, withExcludedPhotosRemoved } from "../report";
 import { useAppData } from "../data";
-import { API_BASE, getToken } from "../api";
+import { API_BASE, fetchWithRefresh, getToken } from "../api";
 import { ReportCover } from "../components/ReportCover";
 import { sectionPhotoArchiveUrl } from "../photoArchive";
 import { ReportDescription } from "../components/ReportDescription";
@@ -50,7 +50,7 @@ export function ReportView() {
     setDownloadError(null);
     try {
       const token = getToken();
-      const res = await fetch(`${API_BASE}/inspections/${id}/report.${format}`, {
+      const res = await fetchWithRefresh(`${API_BASE}/inspections/${id}/report.${format}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (!res.ok) throw new Error(`Failed to generate ${format === "pdf" ? "PDF" : "Word document"} (HTTP ${res.status})`);
