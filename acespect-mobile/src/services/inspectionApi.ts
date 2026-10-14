@@ -75,6 +75,8 @@ export interface SubmitResult {
   status: string;
   /** What the server actually stored. */
   receipt?: { sections: number; photos: number };
+  /** Photos left out because their files are no longer on this phone. */
+  skippedPhotos?: number;
 }
 
 /** Submit the structured inspection. Returns the created inspection id and the server's receipt for it. */

@@ -4,6 +4,7 @@ import type { ActiveTemplate } from '../services/templateApi';
 import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
 import { DraftSnapshot, clearDraftSnapshot, saveDraftSnapshot } from '../services/offlineStorage';
 import { attachDraft, resetLiveSync, scheduleSectionSync } from '../services/liveSync';
+import { noteSectionAnswers, resetPhotoBackup } from '../services/syncManager';
 import { resetPhotoNumbers, restorePhotoNumbers, snapshotPhotoNumbers } from '../services/photoNumbers';
 
 /**
@@ -85,6 +86,8 @@ export interface SubmitPayload extends DraftTop {
   /** What this phone believes it is sending (sections other than Job Information, distinct uploaded photos). The server answers with what it
    *  stored; the inspection is only treated as safely sent when both agree. */
   expected?: { sections: number; photos: number };
+  /** Asks the server to refuse the submission, naming them, if it does not hold every photo the inspection points at. */
+  verifyPhotos?: boolean;
 }
 
 interface DraftValue {
@@ -190,6 +193,16 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     }, 800);
   }, []);
 
+  // Photos start going to the server as soon as they are in the form (services/syncManager.ts, "Photo backup"): shortly after the answers stop
+  // changing, tell the backup which photos this section now holds.
+  const backupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const backupKeys = useRef(new Set<string>());
+  const scanForBackup = useCallback((keys?: string[]) => {
+    const job = answersRef.current['job-info']?.jobNumber;
+    const jobNo = typeof job === 'string' && job.trim() ? job.trim() : undefined;
+    for (const key of keys ?? Object.keys(answersRef.current)) noteSectionAnswers(key, answersRef.current[key], topRef.current.draftId, jobNo);
+  }, []);
+
   const setTop = useCallback((patch: Partial<DraftTop>) => {
     topRef.current = { ...topRef.current, ...patch };
     schedulePersist();
@@ -227,6 +240,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     baselineSectionsRef.current = null;
     resetPhotoNumbers();
     resetLiveSync();
+    resetPhotoBackup();
     void clearDraftSnapshot();
   }, []);
 
@@ -237,7 +251,8 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     answersRef.current = snapshot.answers;
     templatesRef.current = snapshot.templates;
     restorePhotoNumbers(snapshot.photoNumbers, snapshot.photoSeq);
-  }, []);
+    setTimeout(() => scanForBackup(), 0); // a resumed draft carries on sending the photos that were still waiting
+  }, [scanForBackup]);
 
   const getActiveTemplate = useCallback(
     (sectionKey: string) => templatesRef.current[sectionKey],
@@ -262,7 +277,15 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
   const setAnswers = useCallback((sectionKey: string, answers: AnswerTree) => {
     answersRef.current = { ...answersRef.current, [sectionKey]: answers };
     schedulePersist();
-  }, [schedulePersist]);
+    backupKeys.current.add(sectionKey);
+    if (backupTimer.current) clearTimeout(backupTimer.current);
+    backupTimer.current = setTimeout(() => {
+      const keys = [...backupKeys.current];
+      backupKeys.current.clear();
+      // The job number may have just been entered: look at every section again then, so photos waiting on it start.
+      scanForBackup(keys.includes('job-info') ? undefined : keys);
+    }, 1200);
+  }, [schedulePersist, scanForBackup]);
 
   // Photos registered under a section key or any "key:n" sub-key.
   const photosForSection = useCallback((key: string): string[] => {

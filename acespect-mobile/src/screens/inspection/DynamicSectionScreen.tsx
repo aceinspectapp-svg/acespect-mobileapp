@@ -17,6 +17,7 @@ import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionDat
 import { getSectionTitle } from '../../constants/inspectionSections';
 import { getBaselineSections as fetchBaselineSections } from '../../services/inspectionApi';
 import { pinAllSectionTemplates } from '../../utils/pinAllSectionTemplates';
+import { PhotoBackupBar } from '../../components/inspection/PhotoBackupBar';
 
 /**
  * Every Post-Dilapidation job asks the same opinion of every section, on top
@@ -318,6 +319,7 @@ export function DynamicSectionScreen({
         ) : (
           <ScrollIntoViewContext.Provider value={keyboardScroll.value}>
           <ScrollView ref={keyboardScroll.scrollRef} onScroll={keyboardScroll.onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+            <PhotoBackupBar compact />
             {isPostDilapidation && baselineSection && (
               <View style={styles.baselineCard}>
                 <Text style={styles.baselineLabel}>PREVIOUSLY RECORDED</Text>
