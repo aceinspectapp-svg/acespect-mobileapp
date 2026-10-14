@@ -83,6 +83,23 @@ async function syncSection(inspectorId: string, id: string, input: SyncSectionIn
   return { inspectionId: id, ...(await receiptFor(id)) };
 }
 
+/** Every uploaded photo (by id) that these sections point at. */
+export function referencedPhotoIds(sections: { answers?: unknown; photos?: unknown; damages?: unknown }[]): string[] {
+  const ids = new Set<string>();
+  for (const m of JSON.stringify(sections.map((s) => [s.answers, s.photos, s.damages])).matchAll(/\/api\/v1\/media\/([0-9a-f-]{36})/gi)) ids.add(m[1]!.toLowerCase());
+  return [...ids];
+}
+
+/** The ids among `ids` that the server does not hold a photo for. */
+export async function missingPhotoIds(ids: string[]): Promise<string[]> {
+  const have = new Set<string>();
+  for (let i = 0; i < ids.length; i += 1000) {
+    const rows = await prisma.photo.findMany({ where: { id: { in: ids.slice(i, i + 1000) } }, select: { id: true } });
+    for (const r of rows) have.add(r.id);
+  }
+  return ids.filter((id) => !have.has(id));
+}
+
 /** What was actually stored for an inspection: its sections (other than Job Information) and the distinct uploaded photos they reference. */
 export async function receiptFor(inspectionId: string): Promise<{ sections: number; photos: number }> {
   const secs = await prisma.section.findMany({ where: { inspectionId }, select: { key: true, answers: true, photos: true, damages: { select: { photos: true } } } });

@@ -326,16 +326,21 @@ export async function settleInspectionFolder(inspectionId: string, jobNo: string
 }
 
 async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string): Promise<void> {
-  const res = await withRetry(() =>
-    egnyteFetch(`${egnyteBase()}/pubapi/v1/fs-content${encodeEgnytePath(path)}`, {
-      method: 'POST',
-      headers: { ...authHeaders(), 'Content-Type': contentType },
-      body: buffer,
-    }),
-  );
-  if (!res.ok) {
+  // A temporary Egnyte fault (5xx, request timeout) answers with a status rather than throwing, so withRetry alone never retried it: one
+  // blip lost a file for good (the full-size original is stored on a best-effort basis). Try again a few times before giving up.
+  for (let attempt = 0; ; attempt++) {
+    const res = await withRetry(() =>
+      egnyteFetch(`${egnyteBase()}/pubapi/v1/fs-content${encodeEgnytePath(path)}`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': contentType },
+        body: buffer,
+      }),
+    );
+    if (res.ok) return;
     const body = await res.text().catch(() => '');
-    throw new Error(`Egnyte upload failed (${res.status}): ${body}`, { cause: body });
+    const temporary = res.status >= 500 || res.status === 408 || res.status === 429;
+    if (!temporary || attempt >= 3) throw new Error(`Egnyte upload failed (${res.status}): ${body}`, { cause: body });
+    await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
   }
 }
 

@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 import { ZipArchive } from 'archiver';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
-import { inspectionsService, receiptFor } from './inspections.service';
+import { inspectionsService, receiptFor, referencedPhotoIds, missingPhotoIds } from './inspections.service';
 import { alertAdmins } from '../../lib/submissionAlerts';
 import { fetchPhotoStream } from '../../lib/storage';
 import { generateInspectionReportPdf } from '../../lib/reportPdf';
@@ -44,7 +44,17 @@ export const inspectionsController = {
   // Saves as a DRAFT the inspector still owns — review only starts at finalize.
   submit: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
-    const body = req.body as { jobNo?: string; id?: string; sections?: { key?: string }[] };
+    const body = req.body as { jobNo?: string; id?: string; sections?: { key?: string; answers?: unknown; photos?: unknown; damages?: unknown }[]; verifyPhotos?: boolean };
+    // The completeness gate: an app build that asks for it is never given an inspection that points at photos the server does not hold. It is
+    // told which ones, sends just those again, and submits again; nothing is stored in the meantime.
+    if (body.verifyPhotos) {
+      const missing = await missingPhotoIds(referencedPhotoIds(body.sections ?? []));
+      if (missing.length > 0) {
+        const message = `${missing.length} photo(s) in this inspection are not on the server yet.`;
+        logSubmit('warning', { inspectorId: req.user.id, jobNo: body.jobNo }, { reason: 'photos_missing', message, missing: missing.length });
+        throw new ApiError(409, message, 'PHOTOS_MISSING', { missing: missing.slice(0, 2000) });
+      }
+    }
     logSubmit(
       'received',
       { inspectorId: req.user.id, jobNo: body.jobNo },
