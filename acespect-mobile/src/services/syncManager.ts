@@ -304,14 +304,17 @@ function pauseBackup(ms: number): void {
 
 function startBackup(): void {
   if (Date.now() < pausedUntil) return;
-  while (pumpWorkers < PUMP_WORKERS && nextToSend()) void backupWorker();
+  // Photos wait for a job number, so each goes straight into its job's own folder in Egnyte.
+  if (!backupJobNo) { waitReason = 'job'; return; }
+  if (waitReason === 'job') waitReason = undefined;
+  // A bounded loop: a worker that finds nothing to do ends at once, and must not be started again and again.
+  for (let i = pumpWorkers; i < PUMP_WORKERS && nextToSend(); i++) void backupWorker();
 }
 
 async function backupWorker(): Promise<void> {
   pumpWorkers++;
   try {
     while (Date.now() >= pausedUntil) {
-      // Wait for a job number, so each photo goes straight into its job's own folder in Egnyte.
       if (!backupJobNo) { waitReason = 'job'; break; }
       if (await isWaitingForWifi()) { waitReason = 'wifi'; pauseBackup(30_000); break; }
       const next = nextToSend();
