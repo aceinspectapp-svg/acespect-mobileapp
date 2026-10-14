@@ -11,6 +11,7 @@ const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024 } });
 
 router.post('/submit', requireAuth, validate(submitInspectionSchema), inspectionsController.submit);
+router.post('/client-error', requireAuth, inspectionsController.clientError);
 router.put('/:id/sync', requireAuth, validate(syncSectionSchema), inspectionsController.syncSection);
 router.post('/photos', requireAuth, upload.single('photo'), inspectionsController.uploadPhoto);
 // Post-Dilapidation jobs admin has pushed to the calling inspector, not yet

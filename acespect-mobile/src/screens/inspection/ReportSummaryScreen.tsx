@@ -21,6 +21,7 @@ import { INSPECTION_TYPES } from '../../constants/inspectionData';
 import { AppScreenProps } from '../../navigation/types';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
 import { runSubmission, enqueueSubmission, receiptMatches } from '../../services/syncManager';
+import { reportProblem } from '../../services/problemReport';
 import { JobSetupData } from '../../types/jobSetup';
 
 const PROPERTY_LABELS: Record<string, string> = {
@@ -271,6 +272,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
       // A live attempt failed partway (e.g. connection dropped mid-upload) --
       // rather than a dead-end "Submit failed" with no recovery, save it the
       // same way an offline submit would be and let the sync queue retry.
+      reportProblem('submit', err, { jobNo: payload.jobNo, sections: payload.sections.length, photos: payload.expected?.photos });
       await enqueueSubmission(payload);
       draft.reset();
       const e = err as { response?: { data?: { error?: { message?: string } } }; message?: string };

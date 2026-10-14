@@ -77,6 +77,24 @@ export const inspectionsController = {
     res.status(201).json({ inspectionId: inspection.id, status: inspection.status, receipt });
   }),
 
+  // The phone saying why an attempt failed on its side (the server never saw that request): kept in the trail for the Troubleshoot page.
+  clientError: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const b = req.body as { where?: unknown; message?: unknown; status?: unknown; code?: unknown; context?: unknown };
+    const where = String(b.where ?? '').slice(0, 60);
+    const message = String(b.message ?? '').slice(0, 300);
+    const context = b.context && typeof b.context === 'object' ? (b.context as Record<string, unknown>) : {};
+    await recordSubmissionEvent({
+      event: 'failed',
+      inspectorId: req.user.id,
+      jobNo: typeof context.jobNo === 'string' ? context.jobNo.slice(0, 40) : null,
+      statusCode: typeof b.status === 'number' ? b.status : null,
+      message: `Phone: ${where} failed: ${message}`,
+      detail: { source: 'phone', where, code: typeof b.code === 'string' ? b.code.slice(0, 40) : undefined, context: JSON.parse(JSON.stringify(context).slice(0, 1000) || '{}') },
+    });
+    res.status(204).end();
+  }),
+
   // Saves one section while the inspector is still working (see inspectionsService.syncSection).
   syncSection: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();

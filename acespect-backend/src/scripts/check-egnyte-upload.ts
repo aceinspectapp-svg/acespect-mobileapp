@@ -74,6 +74,8 @@ async function main() {
   addFolder(`${ROOT}/V260001-V260100/V260050`);
   files.set(`${ROOT}/V260001-V260100/V260050/old.jpg`, 1);
   addFolder(`${ROOT}/V260033`); files.set(`${ROOT}/V260033/loose.jpg`, 1);
+  // The scratch database outlives a run: forget the photos an earlier run filed under this fake Egnyte root, or file names would collide with them.
+  await prisma.photo.deleteMany({ where: { storageKey: { startsWith: ROOT } } });
   const jpeg = await sharp({ create: { width: 64, height: 48, channels: 3, background: '#4488cc' } }).jpeg().toBuffer();
   const inspector = await prisma.user.create({ data: { email: `egnyte-check-${randomUUID()}@test.local`, role: 'INSPECTOR', passwordHash: 'x' } });
   let passed = 0;
@@ -123,7 +125,7 @@ async function main() {
 
   await check('the same photo sent twice at the same moment (a slow upload retried by the phone) is stored once and neither call fails', async () => {
     const id = randomUUID(); const draft = randomUUID();
-    const [x, y, z] = await Promise.all([1, 2, 3].map(() => uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pp_description:street', undefined, undefined, { jobNo: 'V260130', photoId: id, photoNumber: 9 })));
+    const [x, y, z] = (await Promise.all([1, 2, 3].map(() => uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pp_description:street', undefined, undefined, { jobNo: 'V260130', photoId: id, photoNumber: 9 })))) as unknown as [{ id: string }, { id: string }, { id: string }];
     assert.equal(x.id, id); assert.equal(y.id, id); assert.equal(z.id, id);
     assert.equal(await prisma.photo.count({ where: { id } }), 1);
     assert.equal([...files.keys()].filter((f) => f.endsWith('/V260130/pp_description/street/9.jpg')).length, 1);

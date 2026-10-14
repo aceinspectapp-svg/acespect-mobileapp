@@ -101,7 +101,7 @@ function HealthPanel() {
           </div>
           {health.orphanUploads.map((o) => (
             <div key={o.draftId} style={{ display: "flex", gap: "10px", fontSize: "12px", padding: "3px 0", color: "#374151" }}>
-              <code style={{ minWidth: "96px" }}>{o.draftId.slice(0, 8)}…</code>
+              <code style={{ minWidth: "96px" }}>{o.draftId.length > 20 ? `${o.draftId.slice(0, 8)}…` : o.draftId}</code>
               <span style={{ minWidth: "120px", color: "#94a3b8" }}>{formatTime(o.lastAt)}</span>
               <span>{o.photos} photo{o.photos === 1 ? "" : "s"} · {o.sections.join(", ")}</span>
             </div>

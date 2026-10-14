@@ -5,6 +5,8 @@ import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
 import { getSyncQueue, setSyncQueue, getWifiOnlySync, QueuedSubmission } from './offlineStorage';
 import { submitInspection, uploadPhoto, type SubmitResult } from './inspectionApi';
 import { getPhotoNumber, mergePhotoNumbers } from './photoNumbers';
+import { reportProblem } from './problemReport';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Foreground-only sync: an inspection finished offline is queued here and
@@ -95,6 +97,26 @@ async function deleteLocalFile(uri: string): Promise<void> {
  */
 const photoCache = new Map<string, string>();
 
+// ...and across restarts of the app: if the phone is closed or the system stops the app half way through 100+ photos, the photos already on the
+// server are not sent again.
+const PHOTO_CACHE_KEY = 'uploaded-photos:v1';
+let cacheTimer: ReturnType<typeof setTimeout> | null = null;
+function saveCacheSoon(): void {
+  if (cacheTimer) return;
+  cacheTimer = setTimeout(() => {
+    cacheTimer = null;
+    void AsyncStorage.setItem(PHOTO_CACHE_KEY, JSON.stringify([...photoCache].slice(-3000))).catch(() => undefined);
+  }, 1500);
+}
+async function loadPhotoCache(): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(PHOTO_CACHE_KEY);
+    for (const [uri, url] of (raw ? (JSON.parse(raw) as [string, string][]) : [])) if (!photoCache.has(uri)) photoCache.set(uri, url);
+  } catch {
+    /* nothing remembered */
+  }
+}
+
 /** Photos being sent right now: the background saver and the final submit can reach the same photo together, and it must only be sent once. */
 const photoInFlight = new Map<string, Promise<string>>();
 
@@ -106,6 +128,7 @@ async function uploadAndForget(uri: string, opts: { inspectionId?: string; secti
   const work = uploadPhoto(uri, { ...opts, photoNumber: getPhotoNumber(uri) })
     .then((url) => {
       photoCache.set(uri, url);
+      saveCacheSoon();
       return url;
     })
     .finally(() => photoInFlight.delete(uri));
@@ -117,6 +140,7 @@ async function uploadAndForget(uri: string, opts: { inspectionId?: string; secti
 export function cleanupUploadedFiles(): void {
   for (const uri of photoCache.keys()) void deleteLocalFile(uri);
   photoCache.clear();
+  void AsyncStorage.removeItem(PHOTO_CACHE_KEY).catch(() => undefined);
 }
 
 /**
@@ -337,6 +361,7 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
           continue;
         }
         const message = err instanceof Error ? err.message : 'Unknown error';
+        reportProblem('queued submission', err, { jobNo: entry.payload.jobNo, attempts: entry.attempts + 1, sections: entry.payload.sections.length });
         queueCache = queueCache.map((e) => (e.id === id ? { ...e, attempts: e.attempts + 1, lastError: message } : e));
         await persist();
       }
@@ -370,6 +395,7 @@ export async function initSyncManager(): Promise<void> {
   if (initialized) return;
   initialized = true;
 
+  await loadPhotoCache();
   queueCache = await getSyncQueue();
   notify();
   void processQueue();
