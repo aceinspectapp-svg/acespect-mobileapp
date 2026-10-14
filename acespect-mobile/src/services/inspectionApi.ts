@@ -62,7 +62,7 @@ export async function uploadPhoto(
         if (!(await refreshAccessToken())) throw err; // signed out for real: the app sends the person to sign in
         continue;
       }
-      const transient = status === undefined || status >= 500 || status === 429; // no reply at all (network / timeout), a server hiccup, or "slow down"
+      const transient = status === undefined || status >= 500 || status === 429 || status === 409; // no reply at all (network / timeout), a server hiccup, "slow down", or "this photo is already being saved" (send again: the server then returns the saved copy)
       if (!transient) throw err;
       await new Promise((r) => setTimeout(r, [2000, 6000, 15000][attempt]!));
     }

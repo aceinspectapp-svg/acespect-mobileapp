@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { env } from '../config/env';
+import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { mergeFolder, resolveInspectionFolder, type EgnyteFs, type Resolution } from './egnyteJobFolders';
 
@@ -350,7 +351,12 @@ async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string)
  * section subfolder in Egnyte (see the module doc above); omit them for a
  * flat, ungrouped upload.
  */
-export async function uploadPhoto(
+type StoredPhoto = UploadedPhoto & { folder?: { status: string; message?: string; path: string } };
+
+/** Photos being stored right now, by the phone's photo id: the same photo sent twice at once (a slow upload retried by the phone) is stored once. */
+const photoUploadsInFlight = new Map<string, Promise<StoredPhoto>>();
+
+export function uploadPhoto(
   buffer: Buffer,
   contentType: string,
   ext: string,
@@ -359,7 +365,36 @@ export async function uploadPhoto(
   tenantId?: string,
   jobFolder?: string,
   opts: { jobNo?: string | null; photoId?: string; photoNumber?: number } = {},
-): Promise<UploadedPhoto & { folder?: { status: string; message?: string; path: string } }> {
+): Promise<StoredPhoto> {
+  const key = opts.photoId;
+  if (!key) return storePhoto(buffer, contentType, ext, inspectionId, sectionKey, tenantId, jobFolder, opts);
+  const running = photoUploadsInFlight.get(key);
+  if (running) return running;
+  const work = storePhoto(buffer, contentType, ext, inspectionId, sectionKey, tenantId, jobFolder, opts).finally(() => photoUploadsInFlight.delete(key));
+  photoUploadsInFlight.set(key, work);
+  return work;
+}
+
+/** Records the photo in the index; if the same photo id is already there (a retry that raced the first attempt) that is not an error. */
+async function recordPhoto(data: { id: string; storageKey?: string; data?: Uint8Array<ArrayBuffer>; contentType: string }): Promise<void> {
+  try {
+    await prisma.photo.create({ data });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return;
+    throw e;
+  }
+}
+
+async function storePhoto(
+  buffer: Buffer,
+  contentType: string,
+  ext: string,
+  inspectionId?: string,
+  sectionKey?: string,
+  tenantId?: string,
+  jobFolder?: string,
+  opts: { jobNo?: string | null; photoId?: string; photoNumber?: number } = {},
+): Promise<StoredPhoto> {
   if (!isStorageEnabled() && !useDbStorage()) throw new Error('Photo storage is not configured');
 
   // The phone gives each photo a fixed id, so sending it again (after a dropped connection) returns the stored copy
@@ -385,7 +420,7 @@ export async function uploadPhoto(
     .toBuffer();
 
   if (useDbStorage()) {
-    await prisma.photo.create({ data: { id, data: new Uint8Array(resized), contentType: 'image/jpeg' } });
+    await recordPhoto({ id, data: new Uint8Array(resized), contentType: 'image/jpeg' });
     return { id, storageKey: `db:${id}`, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(resized).digest('hex') };
   }
   // An inspector's photo with a job number goes straight into {batch}/{job}/; one without (an older app build) goes in the draft's own folder
@@ -414,7 +449,7 @@ export async function uploadPhoto(
   }
 
   // Index id -> real path so the public URL can stay a plain opaque id.
-  await prisma.photo.create({ data: { id, storageKey, contentType: 'image/jpeg' } });
+  await recordPhoto({ id, storageKey, contentType: 'image/jpeg' });
 
   // Relative, not `${PUBLIC_BASE_URL}/api/v1/media/${id}`: PUBLIC_BASE_URL is a
   // Cloudflare quick tunnel that gets a new hostname every restart, so a

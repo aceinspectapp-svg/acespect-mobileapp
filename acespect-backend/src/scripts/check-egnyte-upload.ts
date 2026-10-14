@@ -121,6 +121,14 @@ async function main() {
     assert.equal(log.filter((l) => l.startsWith('POST content')).length, writes);
   });
 
+  await check('the same photo sent twice at the same moment (a slow upload retried by the phone) is stored once and neither call fails', async () => {
+    const id = randomUUID(); const draft = randomUUID();
+    const [x, y, z] = await Promise.all([1, 2, 3].map(() => uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pp_description:street', undefined, undefined, { jobNo: 'V260130', photoId: id, photoNumber: 9 })));
+    assert.equal(x.id, id); assert.equal(y.id, id); assert.equal(z.id, id);
+    assert.equal(await prisma.photo.count({ where: { id } }), 1);
+    assert.equal([...files.keys()].filter((f) => f.endsWith('/V260130/pp_description/street/9.jpg')).length, 1);
+  });
+
   await check('eight photos at once for a new job: one folder, eight photos', async () => {
     const draft = randomUUID();
     const before = log.filter((l) => l === `POST fs ${ROOT}/V260101-V260200/V260106`).length;
