@@ -1,0 +1,292 @@
+import React from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollIntoViewContext } from '../ui/KeyboardScroll';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, radius, spacing, typography } from '../../theme';
+import { appendDictated, DictationMicButton } from './DictationMic';
+
+/**
+ * Shared, theme-driven versions of the pill/chip/condition-list UI patterns
+ * that DrivewaySectionScreen defined locally (private, not reusable). These
+ * back the generic field renderers so every section gets consistent styling
+ * without duplicating a private component per screen.
+ */
+
+/**
+ * Single-select pill row, with an optional "Other (specify)" escape hatch.
+ * Matches ChipMultiSelect's `__other__:<text>` encoding (same prefix the
+ * web report's `displayValue` already unwraps for both array and scalar
+ * values) so a single value of `__other__:<text>` round-trips identically
+ * whether it came from here or a multiselect.
+ */
+export function PillSelect({
+  options,
+  value,
+  onChange,
+  allowOther,
+}: {
+  options: { value: string; label: string; color?: string }[];
+  value: string | undefined;
+  onChange: (v: string) => void;
+  allowOther?: boolean;
+}) {
+  const otherPrefix = '__other__:';
+  const otherActive = value === 'other' || value?.startsWith(otherPrefix);
+  const otherValue = value?.startsWith(otherPrefix) ? value.slice(otherPrefix.length) : '';
+  return (
+    <View>
+      <View style={styles.wrap}>
+        {options.map((o) => {
+          const active = value === o.value;
+          return (
+            <Pressable
+              key={o.value}
+              onPress={() => onChange(o.value)}
+              style={[styles.pill, o.color && { borderColor: `${o.color}55` }, active && styles.pillActive, active && o.color && { backgroundColor: o.color, borderColor: o.color }]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: active }}
+            >
+              <Text style={[styles.pillText, o.color && !active && { color: o.color }, active && styles.pillTextActive, active && o.color && { color: colors.white }]}>{o.label}</Text>
+            </Pressable>
+          );
+        })}
+        {allowOther && (
+          <Pressable
+            onPress={() => onChange('other')}
+            style={[styles.pill, otherActive && styles.pillActive]}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: otherActive }}
+          >
+            <Text style={[styles.pillText, otherActive && styles.pillTextActive]}>Other</Text>
+          </Pressable>
+        )}
+      </View>
+      {allowOther && otherActive && (
+        <PlainTextInput
+          placeholder="Please specify"
+          value={otherValue}
+          onChangeText={(text) => onChange(text ? `${otherPrefix}${text}` : 'other')}
+          style={{ marginTop: spacing.sm }}
+        />
+      )}
+    </View>
+  );
+}
+
+/** Multi-select chip row, with an optional "Other (specify)" escape hatch. */
+export function ChipMultiSelect({
+  options,
+  selected,
+  onToggle,
+  allowOther,
+  otherValue,
+  onOtherChange,
+}: {
+  options: { value: string; label: string; icon?: keyof typeof Ionicons.glyphMap }[];
+  selected: string[];
+  onToggle: (v: string) => void;
+  allowOther?: boolean;
+  otherValue?: string;
+  onOtherChange?: (v: string) => void;
+}) {
+  const otherActive = selected.includes('other');
+  return (
+    <View>
+      <View style={styles.wrap}>
+        {options.map((o) => {
+          const active = selected.includes(o.value);
+          return (
+            <Pressable
+              key={o.value}
+              onPress={() => onToggle(o.value)}
+              style={[styles.pill, styles.pillWithIcon, active && styles.pillActive]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: active }}
+            >
+              {o.icon && (
+                <Ionicons name={o.icon} size={15} color={active ? colors.barBlue : colors.textSecondary} />
+              )}
+              <Text style={[styles.pillText, active && styles.pillTextActive]}>{o.label}</Text>
+            </Pressable>
+          );
+        })}
+        {allowOther && (
+          <Pressable
+            onPress={() => onToggle('other')}
+            style={[styles.pill, otherActive && styles.pillActive]}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: otherActive }}
+          >
+            <Text style={[styles.pillText, otherActive && styles.pillTextActive]}>Other</Text>
+          </Pressable>
+        )}
+      </View>
+      {allowOther && otherActive && (
+        <PlainTextInput
+          placeholder="Please specify"
+          value={otherValue ?? ''}
+          onChangeText={onOtherChange ?? (() => {})}
+          style={{ marginTop: spacing.sm }}
+        />
+      )}
+    </View>
+  );
+}
+
+/**
+ * Traffic-light fallback for a color-select option that wasn't given an
+ * explicit `color` -- most templates built after the original seed don't set
+ * one, which used to fall back to flat grey (every row, selected or not,
+ * looked identically disabled). Matches on the option label so it works
+ * without any template changes; anything that isn't a recognized
+ * condition word (e.g. "Varying", "Other") falls back to the app's own blue
+ * rather than grey.
+ */
+function inferConditionColor(label: string): string {
+  const l = label.toLowerCase();
+  if (l.includes('poor') || l.includes('unsafe')) return '#DC2626';
+  if (l.includes('average')) return '#EA580C';
+  if (l.includes('fair')) return '#D97706';
+  if (l.includes('satisfactory') || l.includes('good')) return '#65A30D';
+  if (l.includes('new') || l.includes('excellent')) return '#16A34A';
+  return colors.barBlue;
+}
+
+/** Single-select, color-coded list (e.g. condition ratings). */
+export function ColorSelect({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: string; label: string; color?: string }[];
+  value: string | undefined;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <View style={{ gap: spacing.sm }}>
+      {options.map((o) => {
+        const active = value === o.value;
+        const color = o.color ?? inferConditionColor(o.label);
+        return (
+          <Pressable
+            key={o.value}
+            onPress={() => onChange(o.value)}
+            style={[styles.conditionRow, active && { borderColor: color, backgroundColor: colors.surfaceAlt }]}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: active }}
+          >
+            <View style={[styles.dot, { backgroundColor: color }]} />
+            <Text style={[styles.conditionText, { color: active ? color : colors.textMuted, fontWeight: active ? '700' : '500' }]}>
+              {o.label}
+            </Text>
+            {active && <Ionicons name="checkmark" size={16} color={color} />}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * Plain text input matching the field-kit's visual language (used for
+ * text/numeric/textarea/"other"). Numeric inputs skip the mic -- dictating a
+ * number reliably needs word-to-digit parsing this doesn't do; every other
+ * use here is free text, so it always gets a dictation button.
+ */
+export function PlainTextInput({
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType,
+  multiline,
+  maxLength,
+  style,
+}: {
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder?: string;
+  keyboardType?: 'default' | 'numeric';
+  multiline?: boolean;
+  maxLength?: number;
+  style?: object;
+}) {
+  const dictate = keyboardType !== 'numeric';
+  const inputRef = React.useRef<TextInput>(null);
+  const focusedRef = React.useRef(false);
+  const { ensureVisible } = React.useContext(ScrollIntoViewContext);
+  return (
+    <View style={styles.inputWrap}>
+      <TextInput
+        ref={inputRef}
+        onFocus={() => { focusedRef.current = true; ensureVisible(inputRef.current); }}
+        onBlur={() => { focusedRef.current = false; }}
+        onContentSizeChange={() => { if (focusedRef.current && multiline) ensureVisible(inputRef.current); }}
+        style={[styles.input, multiline && styles.inputMultiline, dictate && styles.inputWithMic, style]}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType ?? 'default'}
+        multiline={multiline}
+        maxLength={maxLength}
+      />
+      {dictate && (
+        <View style={styles.inputMic}>
+          <DictationMicButton size="sm" onResult={(spoken) => onChangeText(appendDictated(value, spoken))} />
+        </View>
+      )}
+    </View>
+  );
+}
+
+export function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <Text style={styles.fieldLabel}>
+      {children}
+      {required && <Text style={{ color: colors.danger }}> *</Text>}
+    </Text>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  pill: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  pillActive: { borderColor: colors.barBlue, backgroundColor: colors.accentBlue },
+  pillWithIcon: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  pillText: { ...typography.bodySm, color: colors.textSecondary },
+  pillTextActive: { color: colors.barBlue, fontWeight: '700' },
+  conditionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  conditionText: { ...typography.bodySm, flex: 1 },
+  fieldLabel: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.xs },
+  inputWrap: { position: 'relative' },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...typography.bodySm,
+    color: colors.textPrimary,
+  },
+  inputMultiline: { minHeight: 80, textAlignVertical: 'top' },
+  inputWithMic: { paddingRight: 40 },
+  inputMic: { position: 'absolute', top: spacing.xs, right: spacing.xs },
+});
