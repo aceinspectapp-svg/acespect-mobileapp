@@ -176,7 +176,11 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
   const canSubmit = confirmed === 'yes' && signed;
 
   const net = useNetworkState();
-  const isOnline = net.isInternetReachable ?? net.isConnected ?? false;
+  // Only a phone that reports NO connection at all is treated as offline. `isInternetReachable` is the system's own background check and
+  // reads false whenever that check is slow or fails -- typically after a long run of photo uploads has filled the connection -- even
+  // though the network works. Trusting it sent finished inspections straight to the queue ("No connection right now") without a single
+  // attempt. If the network really is down the attempt fails quickly and the inspection is queued exactly the same way.
+  const isOnline = net.isConnected !== false;
 
   const onGenerate = async () => {
     // A second tap (or one made after a failed attempt cleared the draft) must never send a blank inspection under this job number.

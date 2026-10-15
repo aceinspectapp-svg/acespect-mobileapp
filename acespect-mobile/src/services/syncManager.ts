@@ -165,6 +165,8 @@ async function uploadAndForget(uri: string, opts: { inspectionId?: string; secti
       // must not hold up the rest of the inspection. Treated like a file that has gone: left out, counted, and reported.
       const code = (err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;
       if (code === 'PHOTO_UNREADABLE') throw new PhotoFileMissing(uri, 'The server could not read this photo');
+      // Say which photo it was, so a failure that reaches the Troubleshoot page names it.
+      if (err && typeof err === 'object') (err as { photoNumber?: number }).photoNumber = getPhotoNumber(uri);
       throw err;
     })
     .finally(() => photoInFlight.delete(uri));
@@ -635,7 +637,26 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
     }
   } finally {
     setProcessing(false);
+    scheduleQueueRetry();
   }
+}
+
+/**
+ * A queued inspection used to be retried only when the app was opened, the connection came back, or "Retry now" was tapped -- so one bad
+ * moment (a weak signal at the end of a long upload) left it waiting until somebody noticed. While the app is open it now tries again by
+ * itself: after 30 s, 1 min, 2 min, then every 5 minutes, up to 12 attempts per inspection (after that it waits for a manual retry).
+ */
+let queueRetryTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleQueueRetry(): void {
+  if (queueRetryTimer) return;
+  const stuck = queueCache.filter((e) => e.attempts > 0 && e.attempts < 12);
+  if (stuck.length === 0) return;
+  const attempts = Math.max(...stuck.map((e) => e.attempts));
+  const wait = [30_000, 60_000, 120_000][attempts - 1] ?? 300_000;
+  queueRetryTimer = setTimeout(() => {
+    queueRetryTimer = null;
+    void processQueue();
+  }, wait);
 }
 
 /** An inspector-triggered "give up on this one" -- see the long-press queue-details alert on SelectInspectionTypeScreen. Never called automatically; a payload with a genuinely bad local file needs a human to decide it's not coming back. */

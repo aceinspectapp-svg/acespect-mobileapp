@@ -14,6 +14,8 @@ export function describeError(err: unknown): { message: string; status?: number;
 
 export function reportProblem(where: string, err: unknown, context: Record<string, unknown> = {}): void {
   const d = describeError(err);
+  const photoNumber = (err as { photoNumber?: number } | null)?.photoNumber;
+  if (photoNumber !== undefined) context = { ...context, photoNumber };
   const key = `${where}|${d.status ?? ''}|${d.code ?? ''}|${d.message}`;
   const last = recent.get(key) ?? 0;
   if (Date.now() - last < 60_000) return;
