@@ -1,0 +1,539 @@
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollIntoViewContext, useKeyboardAwareScroll } from '../../components/ui/KeyboardScroll';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, radius, spacing, typography } from '../../theme';
+import { AppTextInput, Button, DateField, ProgressBar, SegmentedToggle } from '../../components/ui';
+import { InspectionHeader } from '../../components/inspection/InspectionHeader';
+import { SectionCard } from '../../components/inspection/SectionCard';
+import { ChoiceTileGrid } from '../../components/inspection/ChoiceTile';
+import { StatusRow } from '../../components/inspection/StatusRow';
+import { JobSetupData, PropertyUse } from '../../types/jobSetup';
+import { AppScreenProps } from '../../navigation/types';
+import { useSystemStatus } from '../../hooks/useSystemStatus';
+import { useAuth } from '../../context/AuthContext';
+import { useInspectionDraft } from '../../context/InspectionDraftContext';
+import { ActiveTemplate, getActiveTemplateCached, TemplateField } from '../../services/templateApi';
+import { meetsAllRequiredFields } from '../../utils/flattenSectionToDraft';
+import { pinAllSectionTemplates } from '../../utils/pinAllSectionTemplates';
+import { FieldListRenderer } from '../../components/inspection/fieldRenderers';
+import { isGateSatisfied, type AnswerTree, type AnswerValue } from '../../components/inspection/fieldRenderers/types';
+import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
+import { CONSTRUCTION_STAGE_BY_ID } from '../../constants/constructionStages';
+import { tileIconFor } from '../../constants/tileIcons';
+import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
+
+const SECTION_KEY = 'job-info';
+
+/** "Test Inspector" -> "TI" -- the stage forms ask for the inspector's initials, not their full name. */
+function initialsOf(name: string): string {
+  const words = name.replace(/@.*$/, '').split(/[\s._-]+/).filter(Boolean);
+  return words.slice(0, 3).map((w) => w[0]!.toUpperCase()).join('');
+}
+
+/** Narrows an answer to a plain string -- safe wherever the field is known
+ * by construction to be single-valued (text/date/select-tiles/yesno; not
+ * chip-multiselect or anything nested), same idea as leafRenderers' own
+ * asString. */
+function asStr(v: AnswerValue | undefined): string {
+  return typeof v === 'string' ? v : '';
+}
+
+export function JobInformationScreen({
+  route,
+  navigation,
+}: AppScreenProps<'JobInformation'>) {
+  const { selection, fromHub } = route.params;
+  const draft = useInspectionDraft();
+  const systemStatus = useSystemStatus();
+  const { user } = useAuth();
+
+  const keyboardScroll = useKeyboardAwareScroll();
+  const [template, setTemplate] = useState<ActiveTemplate | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  // Generic answers keyed by field.key — replaces the old fixed `details` shape
+  // so the form renders whatever fields the admin's template defines. Restored
+  // from the draft rather than always starting blank. Most fields here are a
+  // plain string (text/date/select-tiles/yesno, hand-rendered below), but not
+  // all any more -- e.g. Weather is a chip-multiselect (string[]) -- so this
+  // is the general AnswerTree shape, not narrowed to string.
+  const [answers, setAnswers] = useState<AnswerTree>(
+    () => (draft.getAnswers(SECTION_KEY) as AnswerTree | undefined) ?? {},
+  );
+
+  const pinKey = `${selection.inspectionTypeId}:${selection.propertyTypeId}:${SECTION_KEY}`;
+
+  useEffect(() => {
+    // Job Information is first in the flow -- pin the raw ids onto the draft
+    // so every later section can address templates without re-threading
+    // navigation params.
+    const typeDef = INSPECTION_TYPES.find((t) => t.id === selection.inspectionTypeId);
+    draft.setTop({
+      inspectionTypeId: selection.inspectionTypeId,
+      propertyTypeId: selection.propertyTypeId,
+      inspectionType: typeDef?.title ?? selection.inspectionTypeId,
+      propertyType: PROPERTY_LABELS[selection.propertyTypeId] ?? selection.propertyTypeId,
+      ...(selection.stageId ? { stageId: selection.stageId, stage: CONSTRUCTION_STAGE_BY_ID[selection.stageId]?.title ?? selection.stageId } : {}),
+    });
+    // Snapshot every section's template up front, not just this one -- so a
+    // section not yet visited in this inspection can't pick up a version
+    // published (or accepted elsewhere) after this inspection started. See
+    // pinAllSectionTemplates for why lazy per-section fetching isn't enough.
+    pinAllSectionTemplates(draft, selection.inspectionTypeId, selection.propertyTypeId, selection.stageId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // Reuse whatever this draft already pinned rather than refetching, so an
+    // inspection already in progress keeps the template version it started
+    // with even if admin publishes a newer one mid-session.
+    const pinned = draft.getActiveTemplate(pinKey);
+    if (pinned) {
+      setTemplate(pinned);
+      return;
+    }
+    setLoadError(false);
+    getActiveTemplateCached(selection.inspectionTypeId, selection.propertyTypeId, SECTION_KEY)
+      .then((t) => {
+        draft.setActiveTemplate(pinKey, t);
+        setTemplate(t);
+      })
+      .catch(() => setLoadError(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Every field starts blank for the inspector to fill in -- except dates,
+  // which default to today, since an inspection is all but always dated the
+  // day it's carried out (calendar stays available to change it), and the
+  // inspector-name field, which several profiles mark `readOnly` -- with
+  // nothing else in the app ever writing a value into it, that combination
+  // left it permanently blank and permanently un-fillable, blocking Job
+  // Information forever since it's also `required` everywhere it appears.
+  // Seeded from the signed-in account instead; still editable wherever the
+  // template doesn't mark it readOnly, in case someone else is completing
+  // the form on the inspector's behalf.
+  // (This used to seed from a MOCK_JOB_DETAILS sample job, which put a fake
+  // inspector, client and address into every real inspection.)
+  useEffect(() => {
+    if (!template) return;
+    const d = new Date();
+    const todayIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const inspectorName = user?.name || user?.email || '';
+    setAnswers((prev) => {
+      const next = { ...prev };
+      // Which stage this is -- the template's Stage choices are gated on it, so each stage shows its own two options.
+      if (selection.stageId) next.constructionStage = selection.stageId;
+      for (const f of template.fields) {
+        if (next[f.key] !== undefined) continue;
+        if (f.type === 'date') next[f.key] = todayIso;
+        else if (f.key === 'assignedInspector') next[f.key] = selection.stageId ? initialsOf(inspectorName) : inspectorName;
+        else next[f.key] = '';
+      }
+      draft.setAnswers(SECTION_KEY, next);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, user]);
+
+  const setAnswer = (key: string) => (value: AnswerValue) =>
+    setAnswers((a) => {
+      const next = { ...a, [key]: value };
+      // Persisted live (not just on Next) so navigating away mid-fill and
+      // reopening this screen -- from the hub or the Back button -- restores
+      // what was typed, the same guarantee every other section already has.
+      draft.setAnswers(SECTION_KEY, next);
+      return next;
+    });
+
+  const textFields = (template?.fields ?? [])
+    .filter((f) => f.type === 'text' || f.type === 'date')
+    .sort((a, b) => a.order - b.order);
+  const tileFields = (template?.fields ?? [])
+    .filter((f) => f.type === 'select-tiles')
+    .sort((a, b) => a.order - b.order);
+  const yesNoFields = (template?.fields ?? [])
+    .filter((f) => f.type === 'yesno')
+    .sort((a, b) => a.order - b.order);
+  // Anything not one of the three hand-rendered shapes above (chip-multiselect
+  // like Weather, its gated "Other" textarea, or any future field type) --
+  // rendered through the same generic engine every other section uses,
+  // rather than needing its own bespoke branch here each time. This is what
+  // makes a template field type actually show up regardless of what it is,
+  // instead of silently vanishing because this screen didn't special-case it.
+  const handledKeys = new Set([...textFields, ...tileFields, ...yesNoFields].map((f) => f.key));
+  const remainingFields: TemplateField[] = (template?.fields ?? [])
+    .filter((f) => !handledKeys.has(f.key))
+    .sort((a, b) => a.order - b.order);
+
+  const canContinue = !!template && meetsAllRequiredFields(template.fields, answers);
+
+  const onNext = () => {
+    if (!template) return;
+
+    // Register this as a completed (or partial) section the same way every
+    // other section does, so the hub's progress ticks and count can actually
+    // see it -- previously Job Information only ever wrote into
+    // `draft.setTop()`, never a section entry, so it could never show as done.
+    draft.setSection({
+      key: SECTION_KEY,
+      name: 'Job Information',
+      order: 1,
+      status: canContinue ? 'complete' : 'partial',
+      fields: answers,
+    });
+
+    const data: JobSetupData = {
+      selection,
+      details: {
+        jobNumber: asStr(answers.jobNumber),
+        inspectionDate: asStr(answers.inspectionDate),
+        clientName: asStr(answers.clientName),
+        inspectionAddress: asStr(answers.inspectionAddress),
+        assignedInspector: asStr(answers.assignedInspector),
+        gpsConfirmed: !!asStr(answers.inspectionAddress).trim(),
+      },
+      // Weather is multi-select now (chip-multiselect on the template) --
+      // this is only a display summary string for the report card; the full
+      // per-option answer is what's actually persisted via draft.setAnswers.
+      weather: Array.isArray(answers.weather) ? (answers.weather as string[]).join(', ') : asStr(answers.weather),
+      usedAsBusiness: (answers.usedAsBusiness ?? '') as PropertyUse,
+      systemStatus: systemStatus.snapshot,
+    };
+
+    if (fromHub) {
+      // Opened from the hub to review/edit -- return there directly rather
+      // than forcing the inspector back through Step 2, which isn't what
+      // they came here to touch. `merge: true` keeps whatever the hub's own
+      // route entry already had; this `data` is only a type-correct
+      // fallback for the (should-never-happen) case that entry is missing.
+      navigation.navigate({ name: 'InspectionSections', params: { data }, merge: true });
+      return;
+    }
+
+    if (!canContinue) return;
+    // A stage inspection has no separate Step 2 (its Description is one of the stage's own sections): go to the hub.
+    if (selection.stageId) {
+      navigation.navigate('InspectionSections', { data });
+      return;
+    }
+    navigation.navigate('InspectionSetupStep2', { data });
+  };
+
+  const keyboardVisible = useKeyboardVisible();
+
+  return (
+    <View style={styles.root}>
+      <StatusBar style="light" />
+
+      <InspectionHeader
+        title="Job Information"
+        subtitle={selection.stageId ? `${CONSTRUCTION_STAGE_BY_ID[selection.stageId]?.title ?? "Stage"} inspection` : "Inspection Setup · Step 1 of 2"}
+        onBack={() => navigation.goBack()}
+        actions={[
+          {
+            icon: 'save-outline',
+            accessibilityLabel: 'Save draft',
+            onPress: () => Alert.alert('Draft saved', 'Job setup saved locally.'),
+          },
+          {
+            icon: 'home-outline',
+            accessibilityLabel: 'Home',
+            onPress: () => navigation.popToTop(),
+          },
+        ]}
+      />
+
+      <View style={styles.progressWrap}>
+        <ProgressBar progress={0.5} />
+      </View>
+
+      {/* Keeps the footer's Back/Next buttons above the keyboard instead of
+          hidden behind it -- wraps the scroll area and footer together so
+          both shift up as one when a text field is focused. */}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoider}
+        behavior="padding"
+        keyboardVerticalOffset={0}
+      >
+      {!template ? (
+        <View style={styles.loadingWrap}>
+          {loadError ? (
+            <>
+              <Text style={styles.helper}>Couldn't load the job information form.</Text>
+              <Button
+                label="Retry"
+                variant="outline"
+                onPress={() => {
+                  setLoadError(false);
+                  getActiveTemplateCached(selection.inspectionTypeId, selection.propertyTypeId, SECTION_KEY)
+                    .then((t) => {
+                      draft.setActiveTemplate(pinKey, t);
+                      setTemplate(t);
+                    })
+                    .catch(() => setLoadError(true));
+                }}
+              />
+            </>
+          ) : (
+            <ActivityIndicator color={colors.accentBlueFg} />
+          )}
+        </View>
+      ) : (
+        <ScrollIntoViewContext.Provider value={keyboardScroll.value}>
+        <ScrollView
+          ref={keyboardScroll.scrollRef}
+          onScroll={keyboardScroll.onScroll}
+          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
+          style={styles.body}
+          contentContainerStyle={styles.bodyContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Info banner */}
+          <View style={styles.banner}>
+            <Ionicons name="information-circle" size={18} color={colors.infoFg} />
+            <Text style={styles.bannerText}>
+              Enter and confirm all job details before beginning the inspection.
+            </Text>
+          </View>
+
+          {/* JOB DETAILS — text/date fields from the template */}
+          {textFields.length > 0 && (
+            <SectionCard title="JOB DETAILS" accent="blue">
+              {textFields.map((field, idx) => (
+                <React.Fragment key={field.key}>
+                  {idx > 0 && <Spacer />}
+                  {field.type === 'date' ? (
+                    <DateField
+                      label={field.label}
+                      required={field.required}
+                      readOnly={field.readOnly}
+                      value={asStr(answers[field.key])}
+                      onChange={setAnswer(field.key)}
+                    />
+                  ) : (
+                    <AppTextInput
+                      label={field.label}
+                      required={field.required}
+                      readOnly={field.readOnly}
+                      prefix={field.prefix}
+                      value={
+                        field.prefix && asStr(answers[field.key]).startsWith(field.prefix)
+                          ? asStr(answers[field.key]).slice(field.prefix.length)
+                          : asStr(answers[field.key])
+                      }
+                      onChangeText={(text) => setAnswer(field.key)(field.prefix ? `${field.prefix}${text}` : text)}
+                    />
+                  )}
+                </React.Fragment>
+              ))}
+              {/* Only meaningful once an address has actually been entered. */}
+              {!!asStr(answers.inspectionAddress).trim() && (
+                <View style={styles.gpsNote}>
+                  <Ionicons name="location" size={14} color={colors.barGreen} />
+                  <Text style={styles.gpsText}>
+                    <Text style={styles.gpsBold}>Confirmed: </Text>
+                    {asStr(answers.inspectionAddress)} · GPS locked
+                  </Text>
+                </View>
+              )}
+            </SectionCard>
+          )}
+
+          {/* Single-select tile fields (e.g. weather). The card title already
+              states the question -- repeating it as a field label underneath
+              just read as the same question asked twice. */}
+          {tileFields.map((field) => (
+            <SectionCard
+              key={field.key}
+              title={`${field.label.toUpperCase()}${field.required ? ' *' : ''}`}
+              accent="orange"
+            >
+              <ChoiceTileGrid
+                options={(field.options ?? []).map((o) => ({
+                  value: o.value,
+                  label: o.label,
+                  icon: tileIconFor(o.label, o.icon) as React.ComponentProps<typeof ChoiceTileGrid>['options'][number]['icon'],
+                }))}
+                value={typeof answers[field.key] === 'string' ? (answers[field.key] as string) : null}
+                onChange={setAnswer(field.key)}
+                columns={3}
+              />
+            </SectionCard>
+          ))}
+
+          {/* Yes/No fields (e.g. used as business) */}
+          {yesNoFields.map((field) => (
+            <SectionCard
+              key={field.key}
+              title={`${field.label.toUpperCase()}${field.required ? ' *' : ''}`}
+              accent="purple"
+            >
+              <SegmentedToggle
+                options={(field.options ?? []).map((o) => ({ value: o.value, label: o.label }))}
+                value={typeof answers[field.key] === 'string' ? (answers[field.key] as string) : null}
+                onChange={setAnswer(field.key)}
+              />
+            </SectionCard>
+          ))}
+
+          {/* Everything else the template defines (chip-multiselect, gated
+              "Other" textareas, etc.) -- the generic renderer, same as every
+              other section, so a field type doesn't need its own bespoke
+              branch above just to actually appear. Gated on whether anything
+              in here would actually be visible, not just whether the list is
+              non-empty -- a field that's only a gated "Other" companion (e.g.
+              weatherOther) is legitimately hidden until that's selected, and
+              counting it as "there's content" left an empty card showing
+              with nothing inside it. */}
+          {remainingFields.some((f) => isGateSatisfied(f, answers)) && (
+            <SectionCard accent="blue">
+              <FieldListRenderer
+                fields={remainingFields}
+                scope={answers}
+                onChange={(key, value) => setAnswer(key)(value)}
+                path={[SECTION_KEY]}
+              />
+            </SectionCard>
+          )}
+
+          {/* SYSTEM STATUS — not part of the template, always device/system telemetry */}
+          <SectionCard title="SYSTEM STATUS" accent="green">
+            <Text style={[styles.helper, styles.statusHelper]}>
+              The following are automatically initialised when the inspection begins.
+            </Text>
+            <StatusRow
+              icon="time-outline"
+              label="Inspection Started"
+              value={systemStatus.startedAt.value}
+              done={systemStatus.startedAt.ready}
+            />
+            <StatusRow
+              icon="location-outline"
+              label="GPS Location"
+              value={systemStatus.gpsLocation.value}
+              done={systemStatus.gpsLocation.ready}
+            />
+            <StatusRow
+              icon="camera-outline"
+              label="Photo Sequence"
+              value={systemStatus.photoSequence.value}
+              done={systemStatus.photoSequence.ready}
+            />
+            <StatusRow
+              icon="wifi-outline"
+              label="Cloud Sync"
+              value={systemStatus.cloudSync.value}
+              done={systemStatus.cloudSync.ready}
+            />
+            <StatusRow
+              icon="save-outline"
+              label="Offline Save"
+              value={systemStatus.offlineSave.value}
+              done={systemStatus.offlineSave.ready}
+            />
+          </SectionCard>
+          <View style={{ height: keyboardScroll.extraBottom }} />
+        </ScrollView>
+        </ScrollIntoViewContext.Provider>
+      )}
+
+      {/* Sticky footer */}
+      <SafeAreaView edges={keyboardVisible ? [] : ['bottom']} style={styles.footer}>
+        <View style={styles.footerRow}>
+          <Button
+            label="Back"
+            variant="outline"
+            leftIcon="chevron-back"
+            fitContent
+            onPress={() => navigation.goBack()}
+          />
+          <Button
+            label="Next"
+            variant="primaryGradient"
+            rightIcon="chevron-forward"
+            disabled={!canContinue}
+            onPress={onNext}
+            style={styles.nextBtn}
+          />
+        </View>
+        {template && !canContinue && (
+          <Text style={styles.footerHint}>
+            Fill in all required fields to continue
+          </Text>
+        )}
+      </SafeAreaView>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+function Spacer() {
+  return <View style={{ height: spacing.lg }} />;
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
+  progressWrap: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  keyboardAvoider: { flex: 1 },
+  body: { flex: 1 },
+  bodyContent: { padding: spacing.lg, paddingBottom: spacing.xxxl },
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  banner: {
+    flexDirection: 'row',
+    backgroundColor: colors.infoBg,
+    borderWidth: 1,
+    borderColor: colors.infoBorder,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  bannerText: {
+    ...typography.bodySm,
+    color: colors.infoFg,
+    flex: 1,
+    marginLeft: spacing.sm,
+    lineHeight: 18,
+  },
+  fieldLabel: { ...typography.label, color: colors.textSecondary },
+  req: { color: colors.danger, fontWeight: '700' },
+  helper: {
+    ...typography.caption,
+    color: colors.accentBlueFg,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+    lineHeight: 16,
+  },
+  statusHelper: { color: colors.accentOrangeFg },
+  gpsNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+    marginTop: spacing.lg,
+  },
+  gpsText: { ...typography.caption, color: colors.textSecondary, flex: 1, marginLeft: spacing.sm },
+  gpsBold: { fontWeight: '700', color: colors.textPrimary },
+  footer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  footerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  nextBtn: { flex: 1 },
+  footerHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+});
