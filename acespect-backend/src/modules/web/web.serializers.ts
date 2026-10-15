@@ -95,7 +95,48 @@ export function serializeSection(s: Section & { damages: Damage[] }) {
   };
 }
 
+/**
+ * What a list needs to know about a section (name, completion, review state) and nothing else. The answers, photos and damage records can
+ * be very large (hundreds of photo links), and a list of every inspection with all of that was tens of megabytes. Same shape as a full
+ * section, with the heavy parts empty; `detail: false` on the inspection tells the web app to fetch the real thing when one is opened.
+ */
+type SectionSummaryRow = Pick<Section, 'id' | 'key' | 'name' | 'icon' | 'status' | 'reviewStatus' | 'reviewComment' | 'updatedAt'>;
+export function serializeSectionSummary(s: SectionSummaryRow) {
+  return {
+    id: s.id,
+    key: s.key,
+    name: s.name,
+    icon: s.icon,
+    status: SEC_STATUS_TO_WEB[s.status],
+    reviewStatus: REV_STATUS_TO_WEB[s.reviewStatus],
+    reviewComment: s.reviewComment,
+    reportText: '',
+    fields: {},
+    answers: null,
+    damages: [],
+    photos: [],
+    excludedPhotoUrls: [],
+  };
+}
+
 type InspectionWithSections = Inspection & { sections: (Section & { damages: Damage[] })[] };
+type InspectionWithSectionSummaries = Inspection & { sections: SectionSummaryRow[] };
+
+/** The latest change to an inspection or any of its sections, so a client can ask for "what changed since I last looked". */
+function lastChange(i: Inspection, sections: { updatedAt: Date }[]): string {
+  let t = i.updatedAt.getTime();
+  for (const s of sections) if (s.updatedAt.getTime() > t) t = s.updatedAt.getTime();
+  return new Date(t).toISOString();
+}
+
+export function serializeInspectionSummary(i: InspectionWithSectionSummaries) {
+  return {
+    ...serializeInspection({ ...i, sections: [] } as unknown as InspectionWithSections, false),
+    sections: i.sections.map(serializeSectionSummary),
+    detail: false,
+    updatedAt: lastChange(i, i.sections),
+  };
+}
 
 export function serializeInspection(i: InspectionWithSections, withSections = true) {
   return {
@@ -120,5 +161,8 @@ export function serializeInspection(i: InspectionWithSections, withSections = tr
       ? { status: i.egnyteStatus, path: i.egnytePath ?? null, message: i.egnyteMessage ?? null, checkedAt: i.egnyteCheckedAt ? i.egnyteCheckedAt.toISOString() : null }
       : null,
     sections: withSections ? i.sections.map(serializeSection) : [],
+    // True when the sections above are complete (see serializeInspectionSummary for the list form).
+    detail: withSections,
+    updatedAt: lastChange(i, withSections ? i.sections : []),
   };
 }

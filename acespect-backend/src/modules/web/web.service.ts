@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import {
   serializeInspection,
+  serializeInspectionSummary,
   serializeSection,
   serializeUser,
   WEB_TO_INS_STATUS,
@@ -18,22 +19,61 @@ const SECTIONS_INCLUDE = {
 };
 
 /** Role-scoped list: inspector → own; reviewer → assigned (non-draft); admin → all. */
-async function listInspections(user: { id: string; role: string }) {
-  let where: Prisma.InspectionWhereInput = {};
-  if (user.role === 'REVIEWER') where = { reviewerId: user.id, status: { not: 'DRAFT' } };
-  else if (user.role === 'INSPECTOR') where = { inspectorId: user.id };
-  // ADMIN → all
-
-  const rows = await prisma.inspection.findMany({
-    where,
-    orderBy: { date: 'desc' },
-    include: SECTIONS_INCLUDE,
-  });
-  return rows.map((r) => serializeInspection(r));
+/**
+ * Which inspections a signed-in person may see. Admins: all. A reviewer: the ones assigned to them that have left draft. Everyone else
+ * (inspectors, and the QC roles that share this login) only their own -- these roles used to fall through to "all", relying on the web app
+ * to filter the list afterwards.
+ */
+function scopeFor(user: { id: string; role: string }): Prisma.InspectionWhereInput {
+  if (user.role === 'ADMIN') return {};
+  if (user.role === 'REVIEWER') return { reviewerId: user.id, status: { not: 'DRAFT' } };
+  return { inspectorId: user.id };
 }
 
-async function getInspection(id: string) {
-  const row = await prisma.inspection.findUnique({ where: { id }, include: SECTIONS_INCLUDE });
+const SECTION_SUMMARY_SELECT = { id: true, key: true, name: true, icon: true, status: true, reviewStatus: true, reviewComment: true, updatedAt: true, order: true } as const;
+
+interface ListOptions {
+  /** 'summary': the light list (no answers, photos or damage records), paged. Anything else: the full list in one go (older web builds). */
+  view?: string;
+  limit?: number;
+  /** The id of the last inspection of the previous page. */
+  cursor?: string;
+  /** Only inspections (or sections) changed after this time. */
+  since?: Date;
+}
+
+async function listInspections(user: { id: string; role: string }, opts: ListOptions = {}) {
+  const scope = scopeFor(user);
+
+  if (opts.view !== 'summary') {
+    const rows = await prisma.inspection.findMany({ where: scope, orderBy: { date: 'desc' }, include: SECTIONS_INCLUDE });
+    return { inspections: rows.map((r) => serializeInspection(r)) };
+  }
+
+  // Taken before the query, so a change that lands while it runs is picked up by the next "since" request rather than missed.
+  const serverTime = new Date().toISOString();
+  const take = Math.min(Math.max(Math.floor(opts.limit ?? 500), 1), 1000);
+  const where: Prisma.InspectionWhereInput = opts.since
+    ? { AND: [scope, { OR: [{ updatedAt: { gt: opts.since } }, { sections: { some: { updatedAt: { gt: opts.since } } } }] }] }
+    : scope;
+  const rows = await prisma.inspection.findMany({
+    where,
+    orderBy: [{ date: 'desc' }, { id: 'desc' }],
+    take: take + 1,
+    ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+    include: { sections: { orderBy: { order: 'asc' }, select: SECTION_SUMMARY_SELECT } },
+  });
+  const page = rows.slice(0, take);
+  return {
+    inspections: page.map((r) => serializeInspectionSummary(r)),
+    ...(rows.length > take ? { nextCursor: page[page.length - 1]!.id } : {}),
+    serverTime,
+  };
+}
+
+async function getInspection(id: string, user: { id: string; role: string }) {
+  // Same visibility rule as the list: asking for someone else's inspection by id is "not found", not a peek at it.
+  const row = await prisma.inspection.findFirst({ where: { AND: [{ id }, scopeFor(user)] }, include: SECTIONS_INCLUDE });
   if (!row) throw ApiError.notFound('Inspection not found');
   return serializeInspection(row);
 }

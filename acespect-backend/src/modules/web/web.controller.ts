@@ -7,14 +7,23 @@ import { webService } from './web.service';
 export const webController = {
   listInspections: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
-    const inspections = await webService.listInspections(req.user);
-    res.status(200).json({ inspections });
+    const q = req.query as Record<string, unknown>;
+    const since = typeof q.since === 'string' ? new Date(q.since) : undefined;
+    if (since && Number.isNaN(since.getTime())) throw ApiError.badRequest('since must be a date');
+    const result = await webService.listInspections(req.user, {
+      view: typeof q.view === 'string' ? q.view : undefined,
+      limit: typeof q.limit === 'string' ? Number(q.limit) || undefined : undefined,
+      cursor: typeof q.cursor === 'string' && /^[0-9a-f-]{36}$/i.test(q.cursor) ? q.cursor : undefined,
+      since,
+    });
+    res.status(200).json(result);
   }),
 
   getInspection: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
-    const inspection = await webService.getInspection(id);
+    const inspection = await webService.getInspection(id, req.user);
     res.status(200).json({ inspection });
   }),
 

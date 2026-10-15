@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import helmet from 'helmet';
+import compression from 'compression';
 import cors from 'cors';
 import morgan from 'morgan';
 import { env } from './config/env';
@@ -26,6 +27,8 @@ export function createApp() {
   app.set('trust proxy', 1);
   app.use(clientIp);
   app.use(helmet());
+  // JSON answers compress to a fraction of their size (images, PDFs and other already-compressed files are skipped automatically).
+  app.use(compression());
   app.use(
     cors({
       origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(',').map((s) => s.trim()),

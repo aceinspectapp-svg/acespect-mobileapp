@@ -219,6 +219,9 @@ model Inspection {
   @@index([inspectorId])
   @@index([reviewerId])
   @@index([baselineInspectionId])
+  @@index([status])
+  @@index([date])
+  @@index([updatedAt])
   @@map("inspections")
 }
 
@@ -254,6 +257,7 @@ model Section {
   damages Damage[]
 
   @@index([inspectionId])
+  @@index([updatedAt])
   @@map("sections")
 }
 
@@ -435,6 +439,8 @@ model Photo {
   contentType String
   createdAt   DateTime @default(now())
 
+  /// Looked up by exact path on every numbered upload (is this file name taken?).
+  @@index([storageKey])
   @@map("photos")
 }
 
@@ -940,6 +946,7 @@ model SubmissionLogEntry {
   @@index([inspectorId])
   @@index([inspectionId])
   @@index([createdAt])
+  @@index([event, createdAt])
   @@map("submission_log_entries")
 }
 
