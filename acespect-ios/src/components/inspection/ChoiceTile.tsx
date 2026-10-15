@@ -41,7 +41,7 @@ export function ChoiceTileGrid({ options, value, onChange, columns = 3 }: Choice
                 size={22}
                 color={selected ? colors.tileSelectedBorder : colors.textSecondary}
               />
-              <Text style={[styles.label, selected && styles.labelSelected]} numberOfLines={1}>
+              <Text style={[styles.label, selected && styles.labelSelected]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
                 {opt.label}
               </Text>
             </View>
@@ -84,7 +84,7 @@ export function ChoiceTileMultiGrid({ options, selected, onToggle, columns = 3 }
                 size={22}
                 color={active ? colors.tileSelectedBorder : colors.textSecondary}
               />
-              <Text style={[styles.label, active && styles.labelSelected]} numberOfLines={1}>
+              <Text style={[styles.label, active && styles.labelSelected]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
                 {opt.label}
               </Text>
             </View>

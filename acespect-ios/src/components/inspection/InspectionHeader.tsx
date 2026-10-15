@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../theme';
+import { EmojiGlyph, isDrawableEmoji } from './EmojiGlyph';
 
 export interface HeaderAction {
   icon: keyof typeof Ionicons.glyphMap;
@@ -43,7 +44,7 @@ export function InspectionHeader({ title, subtitle, onBack, actions = [] }: Insp
             <Text style={styles.title} numberOfLines={1}>
               {title}
             </Text>
-            {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+            {subtitle && (isDrawableEmoji(subtitle) ? <View style={{ marginTop: 3 }}><EmojiGlyph text={subtitle} size={15} color={colors.textOnDarkMuted} /></View> : <Text style={styles.subtitle}>{subtitle}</Text>)}
           </View>
 
           <View style={styles.actions}>

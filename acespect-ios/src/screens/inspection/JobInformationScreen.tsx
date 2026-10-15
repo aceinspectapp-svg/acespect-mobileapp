@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ScrollIntoViewContext, useKeyboardAwareScroll } from '../../components/ui/KeyboardScroll';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -22,6 +22,8 @@ import { FieldListRenderer } from '../../components/inspection/fieldRenderers';
 import { isGateSatisfied, type AnswerTree, type AnswerValue } from '../../components/inspection/fieldRenderers/types';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
 import { CONSTRUCTION_STAGE_BY_ID } from '../../constants/constructionStages';
+import { tileIconFor } from '../../constants/tileIcons';
+import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
 
 const SECTION_KEY = 'job-info';
 
@@ -219,6 +221,8 @@ export function JobInformationScreen({
     navigation.navigate('InspectionSetupStep2', { data });
   };
 
+  const keyboardVisible = useKeyboardVisible();
+
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -251,7 +255,7 @@ export function JobInformationScreen({
       <KeyboardAvoidingView
         style={styles.keyboardAvoider}
         behavior="padding"
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={0}
       >
       {!template ? (
         <View style={styles.loadingWrap}>
@@ -351,7 +355,7 @@ export function JobInformationScreen({
                 options={(field.options ?? []).map((o) => ({
                   value: o.value,
                   label: o.label,
-                  icon: (o.icon ?? 'help-circle-outline') as React.ComponentProps<typeof ChoiceTileGrid>['options'][number]['icon'],
+                  icon: tileIconFor(o.label, o.icon) as React.ComponentProps<typeof ChoiceTileGrid>['options'][number]['icon'],
                 }))}
                 value={typeof answers[field.key] === 'string' ? (answers[field.key] as string) : null}
                 onChange={setAnswer(field.key)}
@@ -437,7 +441,7 @@ export function JobInformationScreen({
       )}
 
       {/* Sticky footer */}
-      <SafeAreaView edges={['bottom']} style={styles.footer}>
+      <SafeAreaView edges={keyboardVisible ? [] : ['bottom']} style={styles.footer}>
         <View style={styles.footerRow}>
           <Button
             label="Back"

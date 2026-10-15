@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ScrollIntoViewContext, useKeyboardAwareScroll } from '../../components/ui/KeyboardScroll';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -17,6 +17,7 @@ import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionDat
 import { getSectionTitle } from '../../constants/inspectionSections';
 import { getBaselineSections as fetchBaselineSections } from '../../services/inspectionApi';
 import { pinAllSectionTemplates } from '../../utils/pinAllSectionTemplates';
+import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
 
 /**
  * Every Post-Dilapidation job asks the same opinion of every section, on top
@@ -248,15 +249,16 @@ export function DynamicSectionScreen({
       setShowMissing(true);
       Alert.alert(
         'Section incomplete',
-        'Not everything here has been filled in yet. Save this as a draft and finish it later, or stay and complete it now.',
+        'Not everything here has been filled in yet. Save this as a draft and finish it later, or keep editing and complete it now.',
         [
-          { text: 'Complete Section', style: 'cancel' },
+          // Closes the alert and stays on the screen, so it says so (it used to be labelled "Complete Section", which it does not do).
+          { text: 'Keep Editing', style: 'cancel' },
           { text: 'Save as Draft', onPress: () => { persistSection('partial'); leaveFn(); } },
         ],
         // Tapping the dimmed area outside the box (Android only -- iOS's
         // native Alert has no backdrop-tap gesture at all) should count the
-        // same as tapping "Complete Section": stay put, no save. That's
-        // already what "Complete Section" itself does (no onPress), so
+        // same as tapping "Keep Editing": stay put, no save. That's
+        // already what "Keep Editing" itself does (no onPress), so
         // `onDismiss` is a deliberate no-op, not a missed handler.
         { cancelable: true, onDismiss: () => {} },
       );
@@ -269,6 +271,8 @@ export function DynamicSectionScreen({
   const handleBack = () => attemptLeave(onBack);
   const handleGoHome = () => attemptLeave(onGoHome);
   const handleComplete = () => attemptLeave(onComplete);
+
+  const keyboardVisible = useKeyboardVisible();
 
   return (
     <View style={styles.root}>
@@ -285,6 +289,11 @@ export function DynamicSectionScreen({
             // persistSection. Now actually writes the current answers as
             // partial, same as the Save as Draft choice everywhere else.
             onPress: () => {
+              // A section whose form has not loaded has nothing to save: say so instead of claiming a save.
+              if (!template) {
+                Alert.alert('Nothing to save yet', `The ${displayName} form has not loaded yet. Wait for it to load (or tap Retry), then save.`);
+                return;
+              }
               persistSection('partial');
               Alert.alert('Draft saved', `${displayName} saved locally.`);
             },
@@ -302,7 +311,7 @@ export function DynamicSectionScreen({
       <KeyboardAvoidingView
         style={styles.keyboardAvoider}
         behavior="padding"
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={0}
       >
         {!template ? (
           <View style={styles.loadingWrap}>
@@ -378,7 +387,7 @@ export function DynamicSectionScreen({
           </ScrollIntoViewContext.Provider>
         )}
 
-        <SafeAreaView edges={['bottom']} style={styles.footer}>
+        <SafeAreaView edges={keyboardVisible ? [] : ['bottom']} style={styles.footer}>
           <View style={styles.footerRow}>
             <Button label="Back" variant="outline" leftIcon="chevron-back" fitContent onPress={handleBack} />
             <Button
@@ -397,7 +406,7 @@ export function DynamicSectionScreen({
           )}
           {template && defectsComplete && !requiredFieldsComplete && (
             <Text style={styles.footerHint}>
-              You can complete with required fields blank, but they're recommended
+              Some required fields are empty — you can save a draft and finish later
             </Text>
           )}
         </SafeAreaView>
