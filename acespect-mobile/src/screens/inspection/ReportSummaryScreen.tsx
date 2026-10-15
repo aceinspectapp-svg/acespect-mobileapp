@@ -264,7 +264,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
       Alert.alert(
         ok ? 'Sent ✓' : 'Sent — please check',
         ok
-          ? `The server confirmed ${res.receipt!.sections} section${res.receipt!.sections === 1 ? '' : 's'} and ${res.receipt!.photos} photo${res.receipt!.photos === 1 ? '' : 's'} (ref ${res.inspectionId.slice(0, 8)}…).${res.skippedPhotos ? ` ${res.skippedPhotos} photo${res.skippedPhotos === 1 ? ' was' : 's were'} left out because the file${res.skippedPhotos === 1 ? ' is' : 's are'} no longer on this phone.` : ''} Review it on your dashboard, then finalize it to send for review.`
+          ? `The server confirmed ${res.receipt!.sections} section${res.receipt!.sections === 1 ? '' : 's'} and ${res.receipt!.photos} photo${res.receipt!.photos === 1 ? '' : 's'} (ref ${res.inspectionId.slice(0, 8)}…).${res.skippedPhotos ? ` ${res.skippedPhotos} photo${res.skippedPhotos === 1 ? ' was' : 's were'} left out because ${res.skippedPhotos === 1 ? 'it' : 'they'} could not be read or ${res.skippedPhotos === 1 ? 'is' : 'are'} no longer on this phone.` : ''} Review it on your dashboard, then finalize it to send for review.`
           : `The server saved the inspection (ref ${res.inspectionId.slice(0, 8)}…) but its copy may be incomplete${res.receipt && payload.expected ? ` (sent ${payload.expected.sections} sections / ${payload.expected.photos} photos, stored ${res.receipt.sections} / ${res.receipt.photos})` : ''}. The office has been told; open it on your dashboard to check.`,
         [{ text: 'OK', onPress: () => { draft.reset(); goHome(); } }],
         { cancelable: false },

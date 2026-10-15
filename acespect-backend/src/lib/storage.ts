@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { env } from '../config/env';
+import { ApiError } from '../utils/ApiError';
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { mergeFolder, resolveInspectionFolder, type EgnyteFs, type Resolution } from './egnyteJobFolders';
@@ -356,6 +357,36 @@ async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string)
  * section subfolder in Egnyte (see the module doc above); omit them for a
  * flat, ungrouped upload.
  */
+/**
+ * The compressed report copy of an uploaded image. iPhones keep library photos as HEIC (HEVC), which the image library built into this
+ * server cannot decode: every such upload failed with a 500, the phone retried it for ever, and the inspection behind it never arrived.
+ * Those are now decoded by a pure-JavaScript HEIC reader instead. A file that cannot be read at all is refused with a clear 422 (a
+ * permanent "no", so the phone stops retrying it) rather than a 500 (a temporary "try again").
+ */
+async function toReportJpeg(buffer: Buffer): Promise<Buffer> {
+  const shrink = (input: Buffer) =>
+    sharp(input)
+      .rotate()
+      .resize({ width: REPORT_MAX_WIDTH, height: REPORT_MAX_HEIGHT, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: REPORT_JPEG_QUALITY })
+      .toBuffer();
+  try {
+    return await shrink(buffer);
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    if (/heif|heic|decoding plugin|bad seek/i.test(why)) {
+      try {
+        const { default: convert } = await import('heic-convert');
+        return await shrink(Buffer.from(await convert({ buffer, format: 'JPEG', quality: 0.92 })));
+      } catch (heicErr) {
+        // eslint-disable-next-line no-console
+        console.error('⚠️  Could not decode a HEIC photo.', heicErr);
+      }
+    }
+    throw new ApiError(422, 'This photo could not be read (unsupported or damaged image). Please take or choose it again.', 'PHOTO_UNREADABLE');
+  }
+}
+
 type StoredPhoto = UploadedPhoto & { folder?: { status: string; message?: string; path: string } };
 
 /** Photos being stored right now, by the phone's photo id: the same photo sent twice at once (a slow upload retried by the phone) is stored once. */
@@ -413,16 +444,7 @@ async function storePhoto(
   // rotate() with no args bakes in the EXIF orientation tag (phone photos are
   // often stored sideways/upside-down relative to how they should display)
   // then strips it, so the resized copy always renders right-side-up.
-  const resized = await sharp(buffer)
-    .rotate()
-    .resize({
-      width: REPORT_MAX_WIDTH,
-      height: REPORT_MAX_HEIGHT,
-      fit: 'inside',
-      withoutEnlargement: true,
-    })
-    .jpeg({ quality: REPORT_JPEG_QUALITY })
-    .toBuffer();
+  const resized = await toReportJpeg(buffer);
 
   if (useDbStorage()) {
     await recordPhoto({ id, data: new Uint8Array(resized), contentType: 'image/jpeg' });

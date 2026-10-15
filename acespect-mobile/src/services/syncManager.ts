@@ -134,8 +134,8 @@ const photoInFlight = new Map<string, Promise<string>>();
 
 /** The photo's file is no longer on this phone (cleared storage, deleted from the gallery): it can never be sent. */
 export class PhotoFileMissing extends Error {
-  constructor(public readonly uri: string) {
-    super('The photo file is no longer on this phone');
+  constructor(public readonly uri: string, reason = 'The photo file is no longer on this phone') {
+    super(reason);
     this.name = 'PhotoFileMissing';
   }
 }
@@ -159,6 +159,13 @@ async function uploadAndForget(uri: string, opts: { inspectionId?: string; secti
       if (opts.sectionKey) photoMeta.set(uri, { sectionKey: opts.sectionKey, ...(opts.jobNo ? { jobNo: opts.jobNo } : {}), ...(opts.inspectionId ? { inspectionId: opts.inspectionId } : {}) });
       saveCacheSoon();
       return url;
+    })
+    .catch((err) => {
+      // The server looked at the file and said it can never be used (an unreadable or unsupported image): sending it again cannot help, and it
+      // must not hold up the rest of the inspection. Treated like a file that has gone: left out, counted, and reported.
+      const code = (err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;
+      if (code === 'PHOTO_UNREADABLE') throw new PhotoFileMissing(uri, 'The server could not read this photo');
+      throw err;
     })
     .finally(() => photoInFlight.delete(uri));
   photoInFlight.set(uri, work);

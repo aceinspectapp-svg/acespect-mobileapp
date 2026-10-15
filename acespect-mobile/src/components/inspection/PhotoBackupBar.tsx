@@ -43,7 +43,7 @@ export function PhotoBackupBar({ compact = false }: { compact?: boolean }) {
           Big inspection: keep the app open and on Wi-Fi until this reaches {s.total} / {s.total}. The screen will stay on while photos are going up.
         </Text>
       ) : null}
-      {s.lost > 0 ? <Text style={[styles.note, { color: colors.warning }]}>{s.lost} photo{s.lost === 1 ? '' : 's'} can no longer be found on this phone and will be left out.</Text> : null}
+      {s.lost > 0 ? <Text style={[styles.note, { color: colors.warning }]}>{s.lost} photo{s.lost === 1 ? '' : 's'} can no longer be found or read and will be left out.</Text> : null}
     </View>
   );
 }
