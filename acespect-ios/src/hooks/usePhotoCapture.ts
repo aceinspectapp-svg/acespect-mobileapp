@@ -119,6 +119,8 @@ export function usePhotoCapture() {
         mediaTypes: ['images'],
         quality: 0.8,
         exif: true,
+        // iPhones otherwise hand over HEIC files, which not everything downstream can read: ask for the JPEG-compatible version.
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
       if (result.canceled || !result.assets?.length) return null;
       const photos = toCapturedPhotos(result.assets, opts);
@@ -146,6 +148,7 @@ export function usePhotoCapture() {
         // selectionLimit: 0 = no cap (the system's own max).
         allowsMultipleSelection: true,
         selectionLimit: 0,
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
       if (result.canceled || !result.assets?.length) return null;
       const photos = toCapturedPhotos(result.assets, opts);

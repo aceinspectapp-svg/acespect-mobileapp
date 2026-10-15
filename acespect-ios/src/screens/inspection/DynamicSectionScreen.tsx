@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ScrollIntoViewContext, useKeyboardAwareScroll } from '../../components/ui/KeyboardScroll';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionDat
 import { getSectionTitle } from '../../constants/inspectionSections';
 import { getBaselineSections as fetchBaselineSections } from '../../services/inspectionApi';
 import { pinAllSectionTemplates } from '../../utils/pinAllSectionTemplates';
+import { PhotoBackupBar } from '../../components/inspection/PhotoBackupBar';
 import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
 
 /**
@@ -162,12 +163,24 @@ export function DynamicSectionScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inspectionTypeId, propertyTypeId, templateKey]);
 
+  // The section saves itself a few seconds after the last edit (and so is copied to the server by the background saver), instead of only
+  // when the inspector leaves the screen the "right" way. Leaving by the system back gesture, switching apps, or the app being closed
+  // during a long photo session used to leave the server holding nothing but Job Information. It runs even if the screen has closed in
+  // the meantime, so the last edits are never dropped.
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveLatest = useRef<() => void>(() => undefined);
+
   function setAnswer(key: string, value: AnswerValue) {
     setAnswers((prev) => {
       const next = { ...prev, [key]: value };
       draft.setAnswers(sectionKey, next);
       return next;
     });
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => {
+      autosaveTimer.current = null;
+      saveLatest.current();
+    }, 3000);
   }
 
   function retry() {
@@ -215,6 +228,9 @@ export function DynamicSectionScreen({
       damages,
     });
   }
+
+  // What the autosave above writes: complete only when everything required is filled in, otherwise a draft ("partial").
+  saveLatest.current = () => persistSection(canComplete ? 'complete' : 'partial');
 
   /**
    * Gate for every way to leave this screen -- the header/footer Back, the
@@ -327,6 +343,7 @@ export function DynamicSectionScreen({
         ) : (
           <ScrollIntoViewContext.Provider value={keyboardScroll.value}>
           <ScrollView ref={keyboardScroll.scrollRef} onScroll={keyboardScroll.onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+            <PhotoBackupBar compact />
             {isPostDilapidation && baselineSection && (
               <View style={styles.baselineCard}>
                 <Text style={styles.baselineLabel}>PREVIOUSLY RECORDED</Text>

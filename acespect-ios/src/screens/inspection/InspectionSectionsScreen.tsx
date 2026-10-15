@@ -16,6 +16,7 @@ import { AppScreenProps } from '../../navigation/types';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
 import { getLiveSyncStatus, subscribeLiveSync, type LiveSyncStatus } from '../../services/liveSync';
 import { JobSetupData } from '../../types/jobSetup';
+import { PhotoBackupBar } from '../../components/inspection/PhotoBackupBar';
 
 /**
  * Inspection Sections hub — the landing screen after Setup Step 2.
@@ -187,6 +188,7 @@ export function InspectionSectionsScreen({
             </Text>
           </View>
         )}
+        <PhotoBackupBar />
       </View>
 
       <ScrollView

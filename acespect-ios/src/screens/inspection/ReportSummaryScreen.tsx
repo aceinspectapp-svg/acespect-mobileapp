@@ -21,6 +21,8 @@ import { INSPECTION_TYPES } from '../../constants/inspectionData';
 import { AppScreenProps } from '../../navigation/types';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
 import { runSubmission, enqueueSubmission, receiptMatches } from '../../services/syncManager';
+import { reportProblem, reportStep } from '../../services/problemReport';
+import { PhotoBackupBar } from '../../components/inspection/PhotoBackupBar';
 import { JobSetupData } from '../../types/jobSetup';
 
 const PROPERTY_LABELS: Record<string, string> = {
@@ -174,13 +176,18 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
   const canSubmit = confirmed === 'yes' && signed;
 
   const net = useNetworkState();
-  const isOnline = net.isInternetReachable ?? net.isConnected ?? false;
+  // Only a phone that reports NO connection at all is treated as offline. `isInternetReachable` is the system's own background check and
+  // reads false whenever that check is slow or fails -- typically after a long run of photo uploads has filled the connection -- even
+  // though the network works. Trusting it sent finished inspections straight to the queue ("No connection right now") without a single
+  // attempt. If the network really is down the attempt fails quickly and the inspection is queued exactly the same way.
+  const isOnline = net.isConnected !== false;
 
   const onGenerate = async () => {
     // A second tap (or one made after a failed attempt cleared the draft) must never send a blank inspection under this job number.
     if (!canSubmit || submitting || startedRef.current) return;
     startedRef.current = true;
     setSubmitting(true);
+    reportStep('submit pressed', { online: isOnline, connected: net.isConnected, reachable: net.isInternetReachable, type: String(net.type) });
 
     // Build the structured payload from the section draft once, with photos
     // left as local `file://` URIs -- uploading happens inside
@@ -194,6 +201,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
     // Nothing but Job Information in the draft: there is no inspection to send. (This happened when a failed attempt had already moved the
     // inspection into the sync queue and cleared the draft, and the Submit button was pressed again: a blank one was saved under the same job.)
     if (!payload.sections.some((s) => s.key !== 'job-info')) {
+      reportStep('submit stopped: no sections saved', { jobNo: data.details.jobNumber });
       startedRef.current = false;
       setSubmitting(false);
       Alert.alert(
@@ -243,6 +251,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
     // up the moment connectivity returns (foreground-triggered; see
     // syncManager.ts) and let the inspector move on to their next job.
     if (!isOnline) {
+      reportStep('submit queued: phone reports no connection', { jobNo: payload.jobNo, sections: payload.sections.length });
       await enqueueSubmission(payload);
       draft.reset();
       setSubmitting(false);
@@ -258,11 +267,12 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
     try {
       setSubmitStatus(payload.sections.some((s) => (s.photos?.length ?? 0) > 0) ? 'Uploading photos…' : 'Saving inspection…');
       const res = await runSubmission(payload);
+      reportStep('submit finished', { jobNo: payload.jobNo, sections: res.receipt?.sections, photos: res.receipt?.photos, skipped: res.skippedPhotos ?? 0 });
       const ok = receiptMatches(payload, res);
       Alert.alert(
         ok ? 'Sent ✓' : 'Sent — please check',
         ok
-          ? `The server confirmed ${res.receipt!.sections} section${res.receipt!.sections === 1 ? '' : 's'} and ${res.receipt!.photos} photo${res.receipt!.photos === 1 ? '' : 's'} (ref ${res.inspectionId.slice(0, 8)}…). Review it on your dashboard, then finalize it to send for review.`
+          ? `The server confirmed ${res.receipt!.sections} section${res.receipt!.sections === 1 ? '' : 's'} and ${res.receipt!.photos} photo${res.receipt!.photos === 1 ? '' : 's'} (ref ${res.inspectionId.slice(0, 8)}…).${res.skippedPhotos ? ` ${res.skippedPhotos} photo${res.skippedPhotos === 1 ? ' was' : 's were'} left out because ${res.skippedPhotos === 1 ? 'it' : 'they'} could not be read or ${res.skippedPhotos === 1 ? 'is' : 'are'} no longer on this phone.` : ''} Review it on your dashboard, then finalize it to send for review.`
           : `The server saved the inspection (ref ${res.inspectionId.slice(0, 8)}…) but its copy may be incomplete${res.receipt && payload.expected ? ` (sent ${payload.expected.sections} sections / ${payload.expected.photos} photos, stored ${res.receipt.sections} / ${res.receipt.photos})` : ''}. The office has been told; open it on your dashboard to check.`,
         [{ text: 'OK', onPress: () => { draft.reset(); goHome(); } }],
         { cancelable: false },
@@ -271,6 +281,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
       // A live attempt failed partway (e.g. connection dropped mid-upload) --
       // rather than a dead-end "Submit failed" with no recovery, save it the
       // same way an offline submit would be and let the sync queue retry.
+      reportProblem('submit', err, { jobNo: payload.jobNo, sections: payload.sections.length, photos: payload.expected?.photos });
       await enqueueSubmission(payload);
       draft.reset();
       const e = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
@@ -372,6 +383,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
               <Text style={styles.declOverlayText}>{submitStatus || 'Submitting…'}</Text>
             </View>
           )}
+          <PhotoBackupBar />
           <SectionTitle label="Inspector Declaration" />
           <Text style={styles.declText}>
             I confirm this report accurately reflects the conditions observed at the property on the date of inspection.
