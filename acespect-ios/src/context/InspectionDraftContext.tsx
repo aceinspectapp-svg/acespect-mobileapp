@@ -1,0 +1,378 @@
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import * as Crypto from 'expo-crypto';
+import type { ActiveTemplate } from '../services/templateApi';
+import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
+import { DraftSnapshot, clearDraftSnapshot, saveDraftSnapshot } from '../services/offlineStorage';
+import { attachDraft, resetLiveSync, scheduleSectionSync } from '../services/liveSync';
+import { resetPhotoNumbers, restorePhotoNumbers, snapshotPhotoNumbers } from '../services/photoNumbers';
+
+/**
+ * In-memory draft of the inspection being filled. Each section screen writes its
+ * data via `setSection`; the shared photo-capture hook feeds `addPhoto` (keyed
+ * by sectionKey). `ReportSummaryScreen` reads it all at submit time and POSTs the
+ * structured inspection. (Online submit — not offline-first yet.)
+ */
+export interface DraftDamage {
+  type: string;
+  location?: string;
+  direction?: string;
+  widthMm?: number;
+  lengthMm?: number;
+  notes?: string;
+  photos?: string[]; // local file:// URIs until uploaded
+}
+
+export interface DraftSection {
+  key: string;
+  name: string;
+  icon?: string;
+  order: number;
+  status?: 'complete' | 'partial' | 'pending';
+  reportText?: string;
+  fields?: Record<string, unknown>;
+  /** Raw un-flattened answers, sent so the section can be reopened for editing. */
+  answers?: Record<string, unknown>;
+  photos?: string[]; // local file:// URIs until uploaded
+  damages?: DraftDamage[];
+}
+
+export interface DraftTop {
+  inspectionType: string;
+  propertyType: string;
+  /** Raw lowercase ids (e.g. "dilapidation", "residential_house") — used to
+   *  address templates; distinct from the human-readable labels above, which
+   *  the submit payload uses. Set once, early, by whichever screen first has
+   *  the wizard's InspectionDraftSelection (today: Job Information). */
+  inspectionTypeId?: string;
+  propertyTypeId?: string;
+  /** Construction Stage inspections: the chosen stage's id (e.g. "pre_pour") and its display name. */
+  stageId?: string;
+  stage?: string;
+  /** This draft's own id, generated the moment it starts (well before
+   *  submit) — used as the Egnyte inspection folder for every photo
+   *  uploaded along the way, and sent as `id` at submit time so the created
+   *  row's id matches the folder those photos already live under. A
+   *  Post-Dilapidation job picked up via `assignmentId` uses that instead
+   *  (see `folderId` below) since its row already exists. */
+  draftId: string;
+  jobNo?: string;
+  address?: string;
+  suburb?: string;
+  client?: string;
+  date?: string;
+  notes?: string;
+  overallProgress?: number;
+  /**
+   * Post-Dilapidation job, picked up from the inspector's assigned list --
+   * `assignmentId` is the placeholder Inspection admin created (submit fills
+   * it in rather than creating a new one); `baselineInspectionId` is the
+   * earlier inspection being compared against, which is what tells every
+   * section screen to render the comparison UI and fetch the baseline's own
+   * data for reference. Unset for a normal, non-comparison inspection.
+   */
+  assignmentId?: string;
+  baselineInspectionId?: string;
+}
+
+export interface SubmitPayload extends DraftTop {
+  /** The backend's Inspection.id to create (or reuse) this row under — set
+   *  at submit time from `getFolderId()`, matching the Egnyte folder every
+   *  photo was already uploaded into along the way. */
+  id?: string;
+  sections: DraftSection[];
+  /** The number each photo file was given when it was taken (see services/photoNumbers.ts): it becomes the photo's name in Egnyte. */
+  photoNumbers?: Record<string, number>;
+  /** What this phone believes it is sending (sections other than Job Information, distinct uploaded photos). The server answers with what it
+   *  stored; the inspection is only treated as safely sent when both agree. */
+  expected?: { sections: number; photos: number };
+}
+
+interface DraftValue {
+  setTop: (patch: Partial<DraftTop>) => void;
+  getTop: () => DraftTop;
+  setSection: (section: DraftSection) => void;
+  /** Read back a section's persisted status/data (e.g. for the hub's completion ticks) -- keyed the same as `setSection`. */
+  getSection: (key: string) => DraftSection | undefined;
+  /** Every section saved so far, fixed template sections and inspector-added custom ones alike. */
+  getAllSections: () => DraftSection[];
+  /** Register a captured photo under its sectionKey (e.g. "driveway:1", "overview"). */
+  addPhoto: (sectionKey: string, uri: string) => void;
+  reset: () => void;
+  /** All local photo URIs across sections + damages + the registry (to upload). */
+  collectPhotoUris: () => string[];
+  /** Same set as `collectPhotoUris`, each tagged with its top-level section key — for uploading into that section's own Egnyte folder. */
+  collectPhotoUrisBySection: () => { sectionKey: string; uri: string }[];
+  /** The id every photo for this draft is (or should be) uploaded under in Egnyte — the assigned job's existing row id if picked up from the assigned list, else this draft's own generated id. */
+  getFolderId: () => string;
+  /** Build the submit payload, mapping each local photo URI via `resolve`. */
+  buildPayload: (resolve: (uri: string) => string) => SubmitPayload;
+  /**
+   * The admin-published template a section screen fetched at the start of
+   * this draft, pinned for the session. Screens must reuse whatever's here
+   * rather than refetching, so an inspection already in progress keeps
+   * rendering the version it started with even if admin publishes a newer
+   * one mid-session.
+   */
+  getActiveTemplate: (sectionKey: string) => ActiveTemplate | undefined;
+  setActiveTemplate: (sectionKey: string, template: ActiveTemplate) => void;
+  /**
+   * A section screen's raw, in-progress answer tree -- distinct from
+   * `setSection`'s flattened `fields` (which collapses repeating-group
+   * instances down to a joined labels string for the report/submit payload
+   * and can't be read back into an editable form). Persisted here so
+   * navigating away (e.g. back to the hub) and returning to the same
+   * section restores exactly what was filled in, not a blank form.
+   */
+  getAnswers: (sectionKey: string) => AnswerTree | undefined;
+  setAnswers: (sectionKey: string, answers: AnswerTree) => void;
+  /**
+   * Post-Dilapidation baseline sections (previous inspection's data, read-only
+   * reference), fetched once per draft and cached here the same way a
+   * section's active template is -- every section screen looks up its own
+   * key from this one shared list rather than each re-fetching the whole
+   * baseline. `null` until the first fetch completes.
+   */
+  getBaselineSections: () => BaselineSectionRef[] | null;
+  setBaselineSections: (sections: BaselineSectionRef[]) => void;
+  /** Replace the entire in-memory draft with a persisted snapshot (see
+   *  `offlineStorage.ts`) — used to resume an inspection left in progress
+   *  from a previous app session, offline or not. */
+  hydrateFromSnapshot: (snapshot: DraftSnapshot) => void;
+}
+
+/** Local mirror of services/inspectionApi.ts's BaselineSection -- kept separate to avoid a circular import (that module imports SubmitPayload from this file). */
+export interface BaselineSectionRef {
+  key: string;
+  name: string;
+  reportText: string;
+  fields: Record<string, unknown>;
+  photos: string[];
+}
+
+const Ctx = createContext<DraftValue | null>(null);
+
+export function useInspectionDraft(): DraftValue {
+  const ctx = useContext(Ctx);
+  if (!ctx) throw new Error('useInspectionDraft must be used within InspectionDraftProvider');
+  return ctx;
+}
+
+export function InspectionDraftProvider({ children }: { children: React.ReactNode }) {
+  const topRef = useRef<DraftTop>({
+    inspectionType: 'Dilapidation',
+    propertyType: 'Residential House',
+    draftId: Crypto.randomUUID(),
+  });
+  const sectionsRef = useRef<Record<string, DraftSection>>({});
+  const photosRef = useRef<Record<string, string[]>>({});
+  const templatesRef = useRef<Record<string, ActiveTemplate>>({});
+  const baselineSectionsRef = useRef<BaselineSectionRef[] | null>(null);
+  const answersRef = useRef<Record<string, AnswerTree>>({});
+
+  // Debounced auto-save: every mutation schedules a snapshot write a moment
+  // later (coalescing rapid-fire changes, e.g. typing) rather than hitting
+  // AsyncStorage on every keystroke. This is what makes a force-quit or
+  // crash mid-inspection resumable instead of losing everything, since the
+  // rest of this draft otherwise lives only in these refs.
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const schedulePersist = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const snapshot: DraftSnapshot = {
+        top: topRef.current,
+        sections: sectionsRef.current,
+        photos: photosRef.current,
+        answers: answersRef.current,
+        templates: templatesRef.current,
+        ...snapshotPhotoNumbers(),
+      };
+      void saveDraftSnapshot(snapshot);
+    }, 800);
+  }, []);
+
+  const setTop = useCallback((patch: Partial<DraftTop>) => {
+    topRef.current = { ...topRef.current, ...patch };
+    schedulePersist();
+  }, [schedulePersist]);
+
+  const getTop = useCallback(() => topRef.current, []);
+
+  const setSection = useCallback((section: DraftSection) => {
+    sectionsRef.current = { ...sectionsRef.current, [section.key]: section };
+    schedulePersist();
+    scheduleSectionSync(section.key); // the server keeps a copy while the inspector works (services/liveSync.ts)
+  }, [schedulePersist]);
+
+  const getSection = useCallback((key: string) => sectionsRef.current[key], []);
+
+  const getAllSections = useCallback(() => Object.values(sectionsRef.current), []);
+
+  const addPhoto = useCallback((sectionKey: string, uri: string) => {
+    const cur = photosRef.current[sectionKey] ?? [];
+    photosRef.current = { ...photosRef.current, [sectionKey]: [...cur, uri] };
+    schedulePersist();
+  }, [schedulePersist]);
+
+  const reset = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    topRef.current = {
+      inspectionType: 'Dilapidation',
+      propertyType: 'Residential House',
+      draftId: Crypto.randomUUID(),
+    };
+    sectionsRef.current = {};
+    photosRef.current = {};
+    templatesRef.current = {};
+    answersRef.current = {};
+    baselineSectionsRef.current = null;
+    resetPhotoNumbers();
+    resetLiveSync();
+    void clearDraftSnapshot();
+  }, []);
+
+  const hydrateFromSnapshot = useCallback((snapshot: DraftSnapshot) => {
+    topRef.current = snapshot.top;
+    sectionsRef.current = snapshot.sections;
+    photosRef.current = snapshot.photos;
+    answersRef.current = snapshot.answers;
+    templatesRef.current = snapshot.templates;
+    restorePhotoNumbers(snapshot.photoNumbers, snapshot.photoSeq);
+  }, []);
+
+  const getActiveTemplate = useCallback(
+    (sectionKey: string) => templatesRef.current[sectionKey],
+    [],
+  );
+
+  const setActiveTemplate = useCallback((sectionKey: string, template: ActiveTemplate) => {
+    templatesRef.current = { ...templatesRef.current, [sectionKey]: template };
+    schedulePersist();
+  }, [schedulePersist]);
+
+  const getBaselineSections = useCallback(() => baselineSectionsRef.current, []);
+  const setBaselineSections = useCallback((sections: BaselineSectionRef[]) => {
+    baselineSectionsRef.current = sections;
+  }, []);
+
+  const getAnswers = useCallback(
+    (sectionKey: string) => answersRef.current[sectionKey],
+    [],
+  );
+
+  const setAnswers = useCallback((sectionKey: string, answers: AnswerTree) => {
+    answersRef.current = { ...answersRef.current, [sectionKey]: answers };
+    schedulePersist();
+  }, [schedulePersist]);
+
+  // Photos registered under a section key or any "key:n" sub-key.
+  const photosForSection = useCallback((key: string): string[] => {
+    return Object.entries(photosRef.current)
+      .filter(([k]) => k === key || k.startsWith(`${key}:`))
+      .flatMap(([, uris]) => uris);
+  }, []);
+
+  const collectPhotoUris = useCallback((): string[] => {
+    const uris = new Set<string>();
+    Object.values(photosRef.current).forEach((arr) => arr.forEach((u) => uris.add(u)));
+    Object.values(sectionsRef.current).forEach((s) => {
+      (s.photos ?? []).forEach((u) => uris.add(u));
+      (s.damages ?? []).forEach((d) => (d.photos ?? []).forEach((u) => uris.add(u)));
+    });
+    return [...uris].filter((u) => u.startsWith('file:'));
+  }, []);
+
+  const collectPhotoUrisBySection = useCallback((): { sectionKey: string; uri: string }[] => {
+    const seen = new Set<string>();
+    const out: { sectionKey: string; uri: string }[] = [];
+    const add = (sectionKey: string, uri: string) => {
+      if (!uri.startsWith('file:') || seen.has(uri)) return;
+      seen.add(uri);
+      // photosRef is keyed by the field's full nesting path (e.g.
+      // "driveway:0:photos" for a damage-list instance's photos) — the
+      // Egnyte folder groups by the top-level section only.
+      out.push({ sectionKey: sectionKey.split(':')[0] ?? sectionKey, uri });
+    };
+    Object.entries(photosRef.current).forEach(([key, arr]) => arr.forEach((u) => add(key, u)));
+    Object.values(sectionsRef.current).forEach((s) => {
+      (s.photos ?? []).forEach((u) => add(s.key, u));
+      (s.damages ?? []).forEach((d) => (d.photos ?? []).forEach((u) => add(s.key, u)));
+    });
+    return out;
+  }, []);
+
+  const getFolderId = useCallback((): string => topRef.current.assignmentId ?? topRef.current.draftId, []);
+
+  const buildPayload = useCallback(
+    (resolve: (uri: string) => string): SubmitPayload => ({
+      ...topRef.current,
+      photoNumbers: snapshotPhotoNumbers().photoNumbers,
+      sections: Object.values(sectionsRef.current)
+        .sort((a, b) => a.order - b.order)
+        .map((s) => {
+          const photos = [...new Set([...(s.photos ?? []), ...photosForSection(s.key)])].map(resolve);
+          return {
+            ...s,
+            photos,
+            // Ship the raw answer tree alongside the flattened `fields`, so the
+            // dashboard can reopen this section as an editable form later.
+            answers: answersRef.current[s.key] as Record<string, unknown> | undefined,
+            damages: (s.damages ?? []).map((d) => ({ ...d, photos: (d.photos ?? []).map(resolve) })),
+          };
+        }),
+    }),
+    [photosForSection],
+  );
+
+  // Force re-render is unnecessary — writers use refs, the reader (submit) pulls
+  // current values on demand. Keep a stable value object.
+  const value = useMemo<DraftValue>(
+    () => ({
+      setTop,
+      getTop,
+      setSection,
+      getSection,
+      getAllSections,
+      addPhoto,
+      reset,
+      collectPhotoUris,
+      collectPhotoUrisBySection,
+      getFolderId,
+      buildPayload,
+      getActiveTemplate,
+      setActiveTemplate,
+      getAnswers,
+      setAnswers,
+      getBaselineSections,
+      setBaselineSections,
+      hydrateFromSnapshot,
+    }),
+    [
+      setTop,
+      getTop,
+      setSection,
+      getSection,
+      getAllSections,
+      addPhoto,
+      reset,
+      collectPhotoUris,
+      collectPhotoUrisBySection,
+      getFolderId,
+      buildPayload,
+      getActiveTemplate,
+      setActiveTemplate,
+      getAnswers,
+      setAnswers,
+      getBaselineSections,
+      setBaselineSections,
+      hydrateFromSnapshot,
+    ],
+  );
+
+  // The background saver (services/liveSync.ts) reads the draft through these.
+  useEffect(() => {
+    attachDraft({ buildPayload, getFolderId, getTop, getAnswers });
+    return () => attachDraft(null);
+  }, [buildPayload, getFolderId, getTop, getAnswers]);
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}

@@ -1,0 +1,80 @@
+{
+  "expo": {
+    "name": "acespect-mobile",
+    "slug": "acespect-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.acespect.app",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "ACE SPECT uses on-device speech recognition for hands-free Voice Mode.",
+        "NSMicrophoneUsageDescription": "ACE SPECT uses your microphone for hands-free Voice Mode."
+      }
+    },
+    "android": {
+      "package": "com.acespect.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ACE SPECT uses your photos to attach inspection evidence.",
+          "cameraPermission": "ACE SPECT uses your camera to capture inspection photos."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ACE SPECT uses your location to GPS-stamp inspections and confirm the property address."
+        }
+      ],
+      "expo-build-properties",
+      "expo-status-bar",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "ACE SPECT uses your microphone for hands-free Voice Mode.",
+          "speechRecognitionPermission": "ACE SPECT uses on-device speech recognition for hands-free Voice Mode."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#E63329"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3367546c-c603-419a-854b-deb28159268f"
+      }
+    },
+    "owner": "anuka02",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3367546c-c603-419a-854b-deb28159268f"
+    }
+  }
+}
