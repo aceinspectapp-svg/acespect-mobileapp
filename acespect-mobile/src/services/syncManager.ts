@@ -174,12 +174,34 @@ async function uploadAndForget(uri: string, opts: { inspectionId?: string; secti
   return work;
 }
 
-/** Removes the local copies of photos that are safely on the server, once the inspection that holds them has been accepted. */
-export function cleanupUploadedFiles(): void {
-  for (const uri of photoCache.keys()) void deleteLocalFile(uri);
-  photoCache.clear();
-  photoMeta.clear();
-  void AsyncStorage.removeItem(PHOTO_CACHE_KEY).catch(() => undefined);
+/**
+ * Removes the local copies of the photos of ONE inspection that the server has accepted (`only`: the photo files that inspection used).
+ * It used to clear every uploaded photo on the phone, so sending one queued inspection also forgot -- and deleted the files of -- the photos
+ * of any other inspection still being filled in: that draft then uploaded all of its photos a second time (stored twice in Egnyte) or, if
+ * the files were already gone, lost them.
+ */
+export function cleanupUploadedFiles(only: Set<string>): void {
+  for (const uri of only) {
+    if (photoCache.has(uri)) void deleteLocalFile(uri);
+    photoCache.delete(uri);
+    photoMeta.delete(uri);
+  }
+  saveCacheSoon();
+}
+
+/** Every local photo file a payload refers to, whether it still holds the file path or the uploaded address it was swapped for. */
+function photoFilesOf(payload: SubmitPayload, before: Set<string>): Set<string> {
+  const files = new Set(before);
+  const text = JSON.stringify(payload.sections);
+  for (const [uri, url] of photoCache) if (text.includes(url)) files.add(uri);
+  return files;
+}
+
+/** The local photo files named in a payload as it was built (before they are swapped for server addresses). */
+function localFilesNamedIn(payload: SubmitPayload): Set<string> {
+  const out = new Set<string>();
+  for (const m of JSON.stringify(payload.sections).matchAll(/"(file:[^"]+)"/g)) out.add(m[1]!);
+  return out;
 }
 
 // ───────────────────────── Photo backup: every photo is sent as soon as it is in the inspection ─────────────────────────
@@ -516,6 +538,7 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
   const jobNo = payload.jobNo;
   const urlByUri = photoCache;
   const lost = new Set<string>();
+  const namedLocally = localFilesNamedIn(payload);
   mergePhotoNumbers(payload.photoNumbers); // a queued submission keeps the numbers its photos were given
 
   // Primary pass: walk each section's actual answer tree, so every
@@ -564,8 +587,8 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
       if (body?.code !== 'PHOTOS_MISSING' || round >= 2 || !(await resendMissing(payload, body.details?.missing ?? [], lost))) throw err;
     }
   }
-  // The server has it: the local copies of the photos are no longer needed.
-  cleanupUploadedFiles();
+  // The server has it: the local copies of THIS inspection's photos are no longer needed.
+  cleanupUploadedFiles(photoFilesOf(payload, namedLocally));
   return { ...result, ...(lost.size > 0 ? { skippedPhotos: lost.size } : {}) };
 }
 
