@@ -12,6 +12,11 @@ export function describeError(err: unknown): { message: string; status?: number;
   return { message: e?.response?.data?.error?.message ?? e?.message ?? String(err), status: e?.response?.status, code: e?.code };
 }
 
+/** A progress note (not an error) about a submit: it lets an admin see how far an attempt got, even when it never completed. */
+export function reportStep(step: string, context: Record<string, unknown> = {}): void {
+  void api.post('/inspections/client-error', { where: step, message: step, level: 'info', context }, { timeout: 15000 }).catch(() => undefined);
+}
+
 export function reportProblem(where: string, err: unknown, context: Record<string, unknown> = {}): void {
   const d = describeError(err);
   const photoNumber = (err as { photoNumber?: number } | null)?.photoNumber;

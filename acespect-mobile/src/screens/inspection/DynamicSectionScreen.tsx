@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ScrollIntoViewContext, useKeyboardAwareScroll } from '../../components/ui/KeyboardScroll';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -162,12 +162,24 @@ export function DynamicSectionScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inspectionTypeId, propertyTypeId, templateKey]);
 
+  // The section saves itself a few seconds after the last edit (and so is copied to the server by the background saver), instead of only
+  // when the inspector leaves the screen the "right" way. Leaving by the system back gesture, switching apps, or the app being closed
+  // during a long photo session used to leave the server holding nothing but Job Information. It runs even if the screen has closed in
+  // the meantime, so the last edits are never dropped.
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveLatest = useRef<() => void>(() => undefined);
+
   function setAnswer(key: string, value: AnswerValue) {
     setAnswers((prev) => {
       const next = { ...prev, [key]: value };
       draft.setAnswers(sectionKey, next);
       return next;
     });
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => {
+      autosaveTimer.current = null;
+      saveLatest.current();
+    }, 3000);
   }
 
   function retry() {
@@ -215,6 +227,9 @@ export function DynamicSectionScreen({
       damages,
     });
   }
+
+  // What the autosave above writes: complete only when everything required is filled in, otherwise a draft ("partial").
+  saveLatest.current = () => persistSection(canComplete ? 'complete' : 'partial');
 
   /**
    * Gate for every way to leave this screen -- the header/footer Back, the

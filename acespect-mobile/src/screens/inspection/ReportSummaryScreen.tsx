@@ -21,7 +21,7 @@ import { INSPECTION_TYPES } from '../../constants/inspectionData';
 import { AppScreenProps } from '../../navigation/types';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
 import { runSubmission, enqueueSubmission, receiptMatches } from '../../services/syncManager';
-import { reportProblem } from '../../services/problemReport';
+import { reportProblem, reportStep } from '../../services/problemReport';
 import { PhotoBackupBar } from '../../components/inspection/PhotoBackupBar';
 import { JobSetupData } from '../../types/jobSetup';
 
@@ -187,6 +187,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
     if (!canSubmit || submitting || startedRef.current) return;
     startedRef.current = true;
     setSubmitting(true);
+    reportStep('submit pressed', { online: isOnline, connected: net.isConnected, reachable: net.isInternetReachable, type: String(net.type) });
 
     // Build the structured payload from the section draft once, with photos
     // left as local `file://` URIs -- uploading happens inside
@@ -200,6 +201,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
     // Nothing but Job Information in the draft: there is no inspection to send. (This happened when a failed attempt had already moved the
     // inspection into the sync queue and cleared the draft, and the Submit button was pressed again: a blank one was saved under the same job.)
     if (!payload.sections.some((s) => s.key !== 'job-info')) {
+      reportStep('submit stopped: no sections saved', { jobNo: data.details.jobNumber });
       startedRef.current = false;
       setSubmitting(false);
       Alert.alert(
@@ -249,6 +251,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
     // up the moment connectivity returns (foreground-triggered; see
     // syncManager.ts) and let the inspector move on to their next job.
     if (!isOnline) {
+      reportStep('submit queued: phone reports no connection', { jobNo: payload.jobNo, sections: payload.sections.length });
       await enqueueSubmission(payload);
       draft.reset();
       setSubmitting(false);
@@ -264,6 +267,7 @@ export function ReportSummaryScreen({ navigation, route }: AppScreenProps<'Repor
     try {
       setSubmitStatus(payload.sections.some((s) => (s.photos?.length ?? 0) > 0) ? 'Uploading photos…' : 'Saving inspection…');
       const res = await runSubmission(payload);
+      reportStep('submit finished', { jobNo: payload.jobNo, sections: res.receipt?.sections, photos: res.receipt?.photos, skipped: res.skippedPhotos ?? 0 });
       const ok = receiptMatches(payload, res);
       Alert.alert(
         ok ? 'Sent ✓' : 'Sent — please check',
