@@ -172,13 +172,20 @@ export function InspectionSectionsScreen({
           {partialCount > 0 ? ` · ${partialCount} partially done` : ''}
         </Text>
         {backup.state !== 'idle' && (
-          <Text style={[styles.progressMeta, { color: backup.state === 'waiting' ? colors.warning : colors.success }]}>
-            {backup.state === 'saving'
-              ? '☁ Backing up to the office…'
-              : backup.state === 'waiting'
-                ? '☁ Not backed up yet — will retry (everything is safe on this phone)'
-                : `☁ Backed up to the office · ${backup.savedSections} section${backup.savedSections === 1 ? '' : 's'}`}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons
+              name={backup.state === 'waiting' ? 'cloud-offline-outline' : backup.state === 'saving' ? 'cloud-upload-outline' : 'cloud-done-outline'}
+              size={16}
+              color={backup.state === 'waiting' ? colors.warning : colors.success}
+            />
+            <Text style={[styles.progressMeta, { flex: 1, color: backup.state === 'waiting' ? colors.warning : colors.success }]}>
+              {backup.state === 'saving'
+                ? 'Backing up to the office…'
+                : backup.state === 'waiting'
+                  ? 'Not backed up yet — will retry (everything is safe on this phone)'
+                  : `Backed up to the office · ${backup.savedSections} section${backup.savedSections === 1 ? '' : 's'}`}
+            </Text>
+          </View>
         )}
       </View>
 

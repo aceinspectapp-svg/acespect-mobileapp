@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { EmojiGlyph } from '../EmojiGlyph';
 import { colors, radius, spacing, typography } from '../../../theme';
 import { Button, ProgressBar } from '../../ui';
 import type { TemplateField, TemplateFieldType, TemplateLayout } from '../../../services/templateApi';
@@ -168,7 +169,7 @@ export function SectionNavRenderer({
         return (
           <Pressable key={letter} style={styles.navRow} onPress={() => setOpenLetter(letter)}>
             <View style={styles.navRowIcon}>
-              <Text style={styles.navRowEmoji}>{meta?.icon ?? '📋'}</Text>
+              <EmojiGlyph text={meta?.icon ?? '📋'} size={20} color={colors.textSecondary} style={styles.navRowEmoji} />
             </View>
             <View style={styles.navRowText}>
               <Text style={styles.navRowTitle}>{letter}</Text>
