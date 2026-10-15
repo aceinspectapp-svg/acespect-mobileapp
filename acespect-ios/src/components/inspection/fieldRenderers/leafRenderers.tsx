@@ -5,6 +5,7 @@ import { AppTextInput, DateField, SegmentedToggle } from '../../ui';
 import { ChoiceTileGrid, ChoiceTileMultiGrid, TileOption } from '../ChoiceTile';
 import { ChipMultiSelect, ColorSelect, FieldLabel, PillSelect, PlainTextInput } from '../fieldKit';
 import { colors, radius, spacing } from '../../../theme';
+import { tileIconFor } from '../../../constants/tileIcons';
 import { usePhotoCapture } from '../../../hooks/usePhotoCapture';
 import { PhotoAnnotator } from '../PhotoAnnotator';
 import { getPhotoNumber, transferPhotoNumber } from '../../../services/photoNumbers';
@@ -112,7 +113,7 @@ export function SelectTilesFieldRenderer({ field, value, onChange, missing }: Fi
   const options: TileOption[] = (field.options ?? []).map((o) => ({
     value: o.value,
     label: o.label,
-    icon: (o.icon ?? 'help-circle-outline') as TileOption['icon'],
+    icon: tileIconFor(o.label, o.icon) as TileOption['icon'],
   }));
   return (
     <View style={blockStyle(missing)}>
@@ -199,7 +200,7 @@ export function TileMultiSelectFieldRenderer({ field, value, onChange, missing }
   const options: TileOption[] = (field.options ?? []).map((o) => ({
     value: o.value,
     label: o.label,
-    icon: (o.icon ?? 'help-circle-outline') as TileOption['icon'],
+    icon: tileIconFor(o.label, o.icon) as TileOption['icon'],
   }));
 
   return (
@@ -283,20 +284,22 @@ export function PhotosFieldRenderer({ field, value, onChange, path, missing }: F
           <Pressable key={uri} onPress={() => setAnnotating(uri)} accessibilityLabel="Mark up photo">
             <Image source={{ uri }} style={styles.photoThumb} />
             <View style={styles.photoThumbBadge}>
-              <Ionicons name="create-outline" size={12} color={colors.white} />
+              <Ionicons name="create-outline" size={15} color={colors.white} />
             </View>
             {getPhotoNumber(uri) !== undefined && (
               <View style={{ position: 'absolute', left: 4, bottom: 4, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 }}>
-                <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{getPhotoNumber(uri)}</Text>
+                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{getPhotoNumber(uri)}</Text>
               </View>
             )}
           </Pressable>
         ))}
-        <Pressable style={styles.photoAddBtn} onPress={onTakePhoto} disabled={busy}>
-          <Ionicons name="camera" size={18} color={colors.barBlue} />
+        <Pressable style={styles.photoAddBtn} onPress={onTakePhoto} disabled={busy} accessibilityLabel="Take a photo">
+          <Ionicons name="camera" size={26} color={colors.barBlue} />
+          <Text style={styles.photoAddLabel}>Camera</Text>
         </Pressable>
-        <Pressable style={styles.photoAddBtn} onPress={onPickFromLibrary} disabled={busy}>
-          <Ionicons name="images" size={18} color={colors.barBlue} />
+        <Pressable style={styles.photoAddBtn} onPress={onPickFromLibrary} disabled={busy} accessibilityLabel="Choose from the photo library">
+          <Ionicons name="images" size={26} color={colors.barBlue} />
+          <Text style={styles.photoAddLabel}>Gallery</Text>
         </Pressable>
       </View>
       <PhotoAnnotator
@@ -319,21 +322,22 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  photoThumb: { width: 64, height: 64, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
+  photoThumb: { width: 76, height: 76, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
   photoThumbBadge: {
     position: 'absolute',
-    right: 2,
-    bottom: 2,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    right: 3,
+    bottom: 3,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  photoAddLabel: { fontSize: 11, fontWeight: '600', color: colors.barBlue, marginTop: 2 },
   photoAddBtn: {
-    width: 64,
-    height: 64,
+    width: 76,
+    height: 76,
     borderRadius: radius.sm,
     borderWidth: 1,
     borderStyle: 'dashed',

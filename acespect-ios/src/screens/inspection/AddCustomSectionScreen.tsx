@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { colors, spacing, typography } from '../../theme';
@@ -7,6 +7,7 @@ import { AppTextInput, Button } from '../../components/ui';
 import { InspectionHeader } from '../../components/inspection/InspectionHeader';
 import { AppScreenProps } from '../../navigation/types';
 import { useInspectionDraft } from '../../context/InspectionDraftContext';
+import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
 
 /**
  * "Add extra structure / room" — for anything the fixed 13-section list
@@ -40,6 +41,8 @@ export function AddCustomSectionScreen({ navigation }: AppScreenProps<'AddCustom
     navigation.replace('CustomSection', { sectionKey: key, sectionName: trimmed });
   }
 
+  const keyboardVisible = useKeyboardVisible();
+
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -47,7 +50,7 @@ export function AddCustomSectionScreen({ navigation }: AppScreenProps<'AddCustom
       <KeyboardAvoidingView
         style={styles.keyboardAvoider}
         behavior="padding"
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={0}
       >
         <View style={styles.body}>
           <Text style={styles.helper}>
@@ -67,7 +70,7 @@ export function AddCustomSectionScreen({ navigation }: AppScreenProps<'AddCustom
             the same as any other section.
           </Text>
         </View>
-        <SafeAreaView edges={['bottom']} style={styles.footer}>
+        <SafeAreaView edges={keyboardVisible ? [] : ['bottom']} style={styles.footer}>
           <Button label="Continue" variant="primaryGradient" disabled={!trimmed} onPress={onCreate} />
         </SafeAreaView>
       </KeyboardAvoidingView>

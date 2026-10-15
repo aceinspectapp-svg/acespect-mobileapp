@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../../theme';
 import { Button, ProgressBar } from '../../ui';
@@ -57,7 +57,8 @@ export function FieldListRenderer({
         const Renderer = FIELD_RENDERERS[field.type];
         if (!Renderer) return null;
         const showLetterHeader = lettersAreMeaningful && field.sectionLetter && field.sectionLetter !== lastLetter;
-        lastLetter = field.sectionLetter;
+        // A field with no letter (e.g. "Number of storeys") sits inside the current group: it must not reset it, or the same band prints again after it.
+        if (field.sectionLetter) lastLetter = field.sectionLetter;
         return (
           <React.Fragment key={field.key}>
             {showLetterHeader && (
@@ -183,7 +184,7 @@ export function SectionNavRenderer({
         );
       })}
       <Modal visible={!!openFields} animationType="slide" onRequestClose={() => setOpenLetter(null)}>
-        <SafeAreaView style={styles.categoryModalRoot} edges={['top', 'bottom']}>
+        <SafeAreaProvider><SafeAreaView style={styles.categoryModalRoot} edges={['top', 'bottom']}>
           <View style={styles.categoryModalHeader}>
             <Pressable onPress={() => setOpenLetter(null)} hitSlop={8} style={styles.categoryModalBack}>
               <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
@@ -213,7 +214,7 @@ export function SectionNavRenderer({
               onPress={() => setOpenLetter(null)}
             />
           </View>
-        </SafeAreaView>
+        </SafeAreaView></SafeAreaProvider>
       </Modal>
     </>
   );
@@ -551,7 +552,7 @@ function FixedListRenderer({ field, value, onChange, path, showMissing, missing 
       )}
 
       <Modal visible={!!open} animationType="slide" onRequestClose={() => setOpenKey(null)}>
-        <SafeAreaView style={styles.categoryModalRoot} edges={['top', 'bottom']}>
+        <SafeAreaProvider><SafeAreaView style={styles.categoryModalRoot} edges={['top', 'bottom']}>
           <View style={styles.categoryModalHeader}>
             <Pressable onPress={() => setOpenKey(null)} hitSlop={8} style={styles.categoryModalBack}>
               <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
@@ -590,7 +591,7 @@ function FixedListRenderer({ field, value, onChange, path, showMissing, missing 
               onPress={() => setOpenKey(null)}
             />
           </View>
-        </SafeAreaView>
+        </SafeAreaView></SafeAreaProvider>
       </Modal>
     </View>
   );
@@ -681,7 +682,7 @@ function StripListRenderer({ field, value, onChange, path, scope, showMissing, m
           </Pressable>
         )}
         <Modal visible={openIdx !== null} animationType="slide" onRequestClose={() => setOpenIdx(null)}>
-          <SafeAreaView style={styles.categoryModalRoot} edges={['top', 'bottom']}>
+          <SafeAreaProvider><SafeAreaView style={styles.categoryModalRoot} edges={['top', 'bottom']}>
             <View style={styles.categoryModalHeader}>
               <Pressable onPress={() => setOpenIdx(null)} hitSlop={8} style={styles.categoryModalBack}>
                 <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
@@ -733,7 +734,7 @@ function StripListRenderer({ field, value, onChange, path, scope, showMissing, m
                 onPress={() => setOpenIdx(null)}
               />
             </View>
-          </SafeAreaView>
+          </SafeAreaView></SafeAreaProvider>
         </Modal>
       </View>
     );

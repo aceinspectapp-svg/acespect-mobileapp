@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -16,6 +16,7 @@ import { colors, radius, spacing, typography } from '../../theme';
 import { AppTextInput, Button, Checkbox } from '../../components/ui';
 import { MfaChallenge, useAuth } from '../../context/AuthContext';
 import { useGoogleSignIn } from '../../hooks/useGoogleSignIn';
+import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
 import { GOOGLE_AUTH_ENABLED } from '../../config/google';
 import { getApiErrorMessage } from '../../services/apiError';
 import { AuthScreenProps } from '../../navigation/types';
@@ -29,6 +30,13 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The dark header above takes a large part of the screen, so with the keyboard open the Sign In button sat behind it:
+  // scroll the form to its end when the keyboard opens so the button stays in view.
+  const sheetScroll = useRef<ScrollView>(null);
+  const keyboardVisible = useKeyboardVisible();
+  useEffect(() => {
+    if (keyboardVisible) setTimeout(() => sheetScroll.current?.scrollToEnd({ animated: true }), 120);
+  }, [keyboardVisible]);
 
   const canSubmit = email.trim().length > 0 && password.length > 0 && !isLoading;
 
@@ -89,6 +97,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
         behavior="padding"
       >
         <ScrollView
+          ref={sheetScroll}
           contentContainerStyle={styles.sheet}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}

@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import * as Crypto from 'expo-crypto';
@@ -136,6 +136,8 @@ export function PhotoAnnotator({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleCancel}>
+      {/* a Modal is its own window: it needs its own safe-area provider, or the top bar (Close / Done) sits under the status bar and cannot be tapped */}
+      <SafeAreaProvider>
       <View style={styles.root}>
         <SafeAreaView style={styles.safe}>
           <View style={styles.topBar}>
@@ -188,6 +190,7 @@ export function PhotoAnnotator({
           </View>
         </SafeAreaView>
       </View>
+      </SafeAreaProvider>
     </Modal>
   );
 }
