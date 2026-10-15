@@ -12,7 +12,7 @@ import {
   type SectionReviewStatus,
   type User,
 } from "../../mockData";
-import { useAppData } from "../../data";
+import { useAppData, useInspectionDetail } from "../../data";
 import { StatusBadge } from "../../components/WebLayout";
 import { ReportCover } from "../../components/ReportCover";
 import { isConstructionInspection, jobInfoFieldsFor } from "./jobInfoFields";
@@ -724,8 +724,8 @@ function ResizeHandle({ width, onChange, min, max, grows, initial }: { width: nu
 export function ReviewerFormView() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { currentUser, loading, getInspectionById, getUser, patchSection, patchDamage, patchInspection } = useAppData();
-  const inspection = getInspectionById(id ?? "");
+  const { currentUser, loading, getUser, patchSection, patchDamage, patchInspection } = useAppData();
+  const { inspection, loadingDetail } = useInspectionDetail(id);
   // The Construction Report as it will print (every section counted), so each section's "Report Content" matches the final report.
   const [areasW, setAreasW] = usePersistedWidth("reviewer.areasWidth", 220);
   const [reportW, setReportW] = usePersistedWidth("reviewer.reportWidth", 360);
@@ -788,7 +788,7 @@ export function ReviewerFormView() {
   if (!inspection) {
     return (
       <div style={{ padding: "48px", textAlign: "center", color: "#94a3b8", fontSize: "16px" }}>
-        {loading || !currentUser ? "Loading…" : "Inspection not found."}
+        {loading || loadingDetail || !currentUser ? "Loading…" : "Inspection not found."}
       </div>
     );
   }

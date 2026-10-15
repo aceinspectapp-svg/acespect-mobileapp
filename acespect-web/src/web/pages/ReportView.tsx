@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router";
 import { ArrowLeft, Printer, Download, FileText } from "lucide-react";
 import type { FormSection } from "../mockData";
 import { buildReportHeader, withExcludedPhotosRemoved } from "../report";
-import { useAppData } from "../data";
+import { useAppData, useInspectionDetail } from "../data";
 import { API_BASE, fetchWithRefresh, getToken } from "../api";
 import { ReportCover } from "../components/ReportCover";
 import { sectionPhotoArchiveUrl } from "../photoArchive";
@@ -28,8 +28,8 @@ const sectionAnchorId = (id: string): string => `section-${id}`;
 export function ReportView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getInspectionById, getUser, loading } = useAppData();
-  const inspection = id ? getInspectionById(id) : undefined;
+  const { getUser, loading } = useAppData();
+  const { inspection, loadingDetail } = useInspectionDetail(id);
   // The report type decides which wording applies (see wording/registry.ts).
   const reportWording = wordingFor(reportProfileOf(inspection?.type ?? "", inspection?.propertyType ?? ""));
   // A Construction Stage inspection has its own report layout (undefined while its templates load).
@@ -74,7 +74,7 @@ export function ReportView() {
   if (!inspection || construction === undefined) {
     return (
       <div style={{ padding: "48px", textAlign: "center", color: "#94a3b8", fontFamily: "Inter, sans-serif" }}>
-        {loading || (inspection && construction === undefined) ? "Loading…" : "Inspection not found."}
+        {loading || loadingDetail || (inspection && construction === undefined) ? "Loading…" : "Inspection not found."}
       </div>
     );
   }

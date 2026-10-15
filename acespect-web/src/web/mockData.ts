@@ -73,6 +73,11 @@ export interface Inspection {
   photoArchiveUrl?: string | null;
   /** Where the photos were placed in Egnyte ({batch}/{job}) and whether the office needs to look at it; null before any placement. */
   egnyte?: { status: "ok" | "needs_review" | "unassigned" | "failed"; path: string | null; message: string | null; checkedAt: string | null } | null;
+  /** False for a row from the light list: `sections` then carry only name / status / review state, with no answers, photos or damages.
+   *  The full inspection is fetched when one is opened (see useInspectionDetail in data.tsx). Absent or true: complete. */
+  detail?: boolean;
+  /** The latest change to the inspection or any of its sections (ISO time). */
+  updatedAt?: string;
 }
 
 /* ─── Inspection templates (admin-defined form structure) ──────────── */

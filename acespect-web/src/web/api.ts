@@ -330,6 +330,13 @@ export const api = {
   mfaEnabled: () => req<{ user: { mfaEnabled?: boolean } }>("/auth/me").then((d) => !!d.user.mfaEnabled),
 
   getInspections: () => req<{ inspections: Inspection[] }>("/web/inspections").then((d) => d.inspections),
+  /** The light list, a page at a time (no answers / photos / damages), or only what changed after `since`. Older servers answer with the full list and no serverTime. */
+  getInspectionsSummary: (opts: { since?: string; cursor?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams({ view: "summary", limit: String(opts.limit ?? 500) });
+    if (opts.since) q.set("since", opts.since);
+    if (opts.cursor) q.set("cursor", opts.cursor);
+    return req<{ inspections: Inspection[]; nextCursor?: string; serverTime?: string }>(`/web/inspections?${q.toString()}`);
+  },
   getInspection: (id: string) => req<{ inspection: Inspection }>(`/web/inspections/${id}`).then((d) => d.inspection),
   getUsers: () => req<{ users: User[] }>("/web/users").then((d) => d.users),
 
