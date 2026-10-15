@@ -1,3 +1,4 @@
+import axios from 'axios';
 import * as Network from 'expo-network';
 import { File } from 'expo-file-system';
 import type { SubmitPayload } from '../context/InspectionDraftContext';
@@ -52,6 +53,83 @@ export function subscribeProcessing(cb: ProcessingListener): () => void {
   return () => processingListeners.delete(cb);
 }
 
+/** What the sync pass is doing right now, so the screen can say so instead of just spinning. */
+export interface SyncProgress {
+  /** The inspection being sent (its job number). */
+  label: string;
+  /** "Preparing", "Uploading photo 3 of 12", "Saving the inspection on the server". */
+  step: string;
+  done: number;
+  total: number;
+}
+type ProgressListener = (p: SyncProgress | null) => void;
+const progressListeners = new Set<ProgressListener>();
+let progress: SyncProgress | null = null;
+/** When the pass last made headway (a step began or a photo finished): the stall watch below measures from here. */
+let lastTouch = 0;
+
+function setProgress(next: SyncProgress | null) {
+  progress = next;
+  if (next) lastTouch = Date.now();
+  progressListeners.forEach((l) => l(progress));
+}
+
+/** Subscribe to what the sync pass is doing; fires immediately. `null` when no pass is running. */
+export function subscribeProgress(cb: ProgressListener): () => void {
+  progressListeners.add(cb);
+  cb(progress);
+  return () => progressListeners.delete(cb);
+}
+
+export function getProgress(): SyncProgress | null {
+  return progress;
+}
+
+/** How long a pass may go without any headway (no photo finished, no step began) before it is given up on and reported. A single photo may take up to 120 s (inspectionApi.ts), so this is longer. */
+const STALL_MS = 150_000;
+
+/**
+ * Rejects when the running pass has made no headway for STALL_MS. Without it, one step that never finishes (an upload that never answers)
+ * kept the "running" flag set for ever: the banner spun, nothing was sent, and every retry was ignored because a pass was "already running".
+ */
+function stallWatch(): { stalled: Promise<never>; stop: () => void } {
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const stalled = new Promise<never>((_, reject) => {
+    timer = setInterval(() => {
+      if (Date.now() - lastTouch > STALL_MS) reject(new Error(`Stopped: no progress for ${Math.round(STALL_MS / 1000)} seconds`));
+    }, 5000);
+  });
+  stalled.catch(() => undefined);
+  return { stalled, stop: () => timer && clearInterval(timer) };
+}
+
+/** Local (not yet uploaded) photo files an entry still holds. */
+export function countLocalPhotos(payload: SubmitPayload): number {
+  const found = new Set<string>();
+  const walk = (v: unknown): void => {
+    if (typeof v === 'string') {
+      if (v.startsWith('file:')) found.add(v);
+    } else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === 'object') Object.values(v as Record<string, unknown>).forEach(walk);
+  };
+  for (const section of payload.sections) {
+    walk(section.answers);
+    walk(section.photos);
+    walk(section.damages);
+  }
+  return found.size;
+}
+
+/** Why a failed attempt failed, in words the inspector can read: what the server said (with its status), and where in the pass it stopped. */
+function describeFailure(err: unknown): string {
+  let text = err instanceof Error ? err.message : 'Unknown error';
+  if (axios.isAxiosError(err) && err.response) {
+    const server = (err.response.data as { error?: { message?: string } } | undefined)?.error?.message;
+    text = `Server answered ${err.response.status}${server ? `: ${server}` : ''}`;
+  }
+  return progress?.step ? `${text} (at: ${progress.step})` : text;
+}
+
 async function persist() {
   await setSyncQueue(queueCache);
   notify();
@@ -98,8 +176,16 @@ const photoCache = new Map<string, string>();
 async function uploadAndForget(uri: string, opts: { inspectionId?: string; sectionKey?: string; jobNo?: string }): Promise<string> {
   const hit = photoCache.get(uri);
   if (hit) return hit;
+  // A queued photo whose file is gone from this phone can never be sent: say so, instead of attempting an upload that cannot work.
+  try {
+    if (!new File(uri).exists) throw new Error(`A photo file is missing from this phone (${opts.sectionKey ?? 'unknown section'})`);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith('A photo file is missing')) throw e;
+  }
+  if (progress) setProgress({ ...progress, step: `Uploading photo ${progress.done + 1} of ${progress.total}` });
   const url = await uploadPhoto(uri, { ...opts, photoNumber: getPhotoNumber(uri) });
   photoCache.set(uri, url);
+  if (progress) setProgress({ ...progress, done: progress.done + 1 });
   return url;
 }
 
@@ -260,6 +346,7 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
   }
 
   payload.expected = expectedContent(payload);
+  if (progress) setProgress({ ...progress, step: 'Saving the inspection on the server' });
   const result = await submitInspection(payload);
   // The server has it: the local copies of the photos are no longer needed.
   cleanupUploadedFiles();
@@ -315,8 +402,12 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
     for (const id of ids) {
       const entry = queueCache.find((e) => e.id === id);
       if (!entry) continue; // already synced and removed earlier in this same pass
+      setProgress({ label: entry.payload.jobNo || entry.payload.address || 'inspection', step: 'Preparing', done: 0, total: countLocalPhotos(entry.payload) });
+      const watch = stallWatch();
       try {
-        await runSubmission(entry.payload);
+        const work = runSubmission(entry.payload);
+        work.catch(() => undefined); // if the stall watch wins, a late failure of this must not surface as an unhandled rejection
+        await Promise.race([work, watch.stalled]);
         queueCache = queueCache.filter((e) => e.id !== id);
         await persist();
       } catch (err) {
@@ -326,12 +417,15 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
           await persist();
           continue;
         }
-        const message = err instanceof Error ? err.message : 'Unknown error';
+        const message = describeFailure(err);
         queueCache = queueCache.map((e) => (e.id === id ? { ...e, attempts: e.attempts + 1, lastError: message } : e));
         await persist();
+      } finally {
+        watch.stop();
       }
     }
   } finally {
+    setProgress(null);
     setProcessing(false);
   }
 }
