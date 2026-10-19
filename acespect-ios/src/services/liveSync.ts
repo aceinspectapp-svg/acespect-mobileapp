@@ -3,6 +3,7 @@ import type { DraftSection, DraftTop, SubmitPayload } from '../context/Inspectio
 import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
 import { resolveSectionForServer } from './syncManager';
 import { reportProblem } from './problemReport';
+import { recordEvent } from './auditEvents';
 
 /**
  * Keeps the server holding the inspection while the inspector works. Each time a section is saved on the phone, it is sent to the
@@ -117,6 +118,7 @@ async function run(): Promise<void> {
       }
       sent.set(key, snapshot);
       dirty.delete(key);
+      if (failures > 0) recordEvent('sync.recovered', { inspectionId: id, jobNo, message: 'Background saving to the server works again', metadata: { afterFailures: failures } });
       failures = 0;
       setStatus({ savedSections: sent.size, lastError: undefined });
     }

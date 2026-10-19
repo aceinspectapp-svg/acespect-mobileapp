@@ -5,6 +5,7 @@ import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
 import { DraftSnapshot, clearDraftSnapshot, saveDraftSnapshot } from '../services/offlineStorage';
 import { attachDraft, resetLiveSync, scheduleSectionSync } from '../services/liveSync';
 import { noteSectionAnswers, resetPhotoBackup } from '../services/syncManager';
+import { recordEvent } from '../services/auditEvents';
 import { resetPhotoNumbers, restorePhotoNumbers, snapshotPhotoNumbers } from '../services/photoNumbers';
 
 /**
@@ -252,6 +253,7 @@ export function InspectionDraftProvider({ children }: { children: React.ReactNod
     templatesRef.current = snapshot.templates;
     restorePhotoNumbers(snapshot.photoNumbers, snapshot.photoSeq);
     setTimeout(() => scanForBackup(), 0); // a resumed draft carries on sending the photos that were still waiting
+    recordEvent('draft.resumed', { inspectionId: snapshot.top.draftId, message: 'Unfinished inspection reopened on the phone' });
   }, [scanForBackup]);
 
   const getActiveTemplate = useCallback(
