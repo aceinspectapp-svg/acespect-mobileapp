@@ -20,6 +20,15 @@ export type LoginResult =
   | { mfaRequired: true; mfaToken: string }
   | { mfaEnrollRequired: true; mfaToken: string };
 
+/** What an invitation link is for (shown before the person chooses a password). */
+export interface InvitationInfo {
+  email: string;
+  name: string | null;
+  termsVersion: string;
+  privacyVersion: string;
+  organisations?: { clientName: string; role: string }[];
+}
+
 export interface LoginInput {
   email: string;
   password: string;

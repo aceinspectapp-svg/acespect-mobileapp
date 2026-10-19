@@ -10,6 +10,7 @@ import * as master from '../modules/qc/qc.master.service';
 import * as people from '../modules/qc/qc.people.service';
 import * as defects from '../modules/qc/qc.defects.service';
 import { ApiError } from '../utils/ApiError';
+import { drainAudit } from '../lib/auditTrail';
 
 if (!/@(localhost|127\.0\.0\.1)[:/]/.test(process.env.DATABASE_URL ?? '')) {
   console.error('Refusing to run: DATABASE_URL must point at a local scratch database.');
@@ -236,4 +237,4 @@ async function main() {
   console.log(failures === 0 ? '\nALL PASSED' : `\n${failures} FAILURE(S)`);
 }
 
-main().catch((e) => { console.error(e); process.exitCode = 1; }).finally(() => prisma.$disconnect());
+main().catch((e) => { console.error(e); process.exitCode = 1; }).finally(async () => { await drainAudit(); await prisma.$disconnect(); });

@@ -141,7 +141,21 @@ function assertNotLocked(user: User): void {
 export const authService = {
   async register(input: RegisterInput): Promise<AuthResult> {
     const existing = await prisma.user.findUnique({ where: { email: input.email } });
-    if (existing) throw ApiError.conflict('An account with this email already exists', 'EMAIL_TAKEN');
+    if (existing) {
+      // An administrator may already have created this person (a client, builder, trade or inspector invited to QC): that account exists but
+      // cannot be signed in to until the invitation is accepted, so "create account" can never work for them. Say what to do instead.
+      const invited = await prisma.qcInvitation.findFirst({ where: { userId: existing.id, usedAt: null }, orderBy: { sentAt: 'desc' }, select: { expiresAt: true } });
+      if (invited) {
+        const expired = invited.expiresAt < new Date();
+        throw ApiError.conflict(
+          expired
+            ? 'This email was invited to ACE SPECT, but the invitation has expired. Ask your administrator to send a new one, then use "I have an invitation" to activate your account.'
+            : 'This email has already been invited to ACE SPECT. Do not create a new account: use "I have an invitation" and paste the link from your invitation to set your password.',
+          expired ? 'INVITATION_EXPIRED' : 'INVITATION_PENDING',
+        );
+      }
+      throw ApiError.conflict('An account with this email already exists. Sign in instead, or use "Forgot password" if you cannot remember the password.', 'EMAIL_TAKEN');
+    }
     const user = await prisma.user.create({
       data: { email: input.email, passwordHash: await hashPassword(input.password), name: input.name ?? null, phone: input.phone ?? null },
     });
@@ -255,12 +269,18 @@ export const authService = {
     );
   },
 
-  async describeInvitation(token: string): Promise<{ email: string; name: string | null; termsVersion: string; privacyVersion: string }> {
-    const inv = await prisma.qcInvitation.findUnique({ where: { tokenHash: sha256(token) }, include: { user: true } });
+  async describeInvitation(token: string): Promise<{ email: string; name: string | null; termsVersion: string; privacyVersion: string; organisations: { clientName: string; role: string }[] }> {
+    const inv = await prisma.qcInvitation.findUnique({ where: { tokenHash: sha256(token) }, include: { user: { include: { qcMemberships: { where: { status: 'ACTIVE' }, include: { client: { select: { name: true } } } } } } } });
     if (!inv) throw ApiError.notFound('This activation link is not valid');
     if (inv.usedAt) throw new ApiError(410, 'This activation link has already been used', 'INVITATION_USED');
     if (inv.expiresAt < new Date()) throw new ApiError(410, 'This activation link has expired. Ask your administrator to send a new one.', 'INVITATION_EXPIRED');
-    return { email: inv.user.email, name: inv.user.name, termsVersion: env.TERMS_VERSION, privacyVersion: env.PRIVACY_VERSION };
+    return {
+      email: inv.user.email,
+      name: inv.user.name,
+      termsVersion: env.TERMS_VERSION,
+      privacyVersion: env.PRIVACY_VERSION,
+      organisations: inv.user.qcMemberships.map((m) => ({ clientName: m.client.name, role: m.role })),
+    };
   },
 
   async acceptInvitation(token: string, password: string, acceptTerms: boolean, info: RequestInfo = {}): Promise<LoginResult> {

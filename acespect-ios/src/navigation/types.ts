@@ -6,6 +6,8 @@ import { JobSetupData } from '../types/jobSetup';
 export type AuthStackParamList = {
   Login: undefined;
   SignUp: undefined;
+  /** Activate an account an administrator created (a client, builder, trade or inspector invited to QC). */
+  AcceptInvitation: { token?: string } | undefined;
   // ForgotPassword lands here next.
 };
 

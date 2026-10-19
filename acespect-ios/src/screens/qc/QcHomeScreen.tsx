@@ -11,6 +11,7 @@ import { useDefectSync } from '../../hooks/useDefectSync';
 import { qcMe } from '../../services/qcPlatformApi';
 import { setActiveClientId } from '../../services/apiClient';
 import { registerForPush } from '../../services/pushRegistration';
+import { useAuth } from '../../context/AuthContext';
 
 interface PropertyCard {
   propertyId: string;
@@ -32,12 +33,16 @@ export function QcHomeScreen({ navigation }: AppScreenProps<'QcHome'>) {
   const sync = useDefectSync();
   const [pickClient, setPickClient] = React.useState<Array<{ id: string; name: string; role: string }> | null>(null);
   const [caps, setCaps] = React.useState<string[]>([]);
+  // False when the signed-in account belongs to no client: QC then has nothing to show, and the person is told why instead of seeing an empty screen.
+  const [linked, setLinked] = React.useState<boolean | null>(null);
+  const { signOut } = useAuth();
 
   const loadMe = useCallback(async () => {
     try {
       const me = await qcMe();
       setPickClient(null);
       setCaps(me.capabilities);
+      setLinked(me.isSA || me.clients.length > 0);
       registerForPush();
     } catch (e) {
       const body = (e as { response?: { status?: number; data?: { error?: { code?: string; details?: { clients?: Array<{ id: string; name: string; role: string }> } } } } }).response;
@@ -107,6 +112,18 @@ export function QcHomeScreen({ navigation }: AppScreenProps<'QcHome'>) {
           <Text style={styles.errorText}>{error}</Text>
           <Pressable onPress={() => refreshTasks()} style={styles.retryBtn}>
             <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {linked === false && !pickClient && (
+        <View style={styles.pick}>
+          <Text style={styles.cardTitle}>This account is not linked to a client yet</Text>
+          <Text style={styles.cardSub}>
+            QC is for people their company has invited. If you were invited, sign out, then tap "I have an invitation" on the sign-in screen and paste the link from your invitation. If not, ask your administrator to add you as a person on the ACE SPECT web portal.
+          </Text>
+          <Pressable style={styles.pickBtn} onPress={() => signOut()} accessibilityRole="button" accessibilityLabel="Sign out to activate an invitation">
+            <Text style={styles.cardTitle}>Sign out and activate an invitation</Text>
           </Pressable>
         </View>
       )}
