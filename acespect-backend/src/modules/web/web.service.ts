@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
+import { audit, diffFields } from '../../lib/auditTrail';
 import {
   serializeInspection,
   serializeInspectionSummary,
@@ -88,8 +89,8 @@ async function listUsers() {
 
 /** Admin edits another user's profile (name/phone/region/license). */
 async function updateUser(id: string, input: UserUpdateInput) {
-  const exists = await prisma.user.findUnique({ where: { id }, select: { id: true } });
-  if (!exists) throw ApiError.notFound('User not found');
+  const beforeUser = await prisma.user.findUnique({ where: { id }, select: { id: true, email: true, name: true, phone: true, region: true, licenseNumber: true } });
+  if (!beforeUser) throw ApiError.notFound('User not found');
 
   const row = await prisma.user.update({
     where: { id },
@@ -100,11 +101,43 @@ async function updateUser(id: string, input: UserUpdateInput) {
       ...(input.licenseNumber !== undefined ? { licenseNumber: input.licenseNumber } : {}),
     },
   });
+  const userDiff = diffFields(beforeUser, row as unknown as Record<string, unknown>, Object.keys(input).filter((k) => k in beforeUser));
+  if (userDiff) await audit({ category: 'admin', action: 'user.update', target: { type: 'User', id, label: beforeUser.email }, before: userDiff.before, after: userDiff.after, message: `Profile of ${beforeUser.email} changed` });
   return serializeUser(row);
 }
 
-/** Reviewer edits a section's verdict / report text / recorded field data. */
+const REVIEW_ACTION: Record<string, string> = { APPROVED: 'section.approve', REVISION_REQUESTED: 'section.request_revision', PENDING: 'section.reset_review' };
+
+/** Reviewer edits a section's verdict / report text / recorded field data -- and the change is on record, before and after. */
 async function updateSection(id: string, input: SectionUpdateInput) {
+  const before = await prisma.section.findUnique({ where: { id }, include: { inspection: { select: { id: true, jobNo: true } } } });
+  const result = await updateSectionCore(id, input);
+  if (before) {
+    const after = await prisma.section.findUnique({ where: { id } });
+    const touched = [
+      input.reviewStatus ? 'reviewStatus' : null, input.reviewComment !== undefined ? 'reviewComment' : null, input.reportText !== undefined ? 'reportText' : null,
+      input.fields ? 'fields' : null, input.excludedPhotoUrls !== undefined ? 'excludedPhotoUrls' : null, input.photos !== undefined ? 'photos' : null, input.answers !== undefined ? 'answers' : null,
+    ].filter((k): k is string => !!k);
+    const diff = after ? diffFields(before as unknown as Record<string, unknown>, after as unknown as Record<string, unknown>, touched) : null;
+    const newStatus = diff?.after.reviewStatus as string | undefined;
+    if (diff || input.damages) {
+      await audit({
+        category: 'web',
+        action: newStatus ? REVIEW_ACTION[newStatus] ?? 'section.edit' : 'section.edit',
+        inspectionId: before.inspection.id,
+        jobNo: before.inspection.jobNo,
+        target: { type: 'Section', id, label: before.name },
+        before: diff?.before,
+        after: diff?.after,
+        message: newStatus ? `${before.name}: ${String(diff?.before.reviewStatus ?? '').toLowerCase()} → ${newStatus.toLowerCase()}` : `${before.name} edited (${Object.keys(diff?.after ?? {}).join(', ') || 'damage records'})`,
+        metadata: { sectionKey: before.key, changed: Object.keys(diff?.after ?? {}), damagesReplaced: input.damages?.length },
+      });
+    }
+  }
+  return result;
+}
+
+async function updateSectionCore(id: string, input: SectionUpdateInput) {
   const exists = await prisma.section.findUnique({ where: { id }, select: { id: true, fields: true } });
   if (!exists) throw ApiError.notFound('Section not found');
 
@@ -209,10 +242,10 @@ async function updateSection(id: string, input: SectionUpdateInput) {
 
 /** Reviewer picks which of one damage record's own photos make the report. */
 async function updateDamage(id: string, input: DamageUpdateInput) {
-  const exists = await prisma.damage.findUnique({ where: { id }, select: { id: true } });
+  const exists = await prisma.damage.findUnique({ where: { id }, include: { section: { select: { key: true, name: true, inspection: { select: { id: true, jobNo: true } } } } } });
   if (!exists) throw ApiError.notFound('Damage not found');
 
-  return prisma.damage.update({
+  const saved = await prisma.damage.update({
     where: { id },
     data: {
       ...(input.excludedPhotoUrls !== undefined
@@ -221,30 +254,44 @@ async function updateDamage(id: string, input: DamageUpdateInput) {
       ...(input.photos !== undefined ? { photos: input.photos as Prisma.InputJsonValue } : {}),
     },
   });
+  const damageDiff = diffFields(exists as unknown as Record<string, unknown>, saved as unknown as Record<string, unknown>, [input.excludedPhotoUrls !== undefined ? 'excludedPhotoUrls' : '', input.photos !== undefined ? 'photos' : ''].filter(Boolean));
+  if (damageDiff) {
+    await audit({
+      category: 'web', action: 'damage.edit', inspectionId: exists.section.inspection.id, jobNo: exists.section.inspection.jobNo,
+      target: { type: 'Damage', id, label: `${exists.section.name}: ${exists.type}` }, before: damageDiff.before, after: damageDiff.after,
+      message: `Photos of a ${exists.type} record in ${exists.section.name} changed`, metadata: { sectionKey: exists.section.key, changed: Object.keys(damageDiff.after) },
+    });
+  }
+  return saved;
 }
 
 /** Status / notes / reviewer-assignment changes on an inspection. */
 /** Approve every section of an inspection in one go (the reviewer's "Approve All"). Sections already approved are left alone. */
 async function approveAllSections(id: string) {
-  const exists = await prisma.inspection.findUnique({ where: { id }, select: { id: true } });
+  const exists = await prisma.inspection.findUnique({ where: { id }, select: { id: true, jobNo: true } });
   if (!exists) throw ApiError.notFound('Inspection not found');
-  await prisma.section.updateMany({ where: { inspectionId: id, reviewStatus: { not: 'APPROVED' } }, data: { reviewStatus: 'APPROVED' } });
+  const approved = await prisma.section.updateMany({ where: { inspectionId: id, reviewStatus: { not: 'APPROVED' } }, data: { reviewStatus: 'APPROVED' } });
+  await audit({ category: 'web', action: 'section.approve_all', inspectionId: id, jobNo: exists.jobNo, target: { type: 'Inspection', id, label: exists.jobNo }, message: `${approved.count} section(s) approved in one step`, metadata: { approved: approved.count } });
   const fresh = await prisma.inspection.findUnique({ where: { id }, include: SECTIONS_INCLUDE });
   return serializeInspection(fresh!);
 }
 
 /** Re-run the Egnyte folder placement for one inspection (after a failure, or once its job number was corrected). */
 async function resolveEgnyte(id: string) {
-  const row = await prisma.inspection.findUnique({ where: { id }, select: { id: true, jobNo: true } });
+  const row = await prisma.inspection.findUnique({ where: { id }, select: { id: true, jobNo: true, egnyteStatus: true, egnytePath: true } });
   if (!row) throw ApiError.notFound('Inspection not found');
   const { settleEgnyteFolder } = await import('../inspections/inspections.service');
   await settleEgnyteFolder(row.id, row.jobNo);
   const fresh = await prisma.inspection.findUnique({ where: { id }, include: SECTIONS_INCLUDE });
+  await audit({
+    category: 'web', action: 'egnyte.recheck', inspectionId: id, jobNo: row.jobNo, target: { type: 'Inspection', id, label: row.jobNo },
+    before: { egnyteStatus: row.egnyteStatus, egnytePath: row.egnytePath }, after: { egnyteStatus: fresh?.egnyteStatus, egnytePath: fresh?.egnytePath }, message: 'Egnyte folder placement re-run',
+  });
   return serializeInspection(fresh!);
 }
 
 async function updateInspection(id: string, input: InspectionUpdateInput) {
-  const exists = await prisma.inspection.findUnique({ where: { id }, select: { id: true } });
+  const exists = await prisma.inspection.findUnique({ where: { id }, select: { id: true, jobNo: true, status: true, notes: true, reviewerId: true } });
   if (!exists) throw ApiError.notFound('Inspection not found');
 
   const row = await prisma.inspection.update({
@@ -256,6 +303,14 @@ async function updateInspection(id: string, input: InspectionUpdateInput) {
     },
     include: SECTIONS_INCLUDE,
   });
+  const inspDiff = diffFields(exists, row as unknown as Record<string, unknown>, [input.status ? 'status' : '', input.notes !== undefined ? 'notes' : '', input.reviewerId !== undefined ? 'reviewerId' : ''].filter(Boolean));
+  if (inspDiff) {
+    await audit({
+      category: 'web', action: inspDiff.after.status ? 'inspection.status_change' : inspDiff.after.reviewerId !== undefined ? 'inspection.assign_reviewer' : 'inspection.edit',
+      inspectionId: id, jobNo: exists.jobNo, target: { type: 'Inspection', id, label: exists.jobNo }, before: inspDiff.before, after: inspDiff.after,
+      message: inspDiff.after.status ? `Status ${String(inspDiff.before.status)} → ${String(inspDiff.after.status)}` : 'Inspection details changed',
+    });
+  }
   return serializeInspection(row);
 }
 

@@ -10,6 +10,8 @@ import { runDlpScan } from './qc.dlp.service';
 import { enforceRetention } from './qc.privacy.service';
 import { scanOrphanUploads } from '../../lib/submissionAlerts';
 import { pruneSubmissionLog } from '../../lib/submissionLog';
+import { anchorAudit, purgeExpiredAudit, verifyAudit } from '../../lib/auditTrail';
+import { alertAdmins } from '../../lib/submissionAlerts';
 
 const MIN = 60_000;
 let registered = false;
@@ -22,6 +24,18 @@ export function registerQcJobs(): void {
   registerJob({ name: 'qc.dlp-scan', everyMs: 60 * MIN, run: async () => void (await runDlpScan()) });
   // Photos that reached Egnyte for an inspection that never arrived are mailed to the admins (lib/submissionAlerts.ts).
   registerJob({ name: 'submissions.orphan-scan', everyMs: 10 * MIN, run: async () => void (await scanOrphanUploads()) });
+  // The audit trail: sealed every hour, fully re-verified every night (an admin is told at once if anything does not match), and entries past
+  // the retention period (7 years) are removed once a day.
+  registerJob({ name: 'audit.anchor', everyMs: 60 * MIN, run: async () => void (await anchorAudit()) });
+  registerJob({
+    name: 'audit.verify',
+    everyMs: 24 * 60 * MIN,
+    run: async () => {
+      const r = await verifyAudit();
+      if (!r.ok) await alertAdmins(`audit-broken:${new Date().toISOString().slice(0, 10)}`, 'The audit log failed its integrity check', [`${r.problems.length} problem(s) found; the first: ${r.problems[0]?.detail ?? 'unknown'}`, 'Open Admin > Audit log and run "Verify integrity" for the full list.']);
+    },
+  });
+  registerJob({ name: 'audit.retention', everyMs: 24 * 60 * MIN, run: async () => void (await purgeExpiredAudit()) });
   registerJob({ name: 'submissions.log-retention', everyMs: 24 * 60 * MIN, run: async () => void (await pruneSubmissionLog()) });
   registerJob({ name: 'qc.digests', everyMs: 15 * MIN, run: async () => void (await sendDigests()) });
 

@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
+import { auditContext } from './lib/auditTrail';
 import cors from 'cors';
 import morgan from 'morgan';
 import { env } from './config/env';
@@ -15,6 +16,7 @@ import { templatesRouter } from './modules/templates/templates.routes';
 import { webRouter } from './modules/web/web.routes';
 import { mediaRouter } from './modules/media/media.routes';
 import { qcRouter } from './modules/qc/qc.routes';
+import { auditRouter } from './modules/audit/audit.routes';
 
 export function createApp() {
   const app = express();
@@ -26,6 +28,7 @@ export function createApp() {
   // edge sets on every request. This stays as the fallback where that header is not used.
   app.set('trust proxy', 1);
   app.use(clientIp);
+  app.use(auditContext);
   app.use(helmet());
   // JSON answers compress to a fraction of their size (images, PDFs and other already-compressed files are skipped automatically).
   app.use(compression());
@@ -73,6 +76,7 @@ export function createApp() {
   app.use('/api/v1/review', reviewRouter);
   app.use('/api/v1/templates', templatesRouter);
   app.use('/api/v1/web', webRouter);
+  app.use('/api/v1/audit', auditRouter);
   app.use('/api/v1/qc', qcRouter);
 
   // Fallbacks

@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
+import { audit as auditTrail } from './auditTrail';
 
 /** Fields that must never be copied into an audit trail. */
 const REDACT = new Set(['passwordHash', 'mfaSecret', 'mfaBackupCodes', 'tokenHash', 'password']);
@@ -84,8 +85,13 @@ export async function recordAudit(e: AuditInput, tx?: Prisma.TransactionClient):
       },
     });
   };
-  if (tx) return run(tx);
-  await prisma.$transaction(run);
+  if (tx) await run(tx);
+  else await prisma.$transaction(run);
+  // The QC trail is mirrored onto the shared audit log (after the original has been written, never inside its transaction).
+  void auditTrail({
+    category: 'qc', action: `qc.${e.action}`, actor: { id: e.actor.id, role: e.actor.role }, target: { type: e.entityType, id: e.entityId }, reason: e.reason ?? null,
+    before: e.before, after: e.after, message: `${e.entityType} ${e.action}`, metadata: { clientId: e.clientId ?? null, supportSession: e.supportSessionId ?? null },
+  });
 }
 
 /** Recompute a chain and report the first entry whose link or hash does not match (tamper evidence). */

@@ -21,6 +21,8 @@
     "check:platform": "tsx src/scripts/qc-platform-check.ts",
     "check:egnyte-folders": "tsx src/scripts/check-egnyte-folders.ts",
     "check:egnyte-upload": "tsx src/scripts/check-egnyte-upload.ts",
+    "check:audit": "tsx src/scripts/check-audit.ts",
+    "audit:backfill": "tsx src/scripts/audit-backfill.ts",
     "check:photo-serving": "tsx src/scripts/check-photo-serving.ts",
     "check:draft-save": "tsx src/scripts/check-draft-save.ts",
     "check:refresh-reuse": "tsx src/scripts/check-refresh-reuse.ts",

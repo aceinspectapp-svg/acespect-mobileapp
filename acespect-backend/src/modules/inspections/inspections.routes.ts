@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { rebindAuditContext } from '../../lib/auditTrail';
 import multer from 'multer';
 import { inspectionsController } from './inspections.controller';
 import { validate } from '../../middleware/validate';
@@ -13,7 +14,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 
 router.post('/submit', requireAuth, validate(submitInspectionSchema), inspectionsController.submit);
 router.post('/client-error', requireAuth, inspectionsController.clientError);
 router.put('/:id/sync', requireAuth, validate(syncSectionSchema), inspectionsController.syncSection);
-router.post('/photos', requireAuth, upload.single('photo'), inspectionsController.uploadPhoto);
+router.post('/photos', requireAuth, upload.single('photo'), rebindAuditContext, inspectionsController.uploadPhoto);
 // Post-Dilapidation jobs admin has pushed to the calling inspector, not yet
 // picked up -- must come before the /:id routes below.
 router.get('/assigned', requireAuth, inspectionsController.listAssigned);

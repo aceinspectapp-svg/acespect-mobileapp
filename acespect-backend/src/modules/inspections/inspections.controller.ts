@@ -9,6 +9,8 @@ import { fetchPhotoStream } from '../../lib/storage';
 import { generateInspectionReportPdf } from '../../lib/reportPdf';
 import { generateInspectionReportDocx } from '../../lib/reportDocx';
 import { recordSubmissionEvent } from '../../lib/submissionLog';
+import { audit, firstWithin, flushPhotoBatches, notePhotoUpload } from '../../lib/auditTrail';
+import { createHash } from 'node:crypto';
 
 /** A photo URL is this backend's own `/api/v1/media/:id` proxy link -- pull the id back off the end of it. */
 function photoIdFromUrl(url: string): string | null {
@@ -52,6 +54,7 @@ export const inspectionsController = {
       if (missing.length > 0) {
         const message = `${missing.length} photo(s) in this inspection are not on the server yet.`;
         logSubmit('warning', { inspectorId: req.user.id, jobNo: body.jobNo }, { reason: 'photos_missing', message, missing: missing.length });
+        await audit({ category: 'mobile', action: 'inspection.submit.refused', outcome: 'failure', severity: 'warning', inspectionId: body.id ?? null, jobNo: body.jobNo ?? null, target: { type: 'Inspection', id: body.id ?? null, label: body.jobNo ?? null }, message, metadata: { reason: 'photos_missing', missing: missing.length } });
         throw new ApiError(409, message, 'PHOTOS_MISSING', { missing: missing.slice(0, 2000) });
       }
     }
@@ -60,7 +63,8 @@ export const inspectionsController = {
       { inspectorId: req.user.id, jobNo: body.jobNo },
       { draftId: body.id, sections: body.sections?.length ?? 0 },
     );
-    const { inspection } = await inspectionsService.submit(req.user.id, req.body);
+    const { inspection, mode } = await inspectionsService.submit(req.user.id, req.body);
+    await flushPhotoBatches(inspection.id); // the photo summary comes before the submit it belongs to
     logSubmit(
       'saved',
       { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo },
@@ -84,6 +88,22 @@ export const inspectionsController = {
       logSubmit('warning', { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo }, { reason: 'receipt_mismatch', message });
       void alertAdmins(`mismatch:${inspection.id}`, `Submission ${inspection.jobNo ?? ''} arrived incomplete`, [message], { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo });
     }
+    const onlyJobInfo = !(body.sections ?? []).some((s) => s.key && s.key !== 'job-info');
+    const mismatch = !!expected && (expected.sections !== receipt.sections || expected.photos !== receipt.photos);
+    await audit({
+      category: 'mobile',
+      action: mode === 'unchanged' ? 'inspection.submit.repeat' : 'inspection.submit',
+      severity: mismatch || onlyJobInfo ? 'warning' : 'info',
+      inspectionId: inspection.id,
+      jobNo: inspection.jobNo,
+      target: { type: 'Inspection', id: inspection.id, label: inspection.jobNo },
+      before: mode === 'created' ? undefined : { status: 'DRAFT' },
+      after: { status: inspection.status },
+      message: mode === 'unchanged'
+        ? 'The phone sent an inspection that had already arrived; nothing was changed'
+        : `${receipt.sections} section(s) and ${receipt.photos} photo(s) stored${mismatch ? ' (does not match what the phone expected)' : ''}${onlyJobInfo ? ' (Job Information only)' : ''}`,
+      metadata: { mode, receipt, expected: expected ?? null, draftId: body.id ?? null, sectionsSent: body.sections?.length ?? 0, onlyJobInfo, receiptMatches: !expected || !mismatch },
+    });
     res.status(201).json({ inspectionId: inspection.id, status: inspection.status, receipt });
   }),
 
@@ -101,6 +121,16 @@ export const inspectionsController = {
       statusCode: typeof b.status === 'number' ? b.status : null,
       message: b.level === 'info' ? `Phone: ${where}` : `Phone: ${where} failed: ${message}`,
       detail: { source: 'phone', where, code: typeof b.code === 'string' ? b.code.slice(0, 40) : undefined, context: JSON.parse(JSON.stringify(context).slice(0, 1000) || '{}') },
+    });
+    await audit({
+      category: 'mobile',
+      action: b.level === 'info' ? 'app.step' : 'app.problem',
+      outcome: b.level === 'info' ? 'success' : 'failure',
+      severity: b.level === 'info' ? 'info' : 'warning',
+      source: 'mobile',
+      jobNo: typeof context.jobNo === 'string' ? context.jobNo.slice(0, 40) : null,
+      message: b.level === 'info' ? where : `${where}: ${message}`,
+      metadata: { where, status: typeof b.status === 'number' ? b.status : undefined, code: typeof b.code === 'string' ? b.code.slice(0, 40) : undefined, context },
     });
     res.status(204).end();
   }),
@@ -138,6 +168,10 @@ export const inspectionsController = {
       { inspectorId: req.user.id, inspectionId: inspection.id, jobNo: inspection.jobNo },
       { reviewJobId: reviewJob.id, status: inspection.status },
     );
+    await audit({
+      category: 'web', action: 'inspection.finalize', inspectionId: inspection.id, jobNo: inspection.jobNo, target: { type: 'Inspection', id: inspection.id, label: inspection.jobNo },
+      before: { status: 'DRAFT' }, after: { status: inspection.status, reviewerId: inspection.reviewerId }, message: 'Sent for review', metadata: { reviewJobId: reviewJob.id },
+    });
     res.status(202).json({
       inspectionId: inspection.id,
       reviewJobId: reviewJob.id,
@@ -164,6 +198,9 @@ export const inspectionsController = {
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
     const inspection = await inspectionsService.getById(id);
+    if (firstWithin(`view:${req.user.id}:${id}`, 10 * 60_000)) {
+      await audit({ category: 'web', action: 'inspection.view', inspectionId: id, jobNo: inspection.jobNo, target: { type: 'Inspection', id, label: inspection.jobNo } });
+    }
     res.status(200).json({ inspection });
   }),
 
@@ -188,6 +225,7 @@ export const inspectionsController = {
     const fileName = `${inspection.jobNo || id}-${kind}-report.pdf`.replace(/[^a-z0-9.-]+/gi, '-');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    await audit({ category: 'web', action: 'report.download', inspectionId: id, jobNo: inspection.jobNo, target: { type: 'Report', id, label: fileName }, message: 'PDF report downloaded', metadata: { format: 'pdf', bytes: pdf.length, sha256: createHash('sha256').update(pdf).digest('hex'), kind } });
     res.send(pdf);
   }),
 
@@ -212,6 +250,7 @@ export const inspectionsController = {
     const fileName = `${inspection.jobNo || id}-${kind}-report.docx`.replace(/[^a-z0-9.-]+/gi, '-');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    await audit({ category: 'web', action: 'report.download', inspectionId: id, jobNo: inspection.jobNo, target: { type: 'Report', id, label: fileName }, message: 'Word report downloaded', metadata: { format: 'docx', bytes: docx.length, sha256: createHash('sha256').update(docx).digest('hex'), kind } });
     res.send(docx);
   }),
 
@@ -246,6 +285,7 @@ export const inspectionsController = {
       { inspectorId: req.user.id, inspectionId },
       { sectionKey, bytes: file.buffer.length, photoId: result.id, ...(jobNo ? { jobNo } : {}) },
     );
+    if (inspectionId) notePhotoUpload({ req, inspectionId, jobNo, photoId: result.id, photoNumber, sectionKey, bytes: file.buffer.length });
     res.status(201).json(result);
   }),
 
@@ -260,6 +300,7 @@ export const inspectionsController = {
     const { name, photos } = await inspectionsService.getSectionPhotos(sectionId);
     if (photos.length === 0) throw ApiError.notFound('No additional photos for this section');
 
+    await audit({ category: 'web', action: 'photos.download', actor: req.user ? undefined : { id: null, name: 'Anonymous (public link)', type: 'user' }, target: { type: 'Section', id: sectionId, label: name }, message: `${photos.length} photo(s) downloaded as a zip`, metadata: { count: photos.length, authenticated: !!req.user } });
     const fileName = `${name.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'section'}-photos.zip`;
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);

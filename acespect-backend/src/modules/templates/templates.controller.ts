@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
+import { audit } from '../../lib/auditTrail';
 import { templatesService } from './templates.service';
 import { serializeTemplate } from './templates.serializers';
 import { templatableKeysFor } from './templates.sections';
@@ -37,6 +38,7 @@ export const templatesController = {
   acceptUpdates: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
     const acceptances = await templatesService.acceptProfileUpdates(req.user.id, requireProfile(req));
+    await audit({ category: 'mobile', action: 'template.accept_updates', target: { type: 'TemplateProfile', id: JSON.stringify(requireProfile(req)) }, message: `${acceptances.length} section template update(s) accepted on the phone`, metadata: { sections: acceptances.map((a) => ({ sectionKey: a.sectionKey, version: a.acceptedTemplate.version })) } });
     res.status(200).json({ acceptances: acceptances.map((a) => ({ sectionKey: a.sectionKey, version: a.acceptedTemplate.version, acceptedAt: a.acceptedAt })) });
   }),
 
@@ -73,6 +75,7 @@ export const templatesController = {
   create: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
     const template = await templatesService.create(req.user.id, req.body);
+    await audit({ category: 'admin', action: 'template.create', target: { type: 'Template', id: template.id, label: `${template.inspectionType} / ${template.propertyType} / ${template.sectionKey}` }, after: { version: template.version, status: template.status }, message: 'Template created' });
     res.status(201).json({ template: serializeTemplate(template) });
   }),
 
@@ -80,6 +83,7 @@ export const templatesController = {
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Template id is required');
     const template = await templatesService.update(id, req.body);
+    await audit({ category: 'admin', action: 'template.update', target: { type: 'Template', id, label: `${template.inspectionType} / ${template.propertyType} / ${template.sectionKey}` }, after: { version: template.version, status: template.status }, message: 'Template edited', metadata: { fieldsChanged: Object.keys(req.body ?? {}) } });
     res.status(200).json({ template: serializeTemplate(template) });
   }),
 
@@ -87,6 +91,7 @@ export const templatesController = {
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Template id is required');
     const template = await templatesService.publish(id);
+    await audit({ category: 'admin', action: 'template.publish', severity: 'notice', target: { type: 'Template', id, label: `${template.inspectionType} / ${template.propertyType} / ${template.sectionKey}` }, after: { version: template.version, status: template.status }, message: `Template version ${template.version} published` });
     res.status(200).json({ template: serializeTemplate(template) });
   }),
 };
