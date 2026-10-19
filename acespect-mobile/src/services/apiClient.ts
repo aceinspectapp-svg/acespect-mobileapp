@@ -1,3 +1,4 @@
+import { appHeaders, currentCorrelation } from './auditEvents';
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { API_URL } from '../config/api';
 import { tokenStorage } from './tokenStorage';
@@ -33,6 +34,10 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const token = await tokenStorage.getAccessToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   config.headers['X-App-Client'] = 'mobile';
+  // Which app version / phone this is, and which submit attempt a request belongs to (the audit log shows both).
+  for (const [k, v] of Object.entries(appHeaders())) config.headers[k] = v;
+  const story = currentCorrelation();
+  if (story) config.headers['X-Correlation-Id'] = story;
   if (activeClientId) config.headers['X-Client-Id'] = activeClientId;
   return config;
 });

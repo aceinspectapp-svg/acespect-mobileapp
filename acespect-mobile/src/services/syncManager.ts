@@ -6,6 +6,7 @@ import { getSyncQueue, setSyncQueue, getWifiOnlySync, QueuedSubmission } from '.
 import { submitInspection, uploadPhoto, type SubmitResult } from './inspectionApi';
 import { getPhotoNumber, mergePhotoNumbers } from './photoNumbers';
 import { reportProblem } from './problemReport';
+import { initAuditEvents, recordEvent } from './auditEvents';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
@@ -227,6 +228,8 @@ const PUMP_WORKERS = 2;
 const bySection = new Map<string, Map<string, PhotoMeta>>(); // top-level section key -> its local photos
 const lostInBackup = new Set<string>();
 let backupJobNo: string | undefined;
+let backupInspectionId: string | undefined;
+let lastEmitted: PhotoBackupStatus = { total: 0, uploaded: 0, state: 'idle', lost: 0 };
 let pumpWorkers = 0;
 let pausedUntil = 0;
 let pumpFailures = 0;
@@ -257,6 +260,13 @@ function emitBackup(): void {
     emitTimer = null;
     backupStatus = computeBackupStatus();
     setKeepAwake(backupStatus.state !== 'idle');
+    // The moments worth keeping: everything is on the server, or the backup is waiting (and why).
+    if (backupStatus.state === 'idle' && lastEmitted.state !== 'idle' && backupStatus.total > 0) {
+      recordEvent('photo.backup.complete', { inspectionId: backupInspectionId, jobNo: backupJobNo, message: `${backupStatus.uploaded} of ${backupStatus.total} photos backed up`, metadata: { total: backupStatus.total, uploaded: backupStatus.uploaded, lost: backupStatus.lost } });
+    } else if (backupStatus.state === 'waiting' && (lastEmitted.state !== 'waiting' || lastEmitted.reason !== backupStatus.reason)) {
+      recordEvent('photo.backup.waiting', { inspectionId: backupInspectionId, jobNo: backupJobNo, severity: 'notice', message: `Photo backup waiting (${backupStatus.reason ?? 'error'})`, metadata: { reason: backupStatus.reason, uploaded: backupStatus.uploaded, total: backupStatus.total } });
+    }
+    lastEmitted = backupStatus;
     backupListeners.forEach((l) => l(backupStatus));
   }, 250);
 }
@@ -296,6 +306,7 @@ function collectLocalPhotos(tree: AnswerTree | undefined, folderPath: string[], 
 /** A section's answers changed: remember which local photos it holds and start sending the ones not sent yet. */
 export function noteSectionAnswers(sectionKey: string, answers: AnswerTree | undefined, inspectionId: string | undefined, jobNo: string | undefined): void {
   if (jobNo) backupJobNo = jobNo;
+  if (inspectionId) backupInspectionId = inspectionId;
   const found = new Map<string, string>();
   collectLocalPhotos(answers, [sectionKey], found);
   const mine = new Map<string, PhotoMeta>();
@@ -585,8 +596,10 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
     } catch (err) {
       const body = (err as { response?: { data?: { error?: { code?: string; details?: { missing?: string[] } } } } }).response?.data?.error;
       if (body?.code !== 'PHOTOS_MISSING' || round >= 2 || !(await resendMissing(payload, body.details?.missing ?? [], lost))) throw err;
+      recordEvent('submit.photos_resent', { inspectionId, jobNo, severity: 'notice', message: `${body.details?.missing?.length ?? 0} photo(s) the server lacked were sent again`, metadata: { count: body.details?.missing?.length ?? 0, round: round + 1 } });
     }
   }
+  if (lost.size > 0) recordEvent('submit.photos_skipped', { inspectionId, jobNo, severity: 'warning', message: `${lost.size} photo(s) left out (file gone or unreadable)`, metadata: { count: lost.size } });
   // The server has it: the local copies of THIS inspection's photos are no longer needed.
   cleanupUploadedFiles(photoFilesOf(payload, namedLocally));
   return { ...result, ...(lost.size > 0 ? { skippedPhotos: lost.size } : {}) };
@@ -609,6 +622,7 @@ export async function enqueueSubmission(payload: SubmitPayload): Promise<void> {
     queuedAt: new Date().toISOString(),
   };
   queueCache = [...queueCache, entry];
+  recordEvent('submit.queued', { inspectionId: payload.id, jobNo: payload.jobNo, severity: 'notice', message: 'Inspection kept on the phone to be sent when possible', metadata: { sections: payload.sections.length } });
   await persist();
   void processQueue();
 }
@@ -643,11 +657,13 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
       if (!entry) continue; // already synced and removed earlier in this same pass
       try {
         await runSubmission(entry.payload);
+        recordEvent('queue.delivered', { inspectionId: entry.payload.id, jobNo: entry.payload.jobNo, message: 'Queued inspection delivered', metadata: { attempts: entry.attempts + 1 } });
         queueCache = queueCache.filter((e) => e.id !== id);
         await persist();
       } catch (err) {
         // The server already holds a real inspection for this job and refused this blank leftover: nothing to send, so stop retrying it.
         if ((err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code === 'BLANK_DUPLICATE') {
+          recordEvent('queue.dropped', { inspectionId: entry.payload.id, jobNo: entry.payload.jobNo, severity: 'notice', message: 'A blank leftover was not sent: the real inspection is already on the server' });
           queueCache = queueCache.filter((e) => e.id !== id);
           await persist();
           continue;
@@ -706,15 +722,24 @@ export async function initSyncManager(): Promise<void> {
   if (initialized) return;
   initialized = true;
 
+  initAuditEvents();
   await loadPhotoCache();
   queueCache = await getSyncQueue();
   notify();
   void processQueue();
 
   let wasOffline = false;
+  let offlineSince = 0;
   Network.addNetworkStateListener((event) => {
     const online = event.isInternetReachable ?? event.isConnected ?? false;
-    if (online && wasOffline) void processQueue();
+    if (online && wasOffline) {
+      recordEvent('network.online', { message: 'Connection back', metadata: { offlineSeconds: Math.round((Date.now() - offlineSince) / 1000), type: String(event.type) } });
+      void processQueue();
+    }
+    if (!online && !wasOffline) {
+      offlineSince = Date.now();
+      recordEvent('network.offline', { severity: 'notice', message: 'Connection lost', metadata: { type: String(event.type) } });
+    }
     wasOffline = !online;
   });
 }

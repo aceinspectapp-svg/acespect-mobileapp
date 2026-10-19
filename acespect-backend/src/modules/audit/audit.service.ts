@@ -8,6 +8,7 @@ import type { AuditEvent } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { audit, auditHealth } from '../../lib/auditTrail';
+import { recordSubmissionEvent } from '../../lib/submissionLog';
 
 export type Viewer = { id: string; role: string };
 
@@ -254,6 +255,9 @@ export async function acceptClientEvents(viewer: Viewer, input: ClientEvents) {
       metadata: { ...(e.metadata ?? {}), recordedOnDevice: true, receivedAt: new Date(now).toISOString(), ...(e.inspectionId && !owner.has(e.inspectionId) ? { inspectionNotYetOnServer: true } : {}) },
     });
     if (ok) accepted++; else duplicates++;
+    if (ok && e.outcome === 'failure') {
+      void recordSubmissionEvent({ event: 'failed', inspectorId: viewer.id, inspectionId: e.inspectionId ?? null, jobNo: e.jobNo ?? null, message: `Phone: ${e.message ?? e.action}`.slice(0, 400), detail: { source: 'phone', action: e.action, ...(e.metadata ? { context: e.metadata } : {}) } });
+    }
   }
   return { accepted, duplicates, rejected: foreign };
 }
