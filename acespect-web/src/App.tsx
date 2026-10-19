@@ -34,6 +34,7 @@ const AdminQcProjectDetail = lazyPage(() => import("./web/pages/admin/AdminQcPro
 const AdminQcOrganisations = lazyPage(() => import("./web/pages/admin/AdminQcOrganisations"), "AdminQcOrganisations");
 const AdminQcPeople = lazyPage(() => import("./web/pages/admin/AdminQcPeople"), "AdminQcPeople");
 const AdminSubmissionLogs = lazyPage(() => import("./web/pages/admin/AdminSubmissionLogs"), "AdminSubmissionLogs");
+const AdminAuditLog = lazyPage(() => import("./web/pages/admin/AdminAuditLog"), "AdminAuditLog");
 const ReportView = lazyPage(() => import("./web/pages/ReportView"), "ReportView");
 const AcceptInvitation = lazyPage(() => import("./web/pages/AuthPages"), "AcceptInvitation");
 const ForgotPassword = lazyPage(() => import("./web/pages/AuthPages"), "ForgotPassword");
@@ -189,6 +190,7 @@ export default function App() {
             <Route path="/admin/qc/*" element={<Navigate to="/qc" replace />} />
             <Route path="/admin/reports" element={<Placeholder title="Reports" />} />
             <Route path="/admin/troubleshoot" element={<AdminSubmissionLogs />} />
+            <Route path="/admin/audit" element={<AdminAuditLog />} />
             <Route path="/admin/settings" element={<Placeholder title="Settings" />} />
           </Route>
 

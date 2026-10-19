@@ -137,6 +137,18 @@ async function main() {
     assert.equal(await t.purgeExpiredAudit(30), 0, 'a nonsense short period purges nothing');
   });
 
+  await check('the monitor flags repeated failed sign-ins and repeated refusals, and the alert is recorded', async () => {
+    const { scanAuditAnomalies } = await import('../lib/auditMonitor');
+    const person = randomUUID();
+    for (let i = 0; i < 9; i++) await t.audit({ category: 'security', action: 'security.login_failed', outcome: 'denied', ip: '203.0.113.77', actor: { id: null, type: 'user', name: 'Not signed in' } });
+    for (let i = 0; i < 6; i++) await t.audit({ category: 'web', action: 'request.rejected', outcome: 'denied', actor: { id: person, name: 'Pat Probe', role: 'INSPECTOR' } });
+    const found = await scanAuditAnomalies();
+    assert.ok(found.includes('logins:203.0.113.77'), found.join(','));
+    assert.ok(found.includes(`refused:${person}`), found.join(','));
+    const alerts = await prisma.submissionLogEntry.count({ where: { event: 'warning', message: { in: ['Repeated failed sign-ins', 'Repeated refused requests'] } } });
+    assert.ok(alerts >= 2, `alerts recorded: ${alerts}`);
+  });
+
   void Prisma;
   console.log(`${passed} checks passed`);
   await prisma.$disconnect();

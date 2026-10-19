@@ -48,3 +48,12 @@ Everything below was run against the final code (commit `46bd35f` and later). "V
 - **iOS app (`acespect-ios`, added by a teammate) is a copy of the Android app and did not have these fixes.** They were ported in commit `ac6c360` (type-checks clean; not run on a device). Check before building it for the client.
 - **Warning — shared update channel:** `acespect-ios` and `acespect-mobile` have the same Expo project id and `preview` branch. Publishing an update from one folder replaces what the other app's phones receive. Agree one source of truth (or separate branches) before publishing from either.
 - **Data note:** V267612 holds each of its 109 photos twice (subfolder copy + flat copy; the portal lists both). V269999 is a test draft.
+
+## 8. Audit log (added Oct 19) — see `Audit-log-guide.md`
+- **Deploy order:** backend first (runs migration `20261019090000_audit_events`: two new tables + triggers, nothing existing changes), then web, then phone update (Android + iOS).
+- **After deploy, once:** run `npm run audit:backfill` on the server, then Admin → Audit log → **Verify integrity** (must say "passed").
+- **Checks run before release:** core 10 checks (`npm run check:audit`: chaining, edit/delete blocked, tamper and deletion detected, 50 concurrent writers, redaction, duplicate phone events, photo batches, seals, retention, alert monitor); API 8 checks (roles, scope, paging, phone upload); reports 5 checks; phone queue 4 checks (offline → arrives later with original times and one story id); 540-photo run with auditing on: 614 s (no measurable cost; recorded as 2 photo summaries + 1 submit entry).
+- **Watch on day one:** Audit log page "Write failures" must stay 0; "Last seal" must advance hourly; the "Problems" preset shows anything refused or failed.
+- **Retention:** `AUDIT_RETENTION_DAYS` (default 2557 = 7 years).
+- **Rollback:** redeploy the previous commit; the new tables can stay (nothing reads them but the audit pages). The triggers only protect those two tables.
+- **Not verified on a real device:** the phone event queue on a physical Android/iOS phone (tested with the real code against the real server, not by tapping).

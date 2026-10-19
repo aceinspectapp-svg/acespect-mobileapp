@@ -15,6 +15,11 @@ router.get('/facets', requireAuth, auditController.facets);
 router.get('/verify', requireAuth, auditController.verify);
 router.get('/health', requireAuth, admins, auditController.health);
 
+// Exports and reports are for administrators; each one is itself recorded in the log.
+router.get('/export', requireAuth, admins, auditController.export);
+router.get('/reports/inspection/:id', requireAuth, admins, auditController.inspectionReport);
+router.get('/reports/:kind', requireAuth, admins, auditController.periodReport);
+
 // Events the phone recorded (some while offline); idempotent by event id.
 router.post('/client-events', requireAuth, validate(clientEventsSchema), auditController.clientEvents);
 

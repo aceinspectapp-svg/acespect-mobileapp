@@ -13,6 +13,7 @@ import {
   type User,
 } from "../../mockData";
 import { useAppData, useInspectionDetail } from "../../data";
+import { AuditHistoryButton } from "../../components/AuditHistoryButton";
 import { StatusBadge } from "../../components/WebLayout";
 import { ReportCover } from "../../components/ReportCover";
 import { isConstructionInspection, jobInfoFieldsFor } from "./jobInfoFields";
@@ -1050,6 +1051,8 @@ export function ReviewerFormView() {
         </div>
 
         <StatusBadge label={sc.label} color={sc.color} bg={sc.bg} />
+
+        <AuditHistoryButton inspectionId={inspection.id} jobNo={inspection.jobNo} />
 
         <button
           onClick={() => navigate(`/report/${inspection.id}`)}

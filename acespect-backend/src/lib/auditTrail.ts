@@ -264,7 +264,7 @@ async function build(input: AuditInput): Promise<Record<string, unknown>> {
     platform: s(client.platform, 40),
     osVersion: s(client.osVersion, 40),
     deviceModel: s(client.deviceModel, 80),
-    ip: input.ip ?? (req?.ip ? String(req.ip).slice(0, 64) : null),
+    ip: (input.ip ?? (req?.ip ? String(req.ip).slice(0, 64) : null))?.replace(/^::ffff:/i, '') ?? null, // an IPv4 address that arrives wrapped as IPv6 is stored as plain IPv4
     userAgent: input.userAgent ?? s(req?.headers['user-agent'], 300),
     targetType: s(input.target?.type, 60),
     targetId: s(input.target?.id, 80),

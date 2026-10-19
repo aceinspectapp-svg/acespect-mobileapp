@@ -12,6 +12,7 @@ import { scanOrphanUploads } from '../../lib/submissionAlerts';
 import { pruneSubmissionLog } from '../../lib/submissionLog';
 import { anchorAudit, purgeExpiredAudit, verifyAudit } from '../../lib/auditTrail';
 import { alertAdmins } from '../../lib/submissionAlerts';
+import { scanAuditAnomalies } from '../../lib/auditMonitor';
 
 const MIN = 60_000;
 let registered = false;
@@ -26,6 +27,7 @@ export function registerQcJobs(): void {
   registerJob({ name: 'submissions.orphan-scan', everyMs: 10 * MIN, run: async () => void (await scanOrphanUploads()) });
   // The audit trail: sealed every hour, fully re-verified every night (an admin is told at once if anything does not match), and entries past
   // the retention period (7 years) are removed once a day.
+  registerJob({ name: 'audit.monitor', everyMs: 10 * MIN, run: async () => void (await scanAuditAnomalies()) });
   registerJob({ name: 'audit.anchor', everyMs: 60 * MIN, run: async () => void (await anchorAudit()) });
   registerJob({
     name: 'audit.verify',

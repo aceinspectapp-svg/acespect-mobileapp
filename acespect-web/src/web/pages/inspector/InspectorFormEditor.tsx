@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router";
 import { ArrowLeft, Plus, Camera, Save, Send, CheckCircle, MessageSquare } from "lucide-react";
 import { STATUS_CONFIG } from "../../mockData";
 import { useAppData, useInspectionDetail } from "../../data";
+import { AuditHistoryButton } from "../../components/AuditHistoryButton";
 import { resolveMediaUrl } from "../../api";
 import { StatusBadge } from "../../components/WebLayout";
 import { SectionFieldEditor, PhotoUploadContext } from "../../components/SectionFieldEditor";
@@ -323,6 +324,7 @@ export function InspectorFormEditor() {
               {inspection.address}, {inspection.suburb}
             </h2>
             <StatusBadge label={sc.label} color={sc.color} bg={sc.bg} />
+            <AuditHistoryButton inspectionId={inspection.id} jobNo={inspection.jobNo} />
           </div>
           <p style={{ fontSize: "12px", color: "#94a3b8", margin: "2px 0 0" }}>
             Job No. {inspection.jobNo} · {inspection.type} · {inspection.date}
