@@ -288,7 +288,21 @@ const json = (v: unknown) => (v === null || v === undefined ? Prisma.DbNull : (v
  * Records one event. Never throws. Returns false when the write failed (counted in auditHealth) or the event was a duplicate phone upload.
  * Events of one stream are chained in the order they commit (a per-stream advisory lock serialises the writers).
  */
-export async function audit(input: AuditInput): Promise<boolean> {
+const inFlight = new Set<Promise<unknown>>();
+/** Waits (up to `ms`) for audit writes still on their way -- used when the server shuts down, so the last entries are not cut off. */
+export async function drainAudit(ms = 5000): Promise<void> {
+  if (inFlight.size === 0) return;
+  await Promise.race([Promise.allSettled([...inFlight]), new Promise((r) => setTimeout(r, ms))]);
+}
+
+export function audit(input: AuditInput): Promise<boolean> {
+  const p = auditNow(input);
+  inFlight.add(p);
+  void p.finally(() => inFlight.delete(p));
+  return p;
+}
+
+async function auditNow(input: AuditInput): Promise<boolean> {
   const store = als.getStore();
   if (store) store.audited = true;
   try {

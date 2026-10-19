@@ -1,7 +1,7 @@
 import { createApp } from './app';
 import { env } from './config/env';
 import { prisma } from './lib/prisma';
-import { flushPhotoBatches, startAuditFlusher } from './lib/auditTrail';
+import { drainAudit, flushPhotoBatches, startAuditFlusher } from './lib/auditTrail';
 import { ensureBucket, isStorageEnabled } from './lib/storage';
 import { startQcJobs } from './modules/qc/qc.jobs';
 import { ensureTemplateReferenceData } from './modules/qc/qc.templates.service';
@@ -68,6 +68,7 @@ async function main() {
     console.log(`\n${signal} received — shutting down...`);
     server.close(async () => {
       await flushPhotoBatches().catch(() => undefined); // photo summaries still waiting are written before the process ends
+      await drainAudit(); // ...and so are audit entries still on their way
       await prisma.$disconnect();
       process.exit(0);
     });
