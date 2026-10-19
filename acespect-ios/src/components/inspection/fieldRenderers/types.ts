@@ -87,3 +87,14 @@ export function isRepeatRequirementMet(field: TemplateField, value: AnswerValue,
   if (!triggered) return true;
   return Array.isArray(value) && value.length > 0;
 }
+
+/**
+ * A required multi-select that only lists things that might be present ("obscured by", "obstructions", "observations & defects")
+ * has no way to say "none of these" -- yet "nothing" is the usual answer. Those lists must never block a section from being
+ * completed, or an inspector with nothing to report is stuck on a section that cannot be finished.
+ */
+const NOTHING_IS_VALID = /(obscur|obstruct|observation|_checks\d*$|checks\d*$|Obs$|damageSummary|^defects$)/i;
+export function isNothingValid(field: TemplateField): boolean {
+  if (field.type !== 'chip-multiselect' && field.type !== 'tile-multiselect') return false;
+  return NOTHING_IS_VALID.test(field.key) || NOTHING_IS_VALID.test(field.label ?? '');
+}

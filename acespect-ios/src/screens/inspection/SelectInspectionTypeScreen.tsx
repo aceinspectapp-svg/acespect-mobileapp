@@ -23,7 +23,9 @@ import { loadDraftSnapshot, DraftSnapshot, QueuedSubmission } from '../../servic
 import {
   subscribe as subscribeSyncQueue,
   subscribeProcessing,
-  retryNow,
+  subscribeProgress,
+  type SyncProgress,
+  retryNowAndReport,
   isWaitingForWifi,
   removeFromQueue,
 } from '../../services/syncManager';
@@ -144,6 +146,10 @@ export function SelectInspectionTypeScreen({
   // nothing at all, which is exactly the confusing part.
   const [syncing, setSyncing] = useState(false);
   useEffect(() => subscribeProcessing(setSyncing), []);
+  // What the sync is doing right now (which inspection, which photo), so the banner says more than "this can take a minute".
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  useEffect(() => subscribeProgress(setSyncProgress), []);
+  const progressText = (p: SyncProgress | null) => (p ? `${p.label}: ${p.step}${p.total > 0 ? ` (${p.done} of ${p.total} photos sent)` : ''}` : 'Starting…');
 
   // Whether it's the Wi-Fi-only preference (not just "no signal at all")
   // holding the queue back, so the banner doesn't claim "tap to retry" is
@@ -337,14 +343,22 @@ export function SelectInspectionTypeScreen({
             style={styles.pendingBanner}
             onPress={() => {
               if (syncing) {
-                Alert.alert('Still syncing', "Already uploading — this can take a minute for photo-heavy inspections. Give it a moment before tapping again.");
+                Alert.alert('Still syncing', `Working on ${progressText(syncProgress)}\n\nIf this stays on the same step for more than 2½ minutes, the app stops it and shows what went wrong.`);
                 return;
               }
-              const started = retryNow();
-              if (!started) {
-                Alert.alert('Still syncing', "Already uploading — this can take a minute for photo-heavy inspections. Give it a moment before tapping again.");
-              }
               setWaitingForWifi(false);
+              void retryNowAndReport().then((r) => {
+                if (!r.started) {
+                  Alert.alert('Still syncing', `Working on ${progressText(syncProgress)}`);
+                } else if (r.failed.length === 0) {
+                  Alert.alert('Sent', r.sent === 1 ? 'The inspection reached the office.' : `${r.sent} inspections reached the office.`);
+                } else {
+                  Alert.alert(
+                    r.sent > 0 ? `${r.sent} sent, ${r.failed.length} not sent` : 'Not sent',
+                    r.failed.map((f) => `${f.label}: ${f.message}`).join('\n\n'),
+                  );
+                }
+              });
             }}
             // `attempts`/`lastError` are already tracked per queued item
             // (syncManager.ts's processQueue) but were never shown anywhere --
@@ -357,7 +371,6 @@ export function SelectInspectionTypeScreen({
             // nothing auto-removes a permanently-failing entry; only a human
             // deciding it's never coming back should.
             onLongPress={() => {
-              const STUCK_THRESHOLD = 20;
               const lines = pendingQueue.map((q, i) => {
                 const label = q.payload.jobNo || q.payload.address || `Inspection ${i + 1}`;
                 const attempted = q.attempts > 0
@@ -365,30 +378,28 @@ export function SelectInspectionTypeScreen({
                   : 'not attempted yet';
                 return `${i + 1}. ${label}\n${attempted}`;
               });
-              const stuck = pendingQueue.filter((q) => q.attempts >= STUCK_THRESHOLD);
               const buttons: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [
                 { text: 'OK', style: 'cancel' },
               ];
-              if (stuck.length > 0) {
+              // Any queued inspection can be removed at any time (it used to be offered only after 20 failed attempts). Removing is permanent:
+              // the inspection on this phone is deleted and never reaches the office, so it asks first.
+              pendingQueue.forEach((q, i) => {
+                const label = q.payload.jobNo || q.payload.address || `Inspection ${i + 1}`;
                 buttons.push({
-                  text: `Give up on ${stuck.length} stuck ${stuck.length === 1 ? 'entry' : 'entries'}`,
+                  text: `Remove ${label.length > 24 ? `${label.slice(0, 24)}…` : label}`,
                   style: 'destructive',
                   onPress: () => {
                     Alert.alert(
-                      'Remove stuck inspection(s)?',
-                      `${stuck.map((q) => q.payload.jobNo || q.payload.address || 'Untitled').join(', ')} will be permanently deleted from this device and never reach the database. Only do this if you're certain the data is already lost (e.g. a missing local photo) -- this cannot be undone.`,
+                      `Remove ${label}?`,
+                      `${label} will be permanently deleted from this phone and will never reach the office. Only do this if it is a test, or the office already has it.`,
                       [
                         { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Delete permanently',
-                          style: 'destructive',
-                          onPress: () => stuck.forEach((q) => void removeFromQueue(q.id)),
-                        },
+                        { text: 'Delete permanently', style: 'destructive', onPress: () => void removeFromQueue(q.id) },
                       ],
                     );
                   },
                 });
-              }
+              });
               Alert.alert('Pending sync details', lines.join('\n\n'), buttons);
             }}
           >
@@ -399,7 +410,7 @@ export function SelectInspectionTypeScreen({
             )}
             <Text style={styles.pendingBannerText}>
               {syncing
-                ? `Syncing ${pendingQueue.length} inspection${pendingQueue.length === 1 ? '' : 's'}… this can take a minute`
+                ? `Syncing ${pendingQueue.length} inspection${pendingQueue.length === 1 ? '' : 's'} — ${progressText(syncProgress)}`
                 : `${pendingQueue.length} inspection${pendingQueue.length === 1 ? '' : 's'} NOT SENT YET${
                     waitingForWifi ? ' — waiting for Wi-Fi (tap to send now anyway)' : ' — tap to send now'
                   } (long-press for details)`}

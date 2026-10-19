@@ -1,3 +1,4 @@
+import axios from 'axios';
 import * as Network from 'expo-network';
 import { File } from 'expo-file-system';
 import type { SubmitPayload } from '../context/InspectionDraftContext';
@@ -53,6 +54,83 @@ export function subscribeProcessing(cb: ProcessingListener): () => void {
   processingListeners.add(cb);
   cb(processing);
   return () => processingListeners.delete(cb);
+}
+
+/** What the sync pass is doing right now, so the screen can say so instead of just spinning. */
+export interface SyncProgress {
+  /** The inspection being sent (its job number). */
+  label: string;
+  /** "Preparing", "Uploading photo 3 of 12", "Saving the inspection on the server". */
+  step: string;
+  done: number;
+  total: number;
+}
+type ProgressListener = (p: SyncProgress | null) => void;
+const progressListeners = new Set<ProgressListener>();
+let progress: SyncProgress | null = null;
+/** When the pass last made headway (a step began or a photo finished): the stall watch below measures from here. */
+let lastTouch = 0;
+
+function setProgress(next: SyncProgress | null) {
+  progress = next;
+  if (next) lastTouch = Date.now();
+  progressListeners.forEach((l) => l(progress));
+}
+
+/** Subscribe to what the sync pass is doing; fires immediately. `null` when no pass is running. */
+export function subscribeProgress(cb: ProgressListener): () => void {
+  progressListeners.add(cb);
+  cb(progress);
+  return () => progressListeners.delete(cb);
+}
+
+export function getProgress(): SyncProgress | null {
+  return progress;
+}
+
+/** How long a pass may go without any headway (no photo finished, no step began) before it is given up on and reported. A single photo may take up to 120 s (inspectionApi.ts), so this is longer. */
+const STALL_MS = 150_000;
+
+/**
+ * Rejects when the running pass has made no headway for STALL_MS. Without it, one step that never finishes (an upload that never answers)
+ * kept the "running" flag set for ever: the banner spun, nothing was sent, and every retry was ignored because a pass was "already running".
+ */
+function stallWatch(): { stalled: Promise<never>; stop: () => void } {
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const stalled = new Promise<never>((_, reject) => {
+    timer = setInterval(() => {
+      if (Date.now() - lastTouch > STALL_MS) reject(new Error(`Stopped: no progress for ${Math.round(STALL_MS / 1000)} seconds`));
+    }, 5000);
+  });
+  stalled.catch(() => undefined);
+  return { stalled, stop: () => timer && clearInterval(timer) };
+}
+
+/** Local (not yet uploaded) photo files an entry still holds. */
+export function countLocalPhotos(payload: SubmitPayload): number {
+  const found = new Set<string>();
+  const walk = (v: unknown): void => {
+    if (typeof v === 'string') {
+      if (v.startsWith('file:')) found.add(v);
+    } else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === 'object') Object.values(v as Record<string, unknown>).forEach(walk);
+  };
+  for (const section of payload.sections) {
+    walk(section.answers);
+    walk(section.photos);
+    walk(section.damages);
+  }
+  return found.size;
+}
+
+/** Why a failed attempt failed, in words the inspector can read: what the server said (with its status), and where in the pass it stopped. */
+function describeFailure(err: unknown): string {
+  let text = err instanceof Error ? err.message : 'Unknown error';
+  if (axios.isAxiosError(err) && err.response) {
+    const server = (err.response.data as { error?: { message?: string } } | undefined)?.error?.message;
+    text = `Server answered ${err.response.status}${server ? `: ${server}` : ''}`;
+  }
+  return progress?.step ? `${text} (at: ${progress.step})` : text;
 }
 
 async function persist() {
@@ -655,8 +733,12 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
     for (const id of ids) {
       const entry = queueCache.find((e) => e.id === id);
       if (!entry) continue; // already synced and removed earlier in this same pass
+      setProgress({ label: entry.payload.jobNo || entry.payload.address || 'inspection', step: 'Preparing', done: 0, total: countLocalPhotos(entry.payload) });
+      const watch = stallWatch();
       try {
-        await runSubmission(entry.payload);
+        const work = runSubmission(entry.payload);
+        work.catch(() => undefined); // if the stall watch wins, a late failure of this must not surface as an unhandled rejection
+        await Promise.race([work, watch.stalled]);
         recordEvent('queue.delivered', { inspectionId: entry.payload.id, jobNo: entry.payload.jobNo, message: 'Queued inspection delivered', metadata: { attempts: entry.attempts + 1 } });
         queueCache = queueCache.filter((e) => e.id !== id);
         await persist();
@@ -668,13 +750,16 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
           await persist();
           continue;
         }
-        const message = err instanceof Error ? err.message : 'Unknown error';
+        const message = describeFailure(err);
         reportProblem('queued submission', err, { jobNo: entry.payload.jobNo, attempts: entry.attempts + 1, sections: entry.payload.sections.length });
         queueCache = queueCache.map((e) => (e.id === id ? { ...e, attempts: e.attempts + 1, lastError: message } : e));
         await persist();
+      } finally {
+        watch.stop();
       }
     }
   } finally {
+    setProgress(null);
     setProcessing(false);
     scheduleQueueRetry();
   }
@@ -715,6 +800,26 @@ export function retryNow(): boolean {
   if (processing) return false;
   void processQueue({ force: true });
   return true;
+}
+
+/** What a manual retry achieved, so the inspector sees a result instead of a button that seems to do nothing. */
+export interface RetryReport {
+  started: boolean;
+  sent: number;
+  failed: { label: string; message: string }[];
+}
+
+/** Like retryNow, but resolves once the pass is over and says how many inspections went through and why the others did not. */
+export async function retryNowAndReport(): Promise<RetryReport> {
+  if (processing) return { started: false, sent: 0, failed: [] };
+  const before = queueCache.map((e) => e.id);
+  await processQueue({ force: true });
+  const left = queueCache.filter((e) => before.includes(e.id));
+  return {
+    started: true,
+    sent: before.length - left.length,
+    failed: left.map((e) => ({ label: e.payload.jobNo || e.payload.address || 'Inspection', message: e.lastError ?? 'No answer from the server' })),
+  };
 }
 
 /** Call once, near app startup. Hydrates the queue from disk, tries a flush, and starts watching for connectivity regained. */

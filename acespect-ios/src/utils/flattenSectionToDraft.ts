@@ -1,7 +1,7 @@
 import type { TemplateField } from '../services/templateApi';
 import type { DraftDamage } from '../context/InspectionDraftContext';
 import type { AnswerTree, AnswerValue } from '../components/inspection/fieldRenderers/types';
-import { isGateSatisfied, isRepeatRequirementMet } from '../components/inspection/fieldRenderers/types';
+import { isGateSatisfied, isNothingValid, isRepeatRequirementMet } from '../components/inspection/fieldRenderers/types';
 import { CATEGORY_OPTIONS, DEFECT_DETAIL_FIELDS, SEVERITY_OPTIONS, defectScope, isDefectOpen } from '../components/inspection/fieldRenderers/defectDetail';
 
 interface FlattenResult {
@@ -198,7 +198,7 @@ function isFilled(v: AnswerValue): boolean {
  * visited, not just one.
  */
 export function meetsAllRequiredFields(templateFields: TemplateField[], scope: AnswerTree): boolean {
-  const required = templateFields.filter((f) => f.required && isGateSatisfied(f, scope));
+  const required = templateFields.filter((f) => f.required && !isNothingValid(f) && isGateSatisfied(f, scope));
   const grouped = new Map<string, TemplateField[]>();
   const ungrouped: TemplateField[] = [];
   for (const f of required) {
@@ -224,9 +224,20 @@ export function meetsAllRequiredFields(templateFields: TemplateField[], scope: A
   for (const field of templateFields) {
     if (field.type !== 'repeating-group') continue;
     if (!isGateSatisfied(field, scope)) continue;
+    const fixedTabs = field.repeat?.presentation === 'fixed-tabs';
+    let opened = 0;
     for (const { scope: inst } of resolveInstances(field, scope[field.key])) {
-      if (!meetsAllRequiredFields(field.itemFields ?? [], inst)) return false;
+      // A fixed side (Front / Left / Rear / Right) the inspector never opened is simply not inspected -- it must not block the section.
+      // A side they did start still has to be finished.
+      if (fixedTabs && Object.keys(inst).every((k) => k === field.repeat?.titleFieldKey)) continue; // naming a room is not inspecting it
+      opened += 1;
+      // The instance's title field (a room's name) shows its standard name on screen without saving it, so it can never count as missing.
+      const titleKey = field.repeat?.titleFieldKey;
+      const itemFields = titleKey ? (field.itemFields ?? []).filter((f) => f.key !== titleKey) : field.itemFields ?? [];
+      if (!meetsAllRequiredFields(itemFields, inst)) return false;
     }
+    // ...but at least one side has to be recorded, or the section is empty.
+    if (fixedTabs && field.required && opened === 0) return false;
   }
   return true;
 }

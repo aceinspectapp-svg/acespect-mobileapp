@@ -6,7 +6,7 @@ import { EmojiGlyph } from '../EmojiGlyph';
 import { colors, radius, spacing, typography } from '../../../theme';
 import { Button, ProgressBar } from '../../ui';
 import type { TemplateField, TemplateFieldType, TemplateLayout } from '../../../services/templateApi';
-import { AnswerTree, AnswerValue, FieldRendererProps, isGateSatisfied, isRepeatRequirementMet } from './types';
+import { AnswerTree, AnswerValue, FieldRendererProps, isGateSatisfied, isNothingValid, isRepeatRequirementMet } from './types';
 import { DEFECT_DETAIL_FIELDS, defectKey, defectScope, isDefectOpen } from './defectDetail';
 import {
   ChipMultiSelectFieldRenderer,
@@ -108,7 +108,7 @@ export function FieldListRenderer({
  * right now.
  */
 function isFieldMissing(field: TemplateField, siblings: TemplateField[], scope: AnswerTree): boolean {
-  if (!field.required) return false;
+  if (!field.required || isNothingValid(field)) return false;
   if (!isGateSatisfied(field, scope)) return false;
   if (field.requiredGroup) {
     const group = siblings.filter((f) => f.requiredGroup === field.requiredGroup);
