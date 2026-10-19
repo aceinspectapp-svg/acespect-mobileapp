@@ -57,3 +57,9 @@ Everything below was run against the final code (commit `46bd35f` and later). "V
 - **Retention:** `AUDIT_RETENTION_DAYS` (default 2557 = 7 years).
 - **Rollback:** redeploy the previous commit; the new tables can stay (nothing reads them but the audit pages). The triggers only protect those two tables.
 - **Not verified on a real device:** the phone event queue on a physical Android/iOS phone (tested with the real code against the real server, not by tapping).
+
+## 9. Invited people on the phone (added Oct 19)
+- **What changed:** phone sign-up with an email that a company already invited now says "use *I have an invitation*" (or that the invitation expired); Login has an "I have an invitation" link; the new screen takes the pasted invitation link, shows who it is for, sets the password and signs in; the QC home explains an account that is not linked to a client. Same in `acespect-ios`.
+- **Deploy:** backend first (message codes `INVITATION_PENDING`, `INVITATION_EXPIRED`, `EMAIL_TAKEN`; invitation lookup now lists organisations), then the phone update (OTA from one folder, see section 7 warning).
+- **Checks:** `check:platform` (now with register/invitation checks), `check:lifecycle`: all passed on the scratch database. Not tapped on a real phone.
+- **Remember:** email is not configured in production, so the admin must copy the invitation link from the People page and send it to the person.
