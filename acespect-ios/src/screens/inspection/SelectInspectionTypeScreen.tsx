@@ -25,7 +25,7 @@ import {
   subscribeProcessing,
   subscribeProgress,
   type SyncProgress,
-  retryNow,
+  retryNowAndReport,
   isWaitingForWifi,
   removeFromQueue,
 } from '../../services/syncManager';
@@ -346,11 +346,19 @@ export function SelectInspectionTypeScreen({
                 Alert.alert('Still syncing', `Working on ${progressText(syncProgress)}\n\nIf this stays on the same step for more than 2½ minutes, the app stops it and shows what went wrong.`);
                 return;
               }
-              const started = retryNow();
-              if (!started) {
-                Alert.alert('Still syncing', `Working on ${progressText(syncProgress)}`);
-              }
               setWaitingForWifi(false);
+              void retryNowAndReport().then((r) => {
+                if (!r.started) {
+                  Alert.alert('Still syncing', `Working on ${progressText(syncProgress)}`);
+                } else if (r.failed.length === 0) {
+                  Alert.alert('Sent', r.sent === 1 ? 'The inspection reached the office.' : `${r.sent} inspections reached the office.`);
+                } else {
+                  Alert.alert(
+                    r.sent > 0 ? `${r.sent} sent, ${r.failed.length} not sent` : 'Not sent',
+                    r.failed.map((f) => `${f.label}: ${f.message}`).join('\n\n'),
+                  );
+                }
+              });
             }}
             // `attempts`/`lastError` are already tracked per queued item
             // (syncManager.ts's processQueue) but were never shown anywhere --

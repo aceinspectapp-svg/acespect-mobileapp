@@ -189,10 +189,26 @@ async function uploadAndForget(uri: string, opts: { inspectionId?: string; secti
   return url;
 }
 
-/** Removes the local copies of photos that are safely on the server, once the inspection that holds them has been accepted. */
-export function cleanupUploadedFiles(): void {
-  for (const uri of photoCache.keys()) void deleteLocalFile(uri);
-  photoCache.clear();
+/** Every local photo file a value refers to, at any depth. */
+function collectLocalUris(value: unknown, out: Set<string>): void {
+  if (typeof value === 'string') {
+    if (isLocalUri(value)) out.add(value);
+  } else if (Array.isArray(value)) {
+    for (const v of value) collectLocalUris(v, out);
+  } else if (value && typeof value === 'object') {
+    for (const v of Object.values(value as Record<string, unknown>)) collectLocalUris(v, out);
+  }
+}
+
+/**
+ * Removes the local copies of the given photos once the inspection that holds them has been accepted. Only that inspection's own photos:
+ * the cache holds photos of every inspection on this phone, including one still being filled in, and deleting those loses them.
+ */
+export function cleanupUploadedFiles(uris: Iterable<string>): void {
+  for (const uri of uris) {
+    void deleteLocalFile(uri);
+    photoCache.delete(uri);
+  }
 }
 
 /**
@@ -309,6 +325,8 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
   const jobNo = payload.jobNo;
   const urlByUri = photoCache;
   mergePhotoNumbers(payload.photoNumbers); // a queued submission keeps the numbers its photos were given
+  const ownPhotos = new Set<string>();
+  collectLocalUris(payload.sections, ownPhotos); // before they are replaced by their uploaded URLs: these are the files to clean up afterwards
 
   // Primary pass: walk each section's actual answer tree, so every
   // photos-type field (wherever it's nested) gets uploaded under a folder
@@ -349,7 +367,7 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
   if (progress) setProgress({ ...progress, step: 'Saving the inspection on the server' });
   const result = await submitInspection(payload);
   // The server has it: the local copies of the photos are no longer needed.
-  cleanupUploadedFiles();
+  cleanupUploadedFiles(ownPhotos);
   return result;
 }
 
@@ -447,6 +465,26 @@ export function retryNow(): boolean {
   if (processing) return false;
   void processQueue({ force: true });
   return true;
+}
+
+/** What a manual retry achieved, so the inspector sees a result instead of a button that seems to do nothing. */
+export interface RetryReport {
+  started: boolean;
+  sent: number;
+  failed: { label: string; message: string }[];
+}
+
+/** Like retryNow, but resolves once the pass is over and says how many inspections went through and why the others did not. */
+export async function retryNowAndReport(): Promise<RetryReport> {
+  if (processing) return { started: false, sent: 0, failed: [] };
+  const before = queueCache.map((e) => e.id);
+  await processQueue({ force: true });
+  const left = queueCache.filter((e) => before.includes(e.id));
+  return {
+    started: true,
+    sent: before.length - left.length,
+    failed: left.map((e) => ({ label: e.payload.jobNo || e.payload.address || 'Inspection', message: e.lastError ?? 'No answer from the server' })),
+  };
 }
 
 /** Call once, near app startup. Hydrates the queue from disk, tries a flush, and starts watching for connectivity regained. */
