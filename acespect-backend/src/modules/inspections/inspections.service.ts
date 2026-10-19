@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
+import { audit, diffFields, firstWithin } from '../../lib/auditTrail';
 import { reviewQueue, reviewJobKey } from '../../lib/queue';
 import { SubmitInspectionInput, SyncSectionInput, UpdateInspectionInput } from './inspections.schemas';
 
@@ -80,8 +81,45 @@ async function syncSection(inspectorId: string, id: string, input: SyncSectionIn
   });
   // The photo folder is placed once, when the inspection is first created or its job number changes -- not on every section.
   if (input.jobNo && (created || existing?.jobNo !== input.jobNo || !existing?.egnyteStatus)) await settleEgnyteFolder(id, input.jobNo);
-  return { inspectionId: id, ...(await receiptFor(id)) };
+  const receipt = await receiptFor(id);
+  if (created) {
+    await audit({ category: 'mobile', action: 'inspection.create', inspectionId: id, jobNo: input.jobNo ?? null, target: { type: 'Inspection', id, label: input.jobNo ?? null }, message: 'Draft created from the phone', metadata: { inspectionType: input.inspectionType, propertyType: input.propertyType } });
+  } else if (existing?.jobNo !== input.jobNo && input.jobNo) {
+    await audit({ category: 'mobile', action: 'inspection.job_number_set', inspectionId: id, jobNo: input.jobNo, target: { type: 'Inspection', id, label: input.jobNo }, before: { jobNo: existing?.jobNo ?? null }, after: { jobNo: input.jobNo } });
+  }
+  const key = `sync:${id}:${input.section.key}`;
+  syncFolded.set(key, (syncFolded.get(key) ?? 0) + 1);
+  if (created || firstWithin(key, 60_000)) {
+    const saves = syncFolded.get(key) ?? 1;
+    syncFolded.delete(key);
+    await audit({
+      category: 'mobile', action: 'section.sync', inspectionId: id, jobNo: input.jobNo ?? null, target: { type: 'Section', id: input.section.key, label: input.section.name },
+      message: `${input.section.name} saved from the phone (${input.section.status})`,
+      metadata: { sectionKey: input.section.key, status: input.section.status, photos: receipt.photos, sections: receipt.sections, savesInThisMinute: saves },
+    });
+  }
+  return { inspectionId: id, ...receipt };
 }
+
+/** Every uploaded photo (by id) that these sections point at. */
+export function referencedPhotoIds(sections: { answers?: unknown; photos?: unknown; damages?: unknown }[]): string[] {
+  const ids = new Set<string>();
+  for (const m of JSON.stringify(sections.map((s) => [s.answers, s.photos, s.damages])).matchAll(/\/api\/v1\/media\/([0-9a-f-]{36})/gi)) ids.add(m[1]!.toLowerCase());
+  return [...ids];
+}
+
+/** The ids among `ids` that the server does not hold a photo for. */
+export async function missingPhotoIds(ids: string[]): Promise<string[]> {
+  const have = new Set<string>();
+  for (let i = 0; i < ids.length; i += 1000) {
+    const rows = await prisma.photo.findMany({ where: { id: { in: ids.slice(i, i + 1000) } }, select: { id: true } });
+    for (const r of rows) have.add(r.id);
+  }
+  return ids.filter((id) => !have.has(id));
+}
+
+/** Saves of one section folded into the next audit entry (the phone saves a section every few seconds while it is being edited). */
+const syncFolded = new Map<string, number>();
 
 /** What was actually stored for an inspection: its sections (other than Job Information) and the distinct uploaded photos they reference. */
 export async function receiptFor(inspectionId: string): Promise<{ sections: number; photos: number }> {
@@ -126,7 +164,7 @@ async function submit(inspectorId: string, input: SubmitInspectionInput) {
   if (existing && existing.inspectorId !== inspectorId) throw ApiError.forbidden(input.assignmentId ? 'This job is not assigned to you' : 'You can only change your own inspections');
   if (existing && existing.status !== 'DRAFT') {
     // Already finalised: this is a retry of something that has already arrived. Leave it exactly as it is.
-    return { inspection: await prisma.inspection.findUniqueOrThrow({ where: { id: existing.id } }) };
+    return { inspection: await prisma.inspection.findUniqueOrThrow({ where: { id: existing.id } }), mode: 'unchanged' as const };
   }
   if (existing) {
     const { sections: _sections, ...fields } = data;
@@ -135,7 +173,7 @@ async function submit(inspectorId: string, input: SubmitInspectionInput) {
       return tx.inspection.update({ where: { id: existing.id }, data: { ...fields, sections: data.sections } });
     });
     await settleEgnyteFolder(existing.id, input.jobNo);
-    return { inspection };
+    return { inspection, mode: 'completed' as const };
   }
 
   const inspection = await prisma.inspection.create({
@@ -148,7 +186,7 @@ async function submit(inspectorId: string, input: SubmitInspectionInput) {
   // UUID. Skipped when `input.id` is absent (nothing was ever uploaded
   // under a matching folder, e.g. a web-created draft).
   await settleEgnyteFolder(inspection.id, input.jobNo);
-  return { inspection };
+  return { inspection, mode: 'created' as const };
 }
 
 /**
@@ -199,9 +237,14 @@ async function requireOwnDraft(id: string, inspectorId: string) {
  */
 async function update(id: string, inspectorId: string, input: UpdateInspectionInput) {
   await requireOwnDraft(id, inspectorId);
+  const before = await prisma.inspection.findUnique({ where: { id }, select: { jobNo: true, address: true, suburb: true, client: true, notes: true, overallProgress: true } });
 
   const updated = await prisma.$transaction(async (tx) => {
     if (input.sections) {
+      // Saves of the same draft take turns. The editor autosaves a second after typing stops and has a Save Draft button (and a draft
+      // can be open in two tabs), so two saves can overlap: each would delete the sections it can see and then add a full set, leaving
+      // every section twice. Locking the row makes the second save wait until the first has committed, then replace that set.
+      await tx.$queryRaw`SELECT id FROM inspections WHERE id = ${id} FOR UPDATE`;
       // Damages cascade from sections, so deleting sections clears them too.
       await tx.section.deleteMany({ where: { inspectionId: id } });
     }
@@ -221,6 +264,15 @@ async function update(id: string, inspectorId: string, input: UpdateInspectionIn
   });
   // A corrected job number moves the photo folder to the right batch.
   if (input.jobNo) await settleEgnyteFolder(id, input.jobNo);
+  const now = { jobNo: updated.jobNo, address: updated.address, suburb: updated.suburb, client: updated.client, notes: updated.notes, overallProgress: updated.overallProgress };
+  const diff = diffFields(before as Record<string, unknown> | null, now, Object.keys(input).filter((k) => k in now));
+  if (diff || input.sections) {
+    await audit({
+      category: 'web', action: 'inspection.edit', inspectionId: id, jobNo: updated.jobNo, target: { type: 'Inspection', id, label: updated.jobNo },
+      before: diff?.before, after: diff?.after, message: input.sections ? `Draft edited (${input.sections.length} sections saved)` : 'Draft details edited',
+      metadata: input.sections ? { sectionsReplaced: input.sections.length } : undefined,
+    });
+  }
   return updated;
 }
 
@@ -325,6 +377,16 @@ async function getById(id: string) {
 }
 
 /**
+ * The job number a report prints (its footer): the one a reviewer typed into Job Information when they corrected it, otherwise the
+ * inspection's own. The inspection's own job number (its folder, its lists) is not touched by that correction.
+ */
+async function reportJobNo(id: string, jobNo: string | null): Promise<string> {
+  const section = await prisma.section.findFirst({ where: { inspectionId: id, key: { startsWith: 'job-info' } }, select: { fields: true } });
+  const typed = (section?.fields as Record<string, unknown> | null)?.jobNo;
+  return typeof typed === 'string' && typed.trim() ? typed.trim() : jobNo ?? '';
+}
+
+/**
  * Upload one inspection photo; returns a URL that proxies through this
  * backend. `inspectionId`/`sectionKey`, when given, group the file under
  * that inspection's own section folder in Egnyte -- mobile passes them
@@ -366,6 +428,7 @@ export const inspectionsService = {
   update,
   finalize,
   getById,
+  reportJobNo,
   uploadPhoto,
   listAssigned,
   getBaselineSections,

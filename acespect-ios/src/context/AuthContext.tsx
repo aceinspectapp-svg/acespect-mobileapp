@@ -12,6 +12,14 @@ import { tokenStorage } from '../services/tokenStorage';
 import { AuthUser, RegisterInput } from '../types/auth';
 
 /** Thrown by signIn when the account has two-step verification: the screen then asks for the code. */
+/** The account is activated but its role must set up two-step verification on the web portal before it can sign in on the phone. */
+export class MfaEnrollNeeded extends Error {
+  constructor() {
+    super('Your role needs two-step verification. Sign in on the ACE SPECT web portal to set it up, then sign in here.');
+    this.name = 'MfaEnrollNeeded';
+  }
+}
+
 export class MfaChallenge extends Error {
   constructor(public readonly mfaToken: string) {
     super('Enter the code from your authenticator app');
@@ -29,6 +37,8 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   /** Second sign-in step: the authenticator (or backup) code. */
   verifyMfa: (mfaToken: string, code: string) => Promise<void>;
+  /** Activates an invited account (sets the password the invitation allows) and signs in. */
+  acceptInvitation: (token: string, password: string) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
   /** Exchange a verified Google ID token for an app session. */
   loginWithGoogleIdToken: (idToken: string) => Promise<void>;
@@ -104,6 +114,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const acceptInvitation = useCallback(async (token: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const res = await authApi.acceptInvitation(token, password);
+      if ('mfaRequired' in res) throw new MfaChallenge(res.mfaToken);
+      if ('mfaEnrollRequired' in res) throw new MfaEnrollNeeded();
+      await tokenStorage.setTokens(res.accessToken, res.refreshToken);
+      setUser(res.user);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const verifyMfa = useCallback(async (mfaToken: string, code: string) => {
     setIsLoading(true);
     try {
@@ -158,11 +181,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       signIn,
       verifyMfa,
+      acceptInvitation,
       register,
       loginWithGoogleIdToken,
       signOut,
     }),
-    [user, isBootstrapping, isLoading, signIn, verifyMfa, register, loginWithGoogleIdToken, signOut],
+    [user, isBootstrapping, isLoading, signIn, verifyMfa, acceptInvitation, register, loginWithGoogleIdToken, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

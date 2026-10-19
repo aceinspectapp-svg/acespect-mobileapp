@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { env } from '../config/env';
+import { ApiError } from '../utils/ApiError';
+import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { mergeFolder, resolveInspectionFolder, type EgnyteFs, type Resolution } from './egnyteJobFolders';
 
@@ -325,16 +327,21 @@ export async function settleInspectionFolder(inspectionId: string, jobNo: string
 }
 
 async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string): Promise<void> {
-  const res = await withRetry(() =>
-    egnyteFetch(`${egnyteBase()}/pubapi/v1/fs-content${encodeEgnytePath(path)}`, {
-      method: 'POST',
-      headers: { ...authHeaders(), 'Content-Type': contentType },
-      body: buffer,
-    }),
-  );
-  if (!res.ok) {
+  // A temporary Egnyte fault (5xx, request timeout) answers with a status rather than throwing, so withRetry alone never retried it: one
+  // blip lost a file for good (the full-size original is stored on a best-effort basis). Try again a few times before giving up.
+  for (let attempt = 0; ; attempt++) {
+    const res = await withRetry(() =>
+      egnyteFetch(`${egnyteBase()}/pubapi/v1/fs-content${encodeEgnytePath(path)}`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': contentType },
+        body: buffer,
+      }),
+    );
+    if (res.ok) return;
     const body = await res.text().catch(() => '');
-    throw new Error(`Egnyte upload failed (${res.status}): ${body}`, { cause: body });
+    const temporary = res.status >= 500 || res.status === 408 || res.status === 429;
+    if (!temporary || attempt >= 3) throw new Error(`Egnyte upload failed (${res.status}): ${body}`, { cause: body });
+    await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
   }
 }
 
@@ -350,7 +357,42 @@ async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string)
  * section subfolder in Egnyte (see the module doc above); omit them for a
  * flat, ungrouped upload.
  */
-export async function uploadPhoto(
+/**
+ * The compressed report copy of an uploaded image. iPhones keep library photos as HEIC (HEVC), which the image library built into this
+ * server cannot decode: every such upload failed with a 500, the phone retried it for ever, and the inspection behind it never arrived.
+ * Those are now decoded by a pure-JavaScript HEIC reader instead. A file that cannot be read at all is refused with a clear 422 (a
+ * permanent "no", so the phone stops retrying it) rather than a 500 (a temporary "try again").
+ */
+async function toReportJpeg(buffer: Buffer): Promise<Buffer> {
+  const shrink = (input: Buffer) =>
+    sharp(input)
+      .rotate()
+      .resize({ width: REPORT_MAX_WIDTH, height: REPORT_MAX_HEIGHT, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: REPORT_JPEG_QUALITY })
+      .toBuffer();
+  try {
+    return await shrink(buffer);
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    if (/heif|heic|decoding plugin|bad seek/i.test(why)) {
+      try {
+        const { default: convert } = await import('heic-convert');
+        return await shrink(Buffer.from(await convert({ buffer, format: 'JPEG', quality: 0.92 })));
+      } catch (heicErr) {
+        // eslint-disable-next-line no-console
+        console.error('⚠️  Could not decode a HEIC photo.', heicErr);
+      }
+    }
+    throw new ApiError(422, 'This photo could not be read (unsupported or damaged image). Please take or choose it again.', 'PHOTO_UNREADABLE');
+  }
+}
+
+type StoredPhoto = UploadedPhoto & { folder?: { status: string; message?: string; path: string } };
+
+/** Photos being stored right now, by the phone's photo id: the same photo sent twice at once (a slow upload retried by the phone) is stored once. */
+const photoUploadsInFlight = new Map<string, Promise<StoredPhoto>>();
+
+export function uploadPhoto(
   buffer: Buffer,
   contentType: string,
   ext: string,
@@ -359,7 +401,36 @@ export async function uploadPhoto(
   tenantId?: string,
   jobFolder?: string,
   opts: { jobNo?: string | null; photoId?: string; photoNumber?: number } = {},
-): Promise<UploadedPhoto & { folder?: { status: string; message?: string; path: string } }> {
+): Promise<StoredPhoto> {
+  const key = opts.photoId;
+  if (!key) return storePhoto(buffer, contentType, ext, inspectionId, sectionKey, tenantId, jobFolder, opts);
+  const running = photoUploadsInFlight.get(key);
+  if (running) return running;
+  const work = storePhoto(buffer, contentType, ext, inspectionId, sectionKey, tenantId, jobFolder, opts).finally(() => photoUploadsInFlight.delete(key));
+  photoUploadsInFlight.set(key, work);
+  return work;
+}
+
+/** Records the photo in the index; if the same photo id is already there (a retry that raced the first attempt) that is not an error. */
+async function recordPhoto(data: { id: string; storageKey?: string; data?: Uint8Array<ArrayBuffer>; contentType: string }): Promise<void> {
+  try {
+    await prisma.photo.create({ data });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return;
+    throw e;
+  }
+}
+
+async function storePhoto(
+  buffer: Buffer,
+  contentType: string,
+  ext: string,
+  inspectionId?: string,
+  sectionKey?: string,
+  tenantId?: string,
+  jobFolder?: string,
+  opts: { jobNo?: string | null; photoId?: string; photoNumber?: number } = {},
+): Promise<StoredPhoto> {
   if (!isStorageEnabled() && !useDbStorage()) throw new Error('Photo storage is not configured');
 
   // The phone gives each photo a fixed id, so sending it again (after a dropped connection) returns the stored copy
@@ -373,19 +444,10 @@ export async function uploadPhoto(
   // rotate() with no args bakes in the EXIF orientation tag (phone photos are
   // often stored sideways/upside-down relative to how they should display)
   // then strips it, so the resized copy always renders right-side-up.
-  const resized = await sharp(buffer)
-    .rotate()
-    .resize({
-      width: REPORT_MAX_WIDTH,
-      height: REPORT_MAX_HEIGHT,
-      fit: 'inside',
-      withoutEnlargement: true,
-    })
-    .jpeg({ quality: REPORT_JPEG_QUALITY })
-    .toBuffer();
+  const resized = await toReportJpeg(buffer);
 
   if (useDbStorage()) {
-    await prisma.photo.create({ data: { id, data: new Uint8Array(resized), contentType: 'image/jpeg' } });
+    await recordPhoto({ id, data: new Uint8Array(resized), contentType: 'image/jpeg' });
     return { id, storageKey: `db:${id}`, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(resized).digest('hex') };
   }
   // An inspector's photo with a job number goes straight into {batch}/{job}/; one without (an older app build) goes in the draft's own folder
@@ -414,7 +476,7 @@ export async function uploadPhoto(
   }
 
   // Index id -> real path so the public URL can stay a plain opaque id.
-  await prisma.photo.create({ data: { id, storageKey, contentType: 'image/jpeg' } });
+  await recordPhoto({ id, storageKey, contentType: 'image/jpeg' });
 
   // Relative, not `${PUBLIC_BASE_URL}/api/v1/media/${id}`: PUBLIC_BASE_URL is a
   // Cloudflare quick tunnel that gets a new hostname every restart, so a

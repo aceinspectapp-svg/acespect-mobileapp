@@ -83,6 +83,8 @@ async function issueTokens(user: User): Promise<AuthResult> {
 export async function revokeAllSessions(userId: string, reason: string): Promise<void> {
   await prisma.user.update({ where: { id: userId }, data: { tokenVersion: { increment: 1 } } });
   await prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+  // A token swapped a moment ago must not be usable again either (see `refresh`'s leeway).
+  await prisma.refreshToken.updateMany({ where: { userId, rotatedAt: { not: null } }, data: { rotatedAt: null } });
   clearAuthCache(userId);
   await logSecurityEvent({ type: 'SESSION_REVOKED', userId, detail: { reason } });
 }
@@ -139,7 +141,21 @@ function assertNotLocked(user: User): void {
 export const authService = {
   async register(input: RegisterInput): Promise<AuthResult> {
     const existing = await prisma.user.findUnique({ where: { email: input.email } });
-    if (existing) throw ApiError.conflict('An account with this email already exists', 'EMAIL_TAKEN');
+    if (existing) {
+      // An administrator may already have created this person (a client, builder, trade or inspector invited to QC): that account exists but
+      // cannot be signed in to until the invitation is accepted, so "create account" can never work for them. Say what to do instead.
+      const invited = await prisma.qcInvitation.findFirst({ where: { userId: existing.id, usedAt: null }, orderBy: { sentAt: 'desc' }, select: { expiresAt: true } });
+      if (invited) {
+        const expired = invited.expiresAt < new Date();
+        throw ApiError.conflict(
+          expired
+            ? 'This email was invited to ACE SPECT, but the invitation has expired. Ask your administrator to send a new one, then use "I have an invitation" to activate your account.'
+            : 'This email has already been invited to ACE SPECT. Do not create a new account: use "I have an invitation" and paste the link from your invitation to set your password.',
+          expired ? 'INVITATION_EXPIRED' : 'INVITATION_PENDING',
+        );
+      }
+      throw ApiError.conflict('An account with this email already exists. Sign in instead, or use "Forgot password" if you cannot remember the password.', 'EMAIL_TAKEN');
+    }
     const user = await prisma.user.create({
       data: { email: input.email, passwordHash: await hashPassword(input.password), name: input.name ?? null, phone: input.phone ?? null },
     });
@@ -253,12 +269,18 @@ export const authService = {
     );
   },
 
-  async describeInvitation(token: string): Promise<{ email: string; name: string | null; termsVersion: string; privacyVersion: string }> {
-    const inv = await prisma.qcInvitation.findUnique({ where: { tokenHash: sha256(token) }, include: { user: true } });
+  async describeInvitation(token: string): Promise<{ email: string; name: string | null; termsVersion: string; privacyVersion: string; organisations: { clientName: string; role: string }[] }> {
+    const inv = await prisma.qcInvitation.findUnique({ where: { tokenHash: sha256(token) }, include: { user: { include: { qcMemberships: { where: { status: 'ACTIVE' }, include: { client: { select: { name: true } } } } } } } });
     if (!inv) throw ApiError.notFound('This activation link is not valid');
     if (inv.usedAt) throw new ApiError(410, 'This activation link has already been used', 'INVITATION_USED');
     if (inv.expiresAt < new Date()) throw new ApiError(410, 'This activation link has expired. Ask your administrator to send a new one.', 'INVITATION_EXPIRED');
-    return { email: inv.user.email, name: inv.user.name, termsVersion: env.TERMS_VERSION, privacyVersion: env.PRIVACY_VERSION };
+    return {
+      email: inv.user.email,
+      name: inv.user.name,
+      termsVersion: env.TERMS_VERSION,
+      privacyVersion: env.PRIVACY_VERSION,
+      organisations: inv.user.qcMemberships.map((m) => ({ clientName: m.client.name, role: m.role })),
+    };
   },
 
   async acceptInvitation(token: string, password: string, acceptTerms: boolean, info: RequestInfo = {}): Promise<LoginResult> {
@@ -368,22 +390,38 @@ export const authService = {
     return issueTokens(user);
   },
 
-  /** Rotate a refresh token: validate, revoke the old, issue a fresh pair. */
+  /**
+   * Rotate a refresh token: validate, revoke the old, issue a fresh pair.
+   *
+   * A refresh token works once. If the answer to a renewal never arrives (the server restarted mid-request, the connection dropped) or two
+   * tabs renew at the same moment, the person's browser is left holding a token already used, and without a leeway that ends the session
+   * for good. So for REFRESH_REUSE_LEEWAY_SEC after a token was swapped, presenting it again still gets a new pair. A token revoked any
+   * other way (sign-out, sign-out everywhere, deactivation) never gets this.
+   */
   async refresh(rawToken: string, info: RequestInfo = {}): Promise<AuthResult> {
     const tokenHash = hashRefreshToken(rawToken);
     const stored = await prisma.refreshToken.findUnique({ where: { tokenHash }, include: { user: true } });
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date() || !stored.user.isActive) {
-      throw ApiError.unauthorized('Invalid or expired refresh token', 'INVALID_REFRESH_TOKEN');
-    }
+    const invalid = () => ApiError.unauthorized('Invalid or expired refresh token', 'INVALID_REFRESH_TOKEN');
+    if (!stored || stored.expiresAt < new Date() || !stored.user.isActive) throw invalid();
+    const withinLeeway = (rotatedAt: Date | null): boolean => !!rotatedAt && env.REFRESH_REUSE_LEEWAY_SEC > 0 && Date.now() - rotatedAt.getTime() <= env.REFRESH_REUSE_LEEWAY_SEC * 1000;
+    if (stored.revokedAt && !withinLeeway(stored.rotatedAt)) throw invalid();
     // Web sessions end after the client's idle timeout; the refresh token's age is time since last activity.
     if (info.appClient === 'web' && stored.user.role !== 'ADMIN') {
       const idle = await idleMinutes(stored.userId);
       if (Date.now() - stored.createdAt.getTime() > idle * 60_000) {
-        await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
+        if (!stored.revokedAt) await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
         throw ApiError.unauthorized('Your session timed out because of inactivity', 'SESSION_IDLE');
       }
     }
-    await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
+    if (!stored.revokedAt) {
+      // Claim the token: of two renewals arriving together only one gets to swap it; the other finds it already swapped and uses the leeway.
+      const now = new Date();
+      const claimed = await prisma.refreshToken.updateMany({ where: { id: stored.id, revokedAt: null }, data: { revokedAt: now, rotatedAt: now } });
+      if (claimed.count === 0) {
+        const fresh = await prisma.refreshToken.findUnique({ where: { id: stored.id }, select: { rotatedAt: true } });
+        if (!withinLeeway(fresh?.rotatedAt ?? null)) throw invalid();
+      }
+    }
     return issueTokens(stored.user);
   },
 

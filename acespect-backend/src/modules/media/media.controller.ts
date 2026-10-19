@@ -7,8 +7,23 @@ import { prisma } from '../../lib/prisma';
 import { verifyMediaSignature } from '../../lib/mediaLinks';
 import { logSecurityEvent } from '../../lib/securityLog';
 
-/** Files that belong to a tenant (evidence, project documents, generated reports) are only served through a signed, expiring link. */
+/**
+ * Every photo request asks this, and answering takes two database look-ups (one a scan of JSON text), so a page with a hundred photos meant
+ * two hundred queries. The answer is remembered briefly: a "no" for a minute (a photo only becomes a tenant file once its record is saved,
+ * and its id is not known to anyone else before then), a "yes" for ten. Bounded in size.
+ */
+const tenantAnswers = new Map<string, { tenant: boolean; until: number }>();
 async function isTenantFile(id: string): Promise<boolean> {
+  const known = tenantAnswers.get(id);
+  if (known && known.until > Date.now()) return known.tenant;
+  const tenant = await lookUpTenantFile(id);
+  if (tenantAnswers.size > 20_000) tenantAnswers.delete(tenantAnswers.keys().next().value as string);
+  tenantAnswers.set(id, { tenant, until: Date.now() + (tenant ? 10 * 60_000 : 60_000) });
+  return tenant;
+}
+
+/** Files that belong to a tenant (evidence, project documents, generated reports) are only served through a signed, expiring link. */
+async function lookUpTenantFile(id: string): Promise<boolean> {
   const needle = `/media/${id}`;
   const [evidence, doc] = await Promise.all([
     prisma.qcEvidence.findFirst({ where: { url: { contains: needle } }, select: { id: true, clientId: true } }),

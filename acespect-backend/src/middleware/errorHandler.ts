@@ -5,6 +5,7 @@ import { isProd } from '../config/env';
 import { isSubmissionPath, recordSubmissionEvent } from '../lib/submissionLog';
 import { logSecurityEvent } from '../lib/securityLog';
 import { alertAdmins } from '../lib/submissionAlerts';
+import { audit } from '../lib/auditTrail';
 
 /** 404 for unmatched routes. */
 export function notFound(req: Request, _res: Response, next: NextFunction): void {
@@ -39,6 +40,10 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
       code = 'DB_REQUEST_ERROR';
       message = 'Database request error';
     }
+  } else if ((err as { code?: string })?.code === 'LIMIT_FILE_SIZE') {
+    status = 413;
+    code = 'FILE_TOO_LARGE';
+    message = 'That photo is larger than 40 MB and cannot be uploaded.';
   } else if (err instanceof Error && !isProd) {
     message = err.message;
   }
@@ -84,6 +89,22 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
         detail: { method: req.method, path: req.originalUrl, code, ...(details ? { fieldErrors: details } : {}) },
       });
     }
+  }
+
+  // Every refused or failed request from a signed-in person is on the audit trail, except the routine ones: an expired sign-in (the phone
+  // renews it by itself) and the QC area, which keeps its own trail.
+  if (req.user && code !== 'TOKEN_EXPIRED' && !req.originalUrl.startsWith('/api/v1/qc')) {
+    void audit({
+      req,
+      category: /\/(templates|web\/users|web\/mail)/.test(req.originalUrl) ? 'admin' : 'web',
+      action: status >= 500 ? 'request.failed' : 'request.rejected',
+      outcome: status === 401 || status === 403 ? 'denied' : 'failure',
+      severity: status >= 500 ? 'error' : status === 403 || status === 401 ? 'warning' : 'notice',
+      message: `${req.method} ${req.originalUrl.split('?')[0]} → ${status} ${code}: ${message}`.slice(0, 480),
+      metadata: { method: req.method, path: req.originalUrl.split('?')[0], status, code, ...(typeof req.body?.jobNo === 'string' ? { jobNo: req.body.jobNo } : {}) },
+      inspectionId: typeof req.body?.id === 'string' && /^[0-9a-f-]{36}$/i.test(req.body.id) ? req.body.id : /\/inspections\/([0-9a-f-]{36})/i.exec(req.originalUrl)?.[1] ?? null,
+      jobNo: typeof req.body?.jobNo === 'string' ? req.body.jobNo : null,
+    });
   }
 
   res.status(status).json({

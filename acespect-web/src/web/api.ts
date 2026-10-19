@@ -104,22 +104,50 @@ export interface ApiError extends Error {
   details?: Record<string, any>;
 }
 
+/** Leave the signed-in area for the sign-in page, with the reason it shows. */
+function endSession(reason: string): void {
+  clearSession();
+  setRefreshToken(null);
+  if (typeof window !== "undefined" && window.location.pathname !== "/") window.location.assign("/?reason=" + reason);
+}
+
 let refreshing: Promise<boolean> | null = null;
-/** Swap the refresh token for a new pair once; every request that hit an expired token waits for the same attempt. */
-async function refreshSession(): Promise<boolean> {
-  const rt = (() => { try { return localStorage.getItem("acespect_refresh"); } catch { return null; } })();
-  if (!rt) return false;
+/**
+ * Swap the refresh token for a new pair once; every request that hit an expired token waits for the same attempt.
+ *
+ * A refresh token works once, and every open tab shares one stored copy, so tabs take turns (a browser lock): the one that gets its turn
+ * first renews, and the others -- seeing that the stored login is no longer the expired one they used -- simply carry on with it instead of
+ * presenting a token that has just been swapped. If the server says the refresh token is no good (a renewal that can never work), the
+ * person is signed out to the sign-in page with a message; otherwise the page would stay up with every request failing. A temporary
+ * failure (too many requests, a restart) leaves the session alone so the next request can try again.
+ */
+async function refreshSession(usedToken?: string | null): Promise<boolean> {
   refreshing ??= (async () => {
+    const renew = async (): Promise<boolean> => {
+      const current = getToken();
+      if (usedToken && current && current !== usedToken) return true; // another tab already renewed
+      const rt = (() => { try { return localStorage.getItem("acespect_refresh"); } catch { return null; } })();
+      if (!rt) return false;
+      try {
+        const res = await fetch(`${API_BASE}/auth/refresh`, { method: "POST", headers: { "Content-Type": "application/json", "X-App-Client": "web" }, body: JSON.stringify({ refreshToken: rt }) });
+        if (res.status === 401 || res.status === 403) {
+          const code = (await res.json().catch(() => null))?.error?.code as string | undefined;
+          endSession(code === "SESSION_IDLE" ? "SESSION_IDLE" : "SESSION_REVOKED");
+          return false;
+        }
+        if (!res.ok) return false;
+        const r = (await res.json()) as AuthResponse;
+        const u = getStoredUser();
+        if (u) setSession(r.accessToken, u);
+        setRefreshToken(r.refreshToken ?? null);
+        return true;
+      } catch {
+        return false;
+      }
+    };
     try {
-      const res = await fetch(`${API_BASE}/auth/refresh`, { method: "POST", headers: { "Content-Type": "application/json", "X-App-Client": "web" }, body: JSON.stringify({ refreshToken: rt }) });
-      if (!res.ok) return false;
-      const r = (await res.json()) as AuthResponse;
-      const u = getStoredUser();
-      if (u) setSession(r.accessToken, u);
-      setRefreshToken(r.refreshToken ?? null);
-      return true;
-    } catch {
-      return false;
+      const locks = typeof navigator !== "undefined" ? (navigator as { locks?: { request: <T>(name: string, cb: () => Promise<T>) => Promise<T> } }).locks : undefined;
+      return locks ? await locks.request("acespect-refresh", renew) : await renew();
     } finally {
       setTimeout(() => { refreshing = null; }, 0);
     }
@@ -127,7 +155,8 @@ async function refreshSession(): Promise<boolean> {
   return refreshing;
 }
 
-async function fetchWithRefresh(url: string, init: RequestInit): Promise<Response> {
+/** fetch for a signed-in call: if the login has expired it is renewed and the call repeated once. Every call that carries the login should use this. */
+export async function fetchWithRefresh(url: string, init: RequestInit): Promise<Response> {
   const res = await fetch(url, init);
   if (res.status !== 401) return res;
   const body = await res.clone().json().catch(() => null);
@@ -137,7 +166,8 @@ async function fetchWithRefresh(url: string, init: RequestInit): Promise<Respons
     if (typeof window !== "undefined" && window.location.pathname !== "/") window.location.assign("/?reason=" + code);
     return res;
   }
-  if (code !== "TOKEN_EXPIRED" || !(await refreshSession())) return res;
+  const used = (init.headers as Record<string, string> | undefined)?.Authorization?.replace(/^Bearer\s+/i, "") ?? null;
+  if (code !== "TOKEN_EXPIRED" || !(await refreshSession(used))) return res;
   const headers = { ...(init.headers as Record<string, string>), Authorization: `Bearer ${getToken()}` };
   return fetch(url, { ...init, headers });
 }
@@ -192,7 +222,7 @@ export async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
 export async function reqForm<T>(path: string, form: FormData, method = "POST"): Promise<T> {
   const token = getToken();
   const client = getActiveClientId();
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetchWithRefresh(`${API_BASE}${path}`, {
     method,
     body: form,
     headers: { "X-App-Client": "web", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(client ? { "X-Client-Id": client } : {}) },
@@ -300,6 +330,13 @@ export const api = {
   mfaEnabled: () => req<{ user: { mfaEnabled?: boolean } }>("/auth/me").then((d) => !!d.user.mfaEnabled),
 
   getInspections: () => req<{ inspections: Inspection[] }>("/web/inspections").then((d) => d.inspections),
+  /** The light list, a page at a time (no answers / photos / damages), or only what changed after `since`. Older servers answer with the full list and no serverTime. */
+  getInspectionsSummary: (opts: { since?: string; cursor?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams({ view: "summary", limit: String(opts.limit ?? 500) });
+    if (opts.since) q.set("since", opts.since);
+    if (opts.cursor) q.set("cursor", opts.cursor);
+    return req<{ inspections: Inspection[]; nextCursor?: string; serverTime?: string }>(`/web/inspections?${q.toString()}`);
+  },
   getInspection: (id: string) => req<{ inspection: Inspection }>(`/web/inspections/${id}`).then((d) => d.inspection),
   getUsers: () => req<{ users: User[] }>("/web/users").then((d) => d.users),
 
@@ -435,7 +472,7 @@ export const api = {
     if (inspectionId) form.append("inspectionId", inspectionId);
     if (sectionKey) form.append("sectionKey", sectionKey);
     const token = getToken();
-    const res = await fetch(`${API_BASE}/inspections/photos`, {
+    const res = await fetchWithRefresh(`${API_BASE}/inspections/photos`, {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       body: form,

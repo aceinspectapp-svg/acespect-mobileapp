@@ -3,18 +3,35 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
 import { webService } from './web.service';
+import { audit, firstWithin } from '../../lib/auditTrail';
 
 export const webController = {
   listInspections: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
-    const inspections = await webService.listInspections(req.user);
-    res.status(200).json({ inspections });
+    const q = req.query as Record<string, unknown>;
+    const since = typeof q.since === 'string' ? new Date(q.since) : undefined;
+    if (since && Number.isNaN(since.getTime())) throw ApiError.badRequest('since must be a date');
+    const result = await webService.listInspections(req.user, {
+      view: typeof q.view === 'string' ? q.view : undefined,
+      limit: typeof q.limit === 'string' ? Number(q.limit) || undefined : undefined,
+      cursor: typeof q.cursor === 'string' && /^[0-9a-f-]{36}$/i.test(q.cursor) ? q.cursor : undefined,
+      since,
+    });
+    // The list is refreshed whenever a tab regains focus: one entry per person per ten minutes, not one per refresh.
+    if (!since && firstWithin(`list:${req.user.id}`, 10 * 60_000)) {
+      await audit({ category: 'web', action: 'inspections.list', message: 'Inspection list opened', metadata: { view: typeof q.view === 'string' ? q.view : 'full', count: result.inspections.length } });
+    }
+    res.status(200).json(result);
   }),
 
   getInspection: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
-    const inspection = await webService.getInspection(id);
+    const inspection = await webService.getInspection(id, req.user);
+    if (firstWithin(`view:${req.user.id}:${id}`, 10 * 60_000)) {
+      await audit({ category: 'web', action: 'inspection.view', inspectionId: id, jobNo: inspection.jobNo, target: { type: 'Inspection', id, label: inspection.jobNo } });
+    }
     res.status(200).json({ inspection });
   }),
 
@@ -69,6 +86,7 @@ export const webController = {
     const problem = await verifyMail();
     if (problem) return void res.status(200).json({ result: 'FAILED', error: problem });
     const result = await sendMail(me!.email, '[ACE SPECT] Test email', 'This is a test email from the ACE SPECT server. If you can read it, email alerts are working.');
+    await audit({ category: 'admin', action: 'admin.mail_test', outcome: result === 'FAILED' ? 'failure' : 'success', message: `Test email ${String(result).toLowerCase()}`, target: { type: 'Settings', id: 'mail' } });
     res.status(200).json({ result, to: me!.email, ...(result === 'FAILED' ? { error: lastMailError } : {}) });
   }),
 
@@ -87,6 +105,7 @@ export const webController = {
   }),
 
   listSubmissionLogs: asyncHandler(async (req: Request, res: Response) => {
+    if (req.user && firstWithin(`troubleshoot:${req.user.id}`, 10 * 60_000)) await audit({ category: 'admin', action: 'admin.troubleshoot.view', message: 'Troubleshoot page opened' });
     const q = req.query as Record<string, string | undefined>;
     const logs = await webService.listSubmissionLogs({
       event: q.event || undefined,

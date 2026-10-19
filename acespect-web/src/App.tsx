@@ -1,38 +1,92 @@
+import { Component, lazy, Suspense, type ComponentType, type ReactNode } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { AppDataProvider, useAppData } from "./web/data";
 import { RoleSelect } from "./web/pages/RoleSelect";
 import { WebLayout } from "./web/components/WebLayout";
-import { ReviewerDashboard } from "./web/pages/reviewer/ReviewerDashboard";
-import { ReviewerInspections } from "./web/pages/reviewer/ReviewerInspections";
-import { ReviewerFormView } from "./web/pages/reviewer/ReviewerFormView";
-import { InspectorDashboard } from "./web/pages/inspector/InspectorDashboard";
-import { InspectorFormEditor } from "./web/pages/inspector/InspectorFormEditor";
-import { AdminDashboard } from "./web/pages/admin/AdminDashboard";
-import { AdminInspections } from "./web/pages/admin/AdminInspections";
-import { AdminUsers } from "./web/pages/admin/AdminUsers";
-import { AdminTemplateProfiles } from "./web/pages/admin/AdminTemplateProfiles";
-import { AdminTemplateSections } from "./web/pages/admin/AdminTemplateSections";
-import { AdminTemplateAdoption } from "./web/pages/admin/AdminTemplateAdoption";
-import { AdminTemplateEditor } from "./web/pages/admin/AdminTemplateEditor";
-import { AdminQcDefects } from "./web/pages/admin/AdminQcDefects";
-import { AdminQcDefectDetail } from "./web/pages/admin/AdminQcDefectDetail";
-import { AdminQcProjects, AdminQcProjectDetail } from "./web/pages/admin/AdminQcProjects";
-import { AdminQcOrganisations } from "./web/pages/admin/AdminQcOrganisations";
-import { AdminQcPeople } from "./web/pages/admin/AdminQcPeople";
-import { AdminSubmissionLogs } from "./web/pages/admin/AdminSubmissionLogs";
-import { ReportView } from "./web/pages/ReportView";
 import { QcLayout } from "./web/components/QcLayout";
 import { useQc } from "./web/qcContext";
-import { AcceptInvitation, ForgotPassword, ResetPassword } from "./web/pages/AuthPages";
 import { SsoCallback } from "./web/components/SignInSteps";
-import { QcDashboard } from "./web/pages/portal/QcDashboard";
-import { QcInspections } from "./web/pages/portal/QcInspections";
-import { QcInspectionDetail } from "./web/pages/portal/QcInspectionDetail";
-import { QcTemplates, QcTemplateDetail } from "./web/pages/portal/QcTemplates";
-import { QcPolicy } from "./web/pages/portal/QcPolicy";
-import { QcReports } from "./web/pages/portal/QcReports";
-import { QcNotifications, QcAudit, QcSettings, QcPrivacy, QcAccount } from "./web/pages/portal/QcAdminPages";
 import type { Role } from "./web/mockData";
+
+/**
+ * Every screen except sign-in is loaded the first time it is opened, not up front: the whole app used to be one 900 KB file that every
+ * visitor (and the PDF renderer) had to download before seeing anything.
+ */
+function lazyPage(load: () => Promise<Record<string, unknown>>, name: string) {
+  return lazy(() => load().then((m) => ({ default: m[name] as ComponentType })));
+}
+const ReviewerDashboard = lazyPage(() => import("./web/pages/reviewer/ReviewerDashboard"), "ReviewerDashboard");
+const ReviewerInspections = lazyPage(() => import("./web/pages/reviewer/ReviewerInspections"), "ReviewerInspections");
+const ReviewerFormView = lazyPage(() => import("./web/pages/reviewer/ReviewerFormView"), "ReviewerFormView");
+const InspectorDashboard = lazyPage(() => import("./web/pages/inspector/InspectorDashboard"), "InspectorDashboard");
+const InspectorFormEditor = lazyPage(() => import("./web/pages/inspector/InspectorFormEditor"), "InspectorFormEditor");
+const AdminDashboard = lazyPage(() => import("./web/pages/admin/AdminDashboard"), "AdminDashboard");
+const AdminInspections = lazyPage(() => import("./web/pages/admin/AdminInspections"), "AdminInspections");
+const AdminUsers = lazyPage(() => import("./web/pages/admin/AdminUsers"), "AdminUsers");
+const AdminTemplateProfiles = lazyPage(() => import("./web/pages/admin/AdminTemplateProfiles"), "AdminTemplateProfiles");
+const AdminTemplateSections = lazyPage(() => import("./web/pages/admin/AdminTemplateSections"), "AdminTemplateSections");
+const AdminTemplateAdoption = lazyPage(() => import("./web/pages/admin/AdminTemplateAdoption"), "AdminTemplateAdoption");
+const AdminTemplateEditor = lazyPage(() => import("./web/pages/admin/AdminTemplateEditor"), "AdminTemplateEditor");
+const AdminQcDefects = lazyPage(() => import("./web/pages/admin/AdminQcDefects"), "AdminQcDefects");
+const AdminQcDefectDetail = lazyPage(() => import("./web/pages/admin/AdminQcDefectDetail"), "AdminQcDefectDetail");
+const AdminQcProjects = lazyPage(() => import("./web/pages/admin/AdminQcProjects"), "AdminQcProjects");
+const AdminQcProjectDetail = lazyPage(() => import("./web/pages/admin/AdminQcProjects"), "AdminQcProjectDetail");
+const AdminQcOrganisations = lazyPage(() => import("./web/pages/admin/AdminQcOrganisations"), "AdminQcOrganisations");
+const AdminQcPeople = lazyPage(() => import("./web/pages/admin/AdminQcPeople"), "AdminQcPeople");
+const AdminSubmissionLogs = lazyPage(() => import("./web/pages/admin/AdminSubmissionLogs"), "AdminSubmissionLogs");
+const AdminAuditLog = lazyPage(() => import("./web/pages/admin/AdminAuditLog"), "AdminAuditLog");
+const ReportView = lazyPage(() => import("./web/pages/ReportView"), "ReportView");
+const AcceptInvitation = lazyPage(() => import("./web/pages/AuthPages"), "AcceptInvitation");
+const ForgotPassword = lazyPage(() => import("./web/pages/AuthPages"), "ForgotPassword");
+const ResetPassword = lazyPage(() => import("./web/pages/AuthPages"), "ResetPassword");
+const QcDashboard = lazyPage(() => import("./web/pages/portal/QcDashboard"), "QcDashboard");
+const QcInspections = lazyPage(() => import("./web/pages/portal/QcInspections"), "QcInspections");
+const QcInspectionDetail = lazyPage(() => import("./web/pages/portal/QcInspectionDetail"), "QcInspectionDetail");
+const QcTemplates = lazyPage(() => import("./web/pages/portal/QcTemplates"), "QcTemplates");
+const QcTemplateDetail = lazyPage(() => import("./web/pages/portal/QcTemplates"), "QcTemplateDetail");
+const QcPolicy = lazyPage(() => import("./web/pages/portal/QcPolicy"), "QcPolicy");
+const QcReports = lazyPage(() => import("./web/pages/portal/QcReports"), "QcReports");
+const QcNotifications = lazyPage(() => import("./web/pages/portal/QcAdminPages"), "QcNotifications");
+const QcAudit = lazyPage(() => import("./web/pages/portal/QcAdminPages"), "QcAudit");
+const QcSettings = lazyPage(() => import("./web/pages/portal/QcAdminPages"), "QcSettings");
+const QcPrivacy = lazyPage(() => import("./web/pages/portal/QcAdminPages"), "QcPrivacy");
+const QcAccount = lazyPage(() => import("./web/pages/portal/QcAdminPages"), "QcAccount");
+
+const Loading = () => <div style={{ padding: 40, fontFamily: "Inter, sans-serif", color: "#94a3b8" }}>Loading…</div>;
+
+/**
+ * After a new version is published the old screens' files are gone, so a tab left open from before cannot load a screen it has not opened
+ * yet. Reload once to pick up the new version; if it still fails, say so instead of showing a blank page.
+ */
+class ChunkBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: Error) {
+    const stale = /dynamically imported module|Importing a module script failed|Loading chunk|Unexpected token '<'/i.test(error?.message ?? "");
+    try {
+      if (stale && !sessionStorage.getItem("chunk-reloaded")) {
+        sessionStorage.setItem("chunk-reloaded", "1");
+        window.location.reload();
+      }
+    } catch {
+      /* storage blocked: fall through to the message */
+    }
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div style={{ padding: 40, fontFamily: "Inter, sans-serif", color: "#475569" }}>
+        <p style={{ fontSize: 16, fontWeight: 600 }}>This page could not be loaded.</p>
+        <p style={{ fontSize: 13 }}>A new version may have just been released. Reload to continue.</p>
+        <button onClick={() => { try { sessionStorage.removeItem("chunk-reloaded"); } catch { /* ignore */ } window.location.reload(); }} style={{ marginTop: 12, padding: "8px 16px", borderRadius: 8, border: "none", background: "#1a2a4a", color: "white", cursor: "pointer" }}>
+          Reload
+        </button>
+      </div>
+    );
+  }
+}
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -75,6 +129,8 @@ export default function App() {
   return (
     <AppDataProvider>
       <BrowserRouter>
+        <ChunkBoundary>
+        <Suspense fallback={<Loading />}>
         <Routes>
           <Route path="/" element={<RoleSelect />} />
 
@@ -134,11 +190,14 @@ export default function App() {
             <Route path="/admin/qc/*" element={<Navigate to="/qc" replace />} />
             <Route path="/admin/reports" element={<Placeholder title="Reports" />} />
             <Route path="/admin/troubleshoot" element={<AdminSubmissionLogs />} />
+            <Route path="/admin/audit" element={<AdminAuditLog />} />
             <Route path="/admin/settings" element={<Placeholder title="Settings" />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
+        </ChunkBoundary>
       </BrowserRouter>
     </AppDataProvider>
   );

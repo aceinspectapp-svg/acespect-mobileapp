@@ -1,10 +1,13 @@
 import express, { Request, Response } from 'express';
 import helmet from 'helmet';
+import compression from 'compression';
+import { auditContext } from './lib/auditTrail';
 import cors from 'cors';
 import morgan from 'morgan';
 import { env } from './config/env';
 import { prisma } from './lib/prisma';
 import { apiLimiter } from './middleware/rateLimit';
+import { clientIp } from './middleware/clientIp';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { authRouter } from './modules/auth/auth.routes';
 import { inspectionsRouter } from './modules/inspections/inspections.routes';
@@ -13,16 +16,22 @@ import { templatesRouter } from './modules/templates/templates.routes';
 import { webRouter } from './modules/web/web.routes';
 import { mediaRouter } from './modules/media/media.routes';
 import { qcRouter } from './modules/qc/qc.routes';
+import { auditRouter } from './modules/audit/audit.routes';
 
 export function createApp() {
   const app = express();
 
   // Security + parsing
   app.disable('x-powered-by');
-  // One proxy hop in front (Railway): without this every request appears to come from the proxy, which breaks
-  // the per-IP rate limits and the IP address written to the security log.
+  // Express's own guess at the visitor's address (one proxy hop assumed). Behind Railway that guess is unreliable -- it often lands on one of
+  // Railway's own servers, shared by every visitor -- so clientIp (next) replaces it with the real address from X-Real-IP, which Railway's
+  // edge sets on every request. This stays as the fallback where that header is not used.
   app.set('trust proxy', 1);
+  app.use(clientIp);
+  app.use(auditContext);
   app.use(helmet());
+  // JSON answers compress to a fraction of their size (images, PDFs and other already-compressed files are skipped automatically).
+  app.use(compression());
   app.use(
     cors({
       origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(',').map((s) => s.trim()),
@@ -67,6 +76,7 @@ export function createApp() {
   app.use('/api/v1/review', reviewRouter);
   app.use('/api/v1/templates', templatesRouter);
   app.use('/api/v1/web', webRouter);
+  app.use('/api/v1/audit', auditRouter);
   app.use('/api/v1/qc', qcRouter);
 
   // Fallbacks

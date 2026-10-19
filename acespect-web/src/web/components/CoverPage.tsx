@@ -37,53 +37,53 @@ export function CoverPage(p: CoverPageProps) {
   const [firstRef, ...moreRefs] = p.references;
 
   return (
-    <div style={{ fontFamily: C.font, color: C.ink, fontSize: `${base}px`, lineHeight: 1.45 }}>
+    <div data-cover="page" style={{ fontFamily: C.font, color: C.ink, fontSize: `${base}px`, lineHeight: 1.45 }}>
       {p.logo && !compact && (
         <div className="screen-only" style={{ display: "flex", justifyContent: "flex-end", marginBottom: "18px" }}>
           {p.logo}
         </div>
       )}
-      <div style={{ fontWeight: 700, fontSize: `${base + 1}px`, margin: "0 0 14px" }}>{p.reportDate}</div>
+      <div data-cover="date" style={{ fontWeight: 700, fontSize: `${base + 1}px`, margin: "0 0 14px" }}>{p.reportDate}</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-        <div>
-          <div style={label}>Client</div>
-          <div style={{ fontSize: `${base}px`, marginTop: "3px" }}>{p.clientName}</div>
+        <div data-cover="client">
+          <div data-cover="label" style={label}>Client</div>
+          <div data-cover="value" style={{ fontSize: `${base}px`, marginTop: "3px" }}>{p.clientName}</div>
           {(p.clientNotes ?? []).map((n) => (
-            <div key={n} style={{ fontSize: `${base - 2}px`, color: C.grey }}>{n}</div>
+            <div key={n} data-cover="note" style={{ fontSize: `${base - 2}px`, color: C.grey }}>{n}</div>
           ))}
         </div>
-        <div>
+        <div data-cover="refs">
           {firstRef && (
-            <>
-              <div style={label}>{firstRef[0]}</div>
-              <div style={{ fontSize: `${base}px`, marginTop: "3px" }}>{firstRef[1]}</div>
-            </>
+            <div data-cover="ref">
+              <div data-cover="label" style={label}>{firstRef[0]}</div>
+              <div data-cover="value" style={{ fontSize: `${base}px`, marginTop: "3px" }}>{firstRef[1]}</div>
+            </div>
           )}
           {moreRefs.map(([k, v]) => (
-            <div key={k} style={{ marginTop: "8px" }}>
-              <div style={label}>{k}</div>
-              <div style={{ fontSize: `${base}px`, marginTop: "3px" }}>{v}</div>
+            <div key={k} data-cover="ref" style={{ marginTop: "8px" }}>
+              <div data-cover="label" style={label}>{k}</div>
+              <div data-cover="value" style={{ fontSize: `${base}px`, marginTop: "3px" }}>{v}</div>
             </div>
           ))}
         </div>
       </div>
-      <div style={{ background: C.navy, borderRight: `${compact ? 6 : 9}px solid ${C.red}`, color: "white", padding: compact ? "14px 18px 16px" : "22px 26px 24px", margin: compact ? "22px 0 20px" : "34px 0 30px" }}>
-        <div style={{ fontSize: compact ? "10px" : "12.5px", fontWeight: 700, letterSpacing: "0.3em", textTransform: "uppercase", opacity: 0.92 }}>{p.kicker}</div>
-        <div style={{ fontSize: compact ? "24px" : "36px", fontWeight: 700, marginTop: "6px", lineHeight: 1.1 }}>{p.title}</div>
+      <div data-cover="banner" style={{ background: C.navy, borderRight: `${compact ? 6 : 9}px solid ${C.red}`, color: "white", padding: compact ? "14px 18px 16px" : "22px 26px 24px", margin: compact ? "22px 0 20px" : "34px 0 30px" }}>
+        <div data-cover="kicker" style={{ fontSize: compact ? "10px" : "12.5px", fontWeight: 700, letterSpacing: "0.3em", textTransform: "uppercase", opacity: 0.92 }}>{p.kicker}</div>
+        <div data-cover="title" style={{ fontSize: compact ? "24px" : "36px", fontWeight: 700, marginTop: "6px", lineHeight: 1.1 }}>{p.title}</div>
       </div>
-      <div>
+      <div data-cover="rows">
         {p.rows.map(([k, v]) => (
-          <div key={k} style={{ display: "grid", gridTemplateColumns: `${compact ? 120 : 166}px 1fr`, gap: "14px", padding: "9px 0", borderBottom: `1px solid ${C.rule}`, breakInside: "avoid" }}>
-            <div style={{ ...label, paddingTop: "3px" }}>{k}</div>
-            <div style={{ fontSize: `${base}px` }}>{v}</div>
+          <div key={k} data-cover="row" style={{ display: "grid", gridTemplateColumns: `${compact ? 120 : 166}px 1fr`, gap: "14px", padding: "9px 0", borderBottom: `1px solid ${C.rule}`, breakInside: "avoid" }}>
+            <div data-cover="row-label" style={{ ...label, paddingTop: "3px" }}>{k}</div>
+            <div data-cover="row-value" style={{ fontSize: `${base}px` }}>{v}</div>
           </div>
         ))}
       </div>
       {(p.signatureName || p.signatureTitle) && (
         // One unbreakable block, so the name is never left on one page and the title on the next.
-        <div style={{ marginTop: "28px", breakInside: "avoid" }}>
-          {p.signatureName && <div style={{ color: C.navy, fontSize: compact ? "14px" : "17px" }}>{p.signatureName}</div>}
-          {p.signatureTitle && <div style={{ color: C.navy, fontSize: compact ? "11px" : "13px", fontWeight: 700 }}>{p.signatureTitle}</div>}
+        <div data-cover="signature" style={{ marginTop: "28px", breakInside: "avoid" }}>
+          {p.signatureName && <div data-cover="sig-name" style={{ color: C.navy, fontSize: compact ? "14px" : "17px" }}>{p.signatureName}</div>}
+          {p.signatureTitle && <div data-cover="sig-title" style={{ color: C.navy, fontSize: compact ? "11px" : "13px", fontWeight: 700 }}>{p.signatureTitle}</div>}
         </div>
       )}
     </div>

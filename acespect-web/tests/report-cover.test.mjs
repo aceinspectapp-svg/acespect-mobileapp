@@ -45,4 +45,11 @@ describe("the cover page", () => {
   it("keeps the Dilapidation details: both references, the owner and the purpose", () => {
     for (const text of ["Our Reference", "V26-0001", "Your Reference", "PO 12", "Property Owner", "Purpose", "The purpose text."]) assert.ok(dilapidation.includes(text), text);
   });
+
+  it("is marked up so the Word export can rebuild the same first page", () => {
+    // reportDocxExtract.ts finds each part of the cover by these data-cover marks; without them the Word file's first page would not match the PDF's
+    const marks = ["page", "date", "client", "label", "value", "refs", "ref", "banner", "kicker", "title", "rows", "row", "row-label", "row-value", "signature", "sig-name", "sig-title"];
+    for (const html of [construction, dilapidation]) for (const m of marks.filter((m) => !["label", "value", "refs", "ref"].includes(m) || html === dilapidation)) assert.ok(html.includes(`data-cover="${m}"`), m);
+    assert.equal(construction.split('data-cover="page"').length - 1, 1, "one cover per report");
+  });
 });

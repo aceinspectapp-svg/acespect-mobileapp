@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { API_URL } from '../config/api';
 import { api } from './apiClient';
-import { AuthResponse, AuthUser, LoginInput, LoginResult, RegisterInput } from '../types/auth';
+import { AuthResponse, AuthUser, InvitationInfo, LoginInput, LoginResult, RegisterInput } from '../types/auth';
 
 /**
  * Auth API.
@@ -21,6 +21,12 @@ export const authApi = {
 
   verifyMfa: (mfaToken: string, code: string): Promise<AuthResponse> =>
     bare.post<AuthResponse>('/auth/mfa/verify', { mfaToken, code }).then((r) => r.data),
+
+  invitationInfo: (token: string): Promise<InvitationInfo> =>
+    bare.get<InvitationInfo>(`/auth/invitations/${encodeURIComponent(token)}`).then((r) => r.data),
+
+  acceptInvitation: (token: string, password: string): Promise<LoginResult> =>
+    bare.post<LoginResult>(`/auth/invitations/${encodeURIComponent(token)}/accept`, { password, acceptTerms: true }).then((r) => r.data),
 
   google: (idToken: string): Promise<AuthResponse> =>
     bare.post<AuthResponse>('/auth/google', { idToken }).then((r) => r.data),

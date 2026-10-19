@@ -111,11 +111,12 @@ function photoRange(start: number | undefined, count: number): string {
 // ───────────────────────── Cover ─────────────────────────
 
 /** The Construction Report's cover: the shared cover page (components/CoverPage.tsx, also the Dilapidation cover) with this report's details. */
-export function Cover({ r, model, inspection }: { r: ReportHeader; model: ConstructionReportModel; inspection: Inspection }) {
+export function Cover({ r, model, inspection, compact = false }: { r: ReportHeader; model: ConstructionReportModel; inspection: Inspection; compact?: boolean }) {
   const jobInfo = inspection.sections.find((s) => (s.key ?? s.id).startsWith("job-info"));
   const email = r.clientEmail || String((jobInfo?.fields as Record<string, unknown> | undefined)?.clientEmail ?? "") || undefined;
   return (
     <CoverPage
+      compact={compact}
       logo={<img src="/houspect-logo.png" alt="Houspect Building Inspections" style={{ height: "56px", width: "auto", display: "block" }} />}
       reportDate={r.reportDate}
       clientName={r.clientName}
@@ -269,10 +270,10 @@ function ListTable({ heads, intro, na, list, row }: { heads: string[]; intro: st
   const cells = list.attached ? row(list) : [];
   return (
     <div>
-      <p style={{ margin: "0 0 10px" }}>{intro}</p>
+      <p style={{ margin: "0 0 10px", breakAfter: "avoid" }}>{intro}</p>
       {list.attached && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: cols, background: C.navy, color: "white", fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <div style={{ display: "grid", gridTemplateColumns: cols, background: C.navy, color: "white", fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", breakAfter: "avoid" }}>
             {heads.map((h) => <div key={h} style={{ padding: "8px" }}>{h}</div>)}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: cols, borderBottom: `1px solid ${C.rule}`, fontSize: "12px" }}>

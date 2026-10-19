@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, clearSession, getStoredUser, getToken, type AuthUser } from "./api";
 import type { Inspection, SectionReviewStatus, User } from "./mockData";
 
@@ -8,6 +8,10 @@ interface AppData {
   inspections: Inspection[];
   users: User[];
   getInspectionById: (id: string) => Inspection | undefined;
+  /** Fetches the complete inspection (answers, photos, damages) when only its light list row is held. Safe to call repeatedly. */
+  loadInspectionDetail: (id: string) => Promise<void>;
+  /** Ids whose full inspection could not be fetched (not found / not allowed), so a page can stop waiting. */
+  detailFailed: ReadonlySet<string>;
   getInspectionsByInspector: (inspectorId: string) => Inspection[];
   getInspectionsForReviewer: (reviewerId: string) => Inspection[];
   getUser: (id: string) => User | undefined;
@@ -52,10 +56,30 @@ interface AppData {
 
 const Ctx = createContext<AppData | null>(null);
 
+/** Newest first, the order the server lists them in. */
+const byDateDesc = (a: Inspection, b: Inspection) => (a.date === b.date ? (a.id < b.id ? 1 : -1) : a.date < b.date ? 1 : -1);
+
+/** Every this-often the whole light list is fetched again (not only what changed), so nothing can stay out of step for long. */
+const FULL_RELOAD_MS = 10 * 60_000;
+
 export function useAppData(): AppData {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useAppData must be used within AppDataProvider");
   return ctx;
+}
+
+/**
+ * The inspection a page needs in full. The list holds light rows (no answers or photos); this asks for the real thing the first time one is
+ * opened. `inspection` is undefined while that is on its way (`loadingDetail`), so a page can show "Loading" instead of an empty form.
+ */
+export function useInspectionDetail(id: string | undefined): { inspection: Inspection | undefined; loadingDetail: boolean } {
+  const { getInspectionById, loadInspectionDetail, detailFailed } = useAppData();
+  const found = id ? getInspectionById(id) : undefined;
+  const needs = !!id && !!found && found.detail === false && !detailFailed.has(id);
+  useEffect(() => {
+    if (id && needs) void loadInspectionDetail(id);
+  }, [id, needs, loadInspectionDetail]);
+  return { inspection: found && found.detail === false ? undefined : found, loadingDetail: needs };
 }
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
@@ -63,15 +87,85 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detailFailed, setDetailFailed] = useState<ReadonlySet<string>>(new Set());
+  // What the server said the time was at the last successful list, and when the whole list was last fetched.
+  const lastSync = useRef<string | null>(null);
+  const lastFull = useRef(0);
+  const inspectionsRef = useRef<Inspection[]>([]);
+  inspectionsRef.current = inspections;
+  const listRun = useRef<Promise<void> | null>(null);
+  const detailRuns = useRef(new Map<string, Promise<void>>());
 
-  const loadData = useCallback(async () => {
-    const [ins, us] = await Promise.all([
-      api.getInspections().catch(() => [] as Inspection[]),
-      api.getUsers().catch(() => [] as User[]), // 403 for inspectors — fine
-    ]);
-    setInspections(ins);
-    setUsers(us);
+  /**
+   * The inspection list used to be one download of every inspection with every answer and photo link (90 MB at 1,500 inspections), repeated
+   * every time the tab regained focus. Now: the light list, a page at a time, the first time; afterwards only what changed since.
+   * Whatever is already shown stays if a request fails.
+   */
+  const loadInspections = useCallback(async (forceFull: boolean) => {
+    const full = forceFull || !lastSync.current || Date.now() - lastFull.current > FULL_RELOAD_MS;
+    const since = full ? undefined : new Date(Date.parse(lastSync.current!) - 5000).toISOString();
+    const rows: Inspection[] = [];
+    let cursor: string | undefined;
+    let serverTime: string | undefined;
+    for (let page = 0; page < 200; page++) {
+      const r = await api.getInspectionsSummary({ since, cursor });
+      rows.push(...r.inspections);
+      serverTime = r.serverTime;
+      cursor = r.nextCursor;
+      if (!cursor) break;
+    }
+    // Rows we already hold in full are kept while they are unchanged; a changed one is fetched again below.
+    const held = new Map(inspectionsRef.current.map((i) => [i.id, i]));
+    const refetch: string[] = [];
+    const merged = rows.map((row) => {
+      const have = held.get(row.id);
+      if (have && have.detail !== false) {
+        if (have.updatedAt && have.updatedAt === row.updatedAt) return have;
+        if (row.detail === false) refetch.push(row.id);
+        else return row; // an older server sent it in full already
+        return have;
+      }
+      return row;
+    });
+    setInspections((prev) => {
+      if (full) return merged.sort(byDateDesc);
+      const byId = new Map(prev.map((i) => [i.id, i]));
+      for (const m of merged) byId.set(m.id, m);
+      return [...byId.values()].sort(byDateDesc);
+    });
+    if (serverTime) {
+      lastSync.current = serverTime;
+      if (full) lastFull.current = Date.now();
+    } else {
+      lastSync.current = null; // an older server: no delta support, so always take the whole list
+    }
+    await Promise.all(
+      refetch.map((id) =>
+        api
+          .getInspection(id)
+          .then((fresh) => setInspections((prev) => prev.map((i) => (i.id === id ? fresh : i))))
+          .catch(() => undefined),
+      ),
+    );
   }, []);
+
+  const loadData = useCallback(async (forceFull = false) => {
+    // A load that fails (the server refusing with 429 or 401, a restart, a network blip) must leave what is already on screen alone:
+    // this runs every time the tab regains focus, and replacing the lists with empty ones made the whole app go blank
+    // ("Inspection not found") until the next successful load. The only failure that really means "empty" is a 403 on the users list
+    // (inspectors may not list users).
+    // Two overlapping triggers (focus and visibility change fire together) share one run.
+    if (!listRun.current) {
+      listRun.current = loadInspections(forceFull)
+        .catch(() => undefined)
+        .finally(() => { listRun.current = null; });
+    }
+    const [, us] = await Promise.all([
+      listRun.current,
+      api.getUsers().catch((e: { status?: number }): User[] | null => (e?.status === 403 ? [] : null)),
+    ]);
+    if (us) setUsers(us);
+  }, [loadInspections]);
 
   // On mount: if a token exists, validate it and load data.
   useEffect(() => {
@@ -85,7 +179,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         const u = await api.me();
         if (cancelled) return;
         setCurrentUser(u);
-        await loadData();
+        await loadData(true);
       } catch {
         clearSession();
         setCurrentUser(null);
@@ -120,7 +214,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       const u = await api.login(email, password);
       setCurrentUser(u);
       setLoading(true);
-      await loadData();
+      await loadData(true);
       setLoading(false);
       return u;
     },
@@ -131,7 +225,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     async (u: AuthUser) => {
       setCurrentUser(u);
       setLoading(true);
-      await loadData();
+      await loadData(true);
       setLoading(false);
     },
     [loadData],
@@ -142,11 +236,30 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setCurrentUser(null);
     setInspections([]);
     setUsers([]);
+    lastSync.current = null;
+    lastFull.current = 0;
+    setDetailFailed(new Set());
   }, []);
 
   const refresh = useCallback(async () => {
-    await loadData();
+    await loadData(true);
   }, [loadData]);
+
+  const loadInspectionDetail = useCallback(async (id: string) => {
+    const running = detailRuns.current.get(id);
+    if (running) return running;
+    const run = api
+      .getInspection(id)
+      .then((fresh) => {
+        setInspections((prev) => (prev.some((i) => i.id === id) ? prev.map((i) => (i.id === id ? fresh : i)) : [fresh, ...prev]));
+      })
+      .catch(() => {
+        setDetailFailed((prev) => new Set(prev).add(id));
+      })
+      .finally(() => { detailRuns.current.delete(id); });
+    detailRuns.current.set(id, run);
+    return run;
+  }, []);
 
   const replaceInspection = useCallback(async (id: string) => {
     const fresh = await api.getInspection(id);
@@ -215,6 +328,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     inspections,
     users,
     getInspectionById: (id) => inspections.find((i) => i.id === id),
+    loadInspectionDetail,
+    detailFailed,
     getInspectionsByInspector: (inspectorId) => inspections.filter((i) => i.inspectorId === inspectorId),
     getInspectionsForReviewer: (reviewerId) =>
       inspections.filter((i) => i.reviewerId === reviewerId && i.status !== "draft"),

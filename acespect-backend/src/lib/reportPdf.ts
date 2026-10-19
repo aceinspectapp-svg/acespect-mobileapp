@@ -1,5 +1,6 @@
 import puppeteer, { type Page } from 'puppeteer';
 import { env } from '../config/env';
+import { ApiError } from '../utils/ApiError';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
 
 /**
@@ -82,7 +83,44 @@ const PHOTO_LOAD_TIMEOUT_MS = 240_000;
  * that lay themselves out from each photo's real shape -- has finished drawing. `use` then does what it needs with the page (print it
  * to PDF, read it out for the Word file). `print`: lay the page out as it prints (the toolbar hidden, the page breaks in place).
  */
+/**
+ * Each report starts its own headless browser (several hundred MB). Left unlimited, a few people pressing "Download PDF" together could use
+ * up the server's memory and take the API down for everyone, phones included. At most REPORT_MAX_CONCURRENT run at once (default 2); others
+ * wait their turn, and when too many are already waiting the request is turned away with a "busy, try again" instead of piling up.
+ */
+const MAX_RUNNING = Math.max(1, Number(process.env.REPORT_MAX_CONCURRENT ?? 2));
+const MAX_WAITING = Math.max(1, Number(process.env.REPORT_MAX_WAITING ?? 8));
+let running = 0;
+const waiting: (() => void)[] = [];
+async function takeTurn(): Promise<() => void> {
+  if (running >= MAX_RUNNING) {
+    if (waiting.length >= MAX_WAITING) throw new ApiError(503, 'Reports are being prepared for other people right now. Please try again in a minute.', 'REPORT_BUSY');
+    await new Promise<void>((resolve) => waiting.push(resolve));
+  } else {
+    running++;
+  }
+  return () => {
+    const next = waiting.shift();
+    if (next) next(); // hands the turn straight on (running stays the same)
+    else running--;
+  };
+}
+
 export async function withReportPage<T>(
+  inspectionId: string,
+  authToken: string,
+  use: (page: Page) => Promise<T>,
+  options: { print?: boolean; width?: number } = {},
+): Promise<T> {
+  const done = await takeTurn();
+  try {
+    return await withReportPageNow(inspectionId, authToken, use, options);
+  } finally {
+    done();
+  }
+}
+
+async function withReportPageNow<T>(
   inspectionId: string,
   authToken: string,
   use: (page: Page) => Promise<T>,

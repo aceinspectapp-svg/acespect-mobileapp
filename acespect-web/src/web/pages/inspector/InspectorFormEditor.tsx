@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ArrowLeft, Plus, Camera, Save, Send, CheckCircle, MessageSquare } from "lucide-react";
 import { STATUS_CONFIG } from "../../mockData";
-import { useAppData } from "../../data";
+import { useAppData, useInspectionDetail } from "../../data";
+import { AuditHistoryButton } from "../../components/AuditHistoryButton";
 import { resolveMediaUrl } from "../../api";
 import { StatusBadge } from "../../components/WebLayout";
 import { SectionFieldEditor, PhotoUploadContext } from "../../components/SectionFieldEditor";
@@ -34,8 +35,9 @@ function sectionKeyOf(s: Pick<FormSection, "id" | "key">): string {
 export function InspectorFormEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getInspectionById, saveInspectionDraft, finalizeInspection } = useAppData();
-  const inspection = id ? getInspectionById(id) ?? null : null;
+  const { saveInspectionDraft, finalizeInspection, loading } = useAppData();
+  const { inspection: detailed, loadingDetail } = useInspectionDetail(id);
+  const inspection = detailed ?? null;
   const [note, setNote] = useState("");
   const [noteBusy, setNoteBusy] = useState(false);
   const [noteSaved, setNoteSaved] = useState(false);
@@ -145,7 +147,7 @@ export function InspectorFormEditor() {
   if (!inspection) {
     return (
       <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8", fontFamily: "Inter, sans-serif", background: "#f5f6fa", minHeight: "100vh" }}>
-        <p style={{ fontSize: "18px", fontWeight: 600, color: "#1a2a4a" }}>Inspection not found</p>
+        <p style={{ fontSize: "18px", fontWeight: 600, color: "#1a2a4a" }}>{loading || loadingDetail ? "Loading…" : "Inspection not found"}</p>
         <button
           onClick={() => navigate("/inspector/dashboard")}
           style={{ marginTop: "16px", padding: "8px 18px", borderRadius: "8px", background: "linear-gradient(135deg, #0f1d35, #1a2a4a)", color: "white", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}
@@ -322,6 +324,7 @@ export function InspectorFormEditor() {
               {inspection.address}, {inspection.suburb}
             </h2>
             <StatusBadge label={sc.label} color={sc.color} bg={sc.bg} />
+            <AuditHistoryButton inspectionId={inspection.id} jobNo={inspection.jobNo} />
           </div>
           <p style={{ fontSize: "12px", color: "#94a3b8", margin: "2px 0 0" }}>
             Job No. {inspection.jobNo} · {inspection.type} · {inspection.date}

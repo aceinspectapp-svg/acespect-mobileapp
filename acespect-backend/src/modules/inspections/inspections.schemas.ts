@@ -23,7 +23,7 @@ const damageSchema = z.object({
   widthMm: z.number().nonnegative().default(0),
   lengthMm: z.number().nonnegative().default(0),
   notes: z.string().max(2000).default(''),
-  photos: z.array(photoUrlSchema).max(50).default([]),
+  photos: z.array(photoUrlSchema).max(300).default([]),
   order: z.number().int().default(0),
 });
 
@@ -38,7 +38,8 @@ export const sectionSchema = z.object({
   fields: z.record(z.string(), z.unknown()).default({}),
   /** Raw un-flattened answer tree, kept so the section can be reopened for editing. */
   answers: z.record(z.string(), z.unknown()).optional(),
-  photos: z.array(photoUrlSchema).max(200).default([]),
+  // One section can hold a great many photos (an inspection can have 500+): the old limit of 200 refused the whole section, for good.
+  photos: z.array(photoUrlSchema).max(1500).default([]),
   damages: z.array(damageSchema).max(200).default([]),
 });
 
@@ -86,6 +87,10 @@ export const submitInspectionSchema = z.object({
   /** What the phone believes it is sending (sections other than Job Information, and distinct uploaded photos): the server answers with
    *  what it actually stored, and both sides raise an alarm if they differ. Optional so older app builds keep working. */
   expected: z.object({ sections: z.number().int().min(0), photos: z.number().int().min(0) }).optional(),
+
+  /** Set by app builds that can answer PHOTOS_MISSING: the server then refuses the submission, naming the photos it does not hold, instead of
+   *  storing an inspection that points at photos which are not there. Optional so older app builds keep working. */
+  verifyPhotos: z.boolean().optional(),
 
   /** Set when submitting a Post-Dilapidation job the inspector picked up from
    *  their assigned list (GET /inspections/assigned) -- the id of the

@@ -104,7 +104,19 @@ async function main() {
   const B = await world('B', '53004085616', '004085616', '51824753556');
 
   console.log('Invitations, MFA, lockout');
+  // A person invited by their company must be pointed at the invitation, not left stuck on "email already registered" when they try the phone's Create account.
+  const tokenA = A.invitation.url.split('/accept/')[1]!;
+  const info = await api('GET', `/auth/invitations/${tokenA}`);
+  ok(info.status === 200 && info.body.email === A.firstAdmin.email && info.body.organisations?.[0]?.clientName?.includes('A Developer'), 'an invitation says who it is for and which organisation', info.body);
+  const regPending = await api('POST', '/auth/register', { body: { email: A.firstAdmin.email, password: PW, name: 'Cal Admin' } });
+  ok(regPending.status === 409 && errCode(regPending) === 'INVITATION_PENDING', 'phone sign-up with an invited email says to use the invitation', regPending.body);
+  const regFresh = await api('POST', '/auth/register', { body: { email: `fresh${sfx}@example.com`, password: PW, name: 'Fresh Inspector' } });
+  ok(regFresh.status === 201 && regFresh.body.accessToken, 'phone sign-up with a new email still works', regFresh.body);
+  const freshMe = await api('GET', '/qc/me', { token: regFresh.body.accessToken });
+  ok(freshMe.status === 200 && (freshMe.body.clients ?? []).length === 0, 'a self-registered account is not linked to any client', freshMe.body);
   const caA = await activate(A.invitation, A.firstAdmin.email);
+  const regTaken = await api('POST', '/auth/register', { body: { email: A.firstAdmin.email, password: PW, name: 'Cal Admin' } });
+  ok(regTaken.status === 409 && errCode(regTaken) === 'EMAIL_TAKEN', 'once activated, sign-up says the account exists and to sign in', regTaken.body);
   ok(!!caA.token && !!caA.mfaSecret, 'Client Admin must enrol MFA at first sign-in');
   const clientRow = await prisma.qcClient.findUniqueOrThrow({ where: { id: A.client.id } });
   ok(clientRow.status === 'ACTIVE', 'client became Active when its first admin activated');

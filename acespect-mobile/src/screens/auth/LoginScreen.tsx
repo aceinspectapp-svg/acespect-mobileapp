@@ -184,6 +184,12 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
               <Text style={styles.signupLink}>Sign Up</Text>
             </Pressable>
           </View>
+          <View style={styles.signupRow}>
+            <Text style={styles.signupText}>Invited by your company? </Text>
+            <Pressable hitSlop={6} onPress={() => navigation.navigate('AcceptInvitation')} accessibilityRole="button" accessibilityLabel="I have an invitation">
+              <Text style={styles.signupLink}>I have an invitation</Text>
+            </Pressable>
+          </View>
           </>
           )}
 

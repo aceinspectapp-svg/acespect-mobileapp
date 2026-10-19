@@ -66,9 +66,19 @@ export function SignUpScreen({ navigation }: AuthScreenProps<'SignUp'>) {
       // On success AuthContext sets the user and navigation switches to the app.
     } catch (e) {
       const msg = getApiErrorMessage(e, 'Could not create your account. Please try again.');
-      console.error('SignUp error', e, msg);
+      const code = (e as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;
       setError(msg);
-      Alert.alert('Signup failed', msg);
+      // Someone an administrator already invited cannot create a second account: send them to the invitation screen instead of a dead end.
+      if (code === 'INVITATION_PENDING' || code === 'INVITATION_EXPIRED') {
+        Alert.alert('You have been invited', msg, [
+          { text: 'Not now', style: 'cancel' },
+          ...(code === 'INVITATION_PENDING' ? [{ text: 'I have an invitation', onPress: () => navigation.navigate('AcceptInvitation') }] : []),
+        ]);
+      } else if (code === 'EMAIL_TAKEN') {
+        Alert.alert('Account already exists', msg, [{ text: 'Back to sign in', onPress: () => navigation.navigate('Login') }, { text: 'OK', style: 'cancel' }]);
+      } else {
+        Alert.alert('Signup failed', msg);
+      }
     }
   };
 
@@ -117,6 +127,11 @@ export function SignUpScreen({ navigation }: AuthScreenProps<'SignUp'>) {
 
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>Sign up to get started</Text>
+            <Pressable onPress={() => navigation.navigate('AcceptInvitation')} accessibilityRole="button" style={{ marginTop: spacing.sm }}>
+              <Text style={{ ...typography.caption, color: colors.accentBlueFg }}>
+                Invited by your company (client, builder, trade or inspector)? Don't sign up here: tap to activate your invitation.
+              </Text>
+            </Pressable>
 
             <View style={styles.form}>
               <AppTextInput

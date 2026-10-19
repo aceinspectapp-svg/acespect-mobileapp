@@ -39,6 +39,8 @@ interface Run {
   size?: number;
   bg?: string | null;
   href?: string;
+  /** Letter-spacing in CSS pixels. Only the cover's own drawing uses it; everything else ignores it. */
+  ls?: number;
 }
 interface Box {
   top?: { w: number; color: string } | null;
@@ -77,7 +79,34 @@ interface TableBlock {
 interface BreakBlock {
   k: 'break';
 }
-type Block = ParaBlock | ImgBlock | TableBlock | BreakBlock;
+/** The first page, read from the marks CoverPage.tsx puts on its parts (see coverBlock in reportDocxExtract.ts). Sizes are CSS pixels. */
+interface CoverBlock {
+  k: 'cover';
+  date: ParaBlock | null;
+  dateGap: number;
+  clientLabel: ParaBlock | null;
+  clientName: ParaBlock | null;
+  clientNameGap: number;
+  clientNotes: ParaBlock[];
+  refs: { gap: number; label: ParaBlock | null; value: ParaBlock | null; valueGap: number }[];
+  banner: {
+    bg: string;
+    edge: { w: number; color: string } | null;
+    pad: { t: number; r: number; b: number; l: number };
+    marginTop: number;
+    marginBottom: number;
+    kicker: ParaBlock | null;
+    kickerOpacity: number;
+    title: ParaBlock | null;
+    titleGap: number;
+  };
+  rows: { label: ParaBlock | null; labelGap: number; value: ParaBlock[] }[];
+  rowPad: { t: number; b: number };
+  rule: { w: number; color: string } | null;
+  labelColumn: number;
+  signature: { gap: number; name: ParaBlock | null; title: ParaBlock | null } | null;
+}
+type Block = ParaBlock | ImgBlock | TableBlock | BreakBlock | CoverBlock;
 interface Extracted {
   error?: string;
   contentWidth: number;
@@ -231,6 +260,8 @@ class Writer {
               })
             : new Paragraph({ children: [new TextRun({ text: '[photograph not available]', italics: true, color: '8A97A8', size: 16, font: 'Arial' })] }),
         );
+      } else if (b.k === 'cover') {
+        out.push(...this.cover(b));
       } else if (b.k === 'table') {
         if (breakNext) out.push(new Paragraph({ pageBreakBefore: true, spacing: { before: 0, after: 0, line: 20 }, children: [] }));
         out.push(await this.table(b));
@@ -238,6 +269,92 @@ class Writer {
         if (n < list.length - 1 && list[n + 1]!.k === 'table') out.push(new Paragraph({ spacing: { before: 0, after: 0, line: 20 }, children: [] }));
       }
       breakNext = false;
+    }
+    return out;
+  }
+
+  /**
+   * The first page, drawn the way the PDF draws it: the date, Client and the references side by side, the navy banner with its red edge
+   * and spaced kicker, ruled rows of details, and the sign-off. Used for the cover only; no other part of the report goes through here.
+   */
+  private cover(b: CoverBlock): (Paragraph | Table)[] {
+    const tw = (px: number): number => Math.round(px * this.scale * 15); // CSS pixels -> twips
+    const none = { style: BorderStyle.NONE, size: 0, color: 'auto' };
+    const noBorders = { top: none, bottom: none, left: none, right: none };
+    const spacer = (px: number): Paragraph => new Paragraph({ spacing: { before: 0, after: 0, line: Math.max(20, tw(px)), lineRule: LineRuleType.EXACT }, children: [] });
+    /** Blend the text colour toward the background by the element's opacity (the kicker is white at 92% on navy). */
+    const blend = (fg: string | undefined, bg: string, opacity: number): string => {
+      const rgb = (c: string | undefined): number[] | null => { const m = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c ?? ''); return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null; };
+      const f = rgb(fg), k = rgb(bg);
+      if (!f || !k || !(opacity < 1)) return hex(fg);
+      return f.map((v, i) => Math.round(v * opacity + k[i]! * (1 - opacity)).toString(16).padStart(2, '0')).join('').toUpperCase();
+    };
+    const para = (p: ParaBlock | null, o: { before?: number; after?: number; keepNext?: boolean; bg?: string; opacity?: number } = {}): Paragraph =>
+      new Paragraph({
+        keepNext: o.keepNext,
+        spacing: { before: tw(o.before ?? 0), after: tw(o.after ?? 0), line: Math.round(Math.min(2, Math.max(1, p?.lineHeight || 1.15)) * 240), lineRule: LineRuleType.AUTO },
+        children: (p?.runs ?? []).map((r) =>
+          r.t === '\n'
+            ? new TextRun({ break: 1 })
+            : new TextRun({
+                text: r.t,
+                bold: r.b,
+                italics: r.i,
+                color: o.bg ? blend(r.color, o.bg, o.opacity ?? 1) : hex(r.color),
+                size: halfPoints(r.size),
+                font: 'Arial',
+                characterSpacing: r.ls && r.ls > 0 ? Math.round(r.ls * this.scale * 15) : undefined,
+              }),
+        ),
+      });
+    const cell = (width: number, children: Paragraph[], o: { fill?: string; margins?: { top: number; bottom: number; left: number; right: number }; bottom?: { w: number; color: string } | null } = {}): TableCell =>
+      new TableCell({
+        width: { size: width, type: WidthType.DXA },
+        shading: o.fill ? { type: ShadingType.CLEAR, fill: o.fill, color: 'auto' } : undefined,
+        margins: o.margins ?? { top: 0, bottom: 0, left: 0, right: 0 },
+        borders: { ...noBorders, bottom: o.bottom ? { style: BorderStyle.SINGLE, size: Math.max(2, Math.round(o.bottom.w * 6)), color: hex(o.bottom.color) } : none },
+        children: children.length ? children : [spacer(1)],
+      });
+    const table = (widths: number[], rows: TableRow[]): Table =>
+      new Table({ rows, columnWidths: widths, width: { size: widths.reduce((a, c) => a + c, 0), type: WidthType.DXA }, borders: { ...noBorders, insideHorizontal: none, insideVertical: none } });
+
+    const total = TEXT_WIDTH_TWIPS;
+    const out: (Paragraph | Table)[] = [];
+
+    // the date, then Client (with any "Attn" / "Via email" lines) beside the references
+    out.push(para(b.date, { after: b.dateGap }));
+    const half = Math.floor(total / 2);
+    const clientCell: Paragraph[] = [para(b.clientLabel), para(b.clientName, { before: b.clientNameGap }), ...b.clientNotes.map((n) => para(n))];
+    const refCell: Paragraph[] = b.refs.flatMap((r, i) => [para(r.label, { before: i === 0 ? 0 : r.gap }), para(r.value, { before: r.valueGap })]);
+    out.push(table([half, total - half], [new TableRow({ cantSplit: true, children: [cell(half, clientCell), cell(total - half, refCell)] })]));
+
+    // the banner: a navy cell with a narrow red cell for its edge
+    const k = b.banner;
+    out.push(spacer(k.marginTop));
+    const navy = hex(k.bg);
+    const edge = k.edge ? Math.max(40, tw(k.edge.w)) : 0;
+    const bannerMargins = { top: tw(k.pad.t), bottom: tw(k.pad.b), left: tw(k.pad.l), right: tw(k.pad.r) };
+    const bannerCells = [cell(total - edge, [para(k.kicker, { bg: k.bg, opacity: k.kickerOpacity }), para(k.title, { before: k.titleGap })], { fill: navy, margins: bannerMargins })];
+    if (k.edge) bannerCells.push(cell(edge, [spacer(1)], { fill: hex(k.edge.color) }));
+    out.push(table(k.edge ? [total - edge, edge] : [total], [new TableRow({ cantSplit: true, children: bannerCells })]));
+    out.push(spacer(k.marginBottom));
+
+    // the ruled rows: label column, then the value
+    if (b.rows.length) {
+      const labelW = Math.min(tw(b.labelColumn), total - 1200);
+      const rowMargins = { top: tw(b.rowPad.t), bottom: tw(b.rowPad.b), left: 0, right: 0 };
+      out.push(
+        table(
+          [labelW, total - labelW],
+          b.rows.map((r) => new TableRow({ cantSplit: true, children: [cell(labelW, [para(r.label, { before: r.labelGap })], { margins: rowMargins, bottom: b.rule }), cell(total - labelW, r.value.map((v) => para(v)), { margins: rowMargins, bottom: b.rule })] })),
+        ),
+      );
+    }
+
+    // the sign-off, kept together
+    if (b.signature) {
+      out.push(para(b.signature.name, { before: b.signature.gap, keepNext: true }));
+      if (b.signature.title) out.push(para(b.signature.title));
     }
     return out;
   }

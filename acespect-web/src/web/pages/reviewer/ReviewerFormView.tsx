@@ -12,9 +12,11 @@ import {
   type SectionReviewStatus,
   type User,
 } from "../../mockData";
-import { useAppData } from "../../data";
+import { useAppData, useInspectionDetail } from "../../data";
+import { AuditHistoryButton } from "../../components/AuditHistoryButton";
 import { StatusBadge } from "../../components/WebLayout";
 import { ReportCover } from "../../components/ReportCover";
+import { isConstructionInspection, jobInfoFieldsFor } from "./jobInfoFields";
 import { ReportDescription } from "../../components/ReportDescription";
 import { ReportScope } from "../../components/ReportScope";
 import { ReportConditions } from "../../components/ReportConditions";
@@ -22,7 +24,7 @@ import { ReportSection } from "../../components/ReportSection";
 import { buildReportHeader, defaultPurposeFor, withExcludedPhotosRemoved } from "../../report";
 import { SectionFieldEditor, PhotoUploadContext } from "../../components/SectionFieldEditor";
 import { constructionSectionText, isConstructionKey } from "../../construction/sectionText";
-import { ConstructionSectionPreview, useConstructionReport } from "../../construction/ConstructionReport";
+import { Cover as ConstructionCover, ConstructionSectionPreview, useConstructionReport } from "../../construction/ConstructionReport";
 import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSectionToDraft, fetchActiveTemplate, listMissingItems } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { reportProfileOf } from "../../wording/profile";
@@ -157,20 +159,6 @@ function FieldsView({ section }: { section: FormSection }) {
 // this form edits the report cover's override fields, not the inspector
 // template's own answer keys, so a value entered here always lands exactly
 // where the generated report reads it from.
-const JOB_INFO_FIELDS: { key: string; label: string; type: "text" | "email" | "date" | "textarea" }[] = [
-  { key: "date", label: "Date", type: "date" },
-  { key: "clientName", label: "Client Name", type: "text" },
-  { key: "clientEmail", label: "Client Email", type: "email" },
-  { key: "yourReference", label: "Client Project Reference", type: "text" },
-  { key: "jobNo", label: "Job Number", type: "text" },
-  { key: "propertyOwner", label: "Property Owner Name", type: "text" },
-  { key: "propertyOwnerEmail", label: "Property Owner Email", type: "email" },
-  { key: "address", label: "Property Address", type: "text" },
-  { key: "weather", label: "Weather", type: "text" },
-  { key: "inspector", label: "Inspector Name", type: "text" },
-  { key: "inspectorRegistration", label: "Inspector DBU License", type: "text" },
-  { key: "purpose", label: "General Statement (Inspection Summary)", type: "textarea" },
-];
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -219,6 +207,8 @@ function JobInfoFieldsForm({
   template: ActiveTemplate | null | undefined;
   onSave: (fields: Record<string, unknown>) => Promise<void>;
 }) {
+  // only the fields this report type's cover reads (Dilapidation and Construction differ)
+  const JOB_INFO_FIELDS = jobInfoFieldsFor(inspection);
   const [draft, setDraft] = useState<Record<string, string | string[]>>({});
   // Snapshot of what `draft` was seeded to, so "dirty" reflects the
   // reviewer's own edits rather than flipping true just because a fallback
@@ -272,7 +262,7 @@ function JobInfoFieldsForm({
     setBaseline(seeded);
     setSavedAt(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section.id]);
+  }, [section.id, inspection.type]);
 
   const dirty = JOB_INFO_FIELDS.some(
     ({ key }) => JSON.stringify(draft[key] ?? "") !== JSON.stringify(baseline[key] ?? ""),
@@ -281,7 +271,8 @@ function JobInfoFieldsForm({
   async function handleSave() {
     setSaving(true);
     try {
-      await onSave(draft);
+      // a job number left as the inspection's own is no correction: nothing is kept, so the report keeps following the inspection's
+      await onSave({ ...draft, ...(JOB_INFO_FIELDS.some((f) => f.key === "jobNo") ? { jobNo: asDraftString(draft.jobNo).trim() === inspection.jobNo.trim() ? "" : asDraftString(draft.jobNo).trim() } : {}) });
       setBaseline(draft);
       setSavedAt(Date.now());
     } finally {
@@ -734,8 +725,8 @@ function ResizeHandle({ width, onChange, min, max, grows, initial }: { width: nu
 export function ReviewerFormView() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { currentUser, loading, getInspectionById, getUser, patchSection, patchDamage, patchInspection } = useAppData();
-  const inspection = getInspectionById(id ?? "");
+  const { currentUser, loading, getUser, patchSection, patchDamage, patchInspection } = useAppData();
+  const { inspection, loadingDetail } = useInspectionDetail(id);
   // The Construction Report as it will print (every section counted), so each section's "Report Content" matches the final report.
   const [areasW, setAreasW] = usePersistedWidth("reviewer.areasWidth", 220);
   const [reportW, setReportW] = usePersistedWidth("reviewer.reportWidth", 360);
@@ -798,7 +789,7 @@ export function ReviewerFormView() {
   if (!inspection) {
     return (
       <div style={{ padding: "48px", textAlign: "center", color: "#94a3b8", fontSize: "16px" }}>
-        {loading || !currentUser ? "Loading…" : "Inspection not found."}
+        {loading || loadingDetail || !currentUser ? "Loading…" : "Inspection not found."}
       </div>
     );
   }
@@ -1061,6 +1052,8 @@ export function ReviewerFormView() {
 
         <StatusBadge label={sc.label} color={sc.color} bg={sc.bg} />
 
+        <AuditHistoryButton inspectionId={inspection.id} jobNo={inspection.jobNo} />
+
         <button
           onClick={() => navigate(`/report/${inspection.id}`)}
           style={{
@@ -1078,7 +1071,7 @@ export function ReviewerFormView() {
             fontWeight: 600,
             flexShrink: 0,
           }}
-          title="Generate Dilapidation Report"
+          title={isConstructionInspection(inspection) ? "Generate Construction Report" : "Generate Dilapidation Report"}
         >
           <FileText size={14} />
           Report
@@ -1456,7 +1449,10 @@ export function ReviewerFormView() {
                       padding: "16px 18px",
                       borderLeft: "3px solid #2563eb",
                     }}>
-                      <ReportCover header={buildReportHeader(inspection, getUser(inspection.inspectorId))} compact />
+                      {/* a Construction report has its own cover (stage, purpose, general), which is what is shown here for one */}
+                      {isConstructionInspection(inspection)
+                        ? (constructionModel ? <ConstructionCover r={buildReportHeader(inspection, getUser(inspection.inspectorId))} model={constructionModel} inspection={inspection} compact /> : <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0 }}>Loading the cover…</p>)
+                        : <ReportCover header={buildReportHeader(inspection, getUser(inspection.inspectorId))} compact />}
                     </div>
                   </div>
                 ) : (selectedSection.key ?? selectedSection.id).startsWith("description") ? (

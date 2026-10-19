@@ -22,7 +22,7 @@ export function ReviewerDashboard() {
   ).length;
 
   return (
-    <PageShell title="Dashboard" subtitle="Welcome back, Sarah Chen">
+    <PageShell title="Dashboard" subtitle={`Welcome back, ${currentUser?.name ?? "reviewer"}`}>
       {/* Stats row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "28px" }}>
         <StatCard

@@ -8,6 +8,7 @@ import { database } from '../db';
 import { persistPhoto } from '../db/photoRepo';
 import { useInspectionDraft } from '../context/InspectionDraftContext';
 import { numberPhoto } from '../services/photoNumbers';
+import { recordEvent } from '../services/auditEvents';
 
 /**
  * Camera + gallery capture via the OS pickers (works in Expo Go).
@@ -87,7 +88,7 @@ async function maybePersist(photo: CapturedPhoto, sortOrder: number, opts?: Capt
 }
 
 export function usePhotoCapture() {
-  const { addPhoto } = useInspectionDraft();
+  const { addPhoto, getFolderId } = useInspectionDraft();
 
   // Persist locally + register each photo in the inspection draft (by
   // sectionKey) so it's uploaded and attached to the right section at
@@ -119,11 +120,14 @@ export function usePhotoCapture() {
         mediaTypes: ['images'],
         quality: 0.8,
         exif: true,
+        // iPhones otherwise hand over HEIC files, which not everything downstream can read: ask for the JPEG-compatible version.
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
       if (result.canceled || !result.assets?.length) return null;
       const photos = toCapturedPhotos(result.assets, opts);
       photos.forEach((p) => numberPhoto(p.uri)); // photo 1, 2, 3 ... in the order taken
       await register(photos, opts);
+      recordEvent('photo.captured', { inspectionId: getFolderId(), message: `${photos.length} photo taken with the camera`, metadata: { count: photos.length, source: 'camera', section: opts?.sectionKey } });
       return photos;
     },
     [register],
@@ -146,11 +150,13 @@ export function usePhotoCapture() {
         // selectionLimit: 0 = no cap (the system's own max).
         allowsMultipleSelection: true,
         selectionLimit: 0,
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
       if (result.canceled || !result.assets?.length) return null;
       const photos = toCapturedPhotos(result.assets, opts);
       photos.forEach((p) => numberPhoto(p.uri)); // in the order they were picked
       await register(photos, opts);
+      recordEvent('photo.captured', { inspectionId: getFolderId(), message: `${photos.length} photo(s) chosen from the library`, metadata: { count: photos.length, source: 'library', section: opts?.sectionKey } });
       return photos;
     },
     [register],

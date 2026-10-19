@@ -34,22 +34,36 @@ export async function alertAdmins(alertKey: string, subject: string, lines: stri
   }
 }
 
-/** Photos stored in a draft-id folder whose inspection never reached the server (the phone uploaded them, then the submission did not land). */
+/**
+ * Photos on the server that no inspection refers to, older than `olderThanMinutes`: the phone uploaded them, but the inspection that goes
+ * with them never arrived. Grouped by the draft folder they sit in, or by job number for photos filed straight into a job folder.
+ */
 export async function findOrphanUploads(olderThanMinutes = 0, limit = 50) {
   const { egnyteRootFolder } = await import('./storage');
   const root = egnyteRootFolder();
   const cutoff = new Date(Date.now() - olderThanMinutes * 60_000);
+  const rel = (n: number) => root.length + 2 + n;
   return prisma.$queryRaw<{ folder: string; photos: number; firstAt: Date; lastAt: Date; sections: string[] }[]>`
-    SELECT split_part(substring(p."storageKey" from ${root.length + 2}::int), '/', 1) AS folder,
-           count(*)::int AS photos, min(p."createdAt") AS "firstAt", max(p."createdAt") AS "lastAt",
-           array_agg(DISTINCT split_part(substring(p."storageKey" from ${root.length + 2}::int), '/', 2)) AS sections
-    FROM photos p
-    WHERE p."storageKey" LIKE ${root + '/%'}
-      AND split_part(substring(p."storageKey" from ${root.length + 2}::int), '/', 1) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-      AND NOT EXISTS (SELECT 1 FROM inspections i WHERE i.id = split_part(substring(p."storageKey" from ${root.length + 2}::int), '/', 1))
-    GROUP BY 1
-    HAVING max(p."createdAt") < ${cutoff}
-    ORDER BY max(p."createdAt") DESC LIMIT ${limit}`;
+    WITH p AS (
+      SELECT id, "createdAt", substring("storageKey" from ${rel(0)}::int) AS rel FROM photos
+      WHERE "storageKey" LIKE ${root + '/%'} AND "createdAt" > now() - interval '30 days'
+    ), k AS MATERIALIZED (
+      SELECT id, "createdAt", rel,
+             CASE WHEN split_part(rel, '/', 1) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN split_part(rel, '/', 1)
+                  WHEN split_part(rel, '/', 1) ~ '^V[0-9]+-V?[0-9]+$' THEN split_part(rel, '/', 2)
+                  ELSE NULL END AS folder,
+             CASE WHEN split_part(rel, '/', 1) ~ '^V[0-9]+-V?[0-9]+$' THEN split_part(rel, '/', 3) ELSE split_part(rel, '/', 2) END AS section
+      FROM p
+    ), c AS MATERIALIZED (
+      SELECT * FROM k WHERE folder IS NOT NULL AND NOT EXISTS (SELECT 1 FROM inspections i WHERE i.id = k.folder)
+    )
+    SELECT folder, count(*)::int AS photos, min("createdAt") AS "firstAt", max("createdAt") AS "lastAt", array_agg(DISTINCT section) AS sections
+    FROM c
+    WHERE NOT EXISTS (SELECT 1 FROM sections s WHERE position(c.id in coalesce(s.answers::text, '')) > 0 OR position(c.id in s.photos::text) > 0)
+      AND NOT EXISTS (SELECT 1 FROM damages d WHERE position(c.id in d.photos::text) > 0)
+    GROUP BY folder
+    HAVING max("createdAt") < ${cutoff}
+    ORDER BY max("createdAt") DESC LIMIT ${limit}`;
 }
 
 /** Recurring check: photos that have waited 15+ minutes with no inspection are mailed to the admins (once each). */
@@ -63,7 +77,7 @@ export async function scanOrphanUploads(): Promise<void> {
   if (fresh.length === 0) return;
   for (const o of fresh) {
     await alertAdmins(`orphan:${o.folder}`, 'Photos uploaded but the inspection never arrived', [
-      `${o.photos} photo(s) from draft ${o.folder.slice(0, 8)} reached Egnyte (${o.sections.filter(Boolean).join(', ')}), last at ${o.lastAt.toISOString()}.`,
+      `${o.photos} photo(s) in folder ${o.folder.length > 20 ? o.folder.slice(0, 8) : o.folder} reached Egnyte (${o.sections.filter(Boolean).join(', ')}), last at ${o.lastAt.toISOString()}.`,
       'The inspection that goes with them has not been received. It is probably still waiting in the inspector\'s sync queue: ask them to open the app and tap the "waiting to sync" banner.',
     ]);
   }

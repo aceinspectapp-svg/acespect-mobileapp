@@ -124,6 +124,9 @@ model RefreshToken {
   userId    String
   expiresAt DateTime
   revokedAt DateTime?
+  /// Set when the token was swapped for a new one at a refresh (and cleared if the person is signed out everywhere afterwards): for a short
+  /// leeway after this, presenting it again still renews the login, so a renewal whose answer was lost does not end the session.
+  rotatedAt DateTime?
   createdAt DateTime  @default(now())
 
   @@index([userId])
@@ -216,6 +219,9 @@ model Inspection {
   @@index([inspectorId])
   @@index([reviewerId])
   @@index([baselineInspectionId])
+  @@index([status])
+  @@index([date])
+  @@index([updatedAt])
   @@map("inspections")
 }
 
@@ -251,6 +257,7 @@ model Section {
   damages Damage[]
 
   @@index([inspectionId])
+  @@index([updatedAt])
   @@map("sections")
 }
 
@@ -432,6 +439,8 @@ model Photo {
   contentType String
   createdAt   DateTime @default(now())
 
+  /// Looked up by exact path on every numbered upload (is this file name taken?).
+  @@index([storageKey])
   @@map("photos")
 }
 
@@ -937,6 +946,7 @@ model SubmissionLogEntry {
   @@index([inspectorId])
   @@index([inspectionId])
   @@index([createdAt])
+  @@index([event, createdAt])
   @@map("submission_log_entries")
 }
 
@@ -1275,4 +1285,86 @@ model QcEscalation {
 
   @@index([defectId])
   @@map("qc_escalations")
+}
+
+// ───────────────────────── Audit trail (inspection flow, admin, security, phone) ─────────────────────────
+
+/// One thing that happened: who did what, to what, when, from where, and how it ended. Rows are never edited or deleted (a database
+/// trigger refuses it); each carries the hash of the previous row in its stream so tampering is detectable, and a daily anchor
+/// (AuditAnchor) covers every event so a deleted row or stream is detectable too. Deliberately has NO foreign keys: the record must
+/// outlive the users and inspections it describes.
+model AuditEvent {
+  id            String    @id @default(uuid())
+  /// Global insertion order (the order of the chains and anchors).
+  seq           BigInt    @unique @default(autoincrement())
+  /// Server time (UTC). The phone's own clock is kept separately in clientTime and is never trusted.
+  occurredAt    DateTime  @default(now())
+  clientTime    DateTime?
+  clientSkewMs  Int?
+  /// mobile | web | admin | system | security | qc
+  category      String
+  /// dotted verb, e.g. inspection.submit, section.approve, report.download
+  action        String
+  /// success | failure | denied
+  outcome       String    @default("success")
+  /// info | notice | warning | error
+  severity      String    @default("info")
+  actorId       String?
+  actorName     String?
+  actorRole     String?
+  /// user | system | device
+  actorType     String    @default("user")
+  /// mobile | web | api | system
+  source        String    @default("api")
+  appName       String?
+  appVersion    String?
+  updateId      String?
+  platform      String?
+  osVersion     String?
+  deviceModel   String?
+  ip            String?
+  userAgent     String?
+  targetType    String?
+  targetId      String?
+  targetLabel   String?
+  inspectionId  String?
+  jobNo         String?
+  correlationId String?
+  requestId     String?
+  /// Set for events uploaded by the phone: makes a re-upload harmless.
+  clientEventId String?   @unique
+  before        Json?
+  after         Json?
+  reason        String?
+  message       String?
+  metadata      Json?
+  /// The chain this row belongs to: "insp:<inspectionId>" or "system".
+  stream        String
+  prevHash      String?
+  hash          String
+
+  @@index([occurredAt])
+  @@index([inspectionId, seq])
+  @@index([actorId, occurredAt])
+  @@index([action, occurredAt])
+  @@index([category, occurredAt])
+  @@index([correlationId])
+  @@index([stream, seq])
+  @@index([jobNo])
+  @@index([outcome, occurredAt])
+  @@map("audit_events")
+}
+
+/// A seal over every event up to `upToSeq`: digest = sha256(previous digest + the hashes of the events since, in order). Anchors form their
+/// own chain, so removing or changing any event (or a whole stream) breaks every later anchor.
+model AuditAnchor {
+  id         String   @id @default(uuid())
+  seq        BigInt   @unique @default(autoincrement())
+  upToSeq    BigInt
+  eventCount Int
+  digest     String
+  prevDigest String?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_anchors")
 }
