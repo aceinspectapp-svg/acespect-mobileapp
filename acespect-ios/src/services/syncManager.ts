@@ -232,8 +232,11 @@ async function uploadAndForget(uri: string, opts: { inspectionId?: string; secti
   const running = photoInFlight.get(uri);
   if (running) return running;
   if (isLocalUri(uri) && localFileMissing(uri)) throw new PhotoFileMissing(uri);
+  // Shown on the banner, and what the stall watch counts as headway: without it a long upload looks like a stuck one.
+  if (progress) setProgress({ ...progress, step: `Uploading photo ${progress.done + 1} of ${progress.total}` });
   const work = uploadPhoto(uri, { ...opts, photoNumber: getPhotoNumber(uri) })
     .then((url) => {
+      if (progress) setProgress({ ...progress, done: progress.done + 1 });
       photoCache.set(uri, url);
       if (opts.sectionKey) photoMeta.set(uri, { sectionKey: opts.sectionKey, ...(opts.jobNo ? { jobNo: opts.jobNo } : {}), ...(opts.inspectionId ? { inspectionId: opts.inspectionId } : {}) });
       saveCacheSoon();
@@ -518,6 +521,29 @@ function folderSegment(key: string): string | null {
  * `internal_areas/ceilings/`, not lumped into one flat `internal_areas/`
  * folder with every other sub-area's photos.
  */
+interface UploadJob {
+  uri: string;
+  opts: { inspectionId?: string; sectionKey?: string; jobNo?: string };
+}
+
+/** How many photos of one inspection go to the server at the same time. The server spaces its Egnyte calls, so more than a few gains nothing. */
+const UPLOAD_PARALLEL = 4;
+
+/** Sends the listed photos a few at a time. A failure is not handled here: the ordered pass that follows meets that photo again and decides. */
+async function uploadInParallel(jobs: UploadJob[]): Promise<void> {
+  const todo = [...new Map(jobs.map((j) => [j.uri, j])).values()];
+  const worker = async (): Promise<void> => {
+    for (let job = todo.shift(); job; job = todo.shift()) {
+      try {
+        await uploadAndForget(job.uri, job.opts);
+      } catch {
+        /* retried, and judged, by the ordered pass */
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(UPLOAD_PARALLEL, todo.length) }, worker));
+}
+
 async function walkAndResolvePhotos(
   tree: AnswerTree | undefined,
   folderPath: string[],
@@ -525,6 +551,8 @@ async function walkAndResolvePhotos(
   urlByUri: Map<string, string>,
   jobNo?: string,
   lost?: Set<string>,
+  /** When given, the walk only lists the photos still to send (with the folder each belongs in) and uploads nothing. */
+  jobs?: UploadJob[],
 ): Promise<void> {
   if (!tree) return;
   for (const [key, value] of Object.entries(tree)) {
@@ -537,6 +565,11 @@ async function walkAndResolvePhotos(
       const keep: string[] = [];
       for (const uri of arr) {
         if (!isLocalUri(uri)) { keep.push(uri); continue; }
+        if (jobs) {
+          if (!urlByUri.has(uri)) jobs.push({ uri, opts: { inspectionId, sectionKey: childPath.join(':'), jobNo } });
+          keep.push(uri);
+          continue;
+        }
         try {
           if (!urlByUri.has(uri)) {
             urlByUri.set(uri, await uploadAndForget(uri, { inspectionId, sectionKey: childPath.join(':'), jobNo }));
@@ -552,12 +585,12 @@ async function walkAndResolvePhotos(
     } else if (Array.isArray(value)) {
       // Repeating-group / damage-list instances (strip/checklist presentation).
       for (const inst of value as AnswerTree[]) {
-        await walkAndResolvePhotos(inst, childPath, inspectionId, urlByUri, jobNo, lost);
+        await walkAndResolvePhotos(inst, childPath, inspectionId, urlByUri, jobNo, lost, jobs);
       }
     } else if (typeof value === 'object') {
       // A single nested compound value, or fixed-tabs' Record<instanceKey, AnswerTree> --
       // either way its own entries recurse the same way, gaining one more folder level.
-      await walkAndResolvePhotos(value as AnswerTree, childPath, inspectionId, urlByUri, jobNo, lost);
+      await walkAndResolvePhotos(value as AnswerTree, childPath, inspectionId, urlByUri, jobNo, lost, jobs);
     }
   }
 }
@@ -634,6 +667,11 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
   // photos-type field (wherever it's nested) gets uploaded under a folder
   // that matches its own sub-area, and the field's own stored value is what
   // ends up holding the real URL -- not just a separate flat summary list.
+  const jobs: UploadJob[] = [];
+  for (const section of payload.sections) {
+    await walkAndResolvePhotos(section.answers as AnswerTree | undefined, [section.key], inspectionId, urlByUri, jobNo, lost, jobs);
+  }
+  await uploadInParallel(jobs); // the walk below then finds each photo already sent
   for (const section of payload.sections) {
     await walkAndResolvePhotos(section.answers as AnswerTree | undefined, [section.key], inspectionId, urlByUri, jobNo, lost);
   }
@@ -665,6 +703,7 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
 
   // Ask the server to check, before it stores anything, that it really holds every photo this inspection points at. If it does not (it
   // names them), send just those again and submit once more -- so an inspection is never stored with photos missing.
+  if (progress) setProgress({ ...progress, step: 'Saving the inspection on the server' });
   payload.verifyPhotos = true;
   let result: SubmitResult | undefined;
   for (let round = 0; !result; round++) {
