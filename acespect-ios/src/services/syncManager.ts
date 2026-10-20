@@ -578,6 +578,8 @@ async function walkAndResolvePhotos(
   lost?: Set<string>,
   /** When given, the walk only lists the photos still to send (with the folder each belongs in) and uploads nothing. */
   jobs?: UploadJob[],
+  /** When given, a photo that fails for any other reason is recorded here and the walk carries on, so every bad photo is found in one pass. */
+  failed?: Map<string, unknown>,
 ): Promise<void> {
   if (!tree) return;
   for (const [key, value] of Object.entries(tree)) {
@@ -590,6 +592,7 @@ async function walkAndResolvePhotos(
       const keep: string[] = [];
       for (const uri of arr) {
         if (!isLocalUri(uri)) { keep.push(uri); continue; }
+        if (lost?.has(uri)) continue; // gone from the phone, or left out by the inspector
         if (jobs) {
           if (!urlByUri.has(uri)) jobs.push({ uri, opts: { inspectionId, sectionKey: childPath.join(':'), jobNo } });
           keep.push(uri);
@@ -603,6 +606,7 @@ async function walkAndResolvePhotos(
         } catch (err) {
           // A photo whose file is gone from the phone can never be sent: leave it out (and count it) rather than block everything else.
           if (err instanceof PhotoFileMissing && lost) lost.add(uri);
+          else if (failed) { failed.set(uri, err); keep.push(uri); }
           else throw err;
         }
       }
@@ -610,12 +614,12 @@ async function walkAndResolvePhotos(
     } else if (Array.isArray(value)) {
       // Repeating-group / damage-list instances (strip/checklist presentation).
       for (const inst of value as AnswerTree[]) {
-        await walkAndResolvePhotos(inst, childPath, inspectionId, urlByUri, jobNo, lost, jobs);
+        await walkAndResolvePhotos(inst, childPath, inspectionId, urlByUri, jobNo, lost, jobs, failed);
       }
     } else if (typeof value === 'object') {
       // A single nested compound value, or fixed-tabs' Record<instanceKey, AnswerTree> --
       // either way its own entries recurse the same way, gaining one more folder level.
-      await walkAndResolvePhotos(value as AnswerTree, childPath, inspectionId, urlByUri, jobNo, lost, jobs);
+      await walkAndResolvePhotos(value as AnswerTree, childPath, inspectionId, urlByUri, jobNo, lost, jobs, failed);
     }
   }
 }
@@ -680,11 +684,20 @@ async function resendMissing(payload: SubmitPayload, ids: string[], lost: Set<st
   return true;
 }
 
-export async function runSubmission(payload: SubmitPayload): Promise<SubmitResult> {
+/** Some photos could not be sent (the rest were). The inspection is not saved without them unless the inspector chooses to leave them out. */
+export class PhotosNotSent extends Error {
+  constructor(public readonly uris: string[], cause: unknown) {
+    super(`${uris.length} photo${uris.length === 1 ? '' : 's'} could not be sent: ${describeFailure(cause)}`);
+    this.name = 'PhotosNotSent';
+  }
+}
+
+export async function runSubmission(payload: SubmitPayload, leaveOut?: Set<string>): Promise<SubmitResult> {
   const inspectionId = payload.id;
   const jobNo = payload.jobNo;
   const urlByUri = photoCache;
-  const lost = new Set<string>();
+  const lost = new Set<string>(leaveOut);
+  const failed = new Map<string, unknown>();
   const namedLocally = localFilesNamedIn(payload);
   mergePhotoNumbers(payload.photoNumbers); // a queued submission keeps the numbers its photos were given
 
@@ -698,7 +711,7 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
   }
   await uploadInParallel(jobs); // the walk below then finds each photo already sent
   for (const section of payload.sections) {
-    await walkAndResolvePhotos(section.answers as AnswerTree | undefined, [section.key], inspectionId, urlByUri, jobNo, lost);
+    await walkAndResolvePhotos(section.answers as AnswerTree | undefined, [section.key], inspectionId, urlByUri, jobNo, lost, undefined, failed);
   }
 
   // Fallback safety net: `section.photos` / `damages[].photos` are a flat
@@ -712,13 +725,16 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
     try {
       urlByUri.set(uri, await uploadAndForget(uri, { inspectionId, sectionKey, jobNo }));
     } catch (err) {
-      if (err instanceof PhotoFileMissing) lost.add(uri); else throw err;
+      if (err instanceof PhotoFileMissing) lost.add(uri); else failed.set(uri, err);
     }
   };
   for (const section of payload.sections) {
     for (const uri of section.photos ?? []) await uploadLeftover(uri, section.key);
     for (const d of section.damages ?? []) for (const uri of d.photos ?? []) await uploadLeftover(uri, section.key);
   }
+
+  // Every photo that failed is known by now. Nothing is saved on the server without them: the inspector decides (see leaveOutStuckPhotos).
+  if (failed.size > 0) throw new PhotosNotSent([...failed.keys()], [...failed.values()][0]);
 
   const resolve = (u: string) => urlByUri.get(u) ?? u;
   for (const section of payload.sections) {
@@ -800,7 +816,7 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
       setProgress({ label: entry.payload.jobNo || entry.payload.address || 'inspection', step: 'Preparing', done: 0, total: countLocalPhotos(entry.payload) });
       const watch = stallWatch();
       try {
-        const work = runSubmission(entry.payload);
+        const work = runSubmission(entry.payload, entry.leaveOut?.length ? new Set(entry.leaveOut) : undefined);
         work.catch(() => undefined); // if the stall watch wins, a late failure of this must not surface as an unhandled rejection
         await Promise.race([work, watch.stalled]);
         recordEvent('queue.delivered', { inspectionId: entry.payload.id, jobNo: entry.payload.jobNo, message: 'Queued inspection delivered', metadata: { attempts: entry.attempts + 1 } });
@@ -814,9 +830,9 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
           await persist();
           continue;
         }
-        const message = describeFailure(err);
+        const message = err instanceof PhotosNotSent ? err.message : describeFailure(err);
         reportProblem('queued submission', err, { jobNo: entry.payload.jobNo, attempts: entry.attempts + 1, sections: entry.payload.sections.length });
-        queueCache = queueCache.map((e) => (e.id === id ? { ...e, attempts: e.attempts + 1, lastError: message } : e));
+        queueCache = queueCache.map((e) => (e.id === id ? { ...e, attempts: e.attempts + 1, lastError: message, stuckPhotos: err instanceof PhotosNotSent ? err.uris : undefined } : e));
         await persist();
       } finally {
         watch.stop();
@@ -845,6 +861,19 @@ function scheduleQueueRetry(): void {
     queueRetryTimer = null;
     void processQueue();
   }, wait);
+}
+
+/**
+ * The inspector's choice, for an inspection waiting only because some photos will not go up: send it without those photos. They stay on
+ * the phone but are not part of the inspection. Never automatic, because a photo that fails now (a busy or full photo store) may go up later.
+ */
+export async function leaveOutStuckPhotos(id: string): Promise<number> {
+  const entry = queueCache.find((e) => e.id === id);
+  const stuck = entry?.stuckPhotos ?? [];
+  if (!entry || stuck.length === 0) return 0;
+  queueCache = queueCache.map((e) => (e.id === id ? { ...e, leaveOut: [...new Set([...(e.leaveOut ?? []), ...stuck])], stuckPhotos: undefined } : e));
+  await persist();
+  return stuck.length;
 }
 
 /** An inspector-triggered "give up on this one" -- see the long-press queue-details alert on SelectInspectionTypeScreen. Never called automatically; a payload with a genuinely bad local file needs a human to decide it's not coming back. */

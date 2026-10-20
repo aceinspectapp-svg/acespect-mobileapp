@@ -26,6 +26,7 @@ import {
   subscribeProgress,
   type SyncProgress,
   retryNowAndReport,
+  leaveOutStuckPhotos,
   isWaitingForWifi,
   removeFromQueue,
 } from '../../services/syncManager';
@@ -385,6 +386,22 @@ export function SelectInspectionTypeScreen({
               // the inspection on this phone is deleted and never reaches the office, so it asks first.
               pendingQueue.forEach((q, i) => {
                 const label = q.payload.jobNo || q.payload.address || `Inspection ${i + 1}`;
+                const stuck = q.stuckPhotos?.length ?? 0;
+                if (stuck > 0) {
+                  buttons.push({
+                    text: `Send ${label.length > 18 ? `${label.slice(0, 18)}…` : label} without ${stuck} photo${stuck === 1 ? '' : 's'}`,
+                    onPress: () => {
+                      Alert.alert(
+                        `Send ${label} without ${stuck} photo${stuck === 1 ? '' : 's'}?`,
+                        `${stuck === 1 ? 'This photo' : 'These photos'} could not be sent and will not be part of the inspection. ${stuck === 1 ? 'It stays' : 'They stay'} on this phone. Everything else is sent now. If the photo store was only busy, waiting and trying again would send ${stuck === 1 ? 'it' : 'them'} too.`,
+                        [
+                          { text: 'Keep Trying', style: 'cancel' },
+                          { text: 'Send Without', style: 'destructive', onPress: () => { void leaveOutStuckPhotos(q.id).then(() => retryNowAndReport()); } },
+                        ],
+                      );
+                    },
+                  });
+                }
                 buttons.push({
                   text: `Remove ${label.length > 24 ? `${label.slice(0, 24)}…` : label}`,
                   style: 'destructive',
