@@ -1,6 +1,6 @@
 import axios from 'axios';
 import * as Network from 'expo-network';
-import { File } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import type { SubmitPayload } from '../context/InspectionDraftContext';
 import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
 import { getSyncQueue, setSyncQueue, getWifiOnlySync, QueuedSubmission } from './offlineStorage';
@@ -163,7 +163,7 @@ function isLocalUri(u: string): boolean {
  */
 async function deleteLocalFile(uri: string): Promise<void> {
   try {
-    new File(uri).delete();
+    new File(currentPath(uri)).delete();
   } catch {
     // Ignore -- already gone, or the platform declined to remove it.
   }
@@ -218,9 +218,25 @@ export class PhotoFileMissing extends Error {
     this.name = 'PhotoFileMissing';
   }
 }
+/**
+ * A saved photo's path names the app's data folder as it was when the photo was taken. The phone can give the app a new data folder
+ * (after an app update or reinstall) while keeping the files, so an old path then points at nothing -- and the photo is wrongly reported
+ * as gone. The same file is found again under the folder the app has now.
+ */
+const OLD_DATA_FOLDER = /^file:\/\/\/(?:private\/)?var\/mobile\/Containers\/Data\/Application\/[0-9A-Fa-f-]{36}\/(.*)$/;
+function currentPath(uri: string): string {
+  const m = OLD_DATA_FOLDER.exec(uri);
+  if (!m) return uri;
+  try {
+    const base = Paths.document.uri.replace(/Documents\/?$/, '');
+    return base !== Paths.document.uri ? `${base}${m[1]}` : uri;
+  } catch {
+    return uri;
+  }
+}
 function localFileMissing(uri: string): boolean {
   try {
-    return !new File(uri).exists;
+    return !new File(currentPath(uri)).exists;
   } catch {
     return false; // cannot tell (web, or a platform without the file API): try the upload and let it speak
   }
@@ -234,7 +250,7 @@ async function uploadAndForget(uri: string, opts: { inspectionId?: string; secti
   if (isLocalUri(uri) && localFileMissing(uri)) throw new PhotoFileMissing(uri);
   // Shown on the banner, and what the stall watch counts as headway: without it a long upload looks like a stuck one.
   if (progress) setProgress({ ...progress, step: `Uploading photo ${progress.done + 1} of ${progress.total}` });
-  const work = uploadPhoto(uri, { ...opts, photoNumber: getPhotoNumber(uri) })
+  const work = uploadPhoto(currentPath(uri), { ...opts, photoNumber: getPhotoNumber(uri), idUri: uri })
     .then((url) => {
       if (progress) setProgress({ ...progress, done: progress.done + 1 });
       photoCache.set(uri, url);
@@ -402,6 +418,8 @@ export function noteSectionAnswers(sectionKey: string, answers: AnswerTree | und
 export function resetPhotoBackup(): void {
   bySection.clear();
   lostInBackup.clear();
+  setAside.clear();
+  failures.clear();
   backupJobNo = undefined;
   pausedUntil = 0;
   pumpFailures = 0;
@@ -412,9 +430,13 @@ export function resetPhotoBackup(): void {
   emitBackup();
 }
 
+/** Photos the background backup has failed on twice: it moves on without them (the final submit tries them again), so one bad photo cannot hold up the rest. */
+const setAside = new Set<string>();
+const failures = new Map<string, number>();
+
 function nextToSend(): [string, PhotoMeta] | undefined {
   for (const m of bySection.values()) {
-    for (const [uri, meta] of m) if (!photoCache.has(uri) && !photoInFlight.has(uri) && !lostInBackup.has(uri)) return [uri, meta];
+    for (const [uri, meta] of m) if (!photoCache.has(uri) && !photoInFlight.has(uri) && !lostInBackup.has(uri) && !setAside.has(uri)) return [uri, meta];
   }
   return undefined;
 }
@@ -456,6 +478,9 @@ async function backupWorker(): Promise<void> {
           const e = err as { response?: { status?: number; data?: { error?: { message?: string } } }; message?: string };
           const st = e.response?.status;
           pumpFailures += 1;
+          const n = (failures.get(uri) ?? 0) + 1;
+          failures.set(uri, n);
+          if (n >= 2) setAside.add(uri);
           lastBackupError = e.response?.data?.error?.message ?? e.message ?? 'not reachable';
           waitReason = 'connection';
           reportProblem('photo backup', err, { jobNo: backupJobNo, failures: pumpFailures, ...(st ? { status: st } : {}) });
