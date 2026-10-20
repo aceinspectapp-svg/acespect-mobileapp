@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { EmojiGlyph } from '../EmojiGlyph';
@@ -8,6 +8,7 @@ import { Button, ProgressBar } from '../../ui';
 import type { TemplateField, TemplateFieldType, TemplateLayout } from '../../../services/templateApi';
 import { AnswerTree, AnswerValue, FieldRendererProps, isGateSatisfied, isNothingValid, isRepeatRequirementMet } from './types';
 import { DEFECT_DETAIL_FIELDS, defectKey, defectScope, isDefectOpen } from './defectDetail';
+import { meetsAllRequiredFields } from '../../../utils/flattenSectionToDraft';
 import {
   ChipMultiSelectFieldRenderer,
   ColorSelectFieldRenderer,
@@ -647,6 +648,35 @@ function StripListRenderer({ field, value, onChange, path, scope, showMissing, m
     if (openIdx === idx) setOpenIdx(null);
   }
 
+  /**
+   * Leaving the open defect / part. A new one that was never touched is simply dropped (it used to stay behind as an empty row), and
+   * one with required answers still missing is not saved without asking: the inspector keeps editing, discards it, or keeps it as a draft.
+   */
+  function closeOpenInstance() {
+    if (openIdx === null) return;
+    const idx = openIdx;
+    const inst = list[idx] ?? {};
+    const titleKey = field.repeat?.titleFieldKey;
+    if (Object.keys(inst).every((k) => k === titleKey)) {
+      removeInstance(idx);
+      return;
+    }
+    const mustFill = titleKey ? itemFields.filter((f) => f.key !== titleKey) : itemFields;
+    if (!meetsAllRequiredFields(mustFill, inst)) {
+      Alert.alert(
+        'Not complete yet',
+        'Some required answers are missing (for example the description or a photo). Keep editing, discard this one, or keep it as a draft and finish it later.',
+        [
+          { text: 'Keep Editing', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: () => removeInstance(idx) },
+          { text: 'Keep as Draft', onPress: () => setOpenIdx(null) },
+        ],
+      );
+      return;
+    }
+    setOpenIdx(null);
+  }
+
   if (openInModal) {
     const openInst = openIdx !== null ? list[openIdx] : undefined;
     return (
@@ -682,10 +712,10 @@ function StripListRenderer({ field, value, onChange, path, scope, showMissing, m
             <Text style={styles.addBtnText}>{field.repeat?.addButtonLabel ?? `Add ${field.label}`}</Text>
           </Pressable>
         )}
-        <Modal visible={openIdx !== null} animationType="slide" onRequestClose={() => setOpenIdx(null)}>
+        <Modal visible={openIdx !== null} animationType="slide" onRequestClose={closeOpenInstance}>
           <SafeAreaProvider><SafeAreaView style={styles.categoryModalRoot} edges={['top', 'bottom']}>
             <View style={styles.categoryModalHeader}>
-              <Pressable onPress={() => setOpenIdx(null)} hitSlop={8} style={styles.categoryModalBack}>
+              <Pressable onPress={closeOpenInstance} hitSlop={8} style={styles.categoryModalBack}>
                 <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
                 <Text style={styles.categoryModalBackText}>Back</Text>
               </Pressable>
@@ -726,13 +756,13 @@ function StripListRenderer({ field, value, onChange, path, scope, showMissing, m
               })()}
             </ScrollView>
             <View style={styles.categoryModalFooter}>
-              <Button label="Back" variant="outline" leftIcon="chevron-back" fitContent onPress={() => setOpenIdx(null)} />
+              <Button label="Back" variant="outline" leftIcon="chevron-back" fitContent onPress={closeOpenInstance} />
               <Button
                 label="Next"
                 variant="primaryGradient"
                 rightIcon="checkmark"
                 style={styles.categoryModalFooterNext}
-                onPress={() => setOpenIdx(null)}
+                onPress={closeOpenInstance}
               />
             </View>
           </SafeAreaView></SafeAreaProvider>
