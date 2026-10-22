@@ -12,6 +12,7 @@ import {
   type SectionReviewStatus,
   type User,
 } from "../../mockData";
+import { canEditInspection } from "../../reviewerQueue";
 import { useAppData, useInspectionDetail } from "../../data";
 import { AuditHistoryButton } from "../../components/AuditHistoryButton";
 import { StatusBadge } from "../../components/WebLayout";
@@ -725,7 +726,8 @@ function ResizeHandle({ width, onChange, min, max, grows, initial }: { width: nu
 export function ReviewerFormView() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { currentUser, loading, getUser, patchSection, patchDamage, patchInspection } = useAppData();
+  const { currentUser, loading, getUser, patchSection, patchDamage, patchInspection, refresh } = useAppData();
+  const [takeError, setTakeError] = useState<string | null>(null);
   const { inspection, loadingDetail } = useInspectionDetail(id);
   // The Construction Report as it will print (every section counted), so each section's "Report Content" matches the final report.
   const [areasW, setAreasW] = usePersistedWidth("reviewer.areasWidth", 220);
@@ -797,6 +799,17 @@ export function ReviewerFormView() {
   const sections = inspection.sections;
   const inspectorName = getUser(inspection.inspectorId)?.name ?? inspection.inspectorId;
   const sc = STATUS_CONFIG[inspection.status];
+  const canEdit = canEditInspection(currentUser, inspection);
+  // Read-only mode: swallow every attempt to click, type into or change a control, except in the areas list (data-readonly-ok), which only navigates.
+  const blocked = (e: React.SyntheticEvent) => {
+    const el = e.target as HTMLElement | null;
+    if (!el || el.closest("[data-readonly-ok]")) return;
+    if (el.closest("button, input, select, textarea, [contenteditable='true'], label")) { e.preventDefault(); e.stopPropagation(); }
+  };
+  const readOnlyGuards = {
+    onClickCapture: blocked, onMouseDownCapture: blocked, onKeyDownCapture: (e: React.KeyboardEvent) => { if (e.key !== "Tab") blocked(e); },
+    onPasteCapture: blocked, onCutCapture: blocked, onDropCapture: blocked,
+  };
   const selectedSection = sections.find((s) => s.id === selectedSectionId) ?? sections[0];
   // A Construction Stage section shows the text the Construction Stage wording writes from its answers -- the same text the printed report is made from.
   const selectedKey = selectedSection ? (selectedSection.key ?? selectedSection.id) : "";
@@ -1107,11 +1120,38 @@ export function ReviewerFormView() {
         </div>
       )}
 
+      {/* Only the assigned reviewer (or an admin) edits; anyone else reads. The server refuses the writes either way. */}
+      {!canEdit && (
+        <div role="status" style={{ flexShrink: 0, background: "#eff6ff", borderBottom: "1px solid #bfdbfe", padding: "8px 24px", display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: "#1e3a8a" }}>
+          <span style={{ flex: 1 }}>
+            {inspection.reviewerId
+              ? `Read only: this inspection is assigned to ${getUser(inspection.reviewerId)?.name ?? "another reviewer"}.`
+              : "Read only: this inspection is unassigned. Assign it to yourself to review and approve it."}
+            {takeError ? <b style={{ color: "#991b1b" }}> {takeError}</b> : null}
+          </span>
+          {!inspection.reviewerId && currentUser?.role === "reviewer" && (
+            <button
+              onClick={async () => {
+                setTakeError(null);
+                try { await api.assignInspection(inspection.id); await refresh(); await patchInspection(inspection.id, {}); }
+                catch (e) { setTakeError((e as Error).message || "Could not assign it to you."); }
+              }}
+              style={{ padding: "5px 12px", borderRadius: "7px", background: "#2563eb", color: "white", fontSize: "12px", fontWeight: 600, border: "none", cursor: "pointer" }}
+            >
+              Assign to me
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ── 3-column body ── */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden", height: CONTENT_H }}>
+      <div
+        style={{ display: "flex", flex: 1, overflow: "hidden", height: CONTENT_H }}
+        {...(canEdit ? {} : readOnlyGuards)}
+      >
 
         {/* ═══ Column 1 — Areas list (220px, white) ═══ */}
-        <div style={{
+        <div data-readonly-ok style={{
           width: `${areasW}px`,
           flexShrink: 0,
           background: "white",

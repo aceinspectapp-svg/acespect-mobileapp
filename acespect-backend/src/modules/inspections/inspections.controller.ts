@@ -11,6 +11,12 @@ import { generateInspectionReportDocx } from '../../lib/reportDocx';
 import { recordSubmissionEvent } from '../../lib/submissionLog';
 import { audit, firstWithin, flushPhotoBatches, notePhotoUpload } from '../../lib/auditTrail';
 import { createHash } from 'node:crypto';
+import { canViewDetail } from '../web/assignment.rules';
+
+/** A reviewer may open (and download the report of) an inspection that is theirs or unassigned, not one another reviewer holds. */
+function assertReviewerMayOpen(user: { id: string; role: string }, inspection: { reviewerId: string | null; status: string }) {
+  if (user.role === 'REVIEWER' && !canViewDetail(user, inspection)) throw new ApiError(403, 'This inspection is assigned to another reviewer', 'ASSIGNED_TO_OTHER');
+}
 
 /** A photo URL is this backend's own `/api/v1/media/:id` proxy link -- pull the id back off the end of it. */
 function photoIdFromUrl(url: string): string | null {
@@ -198,6 +204,7 @@ export const inspectionsController = {
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
     const inspection = await inspectionsService.getById(id);
+    assertReviewerMayOpen(req.user, inspection);
     if (firstWithin(`view:${req.user.id}:${id}`, 10 * 60_000)) {
       await audit({ category: 'web', action: 'inspection.view', inspectionId: id, jobNo: inspection.jobNo, target: { type: 'Inspection', id, label: inspection.jobNo } });
     }
@@ -215,6 +222,7 @@ export const inspectionsController = {
     const token = authHeader.slice('Bearer '.length).trim();
 
     const inspection = await inspectionsService.getById(id);
+    assertReviewerMayOpen(req.user, inspection);
     const kind = /construction/i.test(inspection.inspectionType ?? '') ? 'construction' : 'dilapidation';
     const pdf = await generateInspectionReportPdf(id, token, {
       clientName: inspection.client ?? '',
@@ -238,6 +246,7 @@ export const inspectionsController = {
     const token = authHeader.slice('Bearer '.length).trim();
 
     const inspection = await inspectionsService.getById(id);
+    assertReviewerMayOpen(req.user, inspection);
     const kind = /construction/i.test(inspection.inspectionType ?? '') ? 'construction' : 'dilapidation';
     const reportJobNo = await inspectionsService.reportJobNo(id, inspection.jobNo);
     const docx = await generateInspectionReportDocx(id, token, {

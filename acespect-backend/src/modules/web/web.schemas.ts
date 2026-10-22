@@ -68,6 +68,9 @@ export const userUpdateSchema = z.object({
   licenseNumber: z.string().max(100).nullable().optional(),
 });
 
+export const assignSchema = z.object({ reviewerId: z.string().uuid().optional() });
+export const transferRespondSchema = z.object({ accept: z.boolean() });
+
 export type SectionUpdateInput = z.infer<typeof sectionUpdateSchema>;
 export type DamageUpdateInput = z.infer<typeof damageUpdateSchema>;
 export type InspectionUpdateInput = z.infer<typeof inspectionUpdateSchema>;

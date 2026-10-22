@@ -76,6 +76,8 @@ export interface Inspection {
   /** False for a row from the light list: `sections` then carry only name / status / review state, with no answers, photos or damages.
    *  The full inspection is fetched when one is opened (see useInspectionDetail in data.tsx). Absent or true: complete. */
   detail?: boolean;
+  /** True when another reviewer holds this inspection: only its job, address, status and assignee are sent, nothing to open. */
+  restricted?: boolean;
   /** The latest change to the inspection or any of its sections (ISO time). */
   updatedAt?: string;
 }

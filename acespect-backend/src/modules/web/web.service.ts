@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { audit, diffFields } from '../../lib/auditTrail';
 import {
+  restrictSerialized,
   serializeInspection,
   serializeInspectionSummary,
   serializeSection,
@@ -10,6 +11,8 @@ import {
   WEB_TO_INS_STATUS,
   WEB_TO_REV_STATUS,
 } from './web.serializers';
+import { Actor, canEdit, canViewDetail, isAdmin } from './assignment.rules';
+import { assignmentService } from './assignment.service';
 import { DamageUpdateInput, InspectionUpdateInput, SectionUpdateInput, UserUpdateInput } from './web.schemas';
 
 const SECTIONS_INCLUDE = {
@@ -19,16 +22,29 @@ const SECTIONS_INCLUDE = {
   },
 };
 
-/** Role-scoped list: inspector → own; reviewer → assigned (non-draft); admin → all. */
 /**
- * Which inspections a signed-in person may see. Admins: all. A reviewer: the ones assigned to them that have left draft. Everyone else
- * (inspectors, and the QC roles that share this login) only their own -- these roles used to fall through to "all", relying on the web app
- * to filter the list afterwards.
+ * Which inspections a signed-in person may list. Admins: all. A reviewer: every one that has left draft -- their own, unassigned ones to
+ * take, and other reviewers' (those come back withheld, see `shape`). Everyone else (inspectors, and the QC roles that share this login)
+ * only their own.
  */
 function scopeFor(user: { id: string; role: string }): Prisma.InspectionWhereInput {
   if (user.role === 'ADMIN') return {};
-  if (user.role === 'REVIEWER') return { reviewerId: user.id, status: { not: 'DRAFT' } };
+  if (user.role === 'REVIEWER') return { status: { not: 'DRAFT' } };
   return { inspectorId: user.id };
+}
+
+/** A reviewer gets the full record of inspections that are theirs or unassigned, and only the withheld version of the rest. */
+function shape<T extends ReturnType<typeof serializeInspection>>(user: { id: string; role: string }, s: T) {
+  return user.role === 'REVIEWER' && !canViewDetail(user, { reviewerId: s.reviewerId, status: s.status }) ? restrictSerialized(s) : s;
+}
+
+/** Throws unless `actor` may change this inspection (its assigned reviewer, or an admin). Used by every reviewer write. */
+async function requireCanEdit(inspectionId: string, actor: Actor) {
+  const row = await prisma.inspection.findUnique({ where: { id: inspectionId }, select: { reviewerId: true, status: true } });
+  if (!row) throw ApiError.notFound('Inspection not found');
+  if (!canEdit(actor, row)) {
+    throw new ApiError(403, row.reviewerId ? 'This inspection is assigned to another reviewer, so only they (or an admin) can change it.' : 'Assign this inspection to yourself before editing it.', 'NOT_ASSIGNEE');
+  }
 }
 
 const SECTION_SUMMARY_SELECT = { id: true, key: true, name: true, icon: true, status: true, reviewStatus: true, reviewComment: true, updatedAt: true, order: true } as const;
@@ -48,7 +64,7 @@ async function listInspections(user: { id: string; role: string }, opts: ListOpt
 
   if (opts.view !== 'summary') {
     const rows = await prisma.inspection.findMany({ where: scope, orderBy: { date: 'desc' }, include: SECTIONS_INCLUDE });
-    return { inspections: rows.map((r) => serializeInspection(r)) };
+    return { inspections: rows.map((r) => shape(user, serializeInspection(r))) };
   }
 
   // Taken before the query, so a change that lands while it runs is picked up by the next "since" request rather than missed.
@@ -66,7 +82,7 @@ async function listInspections(user: { id: string; role: string }, opts: ListOpt
   });
   const page = rows.slice(0, take);
   return {
-    inspections: page.map((r) => serializeInspectionSummary(r)),
+    inspections: page.map((r) => shape(user, serializeInspectionSummary(r))),
     ...(rows.length > take ? { nextCursor: page[page.length - 1]!.id } : {}),
     serverTime,
   };
@@ -76,6 +92,8 @@ async function getInspection(id: string, user: { id: string; role: string }) {
   // Same visibility rule as the list: asking for someone else's inspection by id is "not found", not a peek at it.
   const row = await prisma.inspection.findFirst({ where: { AND: [{ id }, scopeFor(user)] }, include: SECTIONS_INCLUDE });
   if (!row) throw ApiError.notFound('Inspection not found');
+  // Held by another reviewer: listed, but not opened.
+  if (user.role === 'REVIEWER' && !canViewDetail(user, row)) throw new ApiError(403, 'This inspection is assigned to another reviewer.', 'ASSIGNED_TO_OTHER');
   return serializeInspection(row);
 }
 
@@ -109,7 +127,10 @@ async function updateUser(id: string, input: UserUpdateInput) {
 const REVIEW_ACTION: Record<string, string> = { APPROVED: 'section.approve', REVISION_REQUESTED: 'section.request_revision', PENDING: 'section.reset_review' };
 
 /** Reviewer edits a section's verdict / report text / recorded field data -- and the change is on record, before and after. */
-async function updateSection(id: string, input: SectionUpdateInput) {
+async function updateSection(id: string, input: SectionUpdateInput, actor: Actor) {
+  const owner = await prisma.section.findUnique({ where: { id }, select: { inspectionId: true } });
+  if (!owner) throw ApiError.notFound('Section not found');
+  await requireCanEdit(owner.inspectionId, actor);
   const before = await prisma.section.findUnique({ where: { id }, include: { inspection: { select: { id: true, jobNo: true } } } });
   const result = await updateSectionCore(id, input);
   if (before) {
@@ -241,7 +262,10 @@ async function updateSectionCore(id: string, input: SectionUpdateInput) {
 }
 
 /** Reviewer picks which of one damage record's own photos make the report. */
-async function updateDamage(id: string, input: DamageUpdateInput) {
+async function updateDamage(id: string, input: DamageUpdateInput, actor: Actor) {
+  const owner = await prisma.damage.findUnique({ where: { id }, select: { section: { select: { inspectionId: true } } } });
+  if (!owner) throw ApiError.notFound('Damage not found');
+  await requireCanEdit(owner.section.inspectionId, actor);
   const exists = await prisma.damage.findUnique({ where: { id }, include: { section: { select: { key: true, name: true, inspection: { select: { id: true, jobNo: true } } } } } });
   if (!exists) throw ApiError.notFound('Damage not found');
 
@@ -267,7 +291,8 @@ async function updateDamage(id: string, input: DamageUpdateInput) {
 
 /** Status / notes / reviewer-assignment changes on an inspection. */
 /** Approve every section of an inspection in one go (the reviewer's "Approve All"). Sections already approved are left alone. */
-async function approveAllSections(id: string) {
+async function approveAllSections(id: string, actor: Actor) {
+  await requireCanEdit(id, actor);
   const exists = await prisma.inspection.findUnique({ where: { id }, select: { id: true, jobNo: true } });
   if (!exists) throw ApiError.notFound('Inspection not found');
   const approved = await prisma.section.updateMany({ where: { inspectionId: id, reviewStatus: { not: 'APPROVED' } }, data: { reviewStatus: 'APPROVED' } });
@@ -277,7 +302,8 @@ async function approveAllSections(id: string) {
 }
 
 /** Re-run the Egnyte folder placement for one inspection (after a failure, or once its job number was corrected). */
-async function resolveEgnyte(id: string) {
+async function resolveEgnyte(id: string, actor: Actor) {
+  await requireCanEdit(id, actor);
   const row = await prisma.inspection.findUnique({ where: { id }, select: { id: true, jobNo: true, egnyteStatus: true, egnytePath: true } });
   if (!row) throw ApiError.notFound('Inspection not found');
   const { settleEgnyteFolder } = await import('../inspections/inspections.service');
@@ -290,23 +316,33 @@ async function resolveEgnyte(id: string) {
   return serializeInspection(fresh!);
 }
 
-async function updateInspection(id: string, input: InspectionUpdateInput) {
+async function updateInspection(id: string, input: InspectionUpdateInput, actor: Actor) {
   const exists = await prisma.inspection.findUnique({ where: { id }, select: { id: true, jobNo: true, status: true, notes: true, reviewerId: true } });
   if (!exists) throw ApiError.notFound('Inspection not found');
+  await requireCanEdit(id, actor);
+  // Changing who holds an inspection goes through the assignment rules (consent, email, audit), never a plain field write.
+  if (input.reviewerId !== undefined) {
+    if (!isAdmin(actor)) throw ApiError.forbidden('Use the assign / transfer request actions to change the reviewer');
+    if (input.reviewerId === null) throw ApiError.badRequest('An inspection cannot be un-assigned; assign it to a reviewer instead');
+    if (input.reviewerId !== exists.reviewerId) await assignmentService.assign(id, input.reviewerId, actor);
+    if (input.status === undefined && input.notes === undefined) {
+      const fresh = await prisma.inspection.findUniqueOrThrow({ where: { id }, include: SECTIONS_INCLUDE });
+      return serializeInspection(fresh);
+    }
+  }
 
   const row = await prisma.inspection.update({
     where: { id },
     data: {
       ...(input.status ? { status: WEB_TO_INS_STATUS[input.status] } : {}),
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
-      ...(input.reviewerId !== undefined ? { reviewerId: input.reviewerId } : {}),
     },
     include: SECTIONS_INCLUDE,
   });
-  const inspDiff = diffFields(exists, row as unknown as Record<string, unknown>, [input.status ? 'status' : '', input.notes !== undefined ? 'notes' : '', input.reviewerId !== undefined ? 'reviewerId' : ''].filter(Boolean));
+  const inspDiff = diffFields(exists, row as unknown as Record<string, unknown>, [input.status ? 'status' : '', input.notes !== undefined ? 'notes' : ''].filter(Boolean));
   if (inspDiff) {
     await audit({
-      category: 'web', action: inspDiff.after.status ? 'inspection.status_change' : inspDiff.after.reviewerId !== undefined ? 'inspection.assign_reviewer' : 'inspection.edit',
+      category: 'web', action: inspDiff.after.status ? 'inspection.status_change' : 'inspection.edit',
       inspectionId: id, jobNo: exists.jobNo, target: { type: 'Inspection', id, label: exists.jobNo }, before: inspDiff.before, after: inspDiff.after,
       message: inspDiff.after.status ? `Status ${String(inspDiff.before.status)} → ${String(inspDiff.after.status)}` : 'Inspection details changed',
     });
