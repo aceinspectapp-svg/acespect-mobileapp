@@ -102,6 +102,33 @@ enum InspectionStatus {
   REJECTED
 }
 
+/// A reviewer asking to take over an inspection that is assigned to another reviewer. The current assignee must agree (APPROVED) before it moves.
+enum TransferRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELLED
+}
+
+model InspectionTransferRequest {
+  id             String                @id @default(uuid())
+  inspection     Inspection            @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  inspectionId   String
+  /// The reviewer who held the inspection when the request was made, and whose agreement is needed.
+  fromReviewerId String
+  /// The reviewer asking to take it.
+  toReviewerId   String
+  status         TransferRequestStatus @default(PENDING)
+  createdAt      DateTime              @default(now())
+  decidedAt      DateTime?
+  decidedById    String?
+
+  @@index([inspectionId, status])
+  @@index([fromReviewerId, status])
+  @@index([toReviewerId, status])
+  @@map("inspection_transfer_requests")
+}
+
 enum SectionStatus {
   COMPLETE
   PARTIAL
@@ -212,9 +239,10 @@ model Inspection {
   /// The reverse side -- every later inspection that used this one as its baseline.
   postDilapidationJobs Inspection[] @relation("PostDilapidationBaseline")
 
-  sections      Section[]
-  reviewJobs    ReviewJob[]
-  reviewSummary ReviewSummary?
+  sections         Section[]
+  reviewJobs       ReviewJob[]
+  reviewSummary    ReviewSummary?
+  transferRequests InspectionTransferRequest[]
 
   @@index([inspectorId])
   @@index([reviewerId])
@@ -791,17 +819,17 @@ model QcDefect {
   closedAt               DateTime?
 
   // Where it came from and its service-level clocks (REQ-SLA-*).
-  dlpDefect        Boolean   @default(false)
-  foundAtStage     String?
+  dlpDefect          Boolean   @default(false)
+  foundAtStage       String?
   sourceInspectionId String?
-  sourceItemNumber String?
-  ackDueAt         DateTime?
-  rectifyDueAt     DateTime?
-  reinspectDueAt   DateTime?
-  acknowledgedAt   DateTime?
-  rectifiedAt      DateTime?
-  verifiedAt       DateTime?
-  lastEscalatedAt  DateTime?
+  sourceItemNumber   String?
+  ackDueAt           DateTime?
+  rectifyDueAt       DateTime?
+  reinspectDueAt     DateTime?
+  acknowledgedAt     DateTime?
+  rectifiedAt        DateTime?
+  verifiedAt         DateTime?
+  lastEscalatedAt    DateTime?
 
   createdBy   User     @relation("QcDefectCreatedBy", fields: [createdById], references: [id])
   createdById String
@@ -1099,7 +1127,6 @@ model QcJobLease {
   @@map("qc_job_leases")
 }
 
-
 // ───────────────────────── Fulfilment: registers, templates, inspections ─────────────────────────
 
 /// Spec-validated registers that are read as lists and rarely joined: project documents (E11), the
@@ -1173,33 +1200,33 @@ model QcTemplateItem {
 /// E21 Inspection. The lifecycle is REQUESTED -> PLANNED -> SCHEDULED -> IN_PROGRESS -> COMPLETED, with
 /// CANCELLED and ON_HOLD branches; a completed inspection is locked (changes are addenda).
 model QcInspection {
-  id             String    @id @default(uuid())
-  ref            String    @unique
-  clientId       String
-  projectId      String
-  siteId         String?
-  propertyId     String?
-  stageKey       String?
-  templateId     String?
-  type           String    @default("STAGE")
-  status         String    @default("PLANNED")
-  inspectorId    String?
-  plannedFrom    DateTime?
-  plannedTo      DateTime?
-  startedAt      DateTime?
-  finishedAt     DateTime?
-  signedAt       DateTime?
-  signedById     String?
-  locked         Boolean   @default(false)
-  holdPoint      Boolean   @default(false)
-  requestedById  String?
-  requestedAt    DateTime?
-  requestData    Json      @default("{}")
-  headerData     Json      @default("{}")
-  summaryData    Json      @default("{}")
-  data           Json      @default("{}")
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id            String    @id @default(uuid())
+  ref           String    @unique
+  clientId      String
+  projectId     String
+  siteId        String?
+  propertyId    String?
+  stageKey      String?
+  templateId    String?
+  type          String    @default("STAGE")
+  status        String    @default("PLANNED")
+  inspectorId   String?
+  plannedFrom   DateTime?
+  plannedTo     DateTime?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  signedAt      DateTime?
+  signedById    String?
+  locked        Boolean   @default(false)
+  holdPoint     Boolean   @default(false)
+  requestedById String?
+  requestedAt   DateTime?
+  requestData   Json      @default("{}")
+  headerData    Json      @default("{}")
+  summaryData   Json      @default("{}")
+  data          Json      @default("{}")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   results QcInspectionResult[]
 
@@ -1236,12 +1263,12 @@ model QcInspectionResult {
 
 /// E23 Evidence file (photo or document): the content hash is recorded when it is stored.
 model QcEvidence {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   clientId     String?
   projectId    String?
   linkedType   String
   linkedId     String
-  kind         String   @default("PHOTO")
+  kind         String    @default("PHOTO")
   phase        String?
   caption      String?
   url          String
@@ -1251,9 +1278,9 @@ model QcEvidence {
   sizeBytes    Int?
   capturedAt   DateTime?
   capturedVia  String?
-  peopleShown  Boolean  @default(false)
+  peopleShown  Boolean   @default(false)
   uploadedById String?
-  uploadedAt   DateTime @default(now())
+  uploadedAt   DateTime  @default(now())
 
   @@index([linkedType, linkedId])
   @@index([clientId, projectId])
@@ -1262,26 +1289,26 @@ model QcEvidence {
 
 /// E27 Escalation record (levels 1-4).
 model QcEscalation {
-  id            String    @id @default(uuid())
-  defect        QcDefect  @relation(fields: [defectId], references: [id], onDelete: Cascade)
-  defectId      String
-  level         Int
-  trigger       String
-  rule          Json      @default("{}")
-  manual        Boolean   @default(false)
-  raisedById    String?
-  reason        String?
-  recipients    Json      @default("[]")
-  triggeredAt   DateTime  @default(now())
-  ackById       String?
-  ackAt         DateTime?
-  resolvedAt    DateTime?
-  resolvedById  String?
-  resolveNote   String?
-  referralType  String?
-  referralDate  DateTime?
-  referralRef   String?
-  outcome       String?
+  id           String    @id @default(uuid())
+  defect       QcDefect  @relation(fields: [defectId], references: [id], onDelete: Cascade)
+  defectId     String
+  level        Int
+  trigger      String
+  rule         Json      @default("{}")
+  manual       Boolean   @default(false)
+  raisedById   String?
+  reason       String?
+  recipients   Json      @default("[]")
+  triggeredAt  DateTime  @default(now())
+  ackById      String?
+  ackAt        DateTime?
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolveNote  String?
+  referralType String?
+  referralDate DateTime?
+  referralRef  String?
+  outcome      String?
 
   @@index([defectId])
   @@map("qc_escalations")

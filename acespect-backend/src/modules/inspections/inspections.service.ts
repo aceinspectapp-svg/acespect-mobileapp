@@ -277,27 +277,17 @@ async function update(id: string, inspectorId: string, input: UpdateInspectionIn
 }
 
 /**
- * Finalize a draft: assign a reviewer, mark it SUBMITTED and enqueue the async
+ * Finalize a draft: mark it SUBMITTED (unassigned -- any reviewer can take it) and enqueue the async
  * multi-agent review. This is the point of no return for the inspector -- after
  * this the inspection is in the reviewer's queue and no longer editable.
  */
 async function finalize(id: string, inspectorId: string) {
   await requireOwnDraft(id, inspectorId);
 
-  // Land it in a reviewer's queue (first active reviewer).
-  const reviewer = await prisma.user.findFirst({
-    where: { role: 'REVIEWER', isActive: true },
-    orderBy: { createdAt: 'asc' },
-    select: { id: true },
-  });
-
+  // Deliberately NOT given to a reviewer: it waits unassigned until a reviewer (or an admin) takes it.
   const inspection = await prisma.inspection.update({
     where: { id },
-    data: {
-      status: 'SUBMITTED',
-      submittedAt: new Date(),
-      reviewerId: reviewer?.id ?? null,
-    },
+    data: { status: 'SUBMITTED', submittedAt: new Date() },
   });
 
   const reviewJob = await prisma.reviewJob.create({

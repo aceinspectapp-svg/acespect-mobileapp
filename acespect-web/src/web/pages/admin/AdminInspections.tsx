@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Search, Eye, ClipboardCheck } from "lucide-react";
+import { Search, Eye } from "lucide-react";
 import { STATUS_CONFIG } from "../../mockData";
 import type { InspectionStatus } from "../../mockData";
 import { useAppData } from "../../data";
+import { useAssignments } from "../../useAssignments";
+import { AssignPicker } from "../../components/AssignPicker";
 import { PageShell, StatusBadge, TableCard, StatCard } from "../../components/WebLayout";
 
 type TabFilter = "all" | InspectionStatus;
@@ -26,7 +28,8 @@ function formatDate(iso: string): string {
 
 export function AdminInspections() {
   const navigate = useNavigate();
-  const { inspections: INSPECTIONS, users } = useAppData();
+  const { inspections: INSPECTIONS, users, refresh } = useAppData();
+  const { overview, reload: reloadOverview } = useAssignments();
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<TabFilter>("all");
 
@@ -446,38 +449,14 @@ export function AdminInspections() {
                       View
                     </button>
 
-                    {/* Assign button — only when no reviewer */}
-                    {isUnassigned && (
-                      <button
-                        onClick={() => {
-                          // Assign action placeholder
-                        }}
-                        title="Assign reviewer"
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          padding: "5px 12px",
-                          borderRadius: "7px",
-                          background: "#1a2a4a",
-                          color: "white",
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          border: "none",
-                          cursor: "pointer",
-                          transition: "background 0.12s",
-                          whiteSpace: "nowrap",
-                        }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.background = "#243b5a")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.background = "#1a2a4a")
-                        }
-                      >
-                        <ClipboardCheck size={13} />
-                        Assign
-                      </button>
+                    {/* Assign / reassign (the server emails the new reviewer) */}
+                    {ins.status !== "draft" && ins.status !== "approved" && (
+                      <AssignPicker
+                        inspectionId={ins.id}
+                        currentReviewerId={ins.reviewerId}
+                        reviewers={overview?.reviewers ?? []}
+                        onDone={async () => { await refresh(); await reloadOverview(); }}
+                      />
                     )}
                   </div>
                 </td>
