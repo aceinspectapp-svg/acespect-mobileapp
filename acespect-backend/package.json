@@ -34,7 +34,6 @@
     "@prisma/client": "^6.2.1",
     "archiver": "^8.0.0",
     "bcryptjs": "^2.4.3",
-    "bullmq": "^5.78.1",
     "compression": "^1.8.0",
     "cors": "^2.8.5",
     "docx": "^9.10.0",
@@ -45,7 +44,6 @@
     "google-auth-library": "^10.7.0",
     "heic-convert": "^2.1.0",
     "helmet": "^8.0.0",
-    "ioredis": "^5.11.1",
     "jose": "^6.2.12",
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.2",
@@ -53,6 +51,7 @@
     "multer": "^2.2.0",
     "nodemailer": "^10.0.14",
     "pdfkit": "^0.20.2",
+    "pg-boss": "11.1.2",
     "puppeteer": "^25.11.0",
     "sharp": "^0.33.5",
     "zod": "^3.24.1"

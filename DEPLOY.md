@@ -1,13 +1,13 @@
 # ACE SPECT — Quick Deploy Runbook
 
-Stack: **Railway** (backend API + Postgres + Redis) · **Vercel** (web) · **EAS** (Android APK).
+Stack: **Railway** (backend API + Postgres) · **Vercel** (web) · **EAS** (Android APK).
 
 ## ✅ Live deployment (deployed 2026-07-02)
 | Piece | URL | Notes |
 |---|---|---|
 | Backend API | https://acespect-backend-production.up.railway.app | health: `/health`, API base: `/api/v1` |
 | Web (reviewer/inspector) | https://acespect-web.vercel.app | Vercel project `anuka1/acespect-web` |
-| Railway project | https://railway.com/project/2d8b8083-7911-41cb-a5d1-dec3f1f7dd53 | services: acespect-backend, Postgres, Redis |
+| Railway project | https://railway.com/project/2d8b8083-7911-41cb-a5d1-dec3f1f7dd53 | services: acespect-backend, Postgres |
 | EAS project | https://expo.dev/accounts/anuka02/projects/acespect-mobile | Android preview APK build |
 
 **Seeded logins:** inspector `jane@acespect.app / Inspect123` · reviewer `reviewer@acespect.app / Review123` · admin `admin@acespect.app / Admin123`.
@@ -33,7 +33,7 @@ Stack: **Railway** (backend API + Postgres + Redis) · **Vercel** (web) · **EAS
   git add -A && git commit -m "Deploy configs" && git push
   ```
 
-**Both Redis and real photo uploads are required for this deploy** — not optional. Redis backs the review queue that submit depends on; Egnyte is where inspection photos actually live (without it, any submit containing a photo fails).
+**Real photo uploads are required for this deploy** — not optional. The review queue runs on the same Postgres (pg-boss), so no Redis is needed; Egnyte is where inspection photos actually live (without it, any submit containing a photo fails).
 
 ---
 
@@ -45,17 +45,16 @@ Stack: **Railway** (backend API + Postgres + Redis) · **Vercel** (web) · **EAS
 
 ---
 
-## 2. Backend + Postgres + Redis → Railway
+## 2. Backend + Postgres → Railway
 1. Railway → **New Project → Deploy from GitHub repo** → pick this repo.
 2. On the created service → **Settings**:
    - **Root Directory:** `acespect-backend`  (uses its `Dockerfile` + `railway.json`)
    - Railway auto-runs `npx prisma migrate deploy && node dist/server.js` on start.
-3. **+ New → Database → Add PostgreSQL**, then **+ New → Database → Add Redis** (same project) — **required**, the review queue (and therefore mobile submit) depends on it.
+3. **+ New → Database → Add PostgreSQL**. The review queue (pg-boss) lives in this same database, in its own `pgboss` schema — no Redis needed.
 4. Backend service → **Variables** → add:
    ```
    NODE_ENV=production
    DATABASE_URL=${{Postgres.DATABASE_URL}}
-   REDIS_URL=${{Redis.REDIS_URL}}
    JWT_ACCESS_SECRET=8e4b5792050bbfcca674902100f3414749f4f5c273fd5f9479da84f85d72f2de
    JWT_REFRESH_SECRET=35a0394e433b3653a98a58cc2df4734e85b11dd9e4589e20b8e58bda6c6277fc
    CORS_ORIGIN=*
@@ -64,7 +63,7 @@ Stack: **Railway** (backend API + Postgres + Redis) · **Vercel** (web) · **EAS
    EGNYTE_ROOT_FOLDER=/Shared/Inspection Photos
    PUBLIC_BASE_URL=<this backend's public URL, e.g. https://acespect-backend-production.up.railway.app>
    ```
-   (`${{Postgres.DATABASE_URL}}` / `${{Redis.REDIS_URL}}` are Railway reference variables — pick them from the dropdown, don't type them by hand.)
+   (`${{Postgres.DATABASE_URL}}` is a Railway reference variable — pick it from the dropdown, don't type it by hand.)
 5. **Networking → Generate Domain**. Copy the URL, e.g. `https://acespect-backend-production.up.railway.app`.
    Your API base is that URL **+ `/api/v1`**.
 6. **Seed users + one demo inspection** (once). Railway service → **⋯ → Run a command** (or `railway run` locally):
@@ -113,7 +112,6 @@ Stack: **Railway** (backend API + Postgres + Redis) · **Vercel** (web) · **EAS
 |---|---|---|
 | `DATABASE_URL` | ✅ | Railway Postgres reference |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | ✅ | ≥16 chars (generated values above) |
-| `REDIS_URL` | ✅ | Railway Redis reference — mobile submit fails without it |
 | `EGNYTE_DOMAIN` / `EGNYTE_API_TOKEN` | ✅ | from Egnyte step 1 — photo upload returns 503 without it |
 | `EGNYTE_ROOT_FOLDER` | ✅ | `/Shared/Inspection Photos` — auto-created on boot if missing |
 | `PUBLIC_BASE_URL` | ✅ | this backend's own public URL — used to build the /api/v1/media proxy links returned for uploaded photos |
@@ -122,4 +120,4 @@ Stack: **Railway** (backend API + Postgres + Redis) · **Vercel** (web) · **EAS
 | `PORT` | auto | Railway sets it; app defaults 4000 |
 
 ## Deploy order recap
-Egnyte (photo storage creds) → backend (Railway, incl. Redis) → get backend URL → web `VITE_API_URL` (Vercel) + mobile `eas.json` URL → build web + APK.
+Egnyte (photo storage creds) → backend (Railway) → get backend URL → web `VITE_API_URL` (Vercel) + mobile `eas.json` URL → build web + APK.
