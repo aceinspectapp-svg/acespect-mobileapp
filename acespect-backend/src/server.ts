@@ -3,6 +3,8 @@ import { env } from './config/env';
 import { prisma } from './lib/prisma';
 import { drainAudit, flushPhotoBatches, startAuditFlusher } from './lib/auditTrail';
 import { ensureBucket, isStorageEnabled } from './lib/storage';
+import { startQueue, stopQueue } from './lib/queue';
+import { startReviewWorker } from './worker';
 import { startQcJobs } from './modules/qc/qc.jobs';
 import { ensureTemplateReferenceData } from './modules/qc/qc.templates.service';
 
@@ -61,6 +63,17 @@ async function main() {
   // Recurring work: SLA scan, DLP reminders, notification digests, retention. Set QC_JOBS=off to run an API-only instance.
   if (process.env.QC_JOBS !== 'off') startQcJobs();
 
+  // Review job queue (pg-boss, in this same Postgres). The review worker runs in-process; set REVIEW_WORKER=off for an API-only instance.
+  try {
+    await startQueue();
+    // eslint-disable-next-line no-console
+    console.log('✅ Job queue ready (pg-boss)');
+    if (process.env.REVIEW_WORKER !== 'off') await startReviewWorker();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('⚠️  Could not start the job queue (pg-boss) — the API keeps running, but review jobs will not be processed.', err);
+  }
+
   startAuditFlusher();
 
   const shutdown = async (signal: string) => {
@@ -69,6 +82,7 @@ async function main() {
     server.close(async () => {
       await flushPhotoBatches().catch(() => undefined); // photo summaries still waiting are written before the process ends
       await drainAudit(); // ...and so are audit entries still on their way
+      await stopQueue().catch(() => undefined); // running review jobs finish before the queue's pool closes
       await prisma.$disconnect();
       process.exit(0);
     });

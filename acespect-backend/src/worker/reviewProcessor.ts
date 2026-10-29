@@ -1,4 +1,3 @@
-import { Job } from 'bullmq';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { env } from '../config/env';
@@ -121,10 +120,10 @@ async function persistResults(
 }
 
 /**
- * BullMQ processor for one review job: PROCESSING → run agents → persist → DONE.
- * Throwing marks the job FAILED and lets BullMQ retry with backoff.
+ * Processor for one review job: PROCESSING → run agents → persist → DONE.
+ * Throwing marks the job FAILED and lets the queue retry with backoff.
  */
-export async function processReview(job: Job<ReviewJobData>): Promise<void> {
+export async function processReview(job: { id: string; data: ReviewJobData }): Promise<void> {
   const { reviewJobId, inspectionId, version } = job.data;
 
   await prisma.reviewJob.update({

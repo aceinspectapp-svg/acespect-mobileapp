@@ -2,7 +2,7 @@
 
 Python FastAPI + LangGraph multi-agent service that reviews submitted building
 inspections. The Node backend (`acespect-backend`) enqueues review jobs on
-BullMQ; its worker calls this service's `POST /review` per job (the "hybrid"
+a PostgreSQL-backed queue (pg-boss); its worker calls this service's `POST /review` per job (the "hybrid"
 split — queue/retries in Node, agents in Python).
 
 ## Agent graph
