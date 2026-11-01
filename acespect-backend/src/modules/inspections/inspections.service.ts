@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { audit, diffFields, firstWithin } from '../../lib/auditTrail';
-import { reviewQueue, reviewJobKey } from '../../lib/queue';
+import { enqueueReview } from '../../lib/queue';
 import { SubmitInspectionInput, SyncSectionInput, UpdateInspectionInput } from './inspections.schemas';
 
 const SEC_STATUS: Record<string, 'COMPLETE' | 'PARTIAL' | 'PENDING'> = {
@@ -294,12 +294,12 @@ async function finalize(id: string, inspectorId: string) {
     data: { inspectionId: inspection.id, version: inspection.version },
   });
 
-  // Deterministic jobId makes a duplicate enqueue a no-op.
-  await reviewQueue.add(
-    'review',
-    { reviewJobId: reviewJob.id, inspectionId: inspection.id, version: inspection.version },
-    { jobId: reviewJobKey(inspection.id, inspection.version) },
-  );
+  // De-duplicated by inspection + version, so a duplicate enqueue is a no-op.
+  await enqueueReview({
+    reviewJobId: reviewJob.id,
+    inspectionId: inspection.id,
+    version: inspection.version,
+  });
 
   return { inspection, reviewJob };
 }

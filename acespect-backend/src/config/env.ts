@@ -34,8 +34,6 @@ const schema = z.object({
   // `aud` of an incoming Google ID token. Empty = Google sign-in disabled.
   GOOGLE_CLIENT_IDS: z.string().default(''),
 
-  // Redis backing the BullMQ review queue.
-  REDIS_URL: z.string().default('redis://localhost:6379'),
   // Python LangGraph agent service the worker calls per job.
   // Empty = skeleton mode: the worker simulates a review instead of calling AI.
   AI_SERVICE_URL: z.string().default(''),
