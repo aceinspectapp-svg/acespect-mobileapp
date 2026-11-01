@@ -15,7 +15,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://acespect-mobileapp-production.up.railway.app"
+        "EXPO_PUBLIC_API_URL": "https://acespect-api-prod-cqcmgpdrbrcebggn.australiaeast-01.azurewebsites.net"
       },
       "channel": "preview"
     },
@@ -24,7 +24,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://acespect-mobileapp-production.up.railway.app"
+        "EXPO_PUBLIC_API_URL": "https://acespect-api-prod-cqcmgpdrbrcebggn.australiaeast-01.azurewebsites.net"
       },
       "channel": "production"
     }
