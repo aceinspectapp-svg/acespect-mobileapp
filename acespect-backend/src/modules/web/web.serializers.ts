@@ -138,6 +138,35 @@ export function serializeInspectionSummary(i: InspectionWithSectionSummaries) {
   };
 }
 
+/**
+ * What a reviewer sees of an inspection held by another reviewer: enough to recognise it and see who has it, none of the content
+ * (client, notes, property details, answers, photos, Egnyte link). `restricted: true` tells the web app not to open it.
+ */
+export function restrictSerialized<T extends ReturnType<typeof serializeInspection>>(s: T) {
+  return {
+    id: s.id,
+    jobNo: s.jobNo,
+    address: s.address,
+    suburb: s.suburb,
+    client: '',
+    inspectorId: s.inspectorId,
+    reviewerId: s.reviewerId,
+    date: s.date,
+    submittedAt: s.submittedAt,
+    type: s.type,
+    propertyType: '',
+    status: s.status,
+    overallProgress: 0,
+    notes: '',
+    photoArchiveUrl: '',
+    egnyte: null,
+    sections: [] as T['sections'],
+    detail: false,
+    restricted: true,
+    updatedAt: s.updatedAt,
+  };
+}
+
 export function serializeInspection(i: InspectionWithSections, withSections = true) {
   return {
     id: i.id,

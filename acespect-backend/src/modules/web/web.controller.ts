@@ -4,6 +4,7 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
 import { webService } from './web.service';
 import { audit, firstWithin } from '../../lib/auditTrail';
+import { assignmentService } from './assignment.service';
 
 export const webController = {
   listInspections: asyncHandler(async (req: Request, res: Response) => {
@@ -48,16 +49,18 @@ export const webController = {
   }),
 
   updateSection: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Section id is required');
-    const section = await webService.updateSection(id, req.body);
+    const section = await webService.updateSection(id, req.body, req.user);
     res.status(200).json({ section });
   }),
 
   updateInspection: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
-    const inspection = await webService.updateInspection(id, req.body);
+    const inspection = await webService.updateInspection(id, req.body, req.user);
     res.status(200).json({ inspection });
   }),
 
@@ -66,9 +69,10 @@ export const webController = {
   }),
 
   approveAll: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
-    res.status(200).json({ inspection: await webService.approveAllSections(id) });
+    res.status(200).json({ inspection: await webService.approveAllSections(id, req.user) });
   }),
 
   mailStatus: asyncHandler(async (_req: Request, res: Response) => {
@@ -91,16 +95,18 @@ export const webController = {
   }),
 
   resolveEgnyte: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
-    const inspection = await webService.resolveEgnyte(id);
+    const inspection = await webService.resolveEgnyte(id, req.user);
     res.status(200).json({ inspection });
   }),
 
   updateDamage: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Damage id is required');
-    const damage = await webService.updateDamage(id, req.body);
+    const damage = await webService.updateDamage(id, req.body, req.user);
     res.status(200).json({ damage });
   }),
 
@@ -115,5 +121,40 @@ export const webController = {
       limit: q.limit ? Number(q.limit) : undefined,
     });
     res.status(200).json({ logs });
+  }),
+
+  assignmentOverview: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    res.status(200).json(await assignmentService.overview(req.user));
+  }),
+
+  assignInspection: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    // No body, or no reviewerId: the caller takes it for themselves.
+    const reviewerId = (req.body as { reviewerId?: string } | undefined)?.reviewerId ?? req.user.id;
+    res.status(200).json(await assignmentService.assign(id, reviewerId, req.user));
+  }),
+
+  requestTransfer: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    res.status(201).json({ request: await assignmentService.requestTransfer(id, req.user) });
+  }),
+
+  respondTransfer: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Request id is required');
+    res.status(200).json(await assignmentService.respondToTransfer(id, (req.body as { accept: boolean }).accept, req.user));
+  }),
+
+  cancelTransfer: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Request id is required');
+    res.status(200).json(await assignmentService.cancelTransfer(id, req.user));
   }),
 };

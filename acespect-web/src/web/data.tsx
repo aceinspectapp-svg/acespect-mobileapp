@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, clearSession, getStoredUser, getToken, type AuthUser } from "./api";
 import type { Inspection, SectionReviewStatus, User } from "./mockData";
+import { composePhoneSections, saveComposedSections } from "./recomposeText";
 
 interface AppData {
   currentUser: AuthUser | null;
@@ -245,11 +246,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     await loadData(true);
   }, [loadData]);
 
+  /** One inspection in full. A section that came from the phone with its raw "Question?: answer" wording is composed into sentences (and saved). */
+  const fetchInspectionDetail = useCallback(async (id: string): Promise<Inspection> => {
+    const fresh = await api.getInspection(id);
+    const { inspection, changed } = await composePhoneSections(fresh);
+    if (changed.length) void saveComposedSections(fresh, changed);
+    return inspection;
+  }, []);
+
   const loadInspectionDetail = useCallback(async (id: string) => {
     const running = detailRuns.current.get(id);
     if (running) return running;
-    const run = api
-      .getInspection(id)
+    const run = fetchInspectionDetail(id)
       .then((fresh) => {
         setInspections((prev) => (prev.some((i) => i.id === id) ? prev.map((i) => (i.id === id ? fresh : i)) : [fresh, ...prev]));
       })
@@ -259,12 +267,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       .finally(() => { detailRuns.current.delete(id); });
     detailRuns.current.set(id, run);
     return run;
-  }, []);
+  }, [fetchInspectionDetail]);
 
   const replaceInspection = useCallback(async (id: string) => {
-    const fresh = await api.getInspection(id);
+    const fresh = await fetchInspectionDetail(id);
     setInspections((prev) => prev.map((i) => (i.id === id ? fresh : i)));
-  }, []);
+  }, [fetchInspectionDetail]);
 
   const patchSection = useCallback<AppData["patchSection"]>(
     async (inspectionId, sectionId, patch) => {

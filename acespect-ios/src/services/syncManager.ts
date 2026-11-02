@@ -1,5 +1,6 @@
+import axios from 'axios';
 import * as Network from 'expo-network';
-import { File } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import type { SubmitPayload } from '../context/InspectionDraftContext';
 import type { AnswerTree } from '../components/inspection/fieldRenderers/types';
 import { getSyncQueue, setSyncQueue, getWifiOnlySync, QueuedSubmission } from './offlineStorage';
@@ -55,6 +56,83 @@ export function subscribeProcessing(cb: ProcessingListener): () => void {
   return () => processingListeners.delete(cb);
 }
 
+/** What the sync pass is doing right now, so the screen can say so instead of just spinning. */
+export interface SyncProgress {
+  /** The inspection being sent (its job number). */
+  label: string;
+  /** "Preparing", "Uploading photo 3 of 12", "Saving the inspection on the server". */
+  step: string;
+  done: number;
+  total: number;
+}
+type ProgressListener = (p: SyncProgress | null) => void;
+const progressListeners = new Set<ProgressListener>();
+let progress: SyncProgress | null = null;
+/** When the pass last made headway (a step began or a photo finished): the stall watch below measures from here. */
+let lastTouch = 0;
+
+function setProgress(next: SyncProgress | null) {
+  progress = next;
+  if (next) lastTouch = Date.now();
+  progressListeners.forEach((l) => l(progress));
+}
+
+/** Subscribe to what the sync pass is doing; fires immediately. `null` when no pass is running. */
+export function subscribeProgress(cb: ProgressListener): () => void {
+  progressListeners.add(cb);
+  cb(progress);
+  return () => progressListeners.delete(cb);
+}
+
+export function getProgress(): SyncProgress | null {
+  return progress;
+}
+
+/** How long a pass may go without any headway (no photo finished, no step began) before it is given up on and reported. A single photo may take up to 120 s (inspectionApi.ts), so this is longer. */
+const STALL_MS = 150_000;
+
+/**
+ * Rejects when the running pass has made no headway for STALL_MS. Without it, one step that never finishes (an upload that never answers)
+ * kept the "running" flag set for ever: the banner spun, nothing was sent, and every retry was ignored because a pass was "already running".
+ */
+function stallWatch(): { stalled: Promise<never>; stop: () => void } {
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const stalled = new Promise<never>((_, reject) => {
+    timer = setInterval(() => {
+      if (Date.now() - lastTouch > STALL_MS) reject(new Error(`Stopped: no progress for ${Math.round(STALL_MS / 1000)} seconds`));
+    }, 5000);
+  });
+  stalled.catch(() => undefined);
+  return { stalled, stop: () => timer && clearInterval(timer) };
+}
+
+/** Local (not yet uploaded) photo files an entry still holds. */
+export function countLocalPhotos(payload: SubmitPayload): number {
+  const found = new Set<string>();
+  const walk = (v: unknown): void => {
+    if (typeof v === 'string') {
+      if (v.startsWith('file:')) found.add(v);
+    } else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === 'object') Object.values(v as Record<string, unknown>).forEach(walk);
+  };
+  for (const section of payload.sections) {
+    walk(section.answers);
+    walk(section.photos);
+    walk(section.damages);
+  }
+  return found.size;
+}
+
+/** Why a failed attempt failed, in words the inspector can read: what the server said (with its status), and where in the pass it stopped. */
+function describeFailure(err: unknown): string {
+  let text = err instanceof Error ? err.message : 'Unknown error';
+  if (axios.isAxiosError(err) && err.response) {
+    const server = (err.response.data as { error?: { message?: string } } | undefined)?.error?.message;
+    text = `Server answered ${err.response.status}${server ? `: ${server}` : ''}`;
+  }
+  return progress?.step ? `${text} (at: ${progress.step})` : text;
+}
+
 async function persist() {
   await setSyncQueue(queueCache);
   notify();
@@ -85,7 +163,7 @@ function isLocalUri(u: string): boolean {
  */
 async function deleteLocalFile(uri: string): Promise<void> {
   try {
-    new File(uri).delete();
+    new File(currentPath(uri)).delete();
   } catch {
     // Ignore -- already gone, or the platform declined to remove it.
   }
@@ -140,9 +218,25 @@ export class PhotoFileMissing extends Error {
     this.name = 'PhotoFileMissing';
   }
 }
+/**
+ * A saved photo's path names the app's data folder as it was when the photo was taken. The phone can give the app a new data folder
+ * (after an app update or reinstall) while keeping the files, so an old path then points at nothing -- and the photo is wrongly reported
+ * as gone. The same file is found again under the folder the app has now.
+ */
+const OLD_DATA_FOLDER = /^file:\/\/\/(?:private\/)?var\/mobile\/Containers\/Data\/Application\/[0-9A-Fa-f-]{36}\/(.*)$/;
+function currentPath(uri: string): string {
+  const m = OLD_DATA_FOLDER.exec(uri);
+  if (!m) return uri;
+  try {
+    const base = Paths.document.uri.replace(/Documents\/?$/, '');
+    return base !== Paths.document.uri ? `${base}${m[1]}` : uri;
+  } catch {
+    return uri;
+  }
+}
 function localFileMissing(uri: string): boolean {
   try {
-    return !new File(uri).exists;
+    return !new File(currentPath(uri)).exists;
   } catch {
     return false; // cannot tell (web, or a platform without the file API): try the upload and let it speak
   }
@@ -154,8 +248,11 @@ async function uploadAndForget(uri: string, opts: { inspectionId?: string; secti
   const running = photoInFlight.get(uri);
   if (running) return running;
   if (isLocalUri(uri) && localFileMissing(uri)) throw new PhotoFileMissing(uri);
-  const work = uploadPhoto(uri, { ...opts, photoNumber: getPhotoNumber(uri) })
+  // Shown on the banner, and what the stall watch counts as headway: without it a long upload looks like a stuck one.
+  if (progress) setProgress({ ...progress, step: `Uploading photo ${progress.done + 1} of ${progress.total}` });
+  const work = uploadPhoto(currentPath(uri), { ...opts, photoNumber: getPhotoNumber(uri), idUri: uri })
     .then((url) => {
+      if (progress) setProgress({ ...progress, done: progress.done + 1 });
       photoCache.set(uri, url);
       if (opts.sectionKey) photoMeta.set(uri, { sectionKey: opts.sectionKey, ...(opts.jobNo ? { jobNo: opts.jobNo } : {}), ...(opts.inspectionId ? { inspectionId: opts.inspectionId } : {}) });
       saveCacheSoon();
@@ -321,6 +418,8 @@ export function noteSectionAnswers(sectionKey: string, answers: AnswerTree | und
 export function resetPhotoBackup(): void {
   bySection.clear();
   lostInBackup.clear();
+  setAside.clear();
+  failures.clear();
   backupJobNo = undefined;
   pausedUntil = 0;
   pumpFailures = 0;
@@ -331,9 +430,13 @@ export function resetPhotoBackup(): void {
   emitBackup();
 }
 
+/** Photos the background backup has failed on twice: it moves on without them (the final submit tries them again), so one bad photo cannot hold up the rest. */
+const setAside = new Set<string>();
+const failures = new Map<string, number>();
+
 function nextToSend(): [string, PhotoMeta] | undefined {
   for (const m of bySection.values()) {
-    for (const [uri, meta] of m) if (!photoCache.has(uri) && !photoInFlight.has(uri) && !lostInBackup.has(uri)) return [uri, meta];
+    for (const [uri, meta] of m) if (!photoCache.has(uri) && !photoInFlight.has(uri) && !lostInBackup.has(uri) && !setAside.has(uri)) return [uri, meta];
   }
   return undefined;
 }
@@ -375,6 +478,9 @@ async function backupWorker(): Promise<void> {
           const e = err as { response?: { status?: number; data?: { error?: { message?: string } } }; message?: string };
           const st = e.response?.status;
           pumpFailures += 1;
+          const n = (failures.get(uri) ?? 0) + 1;
+          failures.set(uri, n);
+          if (n >= 2) setAside.add(uri);
           lastBackupError = e.response?.data?.error?.message ?? e.message ?? 'not reachable';
           waitReason = 'connection';
           reportProblem('photo backup', err, { jobNo: backupJobNo, failures: pumpFailures, ...(st ? { status: st } : {}) });
@@ -440,6 +546,29 @@ function folderSegment(key: string): string | null {
  * `internal_areas/ceilings/`, not lumped into one flat `internal_areas/`
  * folder with every other sub-area's photos.
  */
+interface UploadJob {
+  uri: string;
+  opts: { inspectionId?: string; sectionKey?: string; jobNo?: string };
+}
+
+/** How many photos of one inspection go to the server at the same time. The server spaces its Egnyte calls, so more than a few gains nothing. */
+const UPLOAD_PARALLEL = 4;
+
+/** Sends the listed photos a few at a time. A failure is not handled here: the ordered pass that follows meets that photo again and decides. */
+async function uploadInParallel(jobs: UploadJob[]): Promise<void> {
+  const todo = [...new Map(jobs.map((j) => [j.uri, j])).values()];
+  const worker = async (): Promise<void> => {
+    for (let job = todo.shift(); job; job = todo.shift()) {
+      try {
+        await uploadAndForget(job.uri, job.opts);
+      } catch {
+        /* retried, and judged, by the ordered pass */
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(UPLOAD_PARALLEL, todo.length) }, worker));
+}
+
 async function walkAndResolvePhotos(
   tree: AnswerTree | undefined,
   folderPath: string[],
@@ -447,6 +576,10 @@ async function walkAndResolvePhotos(
   urlByUri: Map<string, string>,
   jobNo?: string,
   lost?: Set<string>,
+  /** When given, the walk only lists the photos still to send (with the folder each belongs in) and uploads nothing. */
+  jobs?: UploadJob[],
+  /** When given, a photo that fails for any other reason is recorded here and the walk carries on, so every bad photo is found in one pass. */
+  failed?: Map<string, unknown>,
 ): Promise<void> {
   if (!tree) return;
   for (const [key, value] of Object.entries(tree)) {
@@ -459,6 +592,12 @@ async function walkAndResolvePhotos(
       const keep: string[] = [];
       for (const uri of arr) {
         if (!isLocalUri(uri)) { keep.push(uri); continue; }
+        if (lost?.has(uri)) continue; // gone from the phone, or left out by the inspector
+        if (jobs) {
+          if (!urlByUri.has(uri)) jobs.push({ uri, opts: { inspectionId, sectionKey: childPath.join(':'), jobNo } });
+          keep.push(uri);
+          continue;
+        }
         try {
           if (!urlByUri.has(uri)) {
             urlByUri.set(uri, await uploadAndForget(uri, { inspectionId, sectionKey: childPath.join(':'), jobNo }));
@@ -467,6 +606,7 @@ async function walkAndResolvePhotos(
         } catch (err) {
           // A photo whose file is gone from the phone can never be sent: leave it out (and count it) rather than block everything else.
           if (err instanceof PhotoFileMissing && lost) lost.add(uri);
+          else if (failed) { failed.set(uri, err); keep.push(uri); }
           else throw err;
         }
       }
@@ -474,12 +614,12 @@ async function walkAndResolvePhotos(
     } else if (Array.isArray(value)) {
       // Repeating-group / damage-list instances (strip/checklist presentation).
       for (const inst of value as AnswerTree[]) {
-        await walkAndResolvePhotos(inst, childPath, inspectionId, urlByUri, jobNo, lost);
+        await walkAndResolvePhotos(inst, childPath, inspectionId, urlByUri, jobNo, lost, jobs, failed);
       }
     } else if (typeof value === 'object') {
       // A single nested compound value, or fixed-tabs' Record<instanceKey, AnswerTree> --
       // either way its own entries recurse the same way, gaining one more folder level.
-      await walkAndResolvePhotos(value as AnswerTree, childPath, inspectionId, urlByUri, jobNo, lost);
+      await walkAndResolvePhotos(value as AnswerTree, childPath, inspectionId, urlByUri, jobNo, lost, jobs, failed);
     }
   }
 }
@@ -544,11 +684,20 @@ async function resendMissing(payload: SubmitPayload, ids: string[], lost: Set<st
   return true;
 }
 
-export async function runSubmission(payload: SubmitPayload): Promise<SubmitResult> {
+/** Some photos could not be sent (the rest were). The inspection is not saved without them unless the inspector chooses to leave them out. */
+export class PhotosNotSent extends Error {
+  constructor(public readonly uris: string[], cause: unknown) {
+    super(`${uris.length} photo${uris.length === 1 ? '' : 's'} could not be sent: ${describeFailure(cause)}`);
+    this.name = 'PhotosNotSent';
+  }
+}
+
+export async function runSubmission(payload: SubmitPayload, leaveOut?: Set<string>): Promise<SubmitResult> {
   const inspectionId = payload.id;
   const jobNo = payload.jobNo;
   const urlByUri = photoCache;
-  const lost = new Set<string>();
+  const lost = new Set<string>(leaveOut);
+  const failed = new Map<string, unknown>();
   const namedLocally = localFilesNamedIn(payload);
   mergePhotoNumbers(payload.photoNumbers); // a queued submission keeps the numbers its photos were given
 
@@ -556,8 +705,13 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
   // photos-type field (wherever it's nested) gets uploaded under a folder
   // that matches its own sub-area, and the field's own stored value is what
   // ends up holding the real URL -- not just a separate flat summary list.
+  const jobs: UploadJob[] = [];
   for (const section of payload.sections) {
-    await walkAndResolvePhotos(section.answers as AnswerTree | undefined, [section.key], inspectionId, urlByUri, jobNo, lost);
+    await walkAndResolvePhotos(section.answers as AnswerTree | undefined, [section.key], inspectionId, urlByUri, jobNo, lost, jobs);
+  }
+  await uploadInParallel(jobs); // the walk below then finds each photo already sent
+  for (const section of payload.sections) {
+    await walkAndResolvePhotos(section.answers as AnswerTree | undefined, [section.key], inspectionId, urlByUri, jobNo, lost, undefined, failed);
   }
 
   // Fallback safety net: `section.photos` / `damages[].photos` are a flat
@@ -571,13 +725,16 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
     try {
       urlByUri.set(uri, await uploadAndForget(uri, { inspectionId, sectionKey, jobNo }));
     } catch (err) {
-      if (err instanceof PhotoFileMissing) lost.add(uri); else throw err;
+      if (err instanceof PhotoFileMissing) lost.add(uri); else failed.set(uri, err);
     }
   };
   for (const section of payload.sections) {
     for (const uri of section.photos ?? []) await uploadLeftover(uri, section.key);
     for (const d of section.damages ?? []) for (const uri of d.photos ?? []) await uploadLeftover(uri, section.key);
   }
+
+  // Every photo that failed is known by now. Nothing is saved on the server without them: the inspector decides (see leaveOutStuckPhotos).
+  if (failed.size > 0) throw new PhotosNotSent([...failed.keys()], [...failed.values()][0]);
 
   const resolve = (u: string) => urlByUri.get(u) ?? u;
   for (const section of payload.sections) {
@@ -587,6 +744,7 @@ export async function runSubmission(payload: SubmitPayload): Promise<SubmitResul
 
   // Ask the server to check, before it stores anything, that it really holds every photo this inspection points at. If it does not (it
   // names them), send just those again and submit once more -- so an inspection is never stored with photos missing.
+  if (progress) setProgress({ ...progress, step: 'Saving the inspection on the server' });
   payload.verifyPhotos = true;
   let result: SubmitResult | undefined;
   for (let round = 0; !result; round++) {
@@ -655,8 +813,12 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
     for (const id of ids) {
       const entry = queueCache.find((e) => e.id === id);
       if (!entry) continue; // already synced and removed earlier in this same pass
+      setProgress({ label: entry.payload.jobNo || entry.payload.address || 'inspection', step: 'Preparing', done: 0, total: countLocalPhotos(entry.payload) });
+      const watch = stallWatch();
       try {
-        await runSubmission(entry.payload);
+        const work = runSubmission(entry.payload, entry.leaveOut?.length ? new Set(entry.leaveOut) : undefined);
+        work.catch(() => undefined); // if the stall watch wins, a late failure of this must not surface as an unhandled rejection
+        await Promise.race([work, watch.stalled]);
         recordEvent('queue.delivered', { inspectionId: entry.payload.id, jobNo: entry.payload.jobNo, message: 'Queued inspection delivered', metadata: { attempts: entry.attempts + 1 } });
         queueCache = queueCache.filter((e) => e.id !== id);
         await persist();
@@ -668,13 +830,16 @@ export async function processQueue(opts?: { force?: boolean }): Promise<void> {
           await persist();
           continue;
         }
-        const message = err instanceof Error ? err.message : 'Unknown error';
+        const message = err instanceof PhotosNotSent ? err.message : describeFailure(err);
         reportProblem('queued submission', err, { jobNo: entry.payload.jobNo, attempts: entry.attempts + 1, sections: entry.payload.sections.length });
-        queueCache = queueCache.map((e) => (e.id === id ? { ...e, attempts: e.attempts + 1, lastError: message } : e));
+        queueCache = queueCache.map((e) => (e.id === id ? { ...e, attempts: e.attempts + 1, lastError: message, stuckPhotos: err instanceof PhotosNotSent ? err.uris : undefined } : e));
         await persist();
+      } finally {
+        watch.stop();
       }
     }
   } finally {
+    setProgress(null);
     setProcessing(false);
     scheduleQueueRetry();
   }
@@ -698,6 +863,19 @@ function scheduleQueueRetry(): void {
   }, wait);
 }
 
+/**
+ * The inspector's choice, for an inspection waiting only because some photos will not go up: send it without those photos. They stay on
+ * the phone but are not part of the inspection. Never automatic, because a photo that fails now (a busy or full photo store) may go up later.
+ */
+export async function leaveOutStuckPhotos(id: string): Promise<number> {
+  const entry = queueCache.find((e) => e.id === id);
+  const stuck = entry?.stuckPhotos ?? [];
+  if (!entry || stuck.length === 0) return 0;
+  queueCache = queueCache.map((e) => (e.id === id ? { ...e, leaveOut: [...new Set([...(e.leaveOut ?? []), ...stuck])], stuckPhotos: undefined } : e));
+  await persist();
+  return stuck.length;
+}
+
 /** An inspector-triggered "give up on this one" -- see the long-press queue-details alert on SelectInspectionTypeScreen. Never called automatically; a payload with a genuinely bad local file needs a human to decide it's not coming back. */
 export async function removeFromQueue(id: string): Promise<void> {
   queueCache = queueCache.filter((e) => e.id !== id);
@@ -715,6 +893,26 @@ export function retryNow(): boolean {
   if (processing) return false;
   void processQueue({ force: true });
   return true;
+}
+
+/** What a manual retry achieved, so the inspector sees a result instead of a button that seems to do nothing. */
+export interface RetryReport {
+  started: boolean;
+  sent: number;
+  failed: { label: string; message: string }[];
+}
+
+/** Like retryNow, but resolves once the pass is over and says how many inspections went through and why the others did not. */
+export async function retryNowAndReport(): Promise<RetryReport> {
+  if (processing) return { started: false, sent: 0, failed: [] };
+  const before = queueCache.map((e) => e.id);
+  await processQueue({ force: true });
+  const left = queueCache.filter((e) => before.includes(e.id));
+  return {
+    started: true,
+    sent: before.length - left.length,
+    failed: left.map((e) => ({ label: e.payload.jobNo || e.payload.address || 'Inspection', message: e.lastError ?? 'No answer from the server' })),
+  };
 }
 
 /** Call once, near app startup. Hydrates the queue from disk, tries a flush, and starts watching for connectivity regained. */

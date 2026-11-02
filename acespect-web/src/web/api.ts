@@ -14,6 +14,12 @@ import type {
 } from "./qcTypes";
 import type { QcSpecPayload } from "./qcSpec";
 
+export interface AssignmentOverview {
+  reviewers: { id: string; name: string; assigned: number; open: number }[];
+  unassigned: number;
+  requests: { id: string; inspectionId: string; jobNo: string; address: string; fromReviewerId: string; toReviewerId: string; createdAt: string }[];
+}
+
 export const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000/api/v1";
 
@@ -370,6 +376,17 @@ export const api = {
 
   /** Re-run the Egnyte folder placement for one inspection (after a failure, or once its job number was corrected). */
   resolveEgnyte: (id: string) => req<{ inspection: Inspection }>(`/web/inspections/${id}/egnyte/resolve`, { method: "POST" }).then((d) => d.inspection),
+
+  /** Per-reviewer counts, the unassigned count and the pending hand-over requests the caller is part of. */
+  getAssignments: () => req<AssignmentOverview>("/web/assignments"),
+  /** Take an inspection (no reviewerId), or assign it to a reviewer. */
+  assignInspection: (id: string, reviewerId?: string) =>
+    req<{ inspectionId: string; reviewerId: string; changed: boolean }>(`/web/inspections/${id}/assign`, { method: "POST", body: JSON.stringify(reviewerId ? { reviewerId } : {}) }),
+  /** Ask the reviewer who holds an inspection to hand it over. */
+  requestTransfer: (id: string) => req<{ request: { id: string } }>(`/web/inspections/${id}/transfer-requests`, { method: "POST" }),
+  respondTransfer: (requestId: string, accept: boolean) =>
+    req<{ id: string; status: string }>(`/web/transfer-requests/${requestId}/respond`, { method: "POST", body: JSON.stringify({ accept }) }),
+  cancelTransfer: (requestId: string) => req<{ id: string; status: string }>(`/web/transfer-requests/${requestId}`, { method: "DELETE" }),
 
   updateInspection: (id: string, patch: { status?: InspectionStatus; notes?: string; reviewerId?: string | null }) =>
     req<{ inspection: Inspection }>(`/web/inspections/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),

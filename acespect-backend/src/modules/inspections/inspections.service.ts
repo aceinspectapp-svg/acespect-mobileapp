@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { audit, diffFields, firstWithin } from '../../lib/auditTrail';
-import { reviewQueue, reviewJobKey } from '../../lib/queue';
+import { enqueueReview } from '../../lib/queue';
 import { SubmitInspectionInput, SyncSectionInput, UpdateInspectionInput } from './inspections.schemas';
 
 const SEC_STATUS: Record<string, 'COMPLETE' | 'PARTIAL' | 'PENDING'> = {
@@ -277,39 +277,29 @@ async function update(id: string, inspectorId: string, input: UpdateInspectionIn
 }
 
 /**
- * Finalize a draft: assign a reviewer, mark it SUBMITTED and enqueue the async
+ * Finalize a draft: mark it SUBMITTED (unassigned -- any reviewer can take it) and enqueue the async
  * multi-agent review. This is the point of no return for the inspector -- after
  * this the inspection is in the reviewer's queue and no longer editable.
  */
 async function finalize(id: string, inspectorId: string) {
   await requireOwnDraft(id, inspectorId);
 
-  // Land it in a reviewer's queue (first active reviewer).
-  const reviewer = await prisma.user.findFirst({
-    where: { role: 'REVIEWER', isActive: true },
-    orderBy: { createdAt: 'asc' },
-    select: { id: true },
-  });
-
+  // Deliberately NOT given to a reviewer: it waits unassigned until a reviewer (or an admin) takes it.
   const inspection = await prisma.inspection.update({
     where: { id },
-    data: {
-      status: 'SUBMITTED',
-      submittedAt: new Date(),
-      reviewerId: reviewer?.id ?? null,
-    },
+    data: { status: 'SUBMITTED', submittedAt: new Date() },
   });
 
   const reviewJob = await prisma.reviewJob.create({
     data: { inspectionId: inspection.id, version: inspection.version },
   });
 
-  // Deterministic jobId makes a duplicate enqueue a no-op.
-  await reviewQueue.add(
-    'review',
-    { reviewJobId: reviewJob.id, inspectionId: inspection.id, version: inspection.version },
-    { jobId: reviewJobKey(inspection.id, inspection.version) },
-  );
+  // De-duplicated by inspection + version, so a duplicate enqueue is a no-op.
+  await enqueueReview({
+    reviewJobId: reviewJob.id,
+    inspectionId: inspection.id,
+    version: inspection.version,
+  });
 
   return { inspection, reviewJob };
 }

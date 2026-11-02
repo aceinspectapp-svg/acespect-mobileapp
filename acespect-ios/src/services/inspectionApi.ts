@@ -21,13 +21,13 @@ async function stablePhotoId(inspectionId: string, sectionKey: string | undefine
 
 export async function uploadPhoto(
   uri: string,
-  opts?: { inspectionId?: string; sectionKey?: string; jobNo?: string; photoNumber?: number },
+  opts?: { inspectionId?: string; sectionKey?: string; jobNo?: string; photoNumber?: number; idUri?: string },
 ): Promise<string> {
   const name = uri.split('/').pop() || 'photo.jpg';
   const rawExt = (name.split('.').pop() || 'jpg').toLowerCase();
   const mime = rawExt === 'jpg' ? 'image/jpeg' : `image/${rawExt}`;
 
-  const photoId = opts?.inspectionId ? await stablePhotoId(opts.inspectionId, opts.sectionKey, uri) : undefined;
+  const photoId = opts?.inspectionId ? await stablePhotoId(opts.inspectionId, opts.sectionKey, opts.idUri ?? uri) : undefined;
   // A fresh FormData for every attempt: one that has already been sent cannot be sent again (that is what showed up as "Network Error").
   const buildForm = (): FormData => {
     const form = new FormData();

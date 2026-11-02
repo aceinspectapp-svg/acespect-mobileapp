@@ -28,6 +28,10 @@ export interface QueuedSubmission {
   payload: SubmitPayload;
   attempts: number;
   lastError?: string;
+  /** Photos that would not go up on the last attempt (the rest did). */
+  stuckPhotos?: string[];
+  /** Photos the inspector chose to send this inspection without. */
+  leaveOut?: string[];
   queuedAt: string;
 }
 

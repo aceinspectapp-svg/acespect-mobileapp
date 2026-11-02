@@ -18,23 +18,26 @@ export const reviewController = {
     res.status(200).json({ inspectors });
   }),
 
-  listInspections: asyncHandler(async (_req: Request, res: Response) => {
-    const inspections = await reviewService.listInspections();
+  listInspections: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const inspections = await reviewService.listInspections(req.user);
     res.status(200).json({ inspections });
   }),
 
   getInspectionDetail: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
-    const inspection = await reviewService.getInspectionDetail(id);
+    const inspection = await reviewService.getInspectionDetail(id, req.user);
     res.status(200).json({ inspection });
   }),
 
   createPostDilapidation: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Inspection id is required');
     const { inspectorId } = req.body as { inspectorId: string };
-    const assignment = await reviewService.createPostDilapidation(id, inspectorId);
+    const assignment = await reviewService.createPostDilapidation(id, inspectorId, req.user);
     await audit({ category: 'web', action: 'inspection.assign_post_dilapidation', inspectionId: id, target: { type: 'Inspection', id }, after: { inspectorId }, message: 'Post-dilapidation job assigned to an inspector', metadata: { assignment: (assignment as { id?: string } | null)?.id } });
     res.status(201).json({ assignment });
   }),
@@ -43,7 +46,7 @@ export const reviewController = {
     if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('Summary id is required');
-    const decision = await reviewService.recordDecision(id, req.user.id, req.body);
+    const decision = await reviewService.recordDecision(id, req.user, req.body);
     await audit({ category: 'web', action: 'review.decision', target: { type: 'ReviewSummary', id }, message: 'Review decision recorded', after: { decision: (req.body as { decision?: unknown })?.decision }, metadata: { id: (decision as { id?: string } | null)?.id } });
     res.status(201).json({ decision });
   }),

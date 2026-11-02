@@ -15,16 +15,5 @@ services:
     volumes:
       - acespect_pgdata:/var/lib/postgresql/data
 
-  # Redis backs the BullMQ review queue.
-  redis:
-    image: redis:7-alpine
-    container_name: acespect-redis
-    restart: unless-stopped
-    ports:
-      - '6379:6379'
-    volumes:
-      - acespect_redisdata:/data
-
 volumes:
   acespect_pgdata:
-  acespect_redisdata:
