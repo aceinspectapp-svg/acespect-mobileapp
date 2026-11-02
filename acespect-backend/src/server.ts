@@ -2,7 +2,7 @@ import { createApp } from './app';
 import { env } from './config/env';
 import { prisma } from './lib/prisma';
 import { drainAudit, flushPhotoBatches, startAuditFlusher } from './lib/auditTrail';
-import { ensureBucket, isStorageEnabled } from './lib/storage';
+import { ensureBucket, isStorageEnabled, storageDescription, storageProvider } from './lib/storage';
 import { startQueue, stopQueue } from './lib/queue';
 import { startReviewWorker } from './worker';
 import { startQcJobs } from './modules/qc/qc.jobs';
@@ -23,21 +23,22 @@ async function main() {
     console.error('⚠️  Could not connect to the database. Check DATABASE_URL.', err);
   }
 
-  // Photo storage is Egnyte-backed (see lib/storage.ts) -- requires
-  // EGNYTE_DOMAIN/EGNYTE_API_TOKEN to be set, or uploads fail loudly at
-  // request time rather than silently.
+  // Photo storage is Azure Blob Storage or Egnyte (STORAGE_PROVIDER, see lib/storage.ts) -- the provider must be configured, or
+  // uploads fail loudly at request time rather than silently.
   try {
+    // eslint-disable-next-line no-console
+    console.log(`📦 Photo storage provider: ${storageProvider()}`);
     if (isStorageEnabled()) {
       await ensureBucket();
       // eslint-disable-next-line no-console
-      console.log('✅ Photo storage ready (Egnyte)');
+      console.log(`✅ Photo storage ready (${storageDescription()})`);
     } else {
       // eslint-disable-next-line no-console
-      console.warn('⚠️  EGNYTE_DOMAIN/EGNYTE_API_TOKEN not set — photo uploads will fail.');
+      console.warn(storageProvider() === 'azure' ? '⚠️  Azure storage (AZURE_STORAGE_ACCOUNT_NAME or AZURE_STORAGE_CONNECTION_STRING) not set — photo uploads will fail.' : '⚠️  EGNYTE_DOMAIN/EGNYTE_API_TOKEN not set — photo uploads will fail.');
     }
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('⚠️  Could not verify photo storage.', err);
+    console.error(`⚠️  Could not verify photo storage (${storageProvider()}).`, err);
   }
 
   const server = app.listen(env.PORT, () => {

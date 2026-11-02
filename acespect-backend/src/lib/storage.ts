@@ -1,9 +1,11 @@
 import { createHash, randomUUID } from 'crypto';
 import sharp from 'sharp';
-import { env } from '../config/env';
+import { Readable } from 'stream';
+import { env, isProd } from '../config/env';
 import { ApiError } from '../utils/ApiError';
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
+import { azureConfigured, azureTarget, ensureContainer, getBlob, putBlob } from './blobStorage';
 import { mergeFolder, resolveInspectionFolder, type EgnyteFs, type Resolution } from './egnyteJobFolders';
 
 // Every photo used in the review UI and the generated report is resized to
@@ -47,8 +49,21 @@ function authHeaders(): Record<string, string> {
 /** Local development only: with no Egnyte configured, files are kept in the `photos` table so the app and its tests still work. */
 export const useDbStorage = (): boolean => !isStorageEnabled() && env.NODE_ENV !== 'production';
 
+/**
+ * Where files are kept. Azure Blob Storage is the default in production; Egnyte is still available (STORAGE_PROVIDER=egnyte) and is
+ * the default elsewhere so existing local setups behave as before. With Azure there are no Egnyte job folders: files sit under
+ * {inspectionId}/{section}/{photo} in the container and the folder placement/settling below does not apply.
+ */
+export const storageProvider = (): 'azure' | 'egnyte' => env.STORAGE_PROVIDER ?? (isProd ? 'azure' : 'egnyte');
+const usesEgnyte = (): boolean => storageProvider() === 'egnyte';
+
 export function isStorageEnabled(): boolean {
-  return !!env.EGNYTE_DOMAIN && !!env.EGNYTE_API_TOKEN;
+  return usesEgnyte() ? !!env.EGNYTE_DOMAIN && !!env.EGNYTE_API_TOKEN : azureConfigured();
+}
+
+/** Names the active provider and what it is pointed at, for the start-up log. */
+export function storageDescription(): string {
+  return usesEgnyte() ? 'Egnyte' : `Azure Blob Storage: ${azureTarget()}`;
 }
 
 /**
@@ -94,6 +109,10 @@ export async function egnyteFetch(url: string, init: RequestInit): Promise<Respo
 /** Create the root inspection-photos folder if it doesn't exist. Safe to call on boot. */
 export async function ensureBucket(): Promise<boolean> {
   if (!isStorageEnabled()) return false;
+  if (!usesEgnyte()) {
+    await ensureContainer();
+    return true;
+  }
   const path = encodeEgnytePath(env.EGNYTE_ROOT_FOLDER);
   const res = await withRetry(() =>
     fetch(`${egnyteBase()}/pubapi/v1/fs${path}`, {
@@ -122,7 +141,7 @@ export async function ensureBucket(): Promise<boolean> {
  * needs no per-job setup. Null when photo storage isn't configured.
  */
 export function inspectionFolderUrl(jobNo: string | null | undefined, inspectionId: string, egnytePath?: string | null): string | null {
-  if (!isStorageEnabled()) return null;
+  if (!isStorageEnabled() || !usesEgnyte()) return null;
   // The resolved folder (inside its batch) when the job was placed; the old {root}/{job} guess for older records.
   if (egnytePath) return `${egnyteBase()}/app/index.do#storage/files/1${encodeEgnytePath(egnytePath.startsWith('/') ? egnytePath : `/${egnytePath}`)}`;
   const segment = safeSegment((jobNo ?? '').trim()) || safeSegment(inspectionId);
@@ -178,17 +197,24 @@ export async function qcJobFolder(projectId: string): Promise<string> {
   return clash > 0 ? `${job}_${short}` : job;
 }
 
+/** The storage key of a file. In Azure it is the blob name (no leading slash, no Egnyte root); in Egnyte it is the full path. */
 function photoPath(id: string, inspectionId: string | undefined, sectionKey: string | undefined, suffix = '', tenantId?: string, jobFolder?: string, destination?: string, name: string = id): string {
+  const path = egnytePhotoPath(id, inspectionId, sectionKey, suffix, tenantId, jobFolder, destination, name);
+  return usesEgnyte() ? path : path.replace(/^\/+/, '');
+}
+
+function egnytePhotoPath(id: string, inspectionId: string | undefined, sectionKey: string | undefined, suffix = '', tenantId?: string, jobFolder?: string, destination?: string, name: string = id): string {
   // An inspector's inspection whose job number is known: {batch}/{job}/{section}/{photo} (see lib/egnyteJobFolders.ts).
   if (destination && sectionKey) return `${destination}/${sectionFolderPath(sectionKey)}/${name}${suffix}`;
   if (destination) return `${destination}/${name}${suffix}`;
   // Client files live under their own folder so one client's files are never mixed with another's; a QC project's files
   // sit under its job-number folder instead.
+  const base = usesEgnyte() ? env.EGNYTE_ROOT_FOLDER : '';
   const root = jobFolder
-    ? `${env.EGNYTE_ROOT_FOLDER}/${safeSegment(jobFolder)}`
+    ? `${base}/${safeSegment(jobFolder)}`
     : tenantId
-      ? `${env.EGNYTE_ROOT_FOLDER}/tenants/${safeSegment(tenantId)}`
-      : env.EGNYTE_ROOT_FOLDER;
+      ? `${base}/tenants/${safeSegment(tenantId)}`
+      : base;
   if (inspectionId && sectionKey) {
     return `${root}/${safeSegment(inspectionId)}/${sectionFolderPath(sectionKey)}/${name}${suffix}`;
   }
@@ -306,7 +332,7 @@ export const egnyteRootFolder = egnyteRoot;
  * repoint the photo index. Safe to repeat. Returns where the inspection's folder is, or null when Egnyte is not configured.
  */
 export async function settleInspectionFolder(inspectionId: string, jobNo: string | null | undefined, previousPath?: string | null): Promise<Resolution | null> {
-  if (!isStorageEnabled()) return null;
+  if (!isStorageEnabled() || !usesEgnyte()) return null;
   const resolution = await resolveInspectionDestination(jobNo, inspectionId, { createJobFolder: false, fresh: true });
   if (resolution.status === 'unassigned') return resolution;
 
@@ -324,6 +350,12 @@ export async function settleInspectionFolder(inspectionId: string, jobNo: string
   // An inspection that never had photos still gets its folder, so the office finds it.
   await egnyteFs.createFolder(resolution.path);
   return resolution;
+}
+
+/** Writes one file to the active provider under the given key. */
+async function putObject(path: string, buffer: Buffer, contentType: string): Promise<void> {
+  if (!usesEgnyte()) return putBlob(path, buffer, contentType);
+  return uploadToEgnyte(path, buffer, contentType);
 }
 
 async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string): Promise<void> {
@@ -452,7 +484,7 @@ async function storePhoto(
   }
   // An inspector's photo with a job number goes straight into {batch}/{job}/; one without (an older app build) goes in the draft's own folder
   // and is moved at submit (settleInspectionFolder).
-  const place = !tenantId && !jobFolder && inspectionId && opts.jobNo !== undefined ? await resolveInspectionDestination(opts.jobNo, inspectionId) : undefined;
+  const place = usesEgnyte() && !tenantId && !jobFolder && inspectionId && opts.jobNo !== undefined ? await resolveInspectionDestination(opts.jobNo, inspectionId) : undefined;
   const destination = place?.path;
   // The photo's number in its inspection is its file name (1.jpg, 2.jpg ...). If another photo already has that exact name in the same folder
   // (a second inspection of the same job and section), the id is added so nothing is ever overwritten.
@@ -463,13 +495,13 @@ async function storePhoto(
     if (taken) name = `${opts.photoNumber}-${id.slice(0, 8)}`;
   }
   const storageKey = photoPath(id, inspectionId, sectionKey, '.jpg', tenantId, jobFolder, destination, name);
-  await uploadToEgnyte(storageKey, resized, 'image/jpeg');
+  await putObject(storageKey, resized, 'image/jpeg');
 
   // Full-quality original, alongside the compressed copy above. Non-fatal:
   // every in-app view depends on the compressed copy having uploaded (which
   // already happened by this point), not this one.
   try {
-    await uploadToEgnyte(photoPath(id, inspectionId, sectionKey, `-original.${ext}`, tenantId, jobFolder, destination, name), buffer, contentType);
+    await putObject(photoPath(id, inspectionId, sectionKey, `-original.${ext}`, tenantId, jobFolder, destination, name), buffer, contentType);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('⚠️  Failed to store the full-quality original (compressed report copy still saved).', err);
@@ -502,10 +534,11 @@ export async function uploadDocument(buffer: Buffer, contentType: string, ext: s
     return { id, storageKey: `db:${id}`, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(buffer).digest('hex') };
   }
   const safeExt = ext.replace(/[^a-z0-9]/gi, '').slice(0, 8) || 'bin';
-  const storageKey = `${env.EGNYTE_ROOT_FOLDER}${jobFolder ? `/${safeSegment(jobFolder)}` : tenantId ? `/tenants/${safeSegment(tenantId)}` : ''}/${folder.split('/').map(safeSegment).filter(Boolean).join('/')}/${id}.${safeExt}`;
-  await uploadToEgnyte(storageKey, buffer, contentType);
-  await prisma.photo.create({ data: { id, storageKey, contentType } });
-  return { id, storageKey, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(buffer).digest('hex') };
+  const storageKey = `${usesEgnyte() ? env.EGNYTE_ROOT_FOLDER : ''}${jobFolder ? `/${safeSegment(jobFolder)}` : tenantId ? `/tenants/${safeSegment(tenantId)}` : ''}/${folder.split('/').map(safeSegment).filter(Boolean).join('/')}/${id}.${safeExt}`;
+  const key = usesEgnyte() ? storageKey : storageKey.replace(/^\/+/, '');
+  await putObject(key, buffer, contentType);
+  await prisma.photo.create({ data: { id, storageKey: key, contentType } });
+  return { id, storageKey: key, url: `/api/v1/media/${id}`, storedHash: createHash('sha256').update(buffer).digest('hex') };
 }
 
 // ---- serving photos back ---------------------------------------------------------------------------------------------------
@@ -543,7 +576,23 @@ function keepPhoto(id: string, bytes: Buffer, contentType: string): void {
   }
 }
 
+async function loadPhotoFromAzure(id: string): Promise<FetchedPhoto> {
+  const indexed = await prisma.photo.findUnique({ where: { id } });
+  const blob = await getBlob(indexed?.storageKey ?? photoPath(id, undefined, undefined, '.jpg'));
+  if (!blob) return { kind: 'none' };
+  const contentType = indexed?.contentType ?? blob.contentType ?? 'image/jpeg';
+  if (Number.isFinite(blob.length) && blob.length > PHOTO_CACHE_MAX_ITEM_BYTES) {
+    return { kind: 'stream', body: Readable.toWeb(blob.stream as Readable) as unknown as ReadableStream, contentType };
+  }
+  const chunks: Buffer[] = [];
+  for await (const chunk of blob.stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  const bytes = Buffer.concat(chunks);
+  if (bytes.length <= PHOTO_CACHE_MAX_ITEM_BYTES) keepPhoto(id, bytes, contentType);
+  return { kind: 'bytes', bytes, contentType };
+}
+
 async function loadPhotoFromEgnyte(id: string): Promise<FetchedPhoto> {
+  if (!usesEgnyte()) return loadPhotoFromAzure(id);
   // Look up the real Egnyte path from the index; fall back to the old flat
   // guess for photos uploaded before this index existed.
   const indexed = await prisma.photo.findUnique({ where: { id } });
@@ -563,7 +612,7 @@ async function loadPhotoFromEgnyte(id: string): Promise<FetchedPhoto> {
   return { kind: 'bytes', bytes, contentType };
 }
 
-/** Streams the resized report copy for a given photo id straight from Egnyte. Used by the media proxy route. */
+/** Streams the resized report copy for a given photo id straight from the storage provider. Used by the media proxy route. */
 export async function fetchPhotoStream(
   id: string,
 ): Promise<{ body: ReadableStream; contentType: string } | null> {

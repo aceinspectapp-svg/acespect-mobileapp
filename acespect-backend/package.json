@@ -21,6 +21,7 @@
     "check:lifecycle": "tsx src/scripts/qc-lifecycle-check.ts",
     "check:platform": "tsx src/scripts/qc-platform-check.ts",
     "check:egnyte-folders": "tsx src/scripts/check-egnyte-folders.ts",
+    "check:azure-storage": "tsx src/scripts/check-azure-storage.ts",
     "check:egnyte-upload": "tsx src/scripts/check-egnyte-upload.ts",
     "check:audit": "tsx src/scripts/check-audit.ts",
     "audit:backfill": "tsx src/scripts/audit-backfill.ts",
@@ -32,6 +33,8 @@
     "egnyte:reconcile": "tsx src/scripts/egnyte-reconcile.ts"
   },
   "dependencies": {
+    "@azure/identity": "^4.14.1",
+    "@azure/storage-blob": "^12.34.0",
     "@prisma/client": "^6.2.1",
     "archiver": "^8.0.0",
     "bcryptjs": "^2.4.3",

@@ -121,3 +121,16 @@ Stack: **Railway** (backend API + Postgres) · **Vercel** (web) · **EAS** (Andr
 
 ## Deploy order recap
 Egnyte (photo storage creds) → backend (Railway) → get backend URL → web `VITE_API_URL` (Vercel) + mobile `eas.json` URL → build web + APK.
+
+## Photo and file storage (Azure Blob Storage)
+
+Photos, report files and QC documents are stored in a private Azure Blob container; the backend streams them back through the signed `/api/v1/media/...` links, so there are no public blob URLs or SAS tokens.
+
+| Variable | Azure value |
+|---|---|
+| `STORAGE_PROVIDER` | `azure` (the default when `NODE_ENV=production`; `egnyte` still works) |
+| `AZURE_STORAGE_ACCOUNT_NAME` | `acespectstorage` |
+| `AZURE_STORAGE_CONTAINER` | `inspection-photos` |
+| `AZURE_STORAGE_CONNECTION_STRING` | leave empty in Azure (local Azurite only: `UseDevelopmentStorage=true`) |
+
+The App Service signs in with its system-assigned managed identity, which needs **Storage Blob Data Contributor** on the storage account (or container). The container must already exist; the app only checks it on start. Local development: `npx azurite --silent --location /tmp/azurite`, then `npm run check:azure-storage`.
