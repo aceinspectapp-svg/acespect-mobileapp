@@ -46,6 +46,15 @@ const schema = z.object({
   PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),
 
 
+  // Where photos and report files are kept (see lib/storage.ts): Azure Blob Storage, or Egnyte (kept for now). Defaults to Azure in
+  // production and Egnyte elsewhere, so existing local setups behave as before.
+  STORAGE_PROVIDER: z.enum(['azure', 'egnyte']).optional(),
+  // Azure Blob Storage. In Azure the backend signs in as its managed identity (no key or SAS): set the account name and the container.
+  // AZURE_STORAGE_CONNECTION_STRING is for local development against the Azurite emulator and takes priority when set.
+  AZURE_STORAGE_ACCOUNT_NAME: z.string().default(''),
+  AZURE_STORAGE_CONTAINER: z.string().regex(/^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){1,61}[a-z0-9]$/, 'AZURE_STORAGE_CONTAINER must be 3-63 lowercase letters, digits or hyphens').default('inspection-photos'),
+  AZURE_STORAGE_CONNECTION_STRING: z.string().default(''),
+
   // Egnyte-backed photo storage (see lib/storage.ts). Empty EGNYTE_DOMAIN/
   // EGNYTE_API_TOKEN means storage is unconfigured -- isStorageEnabled()
   // returns false and photo uploads fail loudly rather than silently.
