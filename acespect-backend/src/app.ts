@@ -1,5 +1,7 @@
 import express, { Request, Response } from 'express';
 import helmet from 'helmet';
+import { readdirSync } from 'fs';
+import { join } from 'path';
 import compression from 'compression';
 import { auditContext } from './lib/auditTrail';
 import cors from 'cors';
@@ -60,7 +62,16 @@ export function createApp() {
     const t0 = Date.now();
     try {
       await prisma.$queryRaw`SELECT 1`;
-      res.json({ status: 'ok', dbMs: Date.now() - t0, timestamp: new Date().toISOString() });
+      // Schema check: migration folders shipped with this build vs migrations the database has applied. "behind" means a release went
+      // out without running `prisma migrate deploy`.
+      let schema: 'current' | 'behind' | 'unknown' = 'unknown';
+      try {
+        const shipped = readdirSync(join(process.cwd(), 'prisma', 'migrations'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+        const applied = await prisma.$queryRaw<Array<{ migration_name: string }>>`SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL`;
+        const have = new Set(applied.map((r) => r.migration_name));
+        schema = shipped.every((n) => have.has(n)) ? 'current' : 'behind';
+      } catch { /* folder or table not readable here: report unknown */ }
+      res.json({ status: 'ok', dbMs: Date.now() - t0, schema, timestamp: new Date().toISOString() });
     } catch {
       res.status(503).json({ status: 'degraded', dbMs: Date.now() - t0 });
     }

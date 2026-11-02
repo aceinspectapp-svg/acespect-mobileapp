@@ -1,5 +1,6 @@
 import PgBoss from 'pg-boss';
 import { env } from '../config/env';
+import { prisma } from './prisma';
 
 /** Name of the review queue — shared by the producer (API) and the worker. */
 export const REVIEW_QUEUE = 'review';
@@ -95,4 +96,31 @@ export async function enqueueReview(data: ReviewJobData): Promise<string | null>
   return b.send(REVIEW_QUEUE, data, {
     singletonKey: reviewJobKey(data.inspectionId, data.version),
   });
+}
+
+
+/**
+ * Review jobs that were created but never made it into the queue (the enqueue failed at submit time, or the process died between
+ * the two steps). Anything still QUEUED after a few minutes with no attempt is offered to the queue again; the singleton key means
+ * a job that is in fact already queued is not duplicated.
+ */
+export async function requeueStrandedReviews(): Promise<number> {
+  const cutoff = new Date(Date.now() - 3 * 60_000);
+  const stranded = await prisma.reviewJob.findMany({
+    where: { status: 'QUEUED', attempts: 0, queuedAt: { lt: cutoff }, inspection: { status: 'SUBMITTED' } },
+    select: { id: true, inspectionId: true, version: true },
+    orderBy: { queuedAt: 'asc' },
+    take: 50,
+  });
+  let queued = 0;
+  for (const j of stranded) {
+    try {
+      await enqueueReview({ reviewJobId: j.id, inspectionId: j.inspectionId, version: j.version });
+      await prisma.reviewJob.update({ where: { id: j.id }, data: { error: null } }).catch(() => undefined);
+      queued++;
+    } catch {
+      break; // the queue is still down; try again on the next tick
+    }
+  }
+  return queued;
 }

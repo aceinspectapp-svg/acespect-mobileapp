@@ -25,4 +25,5 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/prisma ./prisma
 ENV NODE_ENV=production
 EXPOSE 4000
-CMD ["node", "dist/server.js"]
+# Apply any pending database migrations first, so a new release never starts against an old schema (the same step railway.json had).
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && exec node dist/server.js"]

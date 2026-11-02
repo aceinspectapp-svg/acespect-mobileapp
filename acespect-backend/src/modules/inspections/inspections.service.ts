@@ -282,6 +282,14 @@ async function update(id: string, inspectorId: string, input: UpdateInspectionIn
  * this the inspection is in the reviewer's queue and no longer editable.
  */
 async function finalize(id: string, inspectorId: string) {
+  // Asking again for an inspection the server already holds as submitted (a phone retrying after an answer was lost) is a success, not a
+  // conflict: the phone must be able to clear it from its queue.
+  const held = await prisma.inspection.findUnique({ where: { id }, select: { inspectorId: true, status: true } });
+  if (held && held.inspectorId === inspectorId && held.status === 'SUBMITTED') {
+    const inspection = await prisma.inspection.findUniqueOrThrow({ where: { id } });
+    const reviewJob = await prisma.reviewJob.findFirst({ where: { inspectionId: id }, orderBy: { queuedAt: 'desc' } });
+    return { inspection, reviewJob: reviewJob ?? (await prisma.reviewJob.create({ data: { inspectionId: id, version: inspection.version } })) };
+  }
   await requireOwnDraft(id, inspectorId);
 
   // Deliberately NOT given to a reviewer: it waits unassigned until a reviewer (or an admin) takes it.
@@ -294,12 +302,18 @@ async function finalize(id: string, inspectorId: string) {
     data: { inspectionId: inspection.id, version: inspection.version },
   });
 
-  // De-duplicated by inspection + version, so a duplicate enqueue is a no-op.
-  await enqueueReview({
-    reviewJobId: reviewJob.id,
-    inspectionId: inspection.id,
-    version: inspection.version,
-  });
+  // The inspection is already submitted and in the reviewers' list. The automatic review is a bonus, so a queue that is down
+  // must never fail the submission (the phone would retry a submission the server already holds). The job stays QUEUED and
+  // the `reviews.requeue` job picks it up again once the queue is back.
+  try {
+    // De-duplicated by inspection + version, so a duplicate enqueue is a no-op.
+    await enqueueReview({ reviewJobId: reviewJob.id, inspectionId: inspection.id, version: inspection.version });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // eslint-disable-next-line no-console
+    console.error(`[queue:FAILED] could not queue the review of ${inspection.id}: ${message}`);
+    await prisma.reviewJob.update({ where: { id: reviewJob.id }, data: { error: `Not queued: ${message}`.slice(0, 500) } }).catch(() => undefined);
+  }
 
   return { inspection, reviewJob };
 }

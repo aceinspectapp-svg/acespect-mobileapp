@@ -13,6 +13,7 @@ import { pruneSubmissionLog } from '../../lib/submissionLog';
 import { anchorAudit, purgeExpiredAudit, verifyAudit } from '../../lib/auditTrail';
 import { alertAdmins } from '../../lib/submissionAlerts';
 import { scanAuditAnomalies } from '../../lib/auditMonitor';
+import { requeueStrandedReviews } from '../../lib/queue';
 
 const MIN = 60_000;
 let registered = false;
@@ -22,6 +23,8 @@ export function registerQcJobs(): void {
   registered = true;
 
   registerJob({ name: 'qc.sla-scan', everyMs: 5 * MIN, run: async () => void (await runSlaScan()) });
+  // Reviews that were saved but never reached the queue (it was down at submit time) are queued again.
+  registerJob({ name: 'reviews.requeue', everyMs: 5 * MIN, run: async () => void (await requeueStrandedReviews()) });
   registerJob({ name: 'qc.dlp-scan', everyMs: 60 * MIN, run: async () => void (await runDlpScan()) });
   // Photos that reached Egnyte for an inspection that never arrived are mailed to the admins (lib/submissionAlerts.ts).
   registerJob({ name: 'submissions.orphan-scan', everyMs: 10 * MIN, run: async () => void (await scanOrphanUploads()) });
