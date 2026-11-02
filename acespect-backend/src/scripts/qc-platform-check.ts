@@ -18,6 +18,7 @@ import { runDlpScan } from '../modules/qc/qc.dlp.service';
 import { enforceRetention } from '../modules/qc/qc.privacy.service';
 import { ensureTemplateReferenceData } from '../modules/qc/qc.templates.service';
 import { outbox } from '../lib/mailer';
+import { adminOps } from './qc-admin-ops';
 
 if (!/@(localhost|127\.0\.0\.1)[:/]/.test(process.env.DATABASE_URL ?? '')) {
   console.error('Refusing to run: DATABASE_URL must point at a local scratch database.');
@@ -667,6 +668,8 @@ async function main() {
   const portCu = await api('GET', '/qc/portfolio', { token: tokens.cuNo });
   ok(portCu.status === 403, 'portfolio is for Client Admins', portCu.status);
 
+  await adminOps({ api, ok, errCode, sa, ca, caB: caB.token, tokens, A, B, projectA, siteA, lot1, lot2, mcAId, mcBId, tradeId, piId, defectId: defectDraftId, sfx, renderer, stages, world, mcBody, projBody, lotBody, ADDR });
+
   // ───────────── DLP ─────────────
   console.log('Practical completion and DLP');
   const pcDate = new Date(Date.now() - 20 * 86_400_000).toISOString().slice(0, 10);
@@ -676,7 +679,7 @@ async function main() {
   ok(dlpStart.status === 200 && dlpStart.body.project.status === 'DLP', 'practical completion starts the DLP', dlpStart.body);
   const dlpInfo = await api('GET', `/qc/projects/${projectA}/dlp`, { token: ca });
   ok(!!dlpInfo.body.dlp.dlpEndDate && dlpInfo.body.dlp.summary.total === 0, 'DLP end date computed, nothing raised yet', dlpInfo.body);
-  const dlpDef = await api('POST', '/qc/defects', { token: tokens.pi, body: { propertyId: lot1, assignedToId: piId, defect_title: 'Door sticks', description: 'Front door sticks on frame', room_or_area: 'Entry', severity: 'Minor Defect' } });
+  const dlpDef = await api('POST', '/qc/defects', { token: tokens.pi, body: { propertyId: lot1, assignedToId: piId, defect_title: 'Door sticks', description: 'Front door sticks on frame', room_or_area: 'External - front', severity: 'Minor Defect' } });
   ok(dlpDef.status === 201, 'inspector logs a DLP defect', dlpDef.body);
   const dlpDefRow = await prisma.qcDefect.findFirstOrThrow({ where: { id: dlpDef.body.defect.id } });
   ok(dlpDefRow.dlpDefect === true, 'defects raised during the DLP are flagged as DLP defects');

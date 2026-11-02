@@ -6,7 +6,7 @@ import { inputStyle } from "../../components/SpecForm";
 import { qcx, type Notification } from "../../qcApi";
 import { useQc } from "../../qcContext";
 import { api } from "../../api";
-import { NotificationLink } from "../../components/QcLayout";
+import { NotificationLink, roleLabel } from "../../components/QcLayout";
 
 const dt = (v: unknown) => (v ? new Date(String(v)).toLocaleString("en-AU") : "—");
 
@@ -350,7 +350,7 @@ export function QcAccount() {
   useEffect(() => { api.mfaEnabled().then(setMfa).catch(() => undefined); }, []);
   const err = (e: unknown) => setMsg({ ok: false, text: (e as Error).message });
   return (
-    <PageShell title="My account" subtitle={me ? `Signed in as ${me.role.replace(/_/g, " ").toLowerCase()}` : undefined}>
+    <PageShell title="My account" subtitle={me ? `Signed in as ${roleLabel(me.role)}` : undefined}>
       {msg && <p role={msg.ok ? "status" : "alert"} style={{ fontSize: 13, color: msg.ok ? "#15803d" : "#b91c1c" }}>{msg.text}</p>}
       <Card style={{ padding: 18, marginBottom: 16, maxWidth: 520 }}>
         <b style={{ fontSize: 14 }}>Change password</b>

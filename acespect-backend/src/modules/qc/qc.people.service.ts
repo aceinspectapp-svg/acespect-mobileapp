@@ -461,6 +461,9 @@ export async function addTeamMember(projectId: string, input: Input) {
   } else if (assigneeType === 'TRADE_COMPANY') {
     tradeCompanyId = str(input.assigneeId);
     await requireExists('qcTradeCompany', tradeCompanyId, 'Trade company');
+    // A trade company is shared between clients only through the contractors that engage it: another client's company must not be pullable onto this team by id.
+    const engaged = await prisma.qcTradeCompany.count({ where: { id: tradeCompanyId, masterContractors: { some: { clientId: project.clientId } } } });
+    if (!engaged) throw ApiError.badRequest("That trade company is not engaged by any of this client's contractors");
   } else {
     masterContractorId = str(input.assigneeId);
     const mc = await requireExists('qcMasterContractor', masterContractorId, 'Master contractor');

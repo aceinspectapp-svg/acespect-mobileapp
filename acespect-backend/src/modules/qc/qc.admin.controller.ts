@@ -8,7 +8,7 @@ import * as people from './qc.people.service';
 import * as defects from './qc.defects.service';
 import { createPerson } from './qc.people.service';
 import { serializeComment, serializeDefect, serializeEvent } from './qc.serializers';
-import { getSpecPayload } from './spec/qcSpec';
+import { getSpecPayload, validateOrThrow } from './spec/qcSpec';
 import { ROLE_LABEL, MEMBER_ROLES, DEACTIVATION_REASONS } from './qc.people.service';
 import { ACTIONS } from './qc.lifecycle';
 import { actorOf, assertClientAccess, ctxOf, projectScope } from './qc.context';
@@ -374,7 +374,10 @@ export const qcAdminController = {
   createDefect: asyncHandler(async (req, res) => {
     const user = requester(req);
     const body = payloadOf(req) as Parameters<typeof defects.createDefect>[1];
-    await guardEntity(req, 'lot', String(body.propertyId ?? ''));
+    if (!body.propertyId) throw ApiError.badRequest('Choose the lot the defect is on');
+    await guardEntity(req, 'lot', String(body.propertyId));
+    // What a person typed or picked must be one of the allowed options; it is refused here rather than silently left off the new defect.
+    validateOrThrow('F16', body, { partial: true });
     const defect = await defects.createDefect(user, body);
     res.status(201).json({ defect: serializeDefect(defect) });
   }),

@@ -317,6 +317,7 @@ export interface CreateDefectInput extends Input {
  * (F16). Descriptive F16 fields may be supplied up front too.
  */
 export async function createDefect(creator: Requester, input: CreateDefectInput) {
+  if (typeof input.propertyId !== 'string' || !input.propertyId) throw ApiError.badRequest('Choose the lot the defect is on');
   const property = await prisma.qcProperty.findUnique({ where: { id: input.propertyId }, include: { project: true } });
   if (!property) throw ApiError.notFound('Property not found');
   if (property.project.status === 'ARCHIVED') throw ApiError.conflict('This project is archived and read-only.', 'PROJECT_ARCHIVED');
@@ -324,6 +325,8 @@ export async function createDefect(creator: Requester, input: CreateDefectInput)
   const openStatus = await prisma.qcStatus.findUnique({ where: { key: 'open' } });
   if (!openStatus) throw ApiError.badRequest('The Open status is missing -- run the QC migrations');
 
+  // Lenient on purpose: drafts raised from a checklist item carry the template's own wording ("Footing", "North edge"), which is not one of the F16 options.
+  // Values typed in by a person are checked strictly in the controller before they get here.
   const { data } = validateAgainstSpec('F16', input, { partial: true });
   const cols = await f16ToColumns(data);
   const severity = cols.severityId ? await prisma.qcSeverity.findUnique({ where: { id: cols.severityId as string } }) : null;
@@ -387,6 +390,7 @@ export async function updateDefect(id: string, input: Input, requester: Requeste
 
   const cols: Prisma.QcDefectUncheckedUpdateInput = {};
   const f16 = validateAgainstSpec('F16', input, { partial: true });
+  if (f16.issues.length) throw ApiError.badRequest(f16.issues.map((i) => i.message).join('; '), Object.fromEntries(f16.issues.map((i) => [i.field, [i.message]])));
   const touchesDescription = DESCRIPTIVE_LEGACY_KEYS.some((k) => k in input) || Object.keys(f16.data).length > 0;
 
   if (touchesDescription) {

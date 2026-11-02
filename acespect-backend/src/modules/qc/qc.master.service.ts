@@ -141,7 +141,18 @@ export async function deleteClient(id: string) {
   await requireExists('qcClient', id, 'Client');
   const projects = await prisma.qcProject.count({ where: { clientId: id } });
   if (projects > 0) throw ApiError.conflict('This client still has projects; offboard it instead of deleting', 'HAS_DEPENDENTS');
+  // The client's memberships go with it, but the people do not: someone left with no organisation must not keep a working sign-in or a live invitation link.
+  const people = [...new Set((await prisma.qcMembership.findMany({ where: { clientId: id }, select: { userId: true } })).map((m) => m.userId))];
   await prisma.qcClient.delete({ where: { id } });
+  for (const userId of people) {
+    if ((await prisma.qcMembership.count({ where: { userId } })) > 0) continue;
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, lastSignInAt: true } });
+    if (!user || user.role === 'ADMIN') continue;
+    await prisma.qcInvitation.deleteMany({ where: { userId, usedAt: null } });
+    // Never activated: remove the account so the email can be used again. Otherwise keep the history and just switch it off.
+    if (!user.lastSignInAt && (await prisma.user.delete({ where: { id: userId } }).then(() => true, () => false))) continue;
+    await prisma.user.update({ where: { id: userId }, data: { isActive: false, tokenVersion: { increment: 1 } } });
+  }
 }
 
 // ───────────────────────── Master contractors (E02) ─────────────────────────
@@ -186,6 +197,11 @@ export async function deleteMasterContractor(id: string) {
   await requireExists('qcMasterContractor', id, 'Master contractor');
   const used = await prisma.qcProject.count({ where: { builderId: id } });
   if (used > 0) throw ApiError.conflict('This contractor is the builder on a project; mark it inactive instead', 'HAS_DEPENDENTS');
+  // A membership keeps its link only through this id; deleting the organisation would leave people with a contractor role and no contractor (and so no scope).
+  const people = await prisma.qcMembership.count({ where: { masterContractorId: id } });
+  if (people > 0) throw ApiError.conflict(`${people} ${people === 1 ? 'person belongs' : 'people belong'} to this contractor. Move or deactivate them first, or mark the contractor inactive instead`, 'HAS_DEPENDENTS');
+  const onTeams = await prisma.qcProjectMember.count({ where: { masterContractorId: id } });
+  if (onTeams > 0) throw ApiError.conflict('This contractor is on a project team. Remove it from the team first, or mark it inactive instead', 'HAS_DEPENDENTS');
   await prisma.qcMasterContractor.delete({ where: { id } });
 }
 
@@ -306,6 +322,10 @@ export async function deleteTradeCompany(id: string) {
   await requireExists('qcTradeCompany', id, 'Trade company');
   const used = await prisma.qcDefect.count({ where: { allocatedTradeCompanyId: id } });
   if (used > 0) throw ApiError.conflict('Defects are allocated to this company; mark it inactive instead', 'HAS_DEPENDENTS');
+  const people = await prisma.qcMembership.count({ where: { tradeCompanyId: id } });
+  if (people > 0) throw ApiError.conflict(`${people} ${people === 1 ? 'person belongs' : 'people belong'} to this trade company. Move or deactivate them first, or mark the company inactive instead`, 'HAS_DEPENDENTS');
+  const onTeams = await prisma.qcProjectMember.count({ where: { tradeCompanyId: id } });
+  if (onTeams > 0) throw ApiError.conflict('This company is on a project team. Remove it from the team first, or mark it inactive instead', 'HAS_DEPENDENTS');
   await prisma.qcTradeCompany.delete({ where: { id } });
 }
 
