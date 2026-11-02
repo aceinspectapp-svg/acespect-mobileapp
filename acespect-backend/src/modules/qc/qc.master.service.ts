@@ -70,6 +70,18 @@ async function ensureAbnFree(abn: string, exceptClientId?: string, overrideReaso
   if (clash && (overrideReason ?? '').trim().length < 10) throw ApiError.conflict(`ABN ${abn} is already used by ${clash.name}. If this is intended, give a reason of at least 10 characters to continue.`, 'ABN_TAKEN');
 }
 
+/** The same ABN twice inside one client is almost always a double entry; a reason of 10+ characters says it is deliberate (two divisions, a trading arm). */
+async function ensureOrgAbnFree(kind: 'contractor' | 'trade company', abn: string, clientIds: string[], exceptId: string | undefined, overrideReason: unknown) {
+  if (!abn) return;
+  const clash =
+    kind === 'contractor'
+      ? await prisma.qcMasterContractor.findFirst({ where: { abn, clientId: { in: clientIds }, id: exceptId ? { not: exceptId } : undefined }, select: { name: true } })
+      : await prisma.qcTradeCompany.findFirst({ where: { abn, masterContractors: { some: { clientId: { in: clientIds } } }, id: exceptId ? { not: exceptId } : undefined }, select: { name: true } });
+  if (clash && String(overrideReason ?? '').trim().length < 10) {
+    throw ApiError.conflict(`ABN ${abn} is already used by ${clash.name}. If this is a different ${kind} using the same ABN, give a reason of at least 10 characters to continue.`, 'ABN_TAKEN');
+  }
+}
+
 async function nextClientCode(): Promise<string> {
   const rows = await prisma.qcClient.findMany({ select: { clientCode: true } });
   const max = rows.reduce((m, r) => Math.max(m, Number(r.clientCode?.replace(/\D/g, '') || 0)), 0);
@@ -134,7 +146,13 @@ export async function setClientStatus(id: string, status: string, reason?: strin
   const data = { ...(existing.data as Input) };
   if (status === 'SUSPENDED') data.suspension_reason = reason!.trim();
   else delete data.suspension_reason;
-  return prisma.qcClient.update({ where: { id }, data: { status, data: json(data) } });
+  // Reactivating a client whose first admin never activated puts it back to waiting for that activation, not straight to Active.
+  let next = status;
+  if (status === 'ACTIVE' && existing.status === 'SUSPENDED') {
+    const activated = await prisma.qcMembership.count({ where: { clientId: id, user: { lastSignInAt: { not: null } } } });
+    if (!activated) next = 'PENDING_ACTIVATION';
+  }
+  return prisma.qcClient.update({ where: { id }, data: { status: next, data: json(data) } });
 }
 
 export async function deleteClient(id: string) {
@@ -178,7 +196,8 @@ export function insuranceStatus(data: Input): 'Current' | 'Expiring within 30 da
 export async function createMasterContractor(input: Input) {
   const clientId = str(input.clientId);
   await requireExists('qcClient', clientId, 'Client');
-  const data = validateOrThrow('E02', without(input, ['clientId']));
+  const data = validateOrThrow('E02', without(input, ['clientId', 'abnOverrideReason']));
+  await ensureOrgAbnFree('contractor', str(data.abn), [clientId], undefined, input.abnOverrideReason);
   return prisma.qcMasterContractor.create({
     data: { clientId, name: str(data.legal_entity_name), abn: str(data.abn), status: 'ACTIVE', data: json(data) },
   });
@@ -186,7 +205,8 @@ export async function createMasterContractor(input: Input) {
 
 export async function updateMasterContractor(id: string, input: Input) {
   const existing = await requireExists('qcMasterContractor', id, 'Master contractor');
-  const data = validateOrThrow('E02', { ...(existing.data as Input), ...without(input, ['clientId', 'status']) });
+  const data = validateOrThrow('E02', { ...(existing.data as Input), ...without(input, ['clientId', 'status', 'abnOverrideReason']) });
+  if (str(data.abn) !== existing.abn) await ensureOrgAbnFree('contractor', str(data.abn), [existing.clientId], id, input.abnOverrideReason);
   return prisma.qcMasterContractor.update({
     where: { id },
     data: { name: str(data.legal_entity_name), abn: str(data.abn), status: typeof input.status === 'string' ? input.status : existing.status, data: json(data) },
@@ -279,8 +299,10 @@ async function tradeRelations(data: Input) {
 }
 
 export async function createTradeCompany(input: Input) {
-  const data = validateOrThrow('E03', input);
+  const data = validateOrThrow('E03', without(input, ['abnOverrideReason']));
   const { categoryIds, mcIds } = await tradeRelations(data);
+  const owners = await prisma.qcMasterContractor.findMany({ where: { id: { in: mcIds } }, select: { clientId: true } });
+  await ensureOrgAbnFree('trade company', str(data.abn), [...new Set(owners.map((o) => o.clientId))], undefined, input.abnOverrideReason);
   return prisma.qcTradeCompany.create({
     data: {
       name: str(data.legal_entity_name),
@@ -302,8 +324,12 @@ export async function updateTradeCompany(id: string, input: Input) {
     trade_categories: existing.categories.map((c) => c.id),
     engaged_by: existing.masterContractors.map((m) => m.id),
   };
-  const data = validateOrThrow('E03', { ...base, ...without(input, ['status']) });
+  const data = validateOrThrow('E03', { ...base, ...without(input, ['status', 'abnOverrideReason']) });
   const { categoryIds, mcIds } = await tradeRelations(data);
+  if (str(data.abn) !== existing.abn) {
+    const owners = await prisma.qcMasterContractor.findMany({ where: { id: { in: mcIds } }, select: { clientId: true } });
+    await ensureOrgAbnFree('trade company', str(data.abn), [...new Set(owners.map((o) => o.clientId))], id, input.abnOverrideReason);
+  }
   return prisma.qcTradeCompany.update({
     where: { id },
     data: {

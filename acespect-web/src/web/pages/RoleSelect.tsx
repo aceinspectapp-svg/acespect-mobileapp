@@ -189,8 +189,8 @@ export function RoleSelect() {
           </>)}
         </div>
 
-        {/* Demo credentials panel */}
-        <div style={{
+        {/* Demo credentials panel: development builds only. It must never ship to the live portal. */}
+        {import.meta.env.DEV && <div style={{
           background: "white",
           borderRadius: "16px",
           border: "1px solid #e5e7eb",
@@ -238,7 +238,7 @@ export function RoleSelect() {
           <p style={{ fontSize: "11px", color: "#d1d5db", margin: "14px 0 0", textAlign: "center" }}>
             Click any row to auto-fill credentials
           </p>
-        </div>
+        </div>}
       </div>
 
       <footer style={{ textAlign: "center", padding: "16px", borderTop: "1px solid #e5e7eb", background: "white", marginTop: "auto" }}>

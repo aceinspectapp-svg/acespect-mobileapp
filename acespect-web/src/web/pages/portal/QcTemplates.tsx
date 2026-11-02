@@ -8,6 +8,7 @@ import { useQc } from "../../qcContext";
 import { API_BASE, fetchWithRefresh, getActiveClientId, getToken } from "../../api";
 import type { QcProjectRow } from "../../qcTypes";
 import { api } from "../../api";
+import { dialog as popup } from "../../components/dialogs";
 
 const statusChip = (s: string) => (
   <span style={{ padding: "3px 9px", borderRadius: 99, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", background: s === "PUBLISHED" ? "#d1fae5" : s === "DRAFT" ? "#fef3c7" : "#e2e8f0", color: s === "PUBLISHED" ? "#065f46" : s === "DRAFT" ? "#92400e" : "#475569" }}>{s.toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}</span>
@@ -154,7 +155,7 @@ export function QcTemplateDetail() {
                 <td style={cell}>{i.locked ? "🔒 locked " : ""}{i.mandatory ? "" : "optional "}{i.active ? "" : "inactive"}</td>
                 <td style={{ ...cell, textAlign: "right", whiteSpace: "nowrap" }}>
                   {editable && !(i.locked && t.level !== "BASE") && <button style={btnLink} onClick={() => setEditItem(i)}>Edit</button>}{" "}
-                  {editable && !(i.locked && t.level !== "BASE") && <button style={btnDanger} onClick={() => { if (window.confirm(`Remove item ${i.itemNumber}?`)) run(async () => { await qcx.templates.removeItem(i.id); load(); }); }}>Remove</button>}
+                  {editable && !(i.locked && t.level !== "BASE") && <button style={btnDanger} onClick={async () => { if (await popup.confirm(`Remove item ${i.itemNumber}?`, { title: "Remove checklist item", okLabel: "Remove", danger: true })) run(async () => { await qcx.templates.removeItem(i.id); load(); }); }}>Remove</button>}
                 </td>
               </tr>
             ))}
@@ -171,7 +172,7 @@ export function QcTemplateDetail() {
           onSubmit={async (p) => { if (editItem.id) await qcx.templates.updateItem(editItem.id, p); else await qcx.templates.addItem(t.id, p); setEditItem(null); load(); }} />
       )}
       {publishing && (
-        <FormDialog title={`Publish ${t.name}`} formCode="F07" hide={["template", "adopt_projects_and_stages_to_apply"]} initial={{ notify_client_admins: true, effective_for_new_inspections_from: new Date().toISOString().slice(0, 10) }}
+        <FormDialog title={`Publish ${t.name}`} submitLabel="Publish" formCode="F07" hide={["template", "adopt_projects_and_stages_to_apply"]} initial={{ notify_client_admins: true, effective_for_new_inspections_from: new Date().toISOString().slice(0, 10) }}
           note={<p style={{ ...sub, marginTop: 0 }}>A published version is frozen. Inspections that start after the effective date use it; inspections already started keep the version they began with.</p>}
           onClose={() => setPublishing(false)} onSubmit={async (p) => { await qcx.templates.publish(t.id, p); setPublishing(false); load(); }} />
       )}

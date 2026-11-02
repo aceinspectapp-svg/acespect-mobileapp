@@ -6,6 +6,7 @@ import { qcx, type PlanStage, type StageDef, type TemplateRow } from "../../qcAp
 import { useQc } from "../../qcContext";
 import { api, resolveMediaUrl } from "../../api";
 import type { QcLotRow, QcProjectRow } from "../../qcTypes";
+import { dialog as popup } from "../../components/dialogs";
 
 const fmt = (v: unknown) => (v ? new Date(String(v)).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "—");
 
@@ -50,7 +51,7 @@ export function PlanPanel({ project }: { project: QcProjectRow }) {
             <td style={cell}>
               <Select value={p.templateId ?? ""} disabled={!editable} onChange={(v) => v && patch(p, { templateId: v })} placeholder="No template yet" options={tplFor(p.stageId).map((t) => ({ id: t.id, label: `${t.name} v${t.versionLabel}${t.level === "BASE" ? "" : ` (${t.level.toLowerCase()})`}` }))} />
             </td>
-            <td style={cell}><input type="number" min={0} max={30} aria-label={`${p.stageName} notice days`} style={{ ...inputStyle, width: 70 }} disabled={!editable} defaultValue={p.noticeDays ?? ""} onBlur={(e) => e.target.value !== String(p.noticeDays ?? "") && patch(p, { noticeDays: e.target.value === "" ? null : Number(e.target.value) })} /></td>
+            <td style={cell}><input type="number" min={0} max={30} aria-label={`${p.stageName} notice days`} style={{ ...inputStyle, width: 70 }} disabled={!editable} defaultValue={p.noticeDays ?? ""} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} onBlur={(e) => { const raw = e.target.value.trim(); if (raw === String(p.noticeDays ?? "")) return; const n = Number(raw); if (raw !== "" && (!Number.isInteger(n) || n < 0 || n > 30)) { setError("Notice must be a whole number of days from 0 to 30."); return; } void patch(p, { noticeDays: raw === "" ? null : n }); }} /></td>
             <td style={cell}><input type="checkbox" aria-label={`${p.stageName} hold point`} disabled={!can("projects.holdPoints")} checked={p.holdPoint} onChange={(e) => patch(p, { holdPoint: e.target.checked })} /></td>
             <td style={cell}><Select value={p.defaultInspectorId ?? ""} disabled={!editable} onChange={(v) => patch(p, { defaultInspectorId: v || null })} placeholder="None" options={inspectors.map((i) => ({ id: i.id, label: i.name ?? i.email }))} /></td>
           </tr>
@@ -207,9 +208,9 @@ export function StatusMover({ project, onChange }: { project: QcProjectRow; onCh
     <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
       {options.map((o) => (
         <button key={o.id} style={btnGhost} onClick={async () => {
-          const reason = o.id === "ARCHIVED" || project.status === "ARCHIVED" ? window.prompt(`${o.label}. Reason:`) : "";
+          const reason = o.id === "ARCHIVED" || project.status === "ARCHIVED" ? await popup.prompt(o.id === "ARCHIVED" ? "An archived project is read-only. Tell us why it is being archived." : "Tell us why it is being reopened.", { title: o.label, label: "Reason", required: true, multiline: true, okLabel: o.label }) : "";
           if (reason === null) return;
-          try { await qcx.projects.transition(project.id, o.id, reason || undefined); onChange(); } catch (e) { setError((e as Error).message); window.alert((e as Error).message); }
+          try { await qcx.projects.transition(project.id, o.id, reason || undefined); onChange(); } catch (e) { setError((e as Error).message); void popup.alert((e as Error).message); }
         }}>{o.label}</button>
       ))}
       {error && <span style={{ fontSize: 11, color: "#b91c1c" }} />}

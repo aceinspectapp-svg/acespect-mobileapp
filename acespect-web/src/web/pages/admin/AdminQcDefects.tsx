@@ -7,6 +7,7 @@ import { ErrorNote, Field, Modal, Select, btnGhost, btnPrimary, cell, sub } from
 import { inputStyle, type RefOption } from "../../components/SpecForm";
 import type { QcConfigBundle, QcDefect, QcLotRow, QcPerson } from "../../qcTypes";
 import { useQc } from "../../qcContext";
+import { dialog as popup } from "../../components/dialogs";
 
 export const FLAG_STYLE: Record<string, { label: string; color: string; bg: string }> = {
   urgent: { label: "Urgent", color: "#991b1b", bg: "#fee2e2" },
@@ -43,8 +44,8 @@ export function AdminQcDefects() {
   const VIEWS_KEY = "acespect_defect_views";
   const readViews = (): Record<string, typeof filters> => { try { return JSON.parse(localStorage.getItem(VIEWS_KEY) ?? "{}"); } catch { return {}; } };
   const [views, setViews] = useState<Record<string, typeof filters>>(readViews);
-  const saveView = () => {
-    const name = window.prompt("Name this view:")?.trim();
+  const saveView = async () => {
+    const name = (await popup.prompt("The current filters are saved under this name in this browser.", { title: "Save this view", label: "View name", required: true, okLabel: "Save" }))?.trim();
     if (!name) return;
     const next = { ...views, [name]: filters };
     try { localStorage.setItem(VIEWS_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }

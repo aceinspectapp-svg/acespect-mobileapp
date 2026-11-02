@@ -9,6 +9,7 @@ import {
   InvitationDialog, type InvitationInfo, ErrorNote, Field, FormDialog, Select, btnDanger, btnLink, cell, statusPill, sub, showValue, useRefData,
 } from "../../components/QcUi";
 import type { QcClientRow, QcMasterContractorRow, QcTradeCategory, QcTradeCompanyRow } from "../../qcTypes";
+import { dialog as popup } from "../../components/dialogs";
 
 type Tab = "clients" | "mcs" | "trades" | "categories";
 const TABS: Array<{ id: Tab; label: string }> = [
@@ -71,23 +72,24 @@ function Clients() {
   async function setStatus(row: QcClientRow, status: string) {
     let reason: string | undefined;
     if (status === "SUSPENDED") {
-      reason = window.prompt("Reason for suspending this client (required):") ?? undefined;
-      if (!reason?.trim()) return;
-    } else if (!window.confirm(`${status === "OFFBOARDED" ? "Offboard" : "Reactivate"} ${row.name}?`)) return;
+      const why = await popup.prompt(`Suspending ${row.name} stops everyone in it from signing in. Nothing is deleted and it can be reactivated.`, { title: "Suspend client", label: "Reason", required: true, multiline: true, okLabel: "Suspend" });
+      if (!why) return;
+      reason = why;
+    } else if (!(await popup.confirm(status === "OFFBOARDED" ? `Offboard ${row.name}? Everyone in it is signed out and the retention period starts.` : `Reactivate ${row.name}? Its people can sign in again.`, { title: status === "OFFBOARDED" ? "Offboard client" : "Reactivate client", okLabel: status === "OFFBOARDED" ? "Offboard" : "Reactivate", danger: status === "OFFBOARDED" }))) return;
     try {
       await api.qc.clients.setStatus(row.id, status, reason);
       reload();
     } catch (e) {
-      window.alert((e as Error).message);
+      void popup.alert((e as Error).message);
     }
   }
   async function remove(row: QcClientRow) {
-    if (!window.confirm(`Delete ${row.name}? This can't be undone.`)) return;
+    if (!(await popup.confirm(`Delete ${row.name}? This can't be undone.`, { title: "Delete client", okLabel: "Delete", danger: true }))) return;
     try {
       await api.qc.clients.remove(row.id);
       reload();
     } catch (e) {
-      window.alert((e as Error).message);
+      void popup.alert((e as Error).message);
     }
   }
 
@@ -160,6 +162,15 @@ function Clients() {
   );
 }
 
+/** Asked for only after the server says the ABN is already on file: a short reason makes the repeat deliberate. */
+function AbnReason({ value, set, what }: { value: Record<string, unknown>; set: (patch: Record<string, unknown>) => void; what: string }) {
+  return (
+    <Field label={`This ABN is already used by another ${what} here. Why is it being used again?`} required>
+      <input style={{ width: "100%", padding: 8, border: "1px solid #e5e7eb", borderRadius: 8 }} value={String(value.abnOverrideReason ?? "")} onChange={(e) => set({ abnOverrideReason: e.target.value })} />
+    </Field>
+  );
+}
+
 // ─── Master contractors (E02) ────────────────────────────────────────────────
 
 function MasterContractors() {
@@ -168,17 +179,18 @@ function MasterContractors() {
   const [rows, setRows] = useState<QcMasterContractorRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ row?: QcMasterContractorRow } | null>(null);
+  const [abnClash, setAbnClash] = useState(false);
 
   const reload = () => api.qc.masterContractors.list().then(setRows).catch((e) => setError(e.message));
   useEffect(() => { reload(); }, []);
 
   async function remove(row: QcMasterContractorRow) {
-    if (!window.confirm(`Delete ${row.name}?`)) return;
+    if (!(await popup.confirm(`Delete ${row.name}?`, { title: "Delete", okLabel: "Delete", danger: true }))) return;
     try {
       await api.qc.masterContractors.remove(row.id);
       reload();
     } catch (e) {
-      window.alert((e as Error).message);
+      void popup.alert((e as Error).message);
     }
   }
 
@@ -213,20 +225,29 @@ function MasterContractors() {
           initial={dialog.row ? { ...dialog.row.data, clientId: dialog.row.clientId, status: dialog.row.status } : {}}
           refOptions={refOptions}
           extra={(value, set) => (
-            <Field label="Client (tenant)" required>
-              <Select
-                value={String(value.clientId ?? "")}
-                disabled={!!dialog.row}
-                onChange={(v) => set({ clientId: v })}
-                options={refOptions.E01 ?? []}
-              />
-            </Field>
+            <>
+              <Field label="Client (tenant)" required>
+                <Select
+                  value={String(value.clientId ?? "")}
+                  disabled={!!dialog.row}
+                  onChange={(v) => set({ clientId: v })}
+                  options={refOptions.E01 ?? []}
+                />
+              </Field>
+              {abnClash && <div style={{ marginTop: 10 }}><AbnReason value={value} set={set} what="contractor" /></div>}
+            </>
           )}
-          onClose={() => setDialog(null)}
+          onClose={() => { setDialog(null); setAbnClash(false); }}
           onSubmit={async (payload) => {
-            if (dialog.row) await api.qc.masterContractors.update(dialog.row.id, payload);
-            else await api.qc.masterContractors.create(payload);
+            try {
+              if (dialog.row) await api.qc.masterContractors.update(dialog.row.id, payload);
+              else await api.qc.masterContractors.create(payload);
+            } catch (e) {
+              if ((e as { code?: string }).code === "ABN_TAKEN") setAbnClash(true);
+              throw e;
+            }
             setDialog(null);
+            setAbnClash(false);
             reload();
           }}
         />
@@ -243,17 +264,18 @@ function TradeCompanies() {
   const [rows, setRows] = useState<QcTradeCompanyRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ row?: QcTradeCompanyRow } | null>(null);
+  const [abnClash, setAbnClash] = useState(false);
 
   const reload = () => api.qc.tradeCompanies.list().then(setRows).catch((e) => setError(e.message));
   useEffect(() => { reload(); }, []);
 
   async function remove(row: QcTradeCompanyRow) {
-    if (!window.confirm(`Delete ${row.name}?`)) return;
+    if (!(await popup.confirm(`Delete ${row.name}?`, { title: "Delete", okLabel: "Delete", danger: true }))) return;
     try {
       await api.qc.tradeCompanies.remove(row.id);
       reload();
     } catch (e) {
-      window.alert((e as Error).message);
+      void popup.alert((e as Error).message);
     }
   }
 
@@ -290,11 +312,18 @@ function TradeCompanies() {
               : {}
           }
           refOptions={refOptions}
-          onClose={() => setDialog(null)}
+          extra={abnClash ? (value, set) => <AbnReason value={value} set={set} what="trade company" /> : undefined}
+          onClose={() => { setDialog(null); setAbnClash(false); }}
           onSubmit={async (payload) => {
-            if (dialog.row) await api.qc.tradeCompanies.update(dialog.row.id, payload);
-            else await api.qc.tradeCompanies.create(payload);
+            try {
+              if (dialog.row) await api.qc.tradeCompanies.update(dialog.row.id, payload);
+              else await api.qc.tradeCompanies.create(payload);
+            } catch (e) {
+              if ((e as { code?: string }).code === "ABN_TAKEN") setAbnClash(true);
+              throw e;
+            }
             setDialog(null);
+            setAbnClash(false);
             reload();
           }}
         />
@@ -315,13 +344,13 @@ function TradeCategories() {
   useEffect(() => { reload(); }, []);
 
   async function remove(row: QcTradeCategory) {
-    if (!window.confirm(`Remove ${row.name}? Categories already in use are retired instead of deleted.`)) return;
+    if (!(await popup.confirm(`Remove ${row.name}? Categories already in use are retired instead of deleted.`, { title: "Remove category", okLabel: "Remove", danger: true }))) return;
     try {
       const r = await api.qc.tradeCategories.remove(row.id);
-      if (r.retired) window.alert(`${row.name} is in use, so it was retired instead.`);
+      if (r.retired) void popup.alert(`${row.name} is in use, so it was retired instead.`);
       reload();
     } catch (e) {
-      window.alert((e as Error).message);
+      void popup.alert((e as Error).message);
     }
   }
 

@@ -63,3 +63,11 @@ Everything below was run against the final code (commit `46bd35f` and later). "V
 - **Deploy:** backend first (message codes `INVITATION_PENDING`, `INVITATION_EXPIRED`, `EMAIL_TAKEN`; invitation lookup now lists organisations), then the phone update (OTA from one folder, see section 7 warning).
 - **Checks:** `check:platform` (now with register/invitation checks), `check:lifecycle`: all passed on the scratch database. Not tapped on a real phone.
 - **Remember:** email is not configured in production, so the admin must copy the invitation link from the People page and send it to the person.
+
+## 10. QC admin portal clean-up (added Nov 2)
+- **Deploy:** backend first, then web. No migration, no phone update.
+- **Behaviour changes to know about:** deleting a client now removes its never-activated people (and their invitations) and switches the others off; a contractor or trade company that still has people on it cannot be deleted; the same ABN twice inside one client needs a reason (10+ characters), for contractors and trade companies as for clients; reactivating a suspended client that never had an admin sign in returns it to "Pending activation"; defects typed in by a person are refused when severity or room is not on the list (drafts raised from a checklist item stay lenient); the "Additional notification emails" on an escalation level are now actually emailed (they were stored but never used).
+- **Portal:** the browser's own alert/confirm/prompt boxes are replaced by in-page dialogs (`components/dialogs.tsx`); team removal now offers a list to hand open items to; the personal-data export asks for an email address instead of a user id.
+- **Security:** the "Demo credentials" panel on the sign-in page (admin@acespect.app / Admin123 and two more) now shows in development builds only. **Check that those three accounts do not exist in the production database; if they do, delete them or change their passwords.**
+- **Email is still not configured in production**, so the additional notification emails only go out once SMTP_URL / MAIL_FROM are set.
+- **Checks:** `check:platform` now has 450+ checks including `qc-admin-ops.ts`.

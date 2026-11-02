@@ -7,6 +7,7 @@ import { qcx, type Notification } from "../../qcApi";
 import { useQc } from "../../qcContext";
 import { api } from "../../api";
 import { NotificationLink, roleLabel } from "../../components/QcLayout";
+import { dialog as popup } from "../../components/dialogs";
 
 const dt = (v: unknown) => (v ? new Date(String(v)).toLocaleString("en-AU") : "—");
 
@@ -261,8 +262,8 @@ export function QcPrivacy() {
     else qcx.privacy.retention().then(setRetention).catch((e) => setError(e.message));
   }, [tab]);
   useEffect(() => { load(); }, [load]);
-  async function download(id: string, userId: string) {
-    try { const blob = await qcx.privacy.exportPersonal(id, userId); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "personal-data.json"; a.click(); URL.revokeObjectURL(url); } catch (e) { setError((e as Error).message); }
+  async function download(id: string, who: string) {
+    try { const blob = await qcx.privacy.exportPersonal(id, who); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "personal-data.json"; a.click(); URL.revokeObjectURL(url); } catch (e) { setError((e as Error).message); }
   }
   return (
     <PageShell title="Privacy and records" subtitle="Privacy requests, data breaches, sub-processors and retention for the whole platform."
@@ -283,7 +284,7 @@ export function QcPrivacy() {
               <td style={cell}>{r.status}{r.data.identityVerified ? " · ID verified" : ""}</td>
               <td style={{ ...cell, textAlign: "right", whiteSpace: "nowrap" }}>
                 {!r.data.identityVerified && <button style={btnLink} onClick={() => qcx.privacy.updateRequest(r.id, { identityVerified: true, status: "Identity check" }).then(load).catch((e) => setError(e.message))}>Mark ID verified</button>}{" "}
-                {r.data.identityVerified && !["Completed", "Refused (with reason)"].includes(r.status) && <button style={btnLink} onClick={() => { const id = window.prompt("User id (from People) to export:"); if (id) download(r.id, id); }}>Export data</button>}{" "}
+                {r.data.identityVerified && !["Completed", "Refused (with reason)"].includes(r.status) && <button style={btnLink} onClick={async () => { const email = await popup.prompt("Their account email address. The export holds everything we store about that person.", { title: "Export personal data", label: "Email address", required: true, okLabel: "Export" }); if (email) download(r.id, email); }}>Export data</button>}{" "}
                 {!["Completed", "Refused (with reason)"].includes(r.status) && r.data.identityVerified && <button style={btnLink} onClick={() => qcx.privacy.updateRequest(r.id, { status: "Completed" }).then(load).catch((e) => setError(e.message))}>Complete</button>}
               </td>
             </tr>
@@ -297,7 +298,7 @@ export function QcPrivacy() {
             <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
               <td style={cell}><b>{r.data.incident_id}</b><div style={sub}>{r.status}</div></td><td style={cell}>{dt(r.data.detected_at_and_by)}</td>
               <td style={cell}>{r.data.description}</td><td style={cell}>{r.data.assessment_decision}</td><td style={cell}>{r.data.assessment_due}</td>
-              <td style={{ ...cell, textAlign: "right" }}>{r.status !== "Closed" && <button style={btnLink} onClick={() => { const d = window.prompt("Assessment decision (Pending, Eligible data breach, Not eligible):", r.data.assessment_decision); if (d) qcx.privacy.updateBreach(r.id, { assessment_decision: d, ...(d === "Eligible data breach" ? { regulator_notified: window.prompt("Date the regulator was notified (YYYY-MM-DD):") || undefined } : {}) }).then(load).catch((e) => setError(e.message)); }}>Update assessment</button>}</td>
+              <td style={{ ...cell, textAlign: "right" }}>{r.status !== "Closed" && <button style={btnLink} onClick={async () => { const d = await popup.choose("Is this an eligible data breach under the Notifiable Data Breaches scheme?", ["Pending", "Eligible data breach", "Not eligible"].map((x) => ({ id: x, label: x })), { title: "Assessment decision", okLabel: "Save decision" }); if (!d) return; const when = d === "Eligible data breach" ? await popup.prompt("When was the regulator (OAIC) told? Leave blank if that has not happened yet.", { title: "Regulator notified", label: "Date (YYYY-MM-DD)", placeholder: "2026-11-02", okLabel: "Save" }) : undefined; if (when === null) return; qcx.privacy.updateBreach(r.id, { assessment_decision: d, ...(when ? { regulator_notified: when } : {}) }).then(load).catch((e) => setError(e.message)); }}>Update assessment</button>}</td>
             </tr>
           ))}
           {rows?.length === 0 && <tr><td colSpan={6} style={{ textAlign: "center", padding: 28, fontSize: 13, color: "#94a3b8" }}>No incidents.</td></tr>}

@@ -6,6 +6,7 @@
  */
 import sharp from 'sharp';
 import { prisma } from '../lib/prisma';
+import { outbox } from '../lib/mailer';
 
 type Res = { status: number; body: any };
 export interface OpsCtx {
@@ -78,7 +79,7 @@ export async function adminOps(c: OpsCtx): Promise<void> {
   const st1 = await api('POST', `/qc/clients/${C.client.id}/status`, { token: sa, body: { status: 'SUSPENDED', reason: 'Unpaid invoice' } });
   ok(st1.status === 200, 'Super Admin suspends a client', st1.body);
   const st2 = await api('POST', `/qc/clients/${C.client.id}/status`, { token: sa, body: { status: 'ACTIVE' } });
-  ok(st2.status === 200 || st2.status === 400, 'reactivating answers cleanly (with or without a reason)', st2.body);
+  ok(st2.status === 200 && st2.body.client.status === 'PENDING_ACTIVATION', 'reactivating a client whose first admin never activated returns it to Pending activation', st2.body);
   const stBad = await api('POST', `/qc/clients/${C.client.id}/status`, { token: sa, body: { status: 'NONSENSE' } });
   ok(stBad.status === 400, 'an unknown status is refused', stBad.status);
   const stCaClient = await api('POST', `/qc/clients/${A.client.id}/status`, { token: ca, body: { status: 'SUSPENDED' } });
@@ -118,6 +119,13 @@ export async function adminOps(c: OpsCtx): Promise<void> {
   const mcNew = await api('POST', '/qc/master-contractors', { token: ca, body: c.mcBody(`Disposable Builder ${sfx}`, '33102417032') });
   ok(mcNew.status === 201, 'Client Admin adds a contractor', mcNew.body);
   const mcNewId = mcNew.body.masterContractor.id as string;
+  const mcDupe = await api('POST', '/qc/master-contractors', { token: ca, body: c.mcBody(`Another ${sfx}`, '33102417032') });
+  ok(mcDupe.status === 409 && errCode(mcDupe) === 'ABN_TAKEN', 'the same ABN twice in one client is refused until a reason is given', mcDupe.body);
+  const mcDupeOk = await api('POST', '/qc/master-contractors', { token: ca, body: { ...c.mcBody(`Another ${sfx}`, '33102417032'), abnOverrideReason: 'Separate trading division of the same company' } });
+  ok(mcDupeOk.status === 201, 'and is accepted with a reason of 10+ characters', mcDupeOk.body);
+  if (mcDupeOk.status === 201) await api('DELETE', `/qc/master-contractors/${mcDupeOk.body.masterContractor.id}`, { token: ca });
+  const mcBAbn = await api('POST', '/qc/master-contractors', { token: caB, body: c.mcBody(`Other client same ABN ${sfx}`, '33102417032') });
+  ok(mcBAbn.status === 201, 'another client may use the same ABN without being told it exists elsewhere', mcBAbn.body);
   const mcBadAbn = await api('POST', '/qc/master-contractors', { token: ca, body: c.mcBody(`Bad ABN ${sfx}`, '123') });
   ok(mcBadAbn.status === 400, 'a contractor with an invalid ABN is refused', mcBadAbn.status);
   const mcPatch = await api('PATCH', `/qc/master-contractors/${mcNewId}`, { token: ca, body: { primary_contact_name: 'Bobby Builder', after_hours_emergency_phone: '0433333333' } });
@@ -161,6 +169,11 @@ export async function adminOps(c: OpsCtx): Promise<void> {
   const tcNew = await api('POST', '/qc/trade-companies', { token: ca, body: tcBody(`Tiler ${sfx}`, '33102417032') });
   ok(tcNew.status === 201, 'Client Admin adds a trade company', tcNew.body);
   const tcId = tcNew.body.tradeCompany.id as string;
+  const tcDupe = await api('POST', '/qc/trade-companies', { token: ca, body: tcBody(`Tiler twin ${sfx}`, '33102417032') });
+  ok(tcDupe.status === 409 && errCode(tcDupe) === 'ABN_TAKEN', 'a trade company with an ABN already on file in the client is refused until a reason is given', tcDupe.body);
+  const tcDupeOk = await api('POST', '/qc/trade-companies', { token: ca, body: { ...tcBody(`Tiler twin ${sfx}`, '33102417032'), abnOverrideReason: 'Sister company run by the same owner' } });
+  ok(tcDupeOk.status === 201, 'and accepted with a reason', tcDupeOk.body);
+  if (tcDupeOk.status === 201) await api('DELETE', `/qc/trade-companies/${tcDupeOk.body.tradeCompany.id}`, { token: ca });
   const tcPatch = await api('PATCH', `/qc/trade-companies/${tcId}`, { token: ca, body: { primary_contact_name: 'Terry', primary_contact_mobile: '0433333334' } });
   ok(tcPatch.status === 200, 'edits a trade company', tcPatch.body);
   const catUsed = await api('POST', '/qc/trade-categories', { token: sa, body: { category_name: `Fencing ${sfx}`, code: `FNC${sfx}`, licence_required: false, active: true } });
@@ -366,6 +379,18 @@ export async function adminOps(c: OpsCtx): Promise<void> {
   ok(polProj.status === 200 && polProj.body.policy.overridden.includes('dlpReminderDays'), 'a project override is marked as overridden', polProj.body.policy?.overridden);
   const polRevert = await api('DELETE', `/qc/policy?projectId=${c.projectA}&keys=dlpReminderDays`, { token: ca });
   ok(polRevert.status === 200 && !polRevert.body.policy.overridden.includes('dlpReminderDays'), 'and can be reverted key by key', polRevert.body.policy?.overridden);
+  const lv = pol.body.policy.effective.levels as Array<Record<string, unknown>>;
+  const lvBad = await api('PUT', '/qc/policy', { token: ca, body: { levels: lv.map((l, i) => (i === 0 ? { ...l, extraEmails: 'not-an-email' } : l)) } });
+  ok(lvBad.status === 400, 'an invalid additional notification email is refused', lvBad.body);
+  const lvOk = await api('PUT', '/qc/policy', { token: ca, body: { levels: lv.map((l) => ({ ...l, extraEmails: 'surveyor@example.org; solicitor@example.org' })) } });
+  ok(lvOk.status === 200, 'additional notification emails save', lvOk.body);
+  outbox.length = 0;
+  const lastLevel = lv.length;
+  const esc4 = await api('POST', `/qc/defects/${c.defectId}/escalate`, { token: ca, body: { action: 'Escalate', target_level: lastLevel, reason_or_resolution_note: 'Checking the extra recipients' } });
+  ok(esc4.status === 200 || esc4.status === 201, 'a manual escalation is raised', esc4.body);
+  const toExtra = outbox.filter((m) => m.to === 'surveyor@example.org' || m.to === 'solicitor@example.org');
+  ok(toExtra.length === 2 && toExtra[0]!.text.includes('/qc/defects/'), 'and each additional address is emailed a link to the defect', outbox.map((m) => m.to));
+  await api('PUT', '/qc/policy', { token: ca, body: { levels: lv } });
   const polBad = await api('PUT', '/qc/policy', { token: ca, body: { dlpReminderDays: ['soon'] } });
   ok(polBad.status === 400, 'a malformed policy value is refused', polBad.status);
   const polOther = await api('GET', `/qc/policy?projectId=${(await prisma.qcProject.findFirstOrThrow({ where: { clientId: B.client.id } })).id}`, { token: ca });

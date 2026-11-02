@@ -8,6 +8,7 @@ import { FlagChips, SeverityBadge, StatusChip } from "./AdminQcDefects";
 import type { QcAllowedAction, QcDefect, QcDefectDetail, QcDefectEvent } from "../../qcTypes";
 import { qcx, type Escalation } from "../../qcApi";
 import { useQc } from "../../qcContext";
+import { dialog as popup } from "../../components/dialogs";
 
 const ROLE_LABEL: Record<string, string> = {
   SA: "Super Admin", CLIENT_ADMIN: "Client Admin", CLIENT_USER: "Client User", MC_MANAGER: "MC Manager", MC_SITE_SUPERVISOR: "MC Site Supervisor",
@@ -148,7 +149,7 @@ export function AdminQcDefectDetail() {
                   {e.level === 4 && !e.referralType && can("sla.escalate") && <button style={{ ...btnLink, marginLeft: 8 }} onClick={() => setReferral(e)}>Record external referral</button>}
                 </div>
               ))}
-              {can("sla.escalate") && escalations.some((e) => !e.resolvedAt) && <button style={{ ...btnGhost, marginTop: 10 }} onClick={async () => { const note = window.prompt("Mark the escalations resolved. Note:"); if (note?.trim()) { try { await qcx.escalations.escalate(d.id, { action: "Mark resolved", reason_or_resolution_note: note }); load(); loadEscalations(); } catch (e) { window.alert((e as Error).message); } } }}>Mark resolved</button>}
+              {can("sla.escalate") && escalations.some((e) => !e.resolvedAt) && <button style={{ ...btnGhost, marginTop: 10 }} onClick={async () => { const note = await popup.prompt("This marks every open escalation on the defect resolved.", { title: "Mark resolved", label: "Resolution note", required: true, multiline: true, okLabel: "Mark resolved" }); if (note?.trim()) { try { await qcx.escalations.escalate(d.id, { action: "Mark resolved", reason_or_resolution_note: note }); load(); loadEscalations(); } catch (e) { void popup.alert((e as Error).message); } } }}>Mark resolved</button>}
             </Card>
           )}
           <Card style={{ padding: "16px 20px" }}>
@@ -388,7 +389,7 @@ function ActionDialog({ defect, action, refOptions, people, onClose, onDone }: {
           onDone(await attempt());
         } catch (e) {
           const err = e as Error & { code?: string };
-          if (err.code === "CATEGORY_MISMATCH" && window.confirm(`${err.message}`)) {
+          if (err.code === "CATEGORY_MISMATCH" && (await popup.confirm(`${err.message}`, { title: "Check the trade category", okLabel: "Continue anyway" }))) {
             onDone(await attempt({ confirm_mismatch: true }));
             return;
           }

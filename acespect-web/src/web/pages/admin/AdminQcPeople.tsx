@@ -11,6 +11,7 @@ import type { QcMembershipRow, QcPersonRow } from "../../qcTypes";
 import { useQc } from "../../qcContext";
 import { qcx } from "../../qcApi";
 import { RoleMatrix } from "../../components/RoleMatrix";
+import { dialog as popup } from "../../components/dialogs";
 
 /** The capability needed to add or manage someone in each role (mirrors the server). */
 const ROLE_CAP: Record<string, string> = {
@@ -54,7 +55,7 @@ export function AdminQcPeople() {
       await api.qc.people.reactivate(p.id);
       load();
     } catch (e) {
-      window.alert((e as Error).message);
+      void popup.alert((e as Error).message);
     }
   }
 
@@ -98,7 +99,7 @@ export function AdminQcPeople() {
             <td style={cell}>{statusPill(p.isActive ? (p.lastSignInAt ? "Active" : "Invited") : "Deactivated")}{p.mfaEnabled && <div style={sub}>2-step on</div>}</td>
             <td style={{ ...cell, whiteSpace: "nowrap", textAlign: "right" }}>
               {(p.qcMemberships.length === 0 ? can("client.manage") : p.qcMemberships.some((m) => can(ROLE_CAP[m.role] ?? ""))) && <button style={btnLink} onClick={() => setPerson({ row: p })}>Edit</button>}{" "}
-              {p.isActive && !p.lastSignInAt && <><button style={btnLink} onClick={() => qcx.people.resendInvitation(p.id).then((i) => setInvite(i)).catch((e) => window.alert(e.message))}>Resend invitation</button>{" "}</>}
+              {p.isActive && !p.lastSignInAt && <><button style={btnLink} onClick={() => qcx.people.resendInvitation(p.id).then((i) => setInvite(i)).catch((e) => void popup.alert(e.message))}>Resend invitation</button>{" "}</>}
               {can("users.deactivate") && p.qcMemberships.some((m) => can(ROLE_CAP[m.role] ?? "")) && (p.isActive ? (
                 <button style={{ ...btnLink, color: "#dc2626" }} onClick={() => setDeactivating(p)}>Deactivate</button>
               ) : (
@@ -316,7 +317,7 @@ function CredentialsForm({ person, refOptions, onClose, onSaved }: {
       await api.qc.people.setCredentialStatus(person.id, status);
       onSaved();
     } catch (e) {
-      window.alert((e as Error).message);
+      void popup.alert((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -368,7 +369,7 @@ function DeactivateDialog({ person, candidates, onClose, onDone }: {
     setError(null);
     try {
       const r = await api.qc.people.deactivate(person.id, { reason, reassignToId: reassignTo || undefined });
-      if (r.reassigned) window.alert(`${r.reassigned} open defect(s) were reassigned.`);
+      if (r.reassigned) void popup.alert(`${r.reassigned} open defect(s) were reassigned.`);
       onDone();
     } catch (e) {
       const err = e as ApiError;

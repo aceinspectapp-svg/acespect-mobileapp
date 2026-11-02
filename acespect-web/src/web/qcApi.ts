@@ -209,8 +209,8 @@ export const qcx = {
     requests: () => req<{ requests: Json[] }>("/qc/privacy/requests").then((d) => d.requests),
     createRequest: (body: Json) => req<Json>("/qc/privacy/requests", { method: "POST", body: j(body) }),
     updateRequest: (id: string, body: Json) => req<Json>(`/qc/privacy/requests/${id}`, { method: "PATCH", body: j(body) }),
-    exportPersonal: async (id: string, userId: string) => {
-      const res = await fetchWithRefresh(`${API_BASE}/qc/privacy/requests/${id}/export`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` }, body: j({ userId }) });
+    exportPersonal: async (id: string, who: string) => {
+      const res = await fetchWithRefresh(`${API_BASE}/qc/privacy/requests/${id}/export`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` }, body: j(who.includes("@") ? { email: who } : { userId: who }) });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error?.message ?? `HTTP ${res.status}`);
       return res.blob();
     },

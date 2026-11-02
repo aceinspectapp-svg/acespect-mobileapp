@@ -160,6 +160,9 @@ export function parsePolicyPatch(input: Record<string, unknown>): Partialize<Pro
       if (trigger === 'Failed re-inspections on the same item' && (failedCount === null || !Number.isInteger(failedCount) || failedCount < 1)) {
         throw ApiError.badRequest(`Level ${i + 1}: set how many failed re-inspections trigger this level`);
       }
+      const extra = String(l.extraEmails ?? '').split(/[\s,;]+/).filter(Boolean);
+      const badEmail = extra.find((e) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
+      if (badEmail) throw ApiError.badRequest(`Level ${i + 1}: "${badEmail}" is not a valid email address`);
       return {
         level: i + 1, name: String(l.name).trim(), trigger, waitDays, failedCount, action,
         notifyRoles: Array.isArray(l.notifyRoles) ? (l.notifyRoles as string[]) : ['Any of the eight roles'],

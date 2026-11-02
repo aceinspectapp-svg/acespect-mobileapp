@@ -333,7 +333,11 @@ export const qcOpsController = {
   }),
   exportPersonal: asyncHandler(async (req, res) => {
     const body = payloadOf(req);
-    const data = await privacy.exportPersonalData(ctxOf(req), id(req), String(body.userId ?? ''));
+    // The portal asks for an email address (an id is not something a person knows); an id still works for scripts.
+    const email = String(body.email ?? '').trim().toLowerCase();
+    const found = email ? await prisma.user.findUnique({ where: { email }, select: { id: true } }) : null;
+    if (email && !found) throw ApiError.notFound('No account has that email address');
+    const data = await privacy.exportPersonalData(ctxOf(req), id(req), found?.id ?? String(body.userId ?? ''));
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="personal-data-${id(req)}.json"`);
     res.status(200).send(JSON.stringify(data, null, 2));

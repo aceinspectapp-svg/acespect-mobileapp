@@ -9,6 +9,7 @@ import type { QcLotRow, QcProjectRow, QcSiteRow, QcTeamMember } from "../../qcTy
 import { useQc } from "../../qcContext";
 import { DlpPanel, DocumentsPanel, LotImportDialog, PlanPanel, StatusMover } from "../portal/QcProjectPanels";
 import { PolicyPanel, SlaPanel } from "../portal/QcPolicy";
+import { dialog as popup } from "../../components/dialogs";
 
 function projectInitial(p: QcProjectRow): Record<string, unknown> {
   return { ...p.data, developer: p.clientId, builder: p.builderId };
@@ -181,16 +182,16 @@ function Sites({ project, onChange }: { project: QcProjectRow; onChange: () => v
       await api.qc.sites.update(site.id, { status: site.status === "ACTIVE" ? "ARCHIVED" : "ACTIVE" });
       onChange();
     } catch (e) {
-      window.alert((e as Error).message);
+      void popup.alert((e as Error).message);
     }
   }
   async function remove(site: QcSiteRow) {
-    if (!window.confirm(`Delete ${site.name}?`)) return;
+    if (!(await popup.confirm(`Delete ${site.name}?`, { title: "Delete site", okLabel: "Delete", danger: true }))) return;
     try {
       await api.qc.sites.remove(site.id);
       onChange();
     } catch (e) {
-      window.alert((e as Error).message);
+      void popup.alert((e as Error).message);
     }
   }
 
@@ -246,13 +247,13 @@ function Lots({ project, onChange, onImport }: { project: QcProjectRow; onChange
   useEffect(() => { load(); }, [load]);
 
   async function remove(lot: QcLotRow) {
-    if (!window.confirm(`Delete ${lot.name}?`)) return;
+    if (!(await popup.confirm(`Delete ${lot.name}?`, { title: "Delete lot", okLabel: "Delete", danger: true }))) return;
     try {
       await api.qc.lots.remove(lot.id);
       load();
       onChange();
     } catch (e) {
-      window.alert((e as Error).message);
+      void popup.alert((e as Error).message);
     }
   }
 
@@ -263,8 +264,8 @@ function Lots({ project, onChange, onImport }: { project: QcProjectRow; onChange
           <Select value={siteFilter} onChange={setSiteFilter} options={siteOptions} placeholder="All sites" />
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {onImport && <button style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #e5e7eb", background: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }} onClick={() => (siteOptions.length ? onImport() : window.alert("Add a site first; every lot belongs to a site."))}>Import from CSV</button>}
-          <PrimaryBtn onClick={() => (siteOptions.length ? setDialog({}) : window.alert("Add a site first; every lot belongs to a site."))}><Plus size={14} /> Add lot</PrimaryBtn>
+          {onImport && <button style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #e5e7eb", background: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }} onClick={() => (siteOptions.length ? onImport() : void popup.alert("Add a site first; every lot belongs to a site."))}>Import from CSV</button>}
+          <PrimaryBtn onClick={() => (siteOptions.length ? setDialog({}) : void popup.alert("Add a site first; every lot belongs to a site."))}><Plus size={14} /> Add lot</PrimaryBtn>
         </div>
       </div>
       <TableCard headers={["Lot", "Site", "Dwelling", "NCC class", "Storeys", "Floor system", "Lot status", ""]}>
@@ -299,7 +300,7 @@ function Lots({ project, onChange, onImport }: { project: QcProjectRow; onChange
           onSubmit={async (payload) => {
             if (dialog.row) {
               const r = await api.qc.lots.update(dialog.row.id, payload);
-              if (r?.warning) window.alert(r.warning);
+              if (r?.warning) void popup.alert(r.warning);
             } else await api.qc.lots.create(payload);
             setDialog(null);
             load();
@@ -328,21 +329,22 @@ function Team({ project, onChange }: { project: QcProjectRow; onChange: () => vo
   useEffect(() => { load(); }, [load]);
 
   async function remove(m: QcTeamMember) {
-    const reason = window.prompt("Remove from the project team. Reason (required if they have open items):") ?? null;
+    const reason = await popup.prompt("They lose access to this project. Their name stays on past records.", { title: "Remove from the project team", label: "Reason (needed if they have open items)", multiline: true, okLabel: "Remove" });
     if (reason === null) return;
     try {
       await api.qc.projects.removeTeamMember(m.id, reason);
       load();
     } catch (e) {
       const err = e as { code?: string; message: string };
-      if (err.code !== "OPEN_WORK") return window.alert(err.message);
+      if (err.code !== "OPEN_WORK") return void popup.alert(err.message);
       // Open items must move to someone first.
       const others = (data?.people ?? []).filter((p) => p.id !== m.userId && p.qcMemberships.some((x) => x.client.id === project.clientId && x.status === "ACTIVE" && x.role === "PRIVATE_INSPECTOR"));
-      const names = others.map((p, i) => `${i + 1}. ${p.name ?? p.email}`).join("\n");
-      const pick = window.prompt(`${err.message}\n\nType the number of the person who takes over:\n${names}`);
-      const target = others[Number(pick) - 1];
-      if (!target) return;
-      try { await api.qc.projects.removeTeamMember(m.id, reason, target.id); load(); } catch (e2) { window.alert((e2 as Error).message); }
+      if (others.length === 0) return void popup.alert(`${err.message}
+
+There is nobody else in this client who can take them over. Add another inspector first, then remove this person.`, "Nobody to hand over to");
+      const targetId = await popup.choose(`${err.message}\n\nWho takes over their open items?`, others.map((p) => ({ id: p.id, label: p.name ?? p.email })), { title: "Hand over open items", okLabel: "Hand over and remove" });
+      if (!targetId) return;
+      try { await api.qc.projects.removeTeamMember(m.id, reason, targetId); load(); } catch (e2) { void popup.alert((e2 as Error).message); }
     }
   }
 
@@ -396,7 +398,7 @@ function Team({ project, onChange }: { project: QcProjectRow; onChange: () => vo
           onClose={() => setAdding(false)}
           onSubmit={async (payload) => {
             const r = await api.qc.projects.addTeamMember(project.id, payload);
-            if (r?.warnings?.length) window.alert(r.warnings.join("\n"));
+            if (r?.warnings?.length) void popup.alert(r.warnings.join("\n"));
             setAdding(false);
             load();
             onChange();

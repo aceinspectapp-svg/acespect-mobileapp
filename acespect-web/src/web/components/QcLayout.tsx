@@ -10,6 +10,7 @@ import { QcProvider, useQc } from "../qcContext";
 import { qcx, type Notification } from "../qcApi";
 import { btnGhost, btnPrimary, ErrorNote } from "./QcUi";
 import { inputStyle } from "./SpecForm";
+import { DialogHost } from "./dialogs";
 
 interface NavItem { to: string; label: string; icon: React.ElementType; cap: string | string[]; end?: boolean }
 
@@ -139,6 +140,7 @@ function Shell() {
           {needsClient ? <NeedsClient /> : <Outlet />}
         </main>
       </div>
+      <DialogHost />
     </div>
   );
 }

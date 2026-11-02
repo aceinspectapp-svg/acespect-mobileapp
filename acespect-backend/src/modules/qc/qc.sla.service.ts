@@ -14,6 +14,8 @@ import { addDuration, businessDaysBetween } from './qc.calendar';
 import { calendarFor, getProjectPolicy, getSlaPolicy, EscalationLevel, SEVERITY_KEYS, SeverityKey } from './qc.policy.service';
 import { builderRecipients, developerRecipients, inspectorRecipients, notify, supervisorRecipients, tradeRecipients } from './qc.notify';
 import { createHash } from 'crypto';
+import { sendMail } from '../../lib/mailer';
+import { env } from '../../config/env';
 
 const SYSTEM_EMAIL = 'system@acespect.local';
 
@@ -243,7 +245,26 @@ async function raise(d: DefectRowForScan, level: EscalationLevel, trigger: strin
     mandatory: level.level >= 3,
   });
   await recordAudit({ clientId: d.property.project.clientId, entityType: 'Defect', entityId: d.id, action: `escalation.level${level.level}`, actor: { id: manual?.by ?? null, role: manual ? 'USER' : 'SYSTEM' }, reason: trigger });
+  await emailExtraRecipients(level, ref, d.id, d.property.project.name);
   return esc;
+}
+
+/** The level's "Additional notification emails" (an outside surveyor, a developer's solicitor...) get a short message too. Body stays minimal: an event and a link. */
+export function extraEmailList(raw: unknown): string[] {
+  const seen = new Set<string>();
+  for (const part of String(raw ?? '').split(/[\s,;]+/)) {
+    const e = part.trim().toLowerCase();
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) seen.add(e);
+  }
+  return [...seen];
+}
+
+async function emailExtraRecipients(level: EscalationLevel, ref: string, defectId: string, projectName: string) {
+  for (const to of extraEmailList(level.extraEmails)) {
+    const subject = level.level === 1 ? `${ref} is overdue (${projectName})` : `${ref} escalated to level ${level.level}: ${level.name} (${projectName})`;
+    const text = `${subject}\n\nOpen it in ACE SPECT QC: ${env.WEB_APP_URL}/qc/defects/${defectId}\n`;
+    await sendMail(to, subject, text).catch(() => undefined);
+  }
 }
 
 /** Manual escalation by an authorised user (REQ-SLA-004 / F34). `level` is the target level number. */
