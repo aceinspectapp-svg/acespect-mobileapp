@@ -16,6 +16,10 @@ export const authApi = {
   register: (input: RegisterInput): Promise<AuthResponse> =>
     bare.post<AuthResponse>('/auth/register', input).then((r) => r.data),
 
+  /** Is "Create account" available? Unknown (offline, older server) counts as yes, so the screen never hides it by mistake. */
+  signupOpen: (): Promise<boolean> =>
+    bare.get<{ selfSignup?: boolean }>('/auth/sso/config', { timeout: 6000 }).then((r) => r.data.selfSignup !== false, () => true),
+
   login: (input: LoginInput): Promise<LoginResult> =>
     bare.post<LoginResult>('/auth/login', input).then((r) => r.data),
 

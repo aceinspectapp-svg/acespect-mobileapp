@@ -6,8 +6,9 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+import { Alert } from 'react-native';
 import { authApi } from '../services/authApi';
-import { setOnUnauthorized } from '../services/apiClient';
+import { consumeSignOutReason, setOnUnauthorized } from '../services/apiClient';
 import { tokenStorage } from '../services/tokenStorage';
 import { AuthUser, RegisterInput } from '../types/auth';
 
@@ -63,7 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Restore session on launch + react to a hard auth failure from the client.
   useEffect(() => {
     // If a refresh ultimately fails mid-session, drop the user back to login.
-    setOnUnauthorized(() => setUser(null));
+    setOnUnauthorized(() => {
+      const why = consumeSignOutReason();
+      setUser(null);
+      // Switched off by an administrator: say so. Anything still waiting to send stays on this phone.
+      if (why === 'ACCOUNT_INACTIVE') {
+        Alert.alert('Your account has been switched off', 'You have been signed out. Contact your administrator. Inspections and photos that have not been sent yet are kept on this phone.');
+      }
+    });
 
     // Dev-only escape hatch: when EXPO_PUBLIC_AUTH_BYPASS=1, seed a fake user so
     // the whole app is reachable with no backend / no sign-in. Inert (and absent

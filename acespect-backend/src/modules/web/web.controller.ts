@@ -73,8 +73,8 @@ export const webController = {
   updateUser: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('User id is required');
-    const user = await webService.updateUser(id, req.body);
-    res.status(200).json({ user });
+    await webService.updateUser(id, req.body);
+    res.status(200).json({ user: await usersService.getView(id) });
   }),
 
   updateSection: asyncHandler(async (req: Request, res: Response) => {

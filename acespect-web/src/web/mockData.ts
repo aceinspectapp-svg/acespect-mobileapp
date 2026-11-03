@@ -12,6 +12,16 @@ export interface User {
   region?: string;
   /** Inspector's license/registration number (e.g. DBU license) -- shown alongside their name in the reviewer pane and the report cover. */
   licenseNumber?: string;
+  /** Admin -> Users only: where the account stands, and details only an administrator is sent. */
+  status?: "invited" | "active" | "deactivated";
+  lastSignInAt?: string | null;
+  twoStep?: boolean;
+  /** Also holds a role in a QC client, so it is managed on the QC People page. */
+  qcManaged?: boolean;
+  invitationExpired?: boolean;
+  deactivatedAt?: string | null;
+  deactivationReason?: string | null;
+  createdAt?: string;
   /** The report cover's signature block, when this user is the one whose signature appears there (typically the admin/director). */
   signatureUrl?: string;
   signatureTitle?: string;

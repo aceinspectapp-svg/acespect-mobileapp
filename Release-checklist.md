@@ -71,3 +71,11 @@ Everything below was run against the final code (commit `46bd35f` and later). "V
 - **Security:** the "Demo credentials" panel on the sign-in page (admin@acespect.app / Admin123 and two more) now shows in development builds only. **Check that those three accounts do not exist in the production database; if they do, delete them or change their passwords.**
 - **Email is still not configured in production**, so the additional notification emails only go out once SMTP_URL / MAIL_FROM are set.
 - **Checks:** `check:platform` now has 450+ checks including `qc-admin-ops.ts`.
+
+## 11. Houspect user management (added Nov 3) — see `User-management-guide.md`
+- **Deploy order:** backend first (migration `20261103090000_user_management` only adds four empty columns; the container now runs migrations on start), then web, then the phone update (Android and iOS, each on its own channel).
+- **Before deploying:** make sure at least one real administrator can sign in, because **sign-up closes** (`SELF_SIGNUP` defaults to `off`). Existing phone-registered inspectors keep working. To add people, sign in as an administrator and use Admin → Users.
+- **Email:** without `SMTP_URL`/`MAIL_FROM` the administrator is shown each invitation or reset link to pass on.
+- **Two-step sign-in for admins and reviewers:** leave `MFA_REQUIRED_PLATFORM_ROLES` empty until everyone has been told; then set `ADMIN,REVIEWER`.
+- **Checks:** `npm run check:user-management` (66 checks), also in GitHub Actions. The platform check now runs with `SELF_SIGNUP=on`.
+- **Not verified on a real phone:** the new "Accounts are created by your administrator" message and the switched-off message.

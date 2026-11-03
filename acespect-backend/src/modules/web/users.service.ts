@@ -238,4 +238,8 @@ async function reactivate(id: string, actor: Actor) {
   return { user: view(await load(id), true), needsInvitation: !activated(u) };
 }
 
-export const usersService = { listUsers, createUser, resendInvitation, sendPasswordReset, cancelInvitation, changeRole, deactivate, reactivate };
+async function getView(id: string) {
+  return view(await load(id), true);
+}
+
+export const usersService = { getView, listUsers, createUser, resendInvitation, sendPasswordReset, cancelInvitation, changeRole, deactivate, reactivate };

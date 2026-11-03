@@ -186,7 +186,7 @@ async function main() {
   ok(off.status === 200 && off.body.user.status === 'deactivated' && off.body.user.deactivationReason === 'Left the company', 'admin switches the inspector off with a reason', off.body);
   ok((await api('GET', '/auth/me', { token: inspTok })).status === 401, 'their access token stops working at once');
   const ref = await api('POST', '/auth/refresh', { body: { refreshToken: inspRefresh } });
-  ok(ref.status === 401, 'and so does their refresh token', ref.body);
+  ok(ref.status === 401 && code(ref) === 'ACCOUNT_INACTIVE', 'and so does their refresh token, which says the account was switched off', ref.body);
   const logAgain = await login(email('insp'));
   ok(logAgain.status === 403 && code(logAgain) === 'ACCOUNT_INACTIVE', 'signing in again says the account is switched off', logAgain.body);
   const off2 = await api('POST', `/web/users/${inspector.id}/deactivate`, { token: admin, body: {} });

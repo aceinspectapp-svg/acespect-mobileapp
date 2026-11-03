@@ -7,6 +7,7 @@ import {
 import { AcespectLogo } from "../../components/AcespectLogo";
 import { useAppData } from "../data";
 import type { Role } from "../mockData";
+import { DialogHost } from "./dialogs";
 
 const ROLE_NAV: Record<Role, { to: string; icon: React.ElementType; label: string }[]> = {
   reviewer: [
@@ -180,6 +181,7 @@ export function WebLayout() {
         {/* Page */}
         <main style={{ flex: 1, overflow: "auto" }}>
           <Outlet />
+          <DialogHost />
         </main>
       </div>
     </div>

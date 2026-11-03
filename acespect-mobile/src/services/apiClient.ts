@@ -45,6 +45,14 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
 // Single-flight refresh: concurrent 401s share one refresh round-trip.
 let refreshing: Promise<string | null> | null = null;
 
+/** Why the last sign-in could not be renewed, for the message shown once the app returns to the sign-in screen. */
+let endedReason: string | null = null;
+export function consumeSignOutReason(): string | null {
+  const r = endedReason;
+  endedReason = null;
+  return r;
+}
+
 async function performRefresh(): Promise<string | null> {
   const refreshToken = await tokenStorage.getRefreshToken();
   if (!refreshToken) return null;
@@ -52,7 +60,8 @@ async function performRefresh(): Promise<string | null> {
     const { data } = await refreshClient.post('/auth/refresh', { refreshToken });
     await tokenStorage.setTokens(data.accessToken, data.refreshToken);
     return data.accessToken as string;
-  } catch {
+  } catch (e) {
+    if ((e as AxiosError<{ error?: { code?: string } }>).response?.data?.error?.code === 'ACCOUNT_INACTIVE') endedReason = 'ACCOUNT_INACTIVE';
     await tokenStorage.clear();
     return null;
   }

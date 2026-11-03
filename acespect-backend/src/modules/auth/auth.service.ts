@@ -424,7 +424,9 @@ export const authService = {
     const tokenHash = hashRefreshToken(rawToken);
     const stored = await prisma.refreshToken.findUnique({ where: { tokenHash }, include: { user: true } });
     const invalid = () => ApiError.unauthorized('Invalid or expired refresh token', 'INVALID_REFRESH_TOKEN');
-    if (!stored || stored.expiresAt < new Date() || !stored.user.isActive) throw invalid();
+    if (!stored || stored.expiresAt < new Date()) throw invalid();
+    // Only the holder of a real token learns this, so it can say why: the phone then tells the person their account was switched off.
+    if (!stored.user.isActive) throw new ApiError(401, 'This account has been switched off. Contact your administrator.', 'ACCOUNT_INACTIVE');
     const withinLeeway = (rotatedAt: Date | null): boolean => !!rotatedAt && env.REFRESH_REUSE_LEEWAY_SEC > 0 && Date.now() - rotatedAt.getTime() <= env.REFRESH_REUSE_LEEWAY_SEC * 1000;
     if (stored.revokedAt && !withinLeeway(stored.rotatedAt)) throw invalid();
     // Web sessions end after the client's idle timeout; the refresh token's age is time since last activity.

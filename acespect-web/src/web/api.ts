@@ -20,6 +20,9 @@ export interface AssignmentOverview {
   requests: { id: string; inspectionId: string; jobNo: string; address: string; fromReviewerId: string; toReviewerId: string; createdAt: string }[];
 }
 
+/** An invitation or reset link from Admin -> Users. `url` is present only when email could not carry it (the admin passes it on). */
+export interface UserLink { email: string; mail: string; expiresAt?: string; url?: string }
+
 export const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000/api/v1";
 
@@ -345,6 +348,20 @@ export const api = {
   },
   getInspection: (id: string) => req<{ inspection: Inspection }>(`/web/inspections/${id}`).then((d) => d.inspection),
   getUsers: () => req<{ users: User[] }>("/web/users").then((d) => d.users),
+
+  /** Admin -> Users: add people, change roles, switch accounts off and on, invitations and reset links. */
+  users: {
+    create: (input: { name: string; email: string; role: Role; phone?: string; region?: string; licenseNumber?: string }) =>
+      req<{ user: User; invitation: UserLink }>("/web/users", { method: "POST", body: JSON.stringify(input) }),
+    setRole: (id: string, role: Role, reassignToId?: string | null) =>
+      req<{ user: User; handedBack: number }>(`/web/users/${id}/role`, { method: "POST", body: JSON.stringify({ role, reassignToId: reassignToId ?? null }) }),
+    deactivate: (id: string, body: { reason?: string; reassignToId?: string | null }) =>
+      req<{ user: User; handedBack: number }>(`/web/users/${id}/deactivate`, { method: "POST", body: JSON.stringify(body) }),
+    reactivate: (id: string) => req<{ user: User; needsInvitation: boolean }>(`/web/users/${id}/reactivate`, { method: "POST" }),
+    resendInvitation: (id: string) => req<{ invitation: UserLink }>(`/web/users/${id}/invitation`, { method: "POST" }),
+    sendReset: (id: string) => req<{ reset: UserLink & { expiresInMinutes: number } }>(`/web/users/${id}/password-reset`, { method: "POST" }),
+    cancelInvitation: (id: string) => req<void>(`/web/users/${id}/invitation`, { method: "DELETE" }),
+  },
 
   /** Admin-only: edit another user's profile (name/phone/region/license). */
   updateUser: (

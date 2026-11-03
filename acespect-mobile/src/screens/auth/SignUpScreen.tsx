@@ -69,7 +69,12 @@ export function SignUpScreen({ navigation }: AuthScreenProps<'SignUp'>) {
       const code = (e as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;
       setError(msg);
       // Someone an administrator already invited cannot create a second account: send them to the invitation screen instead of a dead end.
-      if (code === 'INVITATION_PENDING' || code === 'INVITATION_EXPIRED') {
+      if (code === 'SIGNUP_DISABLED') {
+        Alert.alert('Accounts are created by your administrator', 'Ask for an invitation, then choose "I have an invitation" on the sign-in screen.', [
+          { text: 'OK', style: 'cancel' },
+          { text: 'I have an invitation', onPress: () => navigation.navigate('AcceptInvitation') },
+        ]);
+      } else if (code === 'INVITATION_PENDING' || code === 'INVITATION_EXPIRED') {
         Alert.alert('You have been invited', msg, [
           { text: 'Not now', style: 'cancel' },
           ...(code === 'INVITATION_PENDING' ? [{ text: 'I have an invitation', onPress: () => navigation.navigate('AcceptInvitation') }] : []),
