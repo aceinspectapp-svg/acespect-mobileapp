@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Plus, Search, Mail, Phone, X } from "lucide-react";
+import { Search, Mail, Phone, X } from "lucide-react";
 import { useAppData } from "../../data";
-import { PageShell, PrimaryBtn, StatusBadge, TableCard } from "../../components/WebLayout";
+import { PageShell, StatusBadge, TableCard } from "../../components/WebLayout";
 import type { Role, User } from "../../mockData";
 
 const ROLE_CONFIG: Record<Role, { color: string; bg: string }> = {
@@ -26,7 +26,6 @@ export function AdminUsers() {
     <PageShell
       title="User Management"
       subtitle={`${USERS.length} users across all roles`}
-      actions={<PrimaryBtn color="#1a2a4a"><Plus size={14} /> Add User</PrimaryBtn>}
     >
       {/* Filters */}
       <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center" }}>
