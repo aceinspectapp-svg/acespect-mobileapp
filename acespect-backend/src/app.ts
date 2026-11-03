@@ -17,6 +17,7 @@ import { reviewRouter } from './modules/review/review.routes';
 import { templatesRouter } from './modules/templates/templates.routes';
 import { webRouter } from './modules/web/web.routes';
 import { mediaRouter } from './modules/media/media.routes';
+import { adminUsersRouter } from './modules/adminUsers/adminUsers.routes';
 import { qcRouter } from './modules/qc/qc.routes';
 import { auditRouter } from './modules/audit/audit.routes';
 
@@ -87,6 +88,7 @@ export function createApp() {
   app.use('/api/v1/review', reviewRouter);
   app.use('/api/v1/templates', templatesRouter);
   app.use('/api/v1/web', webRouter);
+  app.use('/api/v1/admin/users', adminUsersRouter);
   app.use('/api/v1/audit', auditRouter);
   app.use('/api/v1/qc', qcRouter);
 

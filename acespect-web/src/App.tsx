@@ -23,6 +23,7 @@ const InspectorFormEditor = lazyPage(() => import("./web/pages/inspector/Inspect
 const AdminDashboard = lazyPage(() => import("./web/pages/admin/AdminDashboard"), "AdminDashboard");
 const AdminInspections = lazyPage(() => import("./web/pages/admin/AdminInspections"), "AdminInspections");
 const AdminUsers = lazyPage(() => import("./web/pages/admin/AdminUsers"), "AdminUsers");
+const AdminCreateUser = lazyPage(() => import("./web/pages/admin/AdminCreateUser"), "AdminCreateUser");
 const AdminTemplateProfiles = lazyPage(() => import("./web/pages/admin/AdminTemplateProfiles"), "AdminTemplateProfiles");
 const AdminTemplateSections = lazyPage(() => import("./web/pages/admin/AdminTemplateSections"), "AdminTemplateSections");
 const AdminTemplateAdoption = lazyPage(() => import("./web/pages/admin/AdminTemplateAdoption"), "AdminTemplateAdoption");
@@ -182,6 +183,7 @@ export default function App() {
             <Route path="/admin/inspections" element={<AdminInspections />} />
             <Route path="/admin/inspections/:id" element={<ReviewerFormView />} />
             <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/admin/create-user" element={<AdminCreateUser />} />
             <Route path="/admin/templates" element={<AdminTemplateProfiles />} />
             <Route path="/admin/templates/:inspectionType/:propertyType" element={<AdminTemplateSections />} />
             <Route path="/admin/templates/:inspectionType/:propertyType/adoption" element={<AdminTemplateAdoption />} />
