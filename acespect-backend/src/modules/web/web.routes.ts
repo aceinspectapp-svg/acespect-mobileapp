@@ -2,14 +2,21 @@ import { Router } from 'express';
 import { webController } from './web.controller';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
-import { assignSchema, damageUpdateSchema, transferRespondSchema, inspectionUpdateSchema, sectionUpdateSchema, userUpdateSchema } from './web.schemas';
+import { assignSchema, changeRoleSchema, createUserSchema, deactivateUserSchema, damageUpdateSchema, transferRespondSchema, inspectionUpdateSchema, sectionUpdateSchema, userUpdateSchema } from './web.schemas';
 
 const router = Router();
 const reviewers = requireRole('REVIEWER', 'ADMIN');
 const admins = requireRole('ADMIN');
 
 router.get('/users', requireAuth, reviewers, webController.listUsers);
+router.post('/users', requireAuth, admins, validate(createUserSchema), webController.createUser);
 router.patch('/users/:id', requireAuth, admins, validate(userUpdateSchema), webController.updateUser);
+router.post('/users/:id/role', requireAuth, admins, validate(changeRoleSchema), webController.changeUserRole);
+router.post('/users/:id/deactivate', requireAuth, admins, validate(deactivateUserSchema), webController.deactivateUser);
+router.post('/users/:id/reactivate', requireAuth, admins, webController.reactivateUser);
+router.post('/users/:id/invitation', requireAuth, admins, webController.resendUserInvitation);
+router.delete('/users/:id/invitation', requireAuth, admins, webController.cancelUserInvitation);
+router.post('/users/:id/password-reset', requireAuth, admins, webController.sendUserPasswordReset);
 router.get('/assignments', requireAuth, reviewers, webController.assignmentOverview);
 router.post('/inspections/:id/assign', requireAuth, reviewers, validate(assignSchema), webController.assignInspection);
 router.post('/inspections/:id/transfer-requests', requireAuth, reviewers, webController.requestTransfer);

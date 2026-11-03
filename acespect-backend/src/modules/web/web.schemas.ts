@@ -71,6 +71,19 @@ export const userUpdateSchema = z.object({
 export const assignSchema = z.object({ reviewerId: z.string().uuid().optional() });
 export const transferRespondSchema = z.object({ accept: z.boolean() });
 
+export const createUserSchema = z.object({
+  name: z.string().trim().min(1, 'Enter their name').max(200),
+  email: z.string().trim().toLowerCase().email('Enter a valid email address'),
+  role: z.enum(['inspector', 'reviewer', 'admin']),
+  phone: z.string().trim().max(50).optional(),
+  region: z.string().trim().max(200).optional(),
+  licenseNumber: z.string().trim().max(100).optional(),
+});
+export const changeRoleSchema = z.object({ role: z.enum(['inspector', 'reviewer', 'admin']), reassignToId: z.string().uuid().nullable().optional() });
+export const deactivateUserSchema = z.object({ reason: z.string().trim().max(300).optional(), reassignToId: z.string().uuid().nullable().optional() });
+
+export type CreateUserInput = z.infer<typeof createUserSchema>;
+export type DeactivateUserInput = z.infer<typeof deactivateUserSchema>;
 export type SectionUpdateInput = z.infer<typeof sectionUpdateSchema>;
 export type DamageUpdateInput = z.infer<typeof damageUpdateSchema>;
 export type InspectionUpdateInput = z.infer<typeof inspectionUpdateSchema>;

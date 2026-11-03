@@ -62,6 +62,12 @@ model User {
   position          String?
   role              Role      @default(INSPECTOR)
   isActive          Boolean   @default(true)
+  /// Set when an administrator switches the account off (Admin -> Users); cleared on reactivation.
+  deactivatedAt      DateTime?
+  deactivatedById    String?
+  deactivationReason String?
+  /// The administrator who added this person through Admin -> Users (null for self-registered and QC-created accounts).
+  createdById        String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

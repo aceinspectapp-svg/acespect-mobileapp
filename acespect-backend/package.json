@@ -27,6 +27,7 @@
     "check:photo-serving": "tsx src/scripts/check-photo-serving.ts",
     "check:draft-save": "tsx src/scripts/check-draft-save.ts",
     "check:finalize-queue": "tsx src/scripts/check-finalize-queue.ts",
+    "check:user-management": "tsx src/scripts/check-user-management.ts",
     "check:refresh-reuse": "tsx src/scripts/check-refresh-reuse.ts",
     "check:rate-limits": "tsx src/scripts/check-rate-limits.ts",
     "egnyte:reconcile": "tsx src/scripts/egnyte-reconcile.ts"
