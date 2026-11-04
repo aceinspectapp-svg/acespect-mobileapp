@@ -11,10 +11,11 @@ const ROLE_CONFIG: Record<Role, { color: string; bg: string }> = {
 };
 
 export function AdminUsers() {
-  const { users: USERS, patchUser } = useAppData();
+  const { users: USERS, patchUser, removeUser } = useAppData();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Role | "all">("all");
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [deletingUser, setDeletingUser] = useState<User | null>(null);
 
   const filtered = USERS.filter(u => {
     const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
@@ -184,7 +185,9 @@ export function AdminUsers() {
                   >
                     Edit
                   </button>
+                  {user.role !== "admin" && (
                   <button
+                    onClick={() => setDeletingUser(user)}
                     style={{
                       padding: "5px 10px",
                       borderRadius: "6px",
@@ -201,6 +204,7 @@ export function AdminUsers() {
                   >
                     Remove
                   </button>
+                  )}
                 </div>
               </td>
             </tr>
@@ -218,7 +222,49 @@ export function AdminUsers() {
           }}
         />
       )}
+
+      {deletingUser && (
+        <DeleteUserModal
+          user={deletingUser}
+          onClose={() => setDeletingUser(null)}
+          onConfirm={async () => {
+            await removeUser(deletingUser.id);
+            setDeletingUser(null);
+          }}
+        />
+      )}
     </PageShell>
+  );
+}
+
+/** Asks the Admin to confirm, then permanently deletes the account. The server refuses when the person already has records. */
+function DeleteUserModal({ user, onClose, onConfirm }: { user: User; onClose: () => void; onConfirm: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const confirm = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await onConfirm();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete this user.");
+      setBusy(false);
+    }
+  };
+  return (
+    <div onClick={busy ? undefined : onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", borderRadius: "12px", padding: "24px", width: "100%", maxWidth: "400px", boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }}>
+        <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#1a2a4a", margin: "0 0 8px" }}>Delete {user.name}?</h3>
+        <p style={{ fontSize: "13px", color: "#475569", margin: "0 0 16px", lineHeight: 1.5 }}>
+          {user.email} will no longer be able to sign in. This cannot be undone.
+        </p>
+        {error && <p role="alert" style={{ fontSize: "12px", color: "#dc2626", margin: "0 0 12px" }}>{error}</p>}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+          <button onClick={onClose} disabled={busy} style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid #e5e7eb", background: "white", fontSize: "13px", fontWeight: 600, cursor: "pointer", color: "#374151" }}>Cancel</button>
+          <button onClick={confirm} disabled={busy} style={{ padding: "8px 14px", borderRadius: "8px", border: "none", background: "#dc2626", fontSize: "13px", fontWeight: 600, cursor: busy ? "default" : "pointer", color: "white", opacity: busy ? 0.7 : 1 }}>{busy ? "Deleting..." : "Delete user"}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
