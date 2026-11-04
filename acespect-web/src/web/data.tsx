@@ -21,6 +21,8 @@ interface AppData {
     id: string,
     patch: { name?: string; phone?: string | null; region?: string | null; licenseNumber?: string | null },
   ) => Promise<void>;
+  /** Admin-only: permanently delete an inspector or reviewer account. Removes them from `users` on success. */
+  removeUser: (id: string) => Promise<void>;
   login: (email: string, password: string) => Promise<AuthUser>;
   /** Finish a sign-in that needed a second step (MFA, invitation, single sign-on) and load the data. */
   completeSignIn: (user: AuthUser) => Promise<void>;
@@ -319,6 +321,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
   }, []);
 
+  const removeUser = useCallback<AppData["removeUser"]>(async (id) => {
+    await api.deleteUser(id);
+    setUsers((prev) => prev.filter((u) => u.id !== id));
+  }, []);
+
   const createInspection = useCallback<AppData["createInspection"]>(
     async (input) => {
       const { inspectionId } = await api.createInspection(input);
@@ -343,6 +350,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       inspections.filter((i) => i.reviewerId === reviewerId && i.status !== "draft"),
     getUser: (id) => users.find((u) => u.id === id),
     patchUser,
+    removeUser,
     login,
     completeSignIn,
     logout,

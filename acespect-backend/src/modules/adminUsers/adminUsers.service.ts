@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { audit } from '../../lib/auditTrail';
@@ -40,4 +41,27 @@ export async function createUser(input: CreateUserInput) {
     message: `Account created for ${row.email} as ${input.role.toLowerCase()}`,
   });
   return serializeUser(row);
+}
+
+/**
+ * Permanently removes an inspector or reviewer account. An Admin account can never be deleted here. A person who already has inspections,
+ * reviews or QC records is kept (those records belong to the business): the database refuses and the Admin is told to deactivate instead.
+ */
+export async function deleteUser(id: string) {
+  const user = await prisma.user.findUnique({ where: { id }, select: { id: true, email: true, name: true, role: true } });
+  if (!user) throw ApiError.notFound('User not found');
+  if (user.role !== 'INSPECTOR' && user.role !== 'REVIEWER') throw ApiError.forbidden('Only inspector and reviewer accounts can be deleted');
+  try {
+    await prisma.user.delete({ where: { id } });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+      throw ApiError.conflict('This person already has inspections or other records, so the account cannot be deleted.', 'USER_HAS_RECORDS');
+    }
+    throw err;
+  }
+  await audit({
+    category: 'admin', action: 'user.delete', target: { type: 'User', id, label: user.email },
+    before: { email: user.email, name: user.name, role: user.role },
+    message: `Account ${user.email} deleted`,
+  });
 }
