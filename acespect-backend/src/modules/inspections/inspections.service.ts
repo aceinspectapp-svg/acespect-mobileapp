@@ -199,7 +199,8 @@ export async function settleEgnyteFolder(inspectionId: string, jobNo: string | n
     const { settleInspectionFolder, isStorageEnabled } = await import('../../lib/storage');
     if (!isStorageEnabled()) return;
     const previous = await prisma.inspection.findUnique({ where: { id: inspectionId }, select: { egnytePath: true } });
-    const r = await settleInspectionFolder(inspectionId, jobNo, previous?.egnytePath);
+    const sections = previous?.egnytePath ? await prisma.section.findMany({ where: { inspectionId }, select: { answers: true, photos: true, damages: { select: { photos: true } } } }) : [];
+    const r = await settleInspectionFolder(inspectionId, jobNo, previous?.egnytePath, referencedPhotoIds(sections));
     if (!r) return;
     await prisma.inspection.update({
       where: { id: inspectionId },

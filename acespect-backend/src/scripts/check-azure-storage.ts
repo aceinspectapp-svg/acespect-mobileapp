@@ -28,6 +28,7 @@ async function main() {
   const { uploadPhoto, uploadDocument, fetchPhotoStream, ensureBucket, isStorageEnabled, storageProvider, inspectionFolderUrl, settleInspectionFolder, clearPhotoCache } = await import('../lib/storage');
   const { BlobServiceClient } = await import('@azure/storage-blob');
   const { prisma } = await import('../lib/prisma');
+  const { settleEgnyteFolder } = await import('../modules/inspections/inspections.service');
   let passed = 0;
   const check = async (name: string, fn: () => Promise<void>) => { await fn(); passed++; console.log(`  ok  ${name}`); };
 
@@ -40,15 +41,18 @@ async function main() {
   const draft = randomUUID();
   const photoId = randomUUID();
 
-  await check('a photo is stored as {inspection}/{section}/{number}.jpg with the original beside it, no Egnyte root or leading slash', async () => {
-    const r = await uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pp_description:street', undefined, undefined, { jobNo: 'V260950', photoId, photoNumber: 1 });
+  const job = `V${String(Date.now()).slice(-6)}`;
+
+  await check('a photo is stored as {job number}/{section}/{number}.jpg with the original beside it, no Egnyte root or leading slash', async () => {
+    const r = await uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pp_description:street', undefined, undefined, { jobNo: job, photoId, photoNumber: 1 });
     assert.equal(r.id, photoId);
-    assert.equal(r.storageKey, `${draft}/pp_description/street/1.jpg`);
+    assert.equal(r.storageKey, `${job}/pp_description/street/1.jpg`);
     assert.equal(r.url, `/api/v1/media/${photoId}`);
-    assert.equal(r.folder, undefined, 'no Egnyte job folder is made');
+    assert.equal(r.folder, undefined, 'no Egnyte batch folder is made');
     const all = await names();
-    assert.ok(all.includes(`${draft}/pp_description/street/1.jpg`));
-    assert.ok(all.includes(`${draft}/pp_description/street/1-original.jpg`));
+    assert.ok(all.includes(`${job}/pp_description/street/1.jpg`));
+    assert.ok(all.includes(`${job}/pp_description/street/1-original.jpg`));
+    assert.ok(!all.some((n) => n.startsWith(`${draft}/`)), 'nothing under the inspection id');
   });
 
   await check('the photo is served back resized (max 1366x768) as image/jpeg', async () => {
@@ -62,15 +66,15 @@ async function main() {
 
   await check('sending the same photo again (or three at once) stores nothing new', async () => {
     const before = (await names()).length;
-    await uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pp_description:street', undefined, undefined, { jobNo: 'V260950', photoId, photoNumber: 1 });
+    await uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pp_description:street', undefined, undefined, { jobNo: job, photoId, photoNumber: 1 });
     const id = randomUUID();
-    await Promise.all([1, 2, 3].map(() => uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pp_description:street', undefined, undefined, { jobNo: 'V260950', photoId: id, photoNumber: 2 })));
+    await Promise.all([1, 2, 3].map(() => uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pp_description:street', undefined, undefined, { jobNo: job, photoId: id, photoNumber: 2 })));
     assert.equal((await names()).length - before, 2, 'one new photo = compressed + original');
     assert.equal(await prisma.photo.count({ where: { id } }), 1);
   });
 
   await check('a second photo with the same number in the same folder gets the id added instead of overwriting', async () => {
-    const again = await uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pp_description:street', undefined, undefined, { jobNo: 'V260950', photoId: randomUUID(), photoNumber: 1 });
+    const again = await uploadPhoto(jpeg, 'image/jpeg', 'jpg', draft, 'pp_description:street', undefined, undefined, { jobNo: job, photoId: randomUUID(), photoNumber: 1 });
     assert.match(again.storageKey, /\/street\/1-[0-9a-f]{8}\.jpg$/);
   });
 
@@ -98,10 +102,79 @@ async function main() {
     assert.equal(await fetchPhotoStream(randomUUID()), null);
   });
 
-  await check('there is no Egnyte folder link and no folder settling with Azure', async () => {
-    assert.equal(inspectionFolderUrl('V260950', draft, null), null);
-    assert.equal(await settleInspectionFolder(draft, 'V260950'), null);
+  await check('there is no Egnyte folder link with Azure', async () => {
+    assert.equal(inspectionFolderUrl(job, draft, null), null);
   });
+
+  const inspector = await prisma.user.create({ data: { email: `blob-${randomUUID()}@example.com`, role: 'INSPECTOR' } });
+  const mkInspection = (id: string, jobNo: string | null, photoIds: string[]) =>
+    prisma.inspection.create({ data: { id, inspectorId: inspector.id, jobNo, inspectionType: 'Dilapidation', propertyType: 'Commercial Properties', sections: { create: [{ key: 'driveway', name: 'Driveway', icon: 'x', order: 1, photos: photoIds.map((p) => `/api/v1/media/${p}`) }] } } as never });
+  const keyOf = async (id: string) => (await prisma.photo.findUniqueOrThrow({ where: { id } })).storageKey!;
+
+  await check('a job number in lower case or with spaces lands in the same folder', async () => {
+    const r = await uploadPhoto(jpeg, 'image/jpeg', 'jpg', randomUUID(), 'driveway', undefined, undefined, { jobNo: `  ${job.toLowerCase()} `, photoId: randomUUID(), photoNumber: 50 });
+    assert.ok(r.storageKey.startsWith(`${job}/`), r.storageKey);
+  });
+
+  const late = randomUUID();
+  const lateId = randomUUID();
+  const lateJob = `${job}L`;
+
+  await check('a photo taken before the job number is known waits under the inspection id', async () => {
+    const r = await uploadPhoto(jpeg, 'image/jpeg', 'jpg', late, 'driveway', undefined, undefined, { photoId: lateId, photoNumber: 1 });
+    assert.equal(r.storageKey, `${late}/driveway/1.jpg`);
+    assert.equal(await settleInspectionFolder(late, null), null);
+    assert.equal(await keyOf(lateId), `${late}/driveway/1.jpg`);
+  });
+
+  await check('when the job number is saved the photo and its original move to the job folder and still open', async () => {
+    await mkInspection(late, lateJob, [lateId]);
+    await settleEgnyteFolder(late, lateJob);
+    assert.equal(await keyOf(lateId), `${lateJob}/driveway/1.jpg`);
+    const all = await names();
+    assert.ok(all.includes(`${lateJob}/driveway/1.jpg`) && all.includes(`${lateJob}/driveway/1-original.jpg`), 'moved');
+    assert.ok(!all.some((n) => n.startsWith(`${late}/`)), 'nothing left under the inspection id');
+    clearPhotoCache();
+    assert.ok(await fetchPhotoStream(lateId));
+    assert.equal((await prisma.inspection.findUniqueOrThrow({ where: { id: late } })).egnytePath, lateJob);
+  });
+
+  await check('settling again changes nothing', async () => {
+    await settleEgnyteFolder(late, lateJob);
+    assert.equal(await keyOf(lateId), `${lateJob}/driveway/1.jpg`);
+  });
+
+  await check('correcting the job number moves only this inspection out of a folder it shares with another', async () => {
+    const other = randomUUID();
+    const otherId = randomUUID();
+    await uploadPhoto(jpeg, 'image/jpeg', 'jpg', other, 'driveway', undefined, undefined, { jobNo: lateJob, photoId: otherId, photoNumber: 2 });
+    await mkInspection(other, lateJob, [otherId]);
+    const fixed = `${job}F`;
+    await settleEgnyteFolder(late, fixed);
+    assert.equal(await keyOf(lateId), `${fixed}/driveway/1.jpg`);
+    assert.equal(await keyOf(otherId), `${lateJob}/driveway/2.jpg`, 'the other inspection stayed');
+    clearPhotoCache();
+    assert.ok(await fetchPhotoStream(lateId));
+    assert.ok(await fetchPhotoStream(otherId));
+    await prisma.inspection.delete({ where: { id: other } });
+  });
+
+  await check('moving into a job folder never overwrites a photo with the same number', async () => {
+    const a = randomUUID(); const aId = randomUUID();
+    const clashJob = `${job}C`;
+    await uploadPhoto(jpeg, 'image/jpeg', 'jpg', randomUUID(), 'driveway', undefined, undefined, { jobNo: clashJob, photoId: aId, photoNumber: 7 });
+    const bId = randomUUID();
+    await uploadPhoto(jpeg, 'image/jpeg', 'jpg', a, 'driveway', undefined, undefined, { photoId: bId, photoNumber: 7 });
+    await mkInspection(a, clashJob, [bId]);
+    await settleEgnyteFolder(a, clashJob);
+    assert.equal(await keyOf(aId), `${clashJob}/driveway/7.jpg`);
+    assert.equal(await keyOf(bId), `${clashJob}/driveway/7-${bId.slice(0, 8)}.jpg`);
+    assert.ok((await names()).includes(`${clashJob}/driveway/7-${bId.slice(0, 8)}-original.jpg`), 'the original kept its pair');
+    await prisma.inspection.delete({ where: { id: a } });
+  });
+
+  await prisma.inspection.delete({ where: { id: late } });
+  await prisma.user.delete({ where: { id: inspector.id } });
 
   await check('the container is private (no anonymous access)', async () => {
     assert.equal((await container.getAccessPolicy()).blobPublicAccess ?? 'none', 'none');

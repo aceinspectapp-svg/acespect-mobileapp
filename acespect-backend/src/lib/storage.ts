@@ -5,7 +5,7 @@ import { env, isProd } from '../config/env';
 import { ApiError } from '../utils/ApiError';
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
-import { azureConfigured, azureTarget, ensureContainer, getBlob, putBlob } from './blobStorage';
+import { azureConfigured, azureTarget, copyBlob, deleteBlob, ensureContainer, getBlob, listBlobNames, putBlob } from './blobStorage';
 import { mergeFolder, resolveInspectionFolder, type EgnyteFs, type Resolution } from './egnyteJobFolders';
 
 // Every photo used in the review UI and the generated report is resized to
@@ -51,8 +51,9 @@ export const useDbStorage = (): boolean => !isStorageEnabled() && env.NODE_ENV !
 
 /**
  * Where files are kept. Azure Blob Storage is the default in production; Egnyte is still available (STORAGE_PROVIDER=egnyte) and is
- * the default elsewhere so existing local setups behave as before. With Azure there are no Egnyte job folders: files sit under
- * {inspectionId}/{section}/{photo} in the container and the folder placement/settling below does not apply.
+ * the default elsewhere so existing local setups behave as before. With Azure an inspection's photos sit under {job number}/{section}/{photo}
+ * in the container, so the office can find them by job number. The Egnyte batch folders do not apply. A photo that arrives before the job number
+ * is known goes under {inspectionId}/ and is moved when the number is saved (settleBlobFolder).
  */
 export const storageProvider = (): 'azure' | 'egnyte' => env.STORAGE_PROVIDER ?? (isProd ? 'azure' : 'egnyte');
 const usesEgnyte = (): boolean => storageProvider() === 'egnyte';
@@ -326,13 +327,57 @@ export async function moveFolderAndRepoint(from: string, to: string): Promise<vo
 
 export const egnyteRootFolder = egnyteRoot;
 
+/** The Azure folder of a job. Upper-cased so "v260950" and "V260950" are one folder (blob names are case sensitive). Nothing while there is no number. */
+export function blobJobFolder(jobNo: string | null | undefined): string | undefined {
+  const job = (jobNo ?? '').trim().toUpperCase();
+  return job ? safeSegment(job) : undefined;
+}
+
+/** Moves one photo and its full-quality original under `folder`. The index is repointed before the old copies go, so the photo is never unreachable. */
+async function moveBlobPhoto(photo: { id: string; storageKey: string }, oldPrefix: string, folder: string): Promise<void> {
+  let target = `${folder}/${photo.storageKey.slice(oldPrefix.length)}`;
+  // Two inspections of one job share its folder: the same section and number in both must not overwrite each other.
+  if (await prisma.photo.findFirst({ where: { storageKey: target, id: { not: photo.id } }, select: { id: true } })) target = target.replace(/\.jpg$/, `-${photo.id.slice(0, 8)}.jpg`);
+  const oldBase = photo.storageKey.replace(/\.jpg$/, '');
+  const newBase = target.replace(/\.jpg$/, '');
+  const originals = await listBlobNames(`${oldBase}-original.`);
+  if (!(await copyBlob(photo.storageKey, target))) return; // nothing there to move; the index keeps pointing where it did
+  for (const original of originals) await copyBlob(original, `${newBase}${original.slice(oldBase.length)}`);
+  await prisma.photo.update({ where: { id: photo.id }, data: { storageKey: target } });
+  for (const old of [photo.storageKey, ...originals]) await deleteBlob(old);
+}
+
+/**
+ * Azure: the job number is final (saved, or corrected by the office), so make sure the inspection's photos are in its job folder. Everything in
+ * the inspection's own {inspectionId}/ folder moves. After a job number correction only this inspection's photos leave the old job folder
+ * (`ownPhotoIds`), because another inspection of that job may share it. Safe to repeat. Null while there is no job number.
+ */
+async function settleBlobFolder(inspectionId: string, jobNo: string | null | undefined, previousPath: string | null | undefined, ownPhotoIds: string[]): Promise<Resolution | null> {
+  const folder = blobJobFolder(jobNo);
+  if (!folder) return null;
+  const draftPrefix = `${safeSegment(inspectionId)}/`;
+  const select = { id: true, storageKey: true } as const;
+  const groups: Array<{ prefix: string; rows: Array<{ id: string; storageKey: string | null }> }> = [
+    { prefix: draftPrefix, rows: await prisma.photo.findMany({ where: { storageKey: { startsWith: draftPrefix } }, select }) },
+  ];
+  if (previousPath && previousPath !== folder && ownPhotoIds.length > 0) {
+    const prefix = `${previousPath}/`;
+    groups.push({ prefix, rows: await prisma.photo.findMany({ where: { id: { in: ownPhotoIds }, storageKey: { startsWith: prefix } }, select }) });
+  }
+  for (const { prefix, rows } of groups) {
+    for (const row of rows) if (row.storageKey) await moveBlobPhoto({ id: row.id, storageKey: row.storageKey }, prefix, folder);
+  }
+  return { status: 'ok', path: folder, jobFolder: folder };
+}
+
 /**
  * Once the job number is final (submit, or an admin correcting it), put the inspection's photos where they belong: move them
  * out of the draft's own folder (older app builds upload there) or the _Unassigned staging folder into the job's folder, and
- * repoint the photo index. Safe to repeat. Returns where the inspection's folder is, or null when Egnyte is not configured.
+ * repoint the photo index. Safe to repeat. Returns where the inspection's folder is, or null when storage is not configured.
  */
-export async function settleInspectionFolder(inspectionId: string, jobNo: string | null | undefined, previousPath?: string | null): Promise<Resolution | null> {
-  if (!isStorageEnabled() || !usesEgnyte()) return null;
+export async function settleInspectionFolder(inspectionId: string, jobNo: string | null | undefined, previousPath?: string | null, ownPhotoIds: string[] = []): Promise<Resolution | null> {
+  if (!isStorageEnabled()) return null;
+  if (!usesEgnyte()) return settleBlobFolder(inspectionId, jobNo, previousPath, ownPhotoIds);
   const resolution = await resolveInspectionDestination(jobNo, inspectionId, { createJobFolder: false, fresh: true });
   if (resolution.status === 'unassigned') return resolution;
 
@@ -485,7 +530,7 @@ async function storePhoto(
   // An inspector's photo with a job number goes straight into {batch}/{job}/; one without (an older app build) goes in the draft's own folder
   // and is moved at submit (settleInspectionFolder).
   const place = usesEgnyte() && !tenantId && !jobFolder && inspectionId && opts.jobNo !== undefined ? await resolveInspectionDestination(opts.jobNo, inspectionId) : undefined;
-  const destination = place?.path;
+  const destination = place?.path ?? (!usesEgnyte() && !tenantId && !jobFolder && inspectionId ? blobJobFolder(opts.jobNo) : undefined);
   // The photo's number in its inspection is its file name (1.jpg, 2.jpg ...). If another photo already has that exact name in the same folder
   // (a second inspection of the same job and section), the id is added so nothing is ever overwritten.
   let name = id;

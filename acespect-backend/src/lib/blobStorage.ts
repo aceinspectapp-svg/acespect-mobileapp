@@ -59,3 +59,23 @@ export async function getBlob(key: string): Promise<{ stream: NodeJS.ReadableStr
     throw err;
   }
 }
+
+/** Server-side copy inside the container (the bytes do not pass through the API). False when the source does not exist. */
+export async function copyBlob(from: string, to: string): Promise<boolean> {
+  const c = containerClient();
+  const source = c.getBlobClient(blobName(from));
+  if (!(await source.exists())) return false;
+  const poller = await c.getBlobClient(blobName(to)).beginCopyFromURL(source.url);
+  await poller.pollUntilDone();
+  return true;
+}
+
+export async function deleteBlob(key: string): Promise<void> {
+  await containerClient().getBlobClient(blobName(key)).deleteIfExists();
+}
+
+export async function listBlobNames(prefix: string): Promise<string[]> {
+  const names: string[] = [];
+  for await (const b of containerClient().listBlobsFlat({ prefix: blobName(prefix) })) names.push(b.name);
+  return names;
+}
