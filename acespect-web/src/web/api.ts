@@ -352,6 +352,9 @@ export const api = {
     patch: { name?: string; phone?: string | null; region?: string | null; licenseNumber?: string | null },
   ) => req<{ user: User }>(`/web/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) }).then((d) => d.user),
 
+  /** Admin-only: permanently delete an inspector or reviewer account (refused when they already have records). */
+  deleteUser: (id: string) => req<void>(`/admin/users/${id}`, { method: "DELETE" }),
+
   updateSection: (
     id: string,
     patch: {
