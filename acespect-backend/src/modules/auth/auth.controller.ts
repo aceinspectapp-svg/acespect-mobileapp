@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
+import { env } from '../../config/env';
 import { authService, isMicrosoftConfigured, RequestInfo } from './auth.service';
 import { prisma } from '../../lib/prisma';
 import { capabilityList } from '../qc/qc.permissions';
@@ -79,7 +80,7 @@ export const authController = {
     res.status(200).json(await authService.loginWithSso('microsoft', req.body.idToken, infoOf(req)));
   }),
   ssoConfig: asyncHandler(async (_req: Request, res: Response) => {
-    res.status(200).json({ microsoft: isMicrosoftConfigured() });
+    res.status(200).json({ microsoft: isMicrosoftConfigured(), selfSignup: env.SELF_SIGNUP === 'on' });
   }),
 
   refresh: asyncHandler(async (req: Request, res: Response) => {

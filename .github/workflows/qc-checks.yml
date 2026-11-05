@@ -55,7 +55,17 @@ jobs:
           npx prisma migrate deploy
           HASH=$(node -e "require('bcryptjs').hash('Admin123456!x',10).then(h=>process.stdout.write(h))")
           PGPASSWORD=scratch psql -h localhost -U acespect -d qc_scratch -c "INSERT INTO users (id,email,role,\"passwordHash\",\"updatedAt\") VALUES ('admin1','admin@test.com','ADMIN','$HASH',now())"
+      # The platform check makes a few phone-style accounts through the sign-up route, which is closed by default (SELF_SIGNUP).
       - run: npm run check:platform
+        env:
+          SELF_SIGNUP: 'on'
+      - name: Reset the database for the user-management check
+        run: |
+          PGPASSWORD=scratch psql -h localhost -U acespect -d qc_scratch -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+          npx prisma migrate deploy
+          HASH=$(node -e "require('bcryptjs').hash('Admin123456!x',10).then(h=>process.stdout.write(h))")
+          PGPASSWORD=scratch psql -h localhost -U acespect -d qc_scratch -c "INSERT INTO users (id,email,role,\"passwordHash\",\"updatedAt\") VALUES ('admin1','admin@test.com','ADMIN','$HASH',now())"
+      - run: npm run check:user-management
 
   web:
     runs-on: ubuntu-latest

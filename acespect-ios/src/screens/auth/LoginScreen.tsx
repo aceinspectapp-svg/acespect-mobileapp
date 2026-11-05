@@ -20,8 +20,12 @@ import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
 import { GOOGLE_AUTH_ENABLED } from '../../config/google';
 import { getApiErrorMessage } from '../../services/apiError';
 import { AuthScreenProps } from '../../navigation/types';
+import { authApi } from '../../services/authApi';
 
 export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
+  // Closed sign-up (the default in production): accounts come from an administrator's invitation, so the Sign Up row is not offered.
+  const [signupOpen, setSignupOpen] = useState(true);
+  useEffect(() => { let live = true; void authApi.signupOpen().then((open) => { if (live) setSignupOpen(open); }); return () => { live = false; }; }, []);
   const { signIn, verifyMfa, loginWithGoogleIdToken, isLoading } = useAuth();
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [code, setCode] = useState('');
@@ -187,12 +191,16 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
             </>
           )}
 
-          <View style={styles.signupRow}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
-            <Pressable hitSlop={6} onPress={() => navigation.navigate('SignUp')}>
-              <Text style={styles.signupLink}>Sign Up</Text>
-            </Pressable>
-          </View>
+          {signupOpen ? (
+            <View style={styles.signupRow}>
+              <Text style={styles.signupText}>Don't have an account? </Text>
+              <Pressable hitSlop={6} onPress={() => navigation.navigate('SignUp')}>
+                <Text style={styles.signupLink}>Sign Up</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Text style={[styles.signupText, { textAlign: 'center' }]}>Accounts are created by your administrator.</Text>
+          )}
           <View style={styles.signupRow}>
             <Text style={styles.signupText}>Invited by your company? </Text>
             <Pressable hitSlop={6} onPress={() => navigation.navigate('AcceptInvitation')} accessibilityRole="button" accessibilityLabel="I have an invitation">

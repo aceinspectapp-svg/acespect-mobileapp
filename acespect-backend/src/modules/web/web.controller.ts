@@ -4,6 +4,12 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
 import { webService } from './web.service';
 import { audit, firstWithin } from '../../lib/auditTrail';
+import { usersService } from './users.service';
+
+function actorOf(req: Request) {
+  if (!req.user) throw ApiError.unauthorized();
+  return { id: req.user.id, role: req.user.role };
+}
 import { assignmentService } from './assignment.service';
 
 export const webController = {
@@ -36,16 +42,39 @@ export const webController = {
     res.status(200).json({ inspection });
   }),
 
-  listUsers: asyncHandler(async (_req: Request, res: Response) => {
-    const users = await webService.listUsers();
+  listUsers: asyncHandler(async (req: Request, res: Response) => {
+    const users = await usersService.listUsers(req.user?.role ?? '');
     res.status(200).json({ users });
+  }),
+
+  createUser: asyncHandler(async (req: Request, res: Response) => {
+    res.status(201).json(await usersService.createUser(req.body, actorOf(req)));
+  }),
+  changeUserRole: asyncHandler(async (req: Request, res: Response) => {
+    res.status(200).json(await usersService.changeRole(String(req.params.id), req.body.role, req.body.reassignToId, actorOf(req)));
+  }),
+  deactivateUser: asyncHandler(async (req: Request, res: Response) => {
+    res.status(200).json(await usersService.deactivate(String(req.params.id), req.body, actorOf(req)));
+  }),
+  reactivateUser: asyncHandler(async (req: Request, res: Response) => {
+    res.status(200).json(await usersService.reactivate(String(req.params.id), actorOf(req)));
+  }),
+  resendUserInvitation: asyncHandler(async (req: Request, res: Response) => {
+    res.status(200).json(await usersService.resendInvitation(String(req.params.id), actorOf(req)));
+  }),
+  sendUserPasswordReset: asyncHandler(async (req: Request, res: Response) => {
+    res.status(200).json(await usersService.sendPasswordReset(String(req.params.id), actorOf(req)));
+  }),
+  cancelUserInvitation: asyncHandler(async (req: Request, res: Response) => {
+    await usersService.cancelInvitation(String(req.params.id));
+    res.status(204).send();
   }),
 
   updateUser: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     if (!id) throw ApiError.badRequest('User id is required');
-    const user = await webService.updateUser(id, req.body);
-    res.status(200).json({ user });
+    await webService.updateUser(id, req.body);
+    res.status(200).json({ user: await usersService.getView(id) });
   }),
 
   updateSection: asyncHandler(async (req: Request, res: Response) => {

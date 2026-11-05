@@ -93,6 +93,8 @@ export async function revokeAllSessions(userId: string, reason: string): Promise
 async function mfaRequired(user: User): Promise<boolean> {
   const required = env.MFA_REQUIRED_ROLES.split(',').map((s) => s.trim()).filter(Boolean);
   if (user.role === 'ADMIN' && required.includes('SA')) return true;
+  const platformRequired = env.MFA_REQUIRED_PLATFORM_ROLES.split(',').map((x) => x.trim()).filter(Boolean);
+  if (platformRequired.includes(user.role)) return true;
   const memberships = await prisma.qcMembership.findMany({ where: { userId: user.id, status: 'ACTIVE' }, select: { role: true, client: { select: { data: true } } } });
   return memberships.some((m) => required.includes(m.role) || (m.client.data as Record<string, unknown>).mfa_required_for_all_roles === true);
 }
@@ -138,8 +140,20 @@ function assertNotLocked(user: User): void {
   }
 }
 
+/** A brand-new account from a Google sign-in, only while self sign-up is switched on. */
+async function createGoogleUser(profile: { email: string; googleId: string; name?: string | null; avatarUrl?: string | null }) {
+  if (env.SELF_SIGNUP !== 'on') {
+    throw new ApiError(403, 'No ACE SPECT account exists for this Google account. Ask your administrator for an invitation.', 'SIGNUP_DISABLED');
+  }
+  return prisma.user.create({ data: { email: profile.email, googleId: profile.googleId, name: profile.name ?? null, avatarUrl: profile.avatarUrl ?? null } });
+}
+
 export const authService = {
   async register(input: RegisterInput): Promise<AuthResult> {
+    // Accounts come from an administrator's invitation (Admin -> Users). Nobody can make one from the phone unless SELF_SIGNUP=on.
+    if (env.SELF_SIGNUP !== 'on') {
+      throw new ApiError(403, 'Accounts are created by your administrator. Ask for an invitation, then choose "I have an invitation" on the sign-in screen.', 'SIGNUP_DISABLED');
+    }
     const existing = await prisma.user.findUnique({ where: { email: input.email } });
     if (existing) {
       // An administrator may already have created this person (a client, builder, trade or inspector invited to QC): that account exists but
@@ -176,7 +190,7 @@ export const authService = {
       else await logSecurityEvent({ type: 'LOGIN_FAILED', detail: { unknownEmail: true }, ip: info.ip });
       throw ApiError.unauthorized('Invalid email or password', 'INVALID_CREDENTIALS');
     }
-    if (!user.isActive) throw ApiError.forbidden('This account has been deactivated');
+    if (!user.isActive) throw new ApiError(403, 'This account has been switched off. Contact your administrator.', 'ACCOUNT_INACTIVE');
 
     if (user.failedLoginCount) await prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lastFailedAt: null } });
     return afterPasswordOk(user, info);
@@ -261,11 +275,11 @@ export const authService = {
     return { token, url: `${env.WEB_APP_URL.replace(/\/$/, '')}/accept/${token}`, expiresAt };
   },
 
-  async sendInvitationEmail(user: { email: string; name: string | null }, url: string): Promise<string> {
+  async sendInvitationEmail(user: { email: string; name: string | null }, url: string, extra = ''): Promise<string> {
     return sendMail(
       user.email,
       'Activate your ACE SPECT account',
-      `${user.name ? `Hi ${user.name},\n\n` : ''}An ACE SPECT account has been created for you. Activate it here (the link works once and expires in ${INVITATION_DAYS} days):\n${url}\n`,
+      `${user.name ? `Hi ${user.name},\n\n` : ''}An ACE SPECT account has been created for you. Activate it here (the link works once and expires in ${INVITATION_DAYS} days):\n${url}\n${extra ? `\n${extra}\n` : ''}`,
     );
   },
 
@@ -316,10 +330,18 @@ export const authService = {
   async requestPasswordReset(email: string): Promise<void> {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !user.isActive) return;
+    await authService.issuePasswordReset(user.id);
+  },
+
+  /** Make a one-time reset link for a user and email it. The link is returned too, so an admin can hand it over when email is not set up. */
+  async issuePasswordReset(userId: string): Promise<{ url: string; mail: string; email: string }> {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const token = crypto.randomBytes(32).toString('base64url');
     await prisma.qcPasswordReset.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } });
     await prisma.qcPasswordReset.create({ data: { userId: user.id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + RESET_MINUTES * 60_000) } });
-    await sendMail(user.email, 'Reset your ACE SPECT password', `Use this link to choose a new password (single use, expires in ${RESET_MINUTES} minutes):\n${env.WEB_APP_URL.replace(/\/$/, '')}/reset/${token}\n`);
+    const url = `${env.WEB_APP_URL.replace(/\/$/, '')}/reset/${token}`;
+    const mail = await sendMail(user.email, 'Reset your ACE SPECT password', `Use this link to choose a new password (single use, expires in ${RESET_MINUTES} minutes):\n${url}\n`);
+    return { url, mail, email: user.email };
   },
 
   async resetPassword(token: string, password: string): Promise<void> {
@@ -384,9 +406,9 @@ export const authService = {
       const byEmail = await prisma.user.findUnique({ where: { email: profile.email } });
       user = byEmail
         ? await prisma.user.update({ where: { id: byEmail.id }, data: { googleId: profile.googleId, avatarUrl: byEmail.avatarUrl ?? profile.avatarUrl ?? null, name: byEmail.name ?? profile.name ?? null } })
-        : await prisma.user.create({ data: { email: profile.email, googleId: profile.googleId, name: profile.name ?? null, avatarUrl: profile.avatarUrl ?? null } });
+        : await createGoogleUser(profile);
     }
-    if (!user.isActive) throw ApiError.forbidden('This account has been deactivated');
+    if (!user.isActive) throw new ApiError(403, 'This account has been switched off. Contact your administrator.', 'ACCOUNT_INACTIVE');
     return issueTokens(user);
   },
 
@@ -402,7 +424,9 @@ export const authService = {
     const tokenHash = hashRefreshToken(rawToken);
     const stored = await prisma.refreshToken.findUnique({ where: { tokenHash }, include: { user: true } });
     const invalid = () => ApiError.unauthorized('Invalid or expired refresh token', 'INVALID_REFRESH_TOKEN');
-    if (!stored || stored.expiresAt < new Date() || !stored.user.isActive) throw invalid();
+    if (!stored || stored.expiresAt < new Date()) throw invalid();
+    // Only the holder of a real token learns this, so it can say why: the phone then tells the person their account was switched off.
+    if (!stored.user.isActive) throw new ApiError(401, 'This account has been switched off. Contact your administrator.', 'ACCOUNT_INACTIVE');
     const withinLeeway = (rotatedAt: Date | null): boolean => !!rotatedAt && env.REFRESH_REUSE_LEEWAY_SEC > 0 && Date.now() - rotatedAt.getTime() <= env.REFRESH_REUSE_LEEWAY_SEC * 1000;
     if (stored.revokedAt && !withinLeeway(stored.rotatedAt)) throw invalid();
     // Web sessions end after the client's idle timeout; the refresh token's age is time since last activity.

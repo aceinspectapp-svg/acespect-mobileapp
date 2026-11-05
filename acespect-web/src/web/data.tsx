@@ -17,6 +17,8 @@ interface AppData {
   getInspectionsForReviewer: (reviewerId: string) => Inspection[];
   getUser: (id: string) => User | undefined;
   /** Admin-only: edit another user's profile (name/phone/region/license). Refreshes `users` on success. */
+  /** Fetch the user list again (after Admin -> Users changes someone). */
+  reloadUsers: () => Promise<void>;
   patchUser: (
     id: string,
     patch: { name?: string; phone?: string | null; region?: string | null; licenseNumber?: string | null },
@@ -316,6 +318,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [replaceInspection],
   );
 
+  const reloadUsers = useCallback<AppData["reloadUsers"]>(async () => {
+    setUsers(await api.getUsers());
+  }, []);
+
   const patchUser = useCallback<AppData["patchUser"]>(async (id, patch) => {
     const updated = await api.updateUser(id, patch);
     setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
@@ -351,6 +357,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     getUser: (id) => users.find((u) => u.id === id),
     patchUser,
     removeUser,
+    reloadUsers,
     login,
     completeSignIn,
     logout,

@@ -88,6 +88,12 @@ const schema = z.object({
   // are not locked out before they have enrolled. Clients can also require MFA
   // for all their roles (client setting).
   MFA_REQUIRED_ROLES: z.string().default('CLIENT_ADMIN'),
+  // Houspect (platform) roles that must use two-step sign-in, comma separated, e.g. ADMIN,REVIEWER. Empty = not enforced (the default); turn it on
+  // once every admin and reviewer has been told, because each must then set up an authenticator at their next sign-in.
+  MFA_REQUIRED_PLATFORM_ROLES: z.string().default(''),
+  // Can anyone create an account from the phone app (POST /auth/register, Google sign-up)? Off by default: accounts come from an administrator's
+  // invitation (Admin -> Users). Set SELF_SIGNUP=on only for local tests.
+  SELF_SIGNUP: z.enum(['on', 'off']).default('off'),
   // Allowed Microsoft Entra (Azure AD) application IDs for SSO; empty = disabled.
   MICROSOFT_CLIENT_IDS: z.string().default(''),
   // Versions of the privacy collection notice and terms of use users accept at activation.
