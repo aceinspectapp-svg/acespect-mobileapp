@@ -4,7 +4,7 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
 import { fetchPhotoStream } from '../../lib/storage';
 import { prisma } from '../../lib/prisma';
-import { verifyMediaSignature } from '../../lib/mediaLinks';
+import { secondsLeft, unsignedAllowed, verifyMediaSignature } from '../../lib/mediaLinks';
 import { logSecurityEvent } from '../../lib/securityLog';
 
 /**
@@ -36,18 +36,31 @@ async function lookUpTenantFile(id: string): Promise<boolean> {
 // allowed to contain anything but a well-formed id.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const mediaController = {
-  // Public (no auth) -- matches the previous Supabase public-bucket posture.
-  get: asyncHandler(async (req: Request, res: Response) => {
+/** What the handler needs from the outside, so a test can stand in for the database, the storage and the security log. */
+export interface MediaDeps {
+  isTenantFile: (id: string) => Promise<boolean>;
+  fetchPhotoStream: typeof fetchPhotoStream;
+  logSecurityEvent: typeof logSecurityEvent;
+}
+
+export function makeMediaGet({ isTenantFile, fetchPhotoStream, logSecurityEvent }: MediaDeps) {
+  // Every photo and file needs a valid, unexpired signed link (`?e=<expiry>&s=<signature>`) -- the API hands those out only to signed-in users.
+  // The one exception is the roll-out window: until MEDIA_ALLOW_UNSIGNED_UNTIL an old unsigned link to an inspection photo (not a tenant's
+  // file) still works, and each such access is logged.
+  return asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     if (!id || !UUID_RE.test(id)) throw ApiError.badRequest('Invalid photo id');
 
     const tenantFile = await isTenantFile(id);
-    if (tenantFile) {
-      if (!verifyMediaSignature(id, req.query.e, req.query.s)) {
-        await logSecurityEvent({ type: 'MEDIA_DENIED', detail: { id }, ip: req.ip ?? null });
+    const signed = verifyMediaSignature(id, req.query.e, req.query.s);
+    if (!signed) {
+      if (!tenantFile && unsignedAllowed()) {
+        await logSecurityEvent({ type: 'MEDIA_UNSIGNED', detail: { id, hasSignature: req.query.s !== undefined }, ip: req.ip ?? null });
+      } else {
+        await logSecurityEvent({ type: 'MEDIA_DENIED', detail: { id, hasSignature: req.query.s !== undefined }, ip: req.ip ?? null });
         throw ApiError.forbidden('This link has expired or is not valid. Open the file again from ACE SPECT.');
       }
+    } else if (tenantFile) {
       await logSecurityEvent({ type: 'FILE_ACCESS', detail: { id }, ip: req.ip ?? null });
     }
 
@@ -55,16 +68,15 @@ export const mediaController = {
     if (!photo) throw ApiError.notFound('Photo not found');
 
     res.setHeader('Content-Type', photo.contentType);
-    res.setHeader('Cache-Control', tenantFile ? 'private, max-age=60' : 'public, max-age=31536000, immutable');
+    // Private only (never a shared cache), and never for longer than the link itself is good for.
+    res.setHeader('Cache-Control', `private, max-age=${signed ? Math.min(60, secondsLeft(req.query.e)) : 0}`);
     // Without this, Chrome's Cross-Origin-Resource-Policy enforcement blocks
     // <img> tags from loading this photo whenever the web app and backend
-    // are on different origins (net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin)
-    // -- which is always true here, since each runs behind its own separate
-    // Cloudflare tunnel hostname. A plain `fetch()` to the same URL isn't
-    // subject to this check, which is why the request "worked" when tested
-    // directly but every <img> in the app rendered a broken-image icon.
-    // This photo is meant to be publicly embeddable, so opt in explicitly.
+    // are on different origins (net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin).
+    // The link is a signed, expiring one the signed-in app puts in its own <img> tags, so opt in explicitly.
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     Readable.fromWeb(photo.body as import('stream/web').ReadableStream).pipe(res);
-  }),
-};
+  });
+}
+
+export const mediaController = { get: makeMediaGet({ isTenantFile, fetchPhotoStream, logSecurityEvent }) };

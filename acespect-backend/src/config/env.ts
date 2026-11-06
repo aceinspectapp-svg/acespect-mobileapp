@@ -103,6 +103,10 @@ const schema = z.object({
   SUPPORT_SESSION_MINUTES: z.coerce.number().int().positive().default(60),
   // Signed evidence links expire after this many minutes (REQ-TEN-002).
   MEDIA_LINK_MINUTES: z.coerce.number().int().positive().default(15),
+  // Inspection photos are served through signed links only. To roll the signed links out without breaking installed apps and open web tabs,
+  // the old unsigned links keep working until this moment (an ISO date such as 2026-12-01 or 2026-12-01T00:00:00Z; a date alone means 00:00 UTC),
+  // and every unsigned access is logged. Empty (the default) = unsigned links are refused straight away.
+  MEDIA_ALLOW_UNSIGNED_UNTIL: z.string().trim().optional().refine((v) => !v || !Number.isNaN(Date.parse(v)), 'must be a date such as 2026-12-01'),
 
 });
 

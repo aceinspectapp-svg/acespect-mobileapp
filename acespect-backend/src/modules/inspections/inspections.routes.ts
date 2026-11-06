@@ -1,12 +1,29 @@
 import { Router } from 'express';
 import { rebindAuditContext } from '../../lib/auditTrail';
 import multer from 'multer';
+import { inspectionsService } from './inspections.service';
 import { inspectionsController } from './inspections.controller';
 import { validate } from '../../middleware/validate';
 import { requireAuth } from '../../middleware/auth';
+import { stripSignedMediaLinks } from '../../middleware/stripMediaSignatures';
+import { makeSectionPhotosZip } from './photosZip';
+import { webService } from '../web/web.service';
+import { fetchPhotoStream } from '../../lib/storage';
+import { audit } from '../../lib/auditTrail';
+import { logSecurityEvent } from '../../lib/securityLog';
 import { submitInspectionSchema, syncSectionSchema, updateInspectionSchema } from './inspections.schemas';
 
+export const sectionPhotosZip = makeSectionPhotosZip({
+  assertCanViewSection: webService.assertCanViewSection,
+  getSectionPhotos: inspectionsService.getSectionPhotos,
+  fetchPhotoStream,
+  audit: audit as never,
+  logSecurityEvent,
+  requireAuth,
+});
+
 const router = Router();
+router.use(stripSignedMediaLinks);
 
 // In-memory upload (buffer forwarded to Egnyte); 40 MB cap per photo (a 50-megapixel phone photo can pass 20 MB).
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024 } });
@@ -24,7 +41,9 @@ router.post('/:id/finalize', requireAuth, inspectionsController.finalize);
 router.get('/:id/baseline-sections', requireAuth, inspectionsController.getBaselineSections);
 router.get('/:id/report.pdf', requireAuth, inspectionsController.downloadReportPdf);
 router.get('/:id/report.docx', requireAuth, inspectionsController.downloadReportDocx);
-router.get('/sections/:sectionId/photos.zip', inspectionsController.downloadSectionPhotos);
+// "Download all photos": signed-in and allowed to see the inspection, or a short-lived signed link from /photos-link. Never public.
+router.get('/sections/:sectionId/photos-link', requireAuth, sectionPhotosZip.link);
+router.get('/sections/:sectionId/photos.zip', sectionPhotosZip.access, sectionPhotosZip.download);
 router.get('/:id', requireAuth, inspectionsController.getById);
 
 export const inspectionsRouter = router;

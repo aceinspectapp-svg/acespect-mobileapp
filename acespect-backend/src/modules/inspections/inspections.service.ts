@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { audit, diffFields, firstWithin } from '../../lib/auditTrail';
 import { enqueueReview } from '../../lib/queue';
+import { signMediaLinks } from '../../lib/mediaLinks';
 import { SubmitInspectionInput, SyncSectionInput, UpdateInspectionInput } from './inspections.schemas';
 
 const SEC_STATUS: Record<string, 'COMPLETE' | 'PARTIAL' | 'PENDING'> = {
@@ -359,13 +360,13 @@ async function getBaselineSections(assignedInspectionId: string, inspectorId: st
   if (assigned.inspectorId !== inspectorId) throw ApiError.forbidden('This job is not assigned to you');
   if (!assigned.baselineInspection) throw ApiError.notFound('This job has no baseline set');
 
-  return assigned.baselineInspection.sections.map((s) => ({
+  return signMediaLinks(assigned.baselineInspection.sections.map((s) => ({
     key: s.key,
     name: s.name,
     reportText: s.reportText,
     fields: s.fields,
     photos: s.photos,
-  }));
+  })));
 }
 
 /** Fetch an inspection with its latest review job + summary. */

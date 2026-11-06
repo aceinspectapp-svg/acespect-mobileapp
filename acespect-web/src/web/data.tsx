@@ -100,6 +100,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   inspectionsRef.current = inspections;
   const listRun = useRef<Promise<void> | null>(null);
   const detailRuns = useRef(new Map<string, Promise<void>>());
+  // When each inspection's full detail was last fetched: its photo links are signed and expire, so old ones are fetched again (see below).
+  const detailAt = useRef(new Map<string, number>());
 
   /**
    * The inspection list used to be one download of every inspection with every answer and photo link (90 MB at 1,500 inspections), repeated
@@ -148,7 +150,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       refetch.map((id) =>
         api
           .getInspection(id)
-          .then((fresh) => setInspections((prev) => prev.map((i) => (i.id === id ? fresh : i))))
+          .then((fresh) => {
+            detailAt.current.set(id, Date.now());
+            setInspections((prev) => prev.map((i) => (i.id === id ? fresh : i)));
+          })
           .catch(() => undefined),
       ),
     );
@@ -253,6 +258,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   /** One inspection in full. A section that came from the phone with its raw "Question?: answer" wording is composed into sentences (and saved). */
   const fetchInspectionDetail = useCallback(async (id: string): Promise<Inspection> => {
     const fresh = await api.getInspection(id);
+    detailAt.current.set(id, Date.now());
     const { inspection, changed } = await composePhoneSections(fresh);
     if (changed.length) void saveComposedSections(fresh, changed);
     return inspection;
@@ -277,6 +283,34 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const fresh = await fetchInspectionDetail(id);
     setInspections((prev) => prev.map((i) => (i.id === id ? fresh : i)));
   }, [fetchInspectionDetail]);
+
+  // Photo links in an inspection are signed and last about 15 minutes. An inspection that has been open longer than 10 is fetched again when
+  // the tab regains focus, and when a photo fails to load (its link has lapsed), so the photos come back instead of staying broken.
+  useEffect(() => {
+    if (!currentUser) return;
+    let last = 0;
+    const refreshStale = () => {
+      if (Date.now() - last < 15_000) return;
+      last = Date.now();
+      const now = Date.now();
+      const stale = inspectionsRef.current.filter((i) => i.detail !== false && now - (detailAt.current.get(i.id) ?? 0) > 10 * 60_000);
+      for (const i of stale) void replaceInspection(i.id).catch(() => undefined);
+    };
+    const onPhotoError = (e: Event) => {
+      if (e.target instanceof HTMLImageElement && e.target.src.includes("/api/v1/media/")) refreshStale();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshStale();
+    };
+    window.addEventListener("error", onPhotoError, true);
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("error", onPhotoError, true);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [currentUser, replaceInspection]);
 
   const patchSection = useCallback<AppData["patchSection"]>(
     async (inspectionId, sectionId, patch) => {

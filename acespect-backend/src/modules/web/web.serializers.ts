@@ -1,6 +1,7 @@
 // Maps DB rows to the exact shapes the acespect-web frontend expects
 // (camelCase fields, lowercase-hyphen enum strings from mockData.ts).
 import { inspectionFolderUrl } from '../../lib/storage';
+import { signMediaLinks } from '../../lib/mediaLinks';
 import type { Damage, Inspection, Section, User } from '@prisma/client';
 
 export const INS_STATUS_TO_WEB = {
@@ -76,8 +77,9 @@ function serializeDamage(d: Damage) {
   };
 }
 
+/** Photo links inside a section (photos, answers, fields, damage records) are signed, expiring links -- see lib/mediaLinks.ts. */
 export function serializeSection(s: Section & { damages: Damage[] }) {
-  return {
+  return signMediaLinks({
     id: s.id,
     key: s.key, // stable slug ("driveway", "job-info", …) — used by the web to group sections
     name: s.name,
@@ -92,7 +94,7 @@ export function serializeSection(s: Section & { damages: Damage[] }) {
     damages: s.damages.map(serializeDamage),
     photos: s.photos ?? [],
     excludedPhotoUrls: s.excludedPhotoUrls ?? [],
-  };
+  });
 }
 
 /**

@@ -97,6 +97,15 @@ async function getInspection(id: string, user: { id: string; role: string }) {
   return serializeInspection(row);
 }
 
+/** Throws unless `user` may open the inspection this section belongs to (same rules as getInspection above). */
+async function assertCanViewSection(sectionId: string, user: { id: string; role: string }) {
+  const sec = await prisma.section.findUnique({ where: { id: sectionId }, select: { inspectionId: true } });
+  if (!sec) throw ApiError.notFound('Section not found');
+  const row = await prisma.inspection.findFirst({ where: { AND: [{ id: sec.inspectionId }, scopeFor(user)] }, select: { reviewerId: true, status: true } });
+  if (!row) throw ApiError.notFound('Section not found');
+  if (user.role === 'REVIEWER' && !canViewDetail(user, row)) throw new ApiError(403, 'This inspection is assigned to another reviewer.', 'ASSIGNED_TO_OTHER');
+}
+
 async function listUsers() {
   const rows = await prisma.user.findMany({
     where: { role: { in: ['ADMIN', 'REVIEWER', 'INSPECTOR'] } },
@@ -422,6 +431,7 @@ export const webService = {
   getSubmissionHealth,
   listInspections,
   getInspection,
+  assertCanViewSection,
   listUsers,
   updateUser,
   updateSection,

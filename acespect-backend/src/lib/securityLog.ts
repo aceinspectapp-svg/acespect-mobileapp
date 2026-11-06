@@ -4,7 +4,7 @@ import { audit } from './auditTrail';
 export type SecurityEventType =
   | 'LOGIN_OK' | 'LOGIN_FAILED' | 'LOCKOUT' | 'MFA_FAILED' | 'PASSWORD_RESET' | 'PASSWORD_CHANGED'
   | 'INVITATION_ACCEPTED' | 'FORBIDDEN' | 'CROSS_TENANT' | 'SUPPORT_START' | 'SUPPORT_END' | 'CONTEXT_SWITCH'
-  | 'MEDIA_DENIED' | 'FILE_ACCESS' | 'REPORT_DOWNLOAD' | 'EXPORT' | 'TAMPER_DETECTED' | 'SESSION_REVOKED';
+  | 'MEDIA_DENIED' | 'MEDIA_UNSIGNED' | 'FILE_ACCESS' | 'REPORT_DOWNLOAD' | 'EXPORT' | 'TAMPER_DETECTED' | 'SESSION_REVOKED';
 
 /**
  * E31 / REQ-AUD-003: record a security-relevant event. Logging must never

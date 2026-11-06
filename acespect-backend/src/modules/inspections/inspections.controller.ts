@@ -1,11 +1,9 @@
 import { Request, Response } from 'express';
-import { Readable } from 'node:stream';
-import { ZipArchive } from 'archiver';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
 import { inspectionsService, receiptFor, referencedPhotoIds, missingPhotoIds } from './inspections.service';
 import { alertAdmins } from '../../lib/submissionAlerts';
-import { fetchPhotoStream } from '../../lib/storage';
+import { signMediaLinks } from '../../lib/mediaLinks';
 import { generateInspectionReportPdf } from '../../lib/reportPdf';
 import { generateInspectionReportDocx } from '../../lib/reportDocx';
 import { recordSubmissionEvent } from '../../lib/submissionLog';
@@ -16,12 +14,6 @@ import { canViewDetail } from '../web/assignment.rules';
 /** A reviewer may open (and download the report of) an inspection that is theirs or unassigned, not one another reviewer holds. */
 function assertReviewerMayOpen(user: { id: string; role: string }, inspection: { reviewerId: string | null; status: string }) {
   if (user.role === 'REVIEWER' && !canViewDetail(user, inspection)) throw new ApiError(403, 'This inspection is assigned to another reviewer', 'ASSIGNED_TO_OTHER');
-}
-
-/** A photo URL is this backend's own `/api/v1/media/:id` proxy link -- pull the id back off the end of it. */
-function photoIdFromUrl(url: string): string | null {
-  const match = /\/media\/([0-9a-f-]+)\/?$/i.exec(url);
-  return match?.[1] ?? null;
 }
 
 /**
@@ -295,38 +287,7 @@ export const inspectionsController = {
       { sectionKey, bytes: file.buffer.length, photoId: result.id, ...(jobNo ? { jobNo } : {}) },
     );
     if (inspectionId) notePhotoUpload({ req, inspectionId, jobNo, photoId: result.id, photoNumber, sectionKey, bytes: file.buffer.length });
-    res.status(201).json(result);
-  }),
-
-  // A section's "additional photos" (attached outside any specific template
-  // field, e.g. extra shots from an external camera) bundled as one zip so a
-  // reviewer isn't stuck opening them one at a time. Public (no auth) --
-  // same trust model as the media proxy above; the section id is an opaque
-  // UUID, not enumerable.
-  downloadSectionPhotos: asyncHandler(async (req: Request, res: Response) => {
-    const { sectionId } = req.params;
-    if (!sectionId) throw ApiError.badRequest('Section id is required');
-    const { name, photos } = await inspectionsService.getSectionPhotos(sectionId);
-    if (photos.length === 0) throw ApiError.notFound('No additional photos for this section');
-
-    await audit({ category: 'web', action: 'photos.download', actor: req.user ? undefined : { id: null, name: 'Anonymous (public link)', type: 'user' }, target: { type: 'Section', id: sectionId, label: name }, message: `${photos.length} photo(s) downloaded as a zip`, metadata: { count: photos.length, authenticated: !!req.user } });
-    const fileName = `${name.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'section'}-photos.zip`;
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-
-    const archive = new ZipArchive({ zlib: { level: 9 } });
-    archive.on('error', (err: Error) => res.destroy(err));
-    archive.pipe(res);
-
-    for (const [i, url] of photos.entries()) {
-      const id = photoIdFromUrl(url);
-      const stored = id ? await fetchPhotoStream(id) : null;
-      if (!stored) continue;
-      // fetchPhotoStream hands back the raw WHATWG stream fetch() returns --
-      // archiver wants a Node Readable.
-      archive.append(Readable.fromWeb(stored.body as import('stream/web').ReadableStream), { name: `photo-${i + 1}.jpg` });
-    }
-
-    await archive.finalize();
+    // `url` is the plain link to store; `signedUrl` is the same photo as an expiring link to show straight away.
+    res.status(201).json({ ...result, signedUrl: signMediaLinks(result.url) });
   }),
 };

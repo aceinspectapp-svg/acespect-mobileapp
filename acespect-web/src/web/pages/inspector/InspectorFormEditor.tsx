@@ -672,12 +672,13 @@ function AdditionalPhotosCard({
           Additional Photos {photos.length > 0 ? `(${photos.length})` : ""}
         </p>
         {savedPhotos.length > 0 && (
-          <a
-            href={api.sectionPhotosZipUrl(sectionId)}
-            style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", textDecoration: "none" }}
+          <button
+            type="button"
+            onClick={() => { api.downloadSectionPhotos(sectionId).catch((e) => window.alert(e instanceof Error ? e.message : "Could not download the photos.")); }}
+            style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "none", border: "none", padding: 0, cursor: "pointer" }}
           >
             Download all
-          </a>
+          </button>
         )}
       </div>
       {photos.length === 0 ? (

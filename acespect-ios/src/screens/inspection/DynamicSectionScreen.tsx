@@ -16,6 +16,7 @@ import { InspectionDraftSelection } from '../../types/inspection';
 import { INSPECTION_TYPES, PROPERTY_LABELS } from '../../constants/inspectionData';
 import { getSectionTitle } from '../../constants/inspectionSections';
 import { getBaselineSections as fetchBaselineSections } from '../../services/inspectionApi';
+import { mediaUri } from '../../config/api';
 import { pinAllSectionTemplates } from '../../utils/pinAllSectionTemplates';
 import { PhotoBackupBar } from '../../components/inspection/PhotoBackupBar';
 import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
@@ -124,6 +125,21 @@ export function DynamicSectionScreen({
       .catch(() => setBaselineSection(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionKey, isPostDilapidation]);
+
+  // The previous inspection's photos come as signed links that stop working after about 15 minutes. When one fails to load (the link has
+  // lapsed while this screen was open), ask the server for the section again -- at most once every 20 seconds -- and the photos come back.
+  const lastBaselineReload = useRef(0);
+  const reloadBaseline = () => {
+    const assignmentId = draft.getTop().assignmentId as string | undefined;
+    if (!assignmentId || Date.now() - lastBaselineReload.current < 20_000) return;
+    lastBaselineReload.current = Date.now();
+    fetchBaselineSections(assignmentId)
+      .then((sections) => {
+        draft.setBaselineSections(sections);
+        setBaselineSection(sections.find((s) => s.key === sectionKey) ?? null);
+      })
+      .catch(() => undefined);
+  };
 
   // Job Information is first in the flow and owns the wizard's fresh
   // selection -- pin the raw ids onto the draft so every later section can
@@ -353,7 +369,7 @@ export function DynamicSectionScreen({
                 {baselineSection.photos.length > 0 && (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.baselinePhotos}>
                     {baselineSection.photos.map((uri) => (
-                      <Image key={uri} source={{ uri }} style={styles.baselinePhoto} />
+                      <Image key={uri} source={{ uri: mediaUri(uri) }} style={styles.baselinePhoto} onError={reloadBaseline} />
                     ))}
                   </ScrollView>
                 )}

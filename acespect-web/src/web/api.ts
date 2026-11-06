@@ -523,11 +523,25 @@ export const api = {
       }
       throw new Error(message);
     }
-    return res.json();
+    // Photo links are signed and expire: show the new photo with the signed link the server sends back. Whatever is saved with it has the
+    // signature removed by the server, so the stored link stays the plain one.
+    const uploaded = (await res.json()) as { id: string; url: string; signedUrl?: string };
+    return { ...uploaded, url: uploaded.signedUrl ?? uploaded.url };
   },
 
-  /** Bundles a section's non-field-bound photos into one zip download -- see inspections.controller.ts. */
-  sectionPhotosZipUrl: (sectionId: string) => `${API_BASE}/inspections/sections/${sectionId}/photos.zip`,
+  /**
+   * Downloads a section's non-field-bound photos as one zip. The download is not public: this asks the server (signed in) for a short-lived
+   * link -- refused unless the person may open the inspection -- and then opens that link, which a plain `<a href>` cannot do.
+   */
+  downloadSectionPhotos: async (sectionId: string): Promise<void> => {
+    const { url } = await req<{ url: string }>(`/inspections/sections/${sectionId}/photos-link`);
+    const a = document.createElement("a");
+    a.href = new URL(url, new URL(API_BASE, window.location.origin).origin).toString();
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  },
 
   getTemplateSummary: (inspectionType: string, propertyType: string) =>
     req<{ summary: TemplateSummaryRow[] }>(
