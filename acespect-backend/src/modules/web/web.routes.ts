@@ -3,8 +3,10 @@ import { webController } from './web.controller';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
 import { assignSchema, changeRoleSchema, createUserSchema, deactivateUserSchema, damageUpdateSchema, transferRespondSchema, inspectionUpdateSchema, sectionUpdateSchema, userUpdateSchema } from './web.schemas';
+import { stripSignedMediaLinks } from '../../middleware/stripMediaSignatures';
 
 const router = Router();
+router.use(stripSignedMediaLinks);
 const reviewers = requireRole('REVIEWER', 'ADMIN');
 const admins = requireRole('ADMIN');
 

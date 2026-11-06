@@ -1402,9 +1402,9 @@ export function ReviewerFormView() {
                         <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
                           Additional Photos ({selectedSection.photos.length})
                         </p>
-                        <a href={api.sectionPhotosZipUrl(selectedSection.id)} style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", textDecoration: "none" }}>
+                        <button type="button" onClick={() => { api.downloadSectionPhotos(selectedSection.id).catch((e) => window.alert(e instanceof Error ? e.message : "Could not download the photos.")); }} style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb", background: "none", border: "none", padding: 0, cursor: "pointer" }}>
                           Download all
-                        </a>
+                        </button>
                       </div>
                       <PhotosGrid photos={selectedSection.photos} />
                     </div>
