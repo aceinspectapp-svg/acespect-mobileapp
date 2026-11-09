@@ -79,3 +79,9 @@ Everything below was run against the final code (commit `46bd35f` and later). "V
 - **Two-step sign-in for admins and reviewers:** leave `MFA_REQUIRED_PLATFORM_ROLES` empty until everyone has been told; then set `ADMIN,REVIEWER`.
 - **Checks:** `npm run check:user-management` (66 checks), also in GitHub Actions. The platform check now runs with `SELF_SIGNUP=on`.
 - **Not verified on a real phone:** the new "Accounts are created by your administrator" message and the switched-off message.
+
+## 12. Dependencies and encryption (added Nov 9)
+- **Dependencies:** no high or critical vulnerabilities left in what ships (backend 3 moderate, web 0, Android/iOS 6 moderate, all in build tools or zip/glob helpers). sharp 0.35 and zod 4 are major upgrades; every backend check passed on them. CI now fails on any new high/critical (`npm audit --omit=dev --audit-level=high`).
+- **Database TLS:** the backend now adds `sslmode=require&sslaccept=strict` for Azure Database for PostgreSQL hosts (`DATABASE_TLS=auto`, the default). After deploying, `/health/ready` must show `"dbTls":true`. If the backend cannot connect after the deploy, set `DATABASE_TLS=off` and restart, then tell the developer.
+- **Phone apps:** release builds refuse a non-HTTPS API address. Certificate pinning (Microsoft/DigiCert authority keys for *.azurewebsites.net) works only in a NEW app build (APK/iOS build), not through an OTA update. Before adding a custom API domain, its pins must be checked and added to `src/services/sslPinning.ts`, or pinning stays off for it.
+- **Emergency switch:** if pinning ever blocks the app after a certificate change, publish an update built with `EXPO_PUBLIC_SSL_PINNING=off`.
