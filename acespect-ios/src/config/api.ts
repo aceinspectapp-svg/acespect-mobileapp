@@ -16,7 +16,20 @@
  */
 const DEFAULT_DEV_BASE_URL = 'http://172.19.69.51:4000'; // this PC's Wi-Fi IP
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_DEV_BASE_URL;
+const configuredBaseUrl = process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_DEV_BASE_URL;
+
+/**
+ * Release builds only ever talk to the API over HTTPS. A build accidentally made with an http:// address stops with a clear message
+ * instead of sending passwords and inspection data in the clear. Plain http stays allowed in development (a PC on the local Wi-Fi).
+ */
+function requireHttps(url: string): string {
+  if (!__DEV__ && !url.startsWith('https://')) {
+    throw new Error(`This build is set to use an insecure API address (${url}). Release builds must use https://. Rebuild with an https EXPO_PUBLIC_API_URL.`);
+  }
+  return url;
+}
+
+export const API_BASE_URL = requireHttps(configuredBaseUrl);
 
 /** Versioned API prefix. */
 export const API_PREFIX = '/api/v1';

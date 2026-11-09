@@ -11,6 +11,9 @@ const schema = z.object({
   CORS_ORIGIN: z.string().default('*'),
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  // Encryption of the database connection. "auto" (default): Azure Database for PostgreSQL is always reached over TLS with its certificate
+  // checked; other hosts (local, Railway's private network) are left as configured. "require": the same for any host. "off": leave the URL alone.
+  DATABASE_TLS: z.enum(['auto', 'require', 'off']).default('auto'),
 
   JWT_ACCESS_SECRET: z.string().min(16, 'JWT_ACCESS_SECRET must be at least 16 chars'),
   JWT_REFRESH_SECRET: z.string().min(16, 'JWT_REFRESH_SECRET must be at least 16 chars'),
@@ -121,3 +124,26 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 export const isProd = env.NODE_ENV === 'production';
+
+/**
+ * The database URL with TLS switched on where it must be. `sslmode=require` makes both Prisma and node-postgres (pg-boss) encrypt;
+ * `sslaccept=strict` makes Prisma also check the server certificate (node-postgres checks it by default). Parameters already in the URL win.
+ */
+export function withDatabaseTls(url: string, mode: 'auto' | 'require' | 'off'): string {
+  if (mode === 'off') return url;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return url;
+  }
+  const azure = /\.postgres\.database\.azure\.com$/i.test(u.hostname);
+  if (mode === 'auto' && !azure) return url;
+  if (!u.searchParams.has('sslmode')) u.searchParams.set('sslmode', 'require');
+  if (!u.searchParams.has('sslaccept')) u.searchParams.set('sslaccept', 'strict');
+  return u.toString();
+}
+
+env.DATABASE_URL = withDatabaseTls(env.DATABASE_URL, env.DATABASE_TLS);
+// Prisma reads the URL from the environment when its client starts (lib/prisma.ts imports this module first).
+process.env.DATABASE_URL = env.DATABASE_URL;

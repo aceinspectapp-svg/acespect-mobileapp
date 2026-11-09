@@ -6,6 +6,11 @@ import { QcDataProvider } from './src/context/QcDataContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { database } from './src/db';
 import { initSyncManager } from './src/services/syncManager';
+import { startSslPinning } from './src/services/sslPinning';
+import { recordEvent } from './src/services/auditEvents';
+
+// Before anything talks to the server (see src/services/sslPinning.ts).
+void startSslPinning((host) => recordEvent('network.tls_pin_refused', { severity: 'warning', message: `A connection to ${host} was refused: its certificate did not match the pinned keys` }));
 
 /**
  * App entry. Provider order: (database) -> safe area -> auth -> navigation.

@@ -72,7 +72,9 @@ export function createApp() {
         const have = new Set(applied.map((r) => r.migration_name));
         schema = shipped.every((n) => have.has(n)) ? 'current' : 'behind';
       } catch { /* folder or table not readable here: report unknown */ }
-      res.json({ status: 'ok', dbMs: Date.now() - t0, schema, timestamp: new Date().toISOString() });
+      // Is this connection to the database encrypted? (Postgres reports it per connection.)
+      const tls = await prisma.$queryRaw<Array<{ ssl: boolean }>>`SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()`.catch(() => []);
+      res.json({ status: 'ok', dbMs: Date.now() - t0, schema, dbTls: tls[0]?.ssl ?? null, timestamp: new Date().toISOString() });
     } catch {
       res.status(503).json({ status: 'degraded', dbMs: Date.now() - t0 });
     }
