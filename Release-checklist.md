@@ -85,3 +85,8 @@ Everything below was run against the final code (commit `46bd35f` and later). "V
 - **Database TLS:** the backend now adds `sslmode=require&sslaccept=strict` for Azure Database for PostgreSQL hosts (`DATABASE_TLS=auto`, the default). After deploying, `/health/ready` must show `"dbTls":true`. If the backend cannot connect after the deploy, set `DATABASE_TLS=off` and restart, then tell the developer.
 - **Phone apps:** release builds refuse a non-HTTPS API address. Certificate pinning (Microsoft/DigiCert authority keys for *.azurewebsites.net) works only in a NEW app build (APK/iOS build), not through an OTA update. Before adding a custom API domain, its pins must be checked and added to `src/services/sslPinning.ts`, or pinning stays off for it.
 - **Emergency switch:** if pinning ever blocks the app after a certificate change, publish an update built with `EXPO_PUBLIC_SSL_PINNING=off`.
+
+## 13. Report downloads (added Nov 10)
+- [ ] App Service setting `WEB_APP_URL` is the live web app address (today `https://ambitious-sand-059c7ba00.3.azurestaticapps.net`, no trailing slash). PDF and Word reports open that site's `/report/:id` page; without it every download fails.
+- [ ] After deploying, `/health/ready` shows `"reportsFrom"` as that address (not `"not-set"`).
+- [ ] Download one PDF and one Word report from the web app. If one fails, the message now names the step (report printer, opening the page, showing the report, making the file); the App Service log stream has the full cause under `[report]`.

@@ -53,7 +53,11 @@ export function ReportView() {
       const res = await fetchWithRefresh(`${API_BASE}/inspections/${id}/report.${format}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
-      if (!res.ok) throw new Error(`Failed to generate ${format === "pdf" ? "PDF" : "Word document"} (HTTP ${res.status})`);
+      if (!res.ok) {
+        // The server says why (for example the report page could not be opened); show that instead of a bare status code.
+        const why = (await res.json().catch(() => null))?.error?.message;
+        throw new Error(`Failed to generate ${format === "pdf" ? "PDF" : "Word document"}${why ? `: ${why}` : ` (HTTP ${res.status})`}`);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
