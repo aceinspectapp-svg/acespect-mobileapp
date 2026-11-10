@@ -134,7 +134,9 @@ export function reportPageMisconfigured(): boolean {
 /** A failure while making a report: logged with its real cause for the server log, answered with a plain message and a code. */
 function reportFailure(stage: string, message: string, cause: unknown): ApiError {
   console.error(`[report] ${stage} failed:`, cause);
-  return new ApiError(502, message, 'REPORT_FAILED', { stage });
+  // The first line of the underlying error (no stack), so the person who sees the message can pass on the real reason.
+  const reason = (cause instanceof Error ? cause.message : String(cause)).split('\n')[0]?.slice(0, 240).trim();
+  return new ApiError(502, reason ? `${message} Reason: ${reason}` : message, 'REPORT_FAILED', { stage });
 }
 
 async function withReportPageNow<T>(
@@ -151,9 +153,15 @@ async function withReportPageNow<T>(
   try {
     browser = await puppeteer.launch({
       headless: true,
+      // Chromium writes its profile and crash-reporter database under HOME / XDG folders. On a cloud container (Azure App Service)
+      // those can be unset or read-only, and Chromium then exits at once ("chrome_crashpad_handler: --database is required"), so it is
+      // pointed at /tmp, which is always writable. Locally (Windows, macOS) the defaults are left alone.
+      env: process.platform === 'linux'
+        ? { ...process.env, HOME: process.env.HOME || '/tmp', XDG_CONFIG_HOME: '/tmp/.chromium', XDG_CACHE_HOME: '/tmp/.chromium' }
+        : process.env,
       // --disable-dev-shm-usage: containers (Azure App Service included) give /dev/shm only 64 MB, which a long report with many photos
       // overruns, crashing the page part-way ("Target closed"); Chromium then uses /tmp instead.
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-crash-reporter', '--no-zygote'],
       // In the production container this points at Alpine's own `chromium`
       // package (see Dockerfile) instead of Puppeteer's bundled download --
       // that download is a glibc build that doesn't run on Alpine's musl libc

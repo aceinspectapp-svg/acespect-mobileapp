@@ -4,7 +4,8 @@ const puppeteer = require('puppeteer');
 (async () => {
   const browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    env: { ...process.env, HOME: process.env.HOME || '/tmp', XDG_CONFIG_HOME: '/tmp/.chromium', XDG_CACHE_HOME: '/tmp/.chromium' },
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-crash-reporter', '--no-zygote'],
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
   });
   const version = await browser.version();
