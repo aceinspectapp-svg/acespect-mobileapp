@@ -1125,7 +1125,12 @@ export function ReviewerFormView() {
         <AuditHistoryButton inspectionId={inspection.id} jobNo={inspection.jobNo} />
 
         <button
-          onClick={() => navigate(`/report/${inspection.id}`)}
+          onClick={() => {
+            // The report opens in a new tab, so the review stays open here. If the browser blocks new tabs, it opens in this tab as before.
+            const tab = window.open(`/report/${inspection.id}`, "_blank");
+            if (tab) tab.opener = null;
+            else navigate(`/report/${inspection.id}`);
+          }}
           style={{
             height: "32px",
             padding: "0 12px",

@@ -147,7 +147,13 @@ export function ReportView() {
         }}
       >
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            // Opened in its own tab from the review screen (nothing to go back to): close the tab, which returns to the review.
+            if (window.history.length <= 1) {
+              window.close();
+              setTimeout(() => { if (!window.closed) navigate("/"); }, 150); // the browser refused to close it
+            } else navigate(-1);
+          }}
           style={{
             display: "flex",
             alignItems: "center",
