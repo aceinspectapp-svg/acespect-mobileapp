@@ -81,3 +81,13 @@ jobs:
           name: report-smoke-pdf
           path: report-smoke-output/
           if-no-files-found: ignore
+
+  # The production image (acespect-backend/Dockerfile, what Azure runs) brings its own Chromium. The pdf job above uses
+  # Puppeteer's downloaded Chrome on Ubuntu, so it cannot notice when the image's browser no longer starts. This builds the real
+  # image and makes a PDF inside it.
+  container-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t acespect-api:ci acespect-backend
+      - run: docker run -i --rm acespect-api:ci node - < acespect-backend/scripts/browser-smoke.cjs
