@@ -16,67 +16,75 @@ const shape = (aspects) => packPhotoRows(aspects, PAGE_PACK).map((r) => r.indice
 const rows = (aspects) => packPhotoRows(aspects, PAGE_PACK);
 
 describe("photo grid row packing", () => {
-  it("puts three portraits in a single row", () => {
+  const W = PAGE_PACK.width, G = PAGE_PACK.gap;
+  const portraitW = (W - 2 * G) / 3; // a portrait's width: three to a row, filling it
+  const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
+
+  it("puts three portraits in a row, never more", () => {
     assert.deepEqual(shape([P, P, P]), [3]);
+    assert.deepEqual(shape([P, P, P, P]), [3, 1]);
+    assert.deepEqual(shape([P, P, P, P, P, P, P, P]), [3, 3, 2]);
   });
 
-  it("puts two portraits and a landscape in a single row", () => {
-    assert.deepEqual(shape([P, P, L]), [3]);
-    assert.deepEqual(shape([P, L, P]), [3]);
-    assert.deepEqual(shape([L, P, P]), [3]);
-  });
-
-  it("puts two landscapes side by side, not three (they would get too small)", () => {
+  it("puts at most two photos in a row that holds a landscape", () => {
     assert.deepEqual(shape([L, L]), [2]);
-    assert.deepEqual(shape([L, L, L]), [2, 1]);
-    assert.deepEqual(shape([L, L, L, L]), [2, 2]);
+    assert.deepEqual(shape([L, L, L, L, L]), [2, 2, 1]);
+    assert.deepEqual(shape([P, L]), [2]);
+    assert.deepEqual(shape([L, P, P, P]), [2, 2]);
+    assert.deepEqual(shape([P, P, L]), [2, 1]); // two portraits, then the landscape starts its own row
   });
 
-  it("gives every photo in a full row the same height, filling the page width", () => {
-    for (const aspects of [[P, P, P], [P, P, L], [L, L], [P, L]]) {
-      const [row] = rows(aspects);
-      assert.ok(row.full, "the row spans the full width");
-      const used = aspects.slice(0, row.indices.length).reduce((w, a) => w + a * row.height, 0) + (row.indices.length - 1) * PAGE_PACK.gap;
-      assert.ok(Math.abs(used - PAGE_PACK.width) < 1e-6, `widths add up to the page width (${used})`);
+  it("makes three portraits fill the row exactly", () => {
+    const [row] = rows([P, P, P]);
+    const used = row.sizes.reduce((w, z) => w + z.width, 0) + 2 * G;
+    near(used, W, "row width");
+  });
+
+  it("makes a landscape exactly as tall as a portrait is wide", () => {
+    const portrait = rows([P, P, P])[0].sizes[0];
+    const landscape = rows([L, L])[0].sizes[0];
+    near(portrait.width, portraitW, "portrait width");
+    near(landscape.height, portrait.width, "landscape height = portrait width");
+    near(landscape.width, portrait.height, "landscape width = portrait height");
+    const pair = rows([L, L])[0].sizes.reduce((w, z) => w + z.width, 0) + G;
+    assert.ok(pair <= W + 1e-9, "two landscapes fit the row");
+  });
+
+  it("gives every photo of a kind the same size, in full rows, short rows, mixed rows and alone", () => {
+    const all = rows([P, P, P, P, P, L, L, L, P, L]).flatMap((r) => r.indices.map((i, k) => [i, r.sizes[k]]));
+    const portraits = all.filter(([i]) => [0, 1, 2, 3, 4, 8].includes(i)).map(([, z]) => z);
+    const landscapes = all.filter(([i]) => [5, 6, 7, 9].includes(i)).map(([, z]) => z);
+    for (const z of portraits) { near(z.width, portraits[0].width, "portrait width"); near(z.height, portraits[0].height, "portrait height"); }
+    for (const z of landscapes) { near(z.width, landscapes[0].width, "landscape width"); near(z.height, landscapes[0].height, "landscape height"); }
+    near(rows([L])[0].sizes[0].height, portraitW, "a lone landscape");
+  });
+
+  it("never crops or stretches: every photo keeps its own shape", () => {
+    for (const a of [P, L, 1, 9 / 16, 2 / 3, 3 / 2, 16 / 9, 0.4, 3]) {
+      const z = rows([a])[0].sizes[0];
+      near(z.width / z.height, a, `shape ${a}`);
     }
   });
 
-  it("keeps every row between the minimum and maximum height", () => {
-    const aspects = [P, L, P, L, L, P, P, L, P, L, L];
-    for (const row of rows(aspects)) {
-      assert.ok(row.height <= PAGE_PACK.maxHeight + 1e-9);
-      if (row.full) assert.ok(row.height >= PAGE_PACK.minHeight - 1e-9, `row height ${row.height}`);
-    }
+  it("gives every portrait the same width and every landscape that same height, whatever the exact shape", () => {
+    for (const a of [3 / 4, 2 / 3, 0.7]) near(rows([a])[0].sizes[0].width, portraitW, `portrait ${a} width`);
+    for (const a of [4 / 3, 3 / 2, 1]) near(rows([a])[0].sizes[0].height, portraitW, `landscape ${a} height`);
+  });
+
+  it("scales an unusually wide landscape down so two still fit a row", () => {
+    const [row] = rows([3, 3]);
+    assert.ok(row.sizes.reduce((w, z) => w + z.width, 0) + G <= W + 1e-9);
+  });
+
+  it("keeps every photo within the maximum height", () => {
+    for (const row of rows([0.5, 0.5, 0.5, 0.4, L])) for (const z of row.sizes) assert.ok(z.height <= PAGE_PACK.maxHeight + 1e-9);
+    const small = packPhotoRows([P, L], { ...PAGE_PACK, maxHeight: 3 });
+    for (const z of small[0].sizes) assert.ok(z.height <= 3 + 1e-9);
   });
 
   it("uses every photo exactly once, in order", () => {
     const aspects = [P, L, L, P, P, L, P];
     assert.deepEqual(rows(aspects).flatMap((r) => r.indices), aspects.map((_, i) => i));
-  });
-
-  it("shows a lone photo at a sensible size instead of stretching it across the page", () => {
-    for (const a of [P, L]) {
-      const [row] = rows([a]);
-      assert.equal(row.full, false);
-      assert.ok(row.height <= PAGE_PACK.maxHeight);
-      assert.ok(row.height * a < PAGE_PACK.width, "narrower than the page");
-    }
-  });
-
-  it("draws a lone last photo at the same height as the rows above it (it is centred, not enlarged)", () => {
-    for (const aspects of [[L, L, L], [P, P, L, L], [1, 3, 0.5], [P, L, P, L, P, L, L]]) {
-      const r = rows(aspects.flat());
-      const last = r[r.length - 1];
-      if (!last.full) assert.ok(last.height <= r[r.length - 2].height + 1e-9, `last ${last.height} vs ${r[r.length - 2].height}`);
-    }
-    const [two] = [rows([L, L, L])];
-    assert.deepEqual(two.map((row) => row.indices.length), [2, 1]);
-    assert.equal(two[1].height, two[0].height);
-  });
-
-  it("only ever leaves the LAST row short", () => {
-    const r = rows([P, L, L, P, L, L, L]);
-    r.slice(0, -1).forEach((row) => assert.ok(row.full));
   });
 
   it("handles no photos", () => {

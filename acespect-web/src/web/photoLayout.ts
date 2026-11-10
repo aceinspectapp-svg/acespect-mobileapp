@@ -1,14 +1,12 @@
 /**
  * Row layout for a group of photos that sit under one title.
  *
- * Given each photo's real shape (width / height), `packPhotoRows` decides how
- * many photos go in each row so that every row fills the page width and all
- * the photos in a row share one height -- three portraits side by side, two
- * portraits and a landscape in one row, two landscapes per row, and so on --
- * with no cropping and no stretching, because each photo is shown at exactly
- * its own shape. The row height follows from the shapes: a row of portraits
- * is taller than a row of landscapes, which keeps every photo at a readable
- * size without a fixed box.
+ * Photos keep their order and are placed in rows by a fixed rule:
+ *   - portrait photos go three to a row;
+ *   - a row that holds a landscape photo has at most two photos (two landscapes, or a landscape and a portrait).
+ * Every portrait is as wide as a third of the row (less the gaps), and every landscape is as TALL as a portrait is wide. The other side
+ * follows the photo's own shape, so nothing is ever cropped or stretched (a 3:4 portrait and a 4:3 landscape are the same box turned on
+ * its side). Rows start at the left margin and the photos in a row share a bottom line; a lone photo stays at its normal size.
  *
  * Pure and unit-tested (tests/photo-layout.test.mjs); the React side lives in
  * PhotoGrid (components/reportKit.tsx). Units are centimetres throughout.
@@ -19,71 +17,73 @@ export interface PackOptions {
   width: number;
   /** Space between neighbouring photos. */
   gap: number;
-  /** Most photos allowed in one row. */
+  /** Most photos in one row of portraits. */
   maxPerRow: number;
-  /** A full row is never shorter than this (photos would get too small). */
+  /** Most photos in a row that holds at least one landscape photo. */
+  landscapeMaxPerRow: number;
+  /** Kept for callers that size a grid; the boxes above decide the sizes. */
   minHeight: number;
-  /** The row height the layout aims for. */
+  /** Kept for callers that size a grid; the boxes above decide the sizes. */
   targetHeight: number;
-  /** A row is never taller than this; if the photos can't fill the width at this height the row is left short. */
+  /** No photo is drawn taller than this (a spot like the cover photo passes a smaller value). */
   maxHeight: number;
 }
 
 export interface PackedRow {
   /** Indices (into the input) of the photos in this row, in order. */
   indices: number[];
-  /** Height every photo in the row is drawn at. */
+  /** Each photo's drawn size, in the same order as `indices`; `width / height` is always the photo's own shape. */
+  sizes: { width: number; height: number }[];
+  /** The tallest photo in the row. */
   height: number;
-  /** True when the row spans the full width; false for a short last row (e.g. a lone photo). */
+  /** True when the row holds as many photos as it can (three portraits, or two with a landscape); false for a short row. */
   full: boolean;
 }
 
 /** A report page at A4 with the report's side margins: 21cm - 2 x 2.2cm of text width. */
-export const PAGE_PACK: PackOptions = { width: 16.4, gap: 0.25, maxPerRow: 4, minHeight: 5, targetHeight: 6.5, maxHeight: 9 };
+export const PAGE_PACK: PackOptions = { width: 16.4, gap: 0.25, maxPerRow: 3, landscapeMaxPerRow: 2, minHeight: 5, targetHeight: 6.5, maxHeight: 9 };
 /** The narrow reviewer preview panel. */
-export const COMPACT_PACK: PackOptions = { width: 9, gap: 0.2, maxPerRow: 3, minHeight: 3.5, targetHeight: 4.5, maxHeight: 6 };
+export const COMPACT_PACK: PackOptions = { width: 9, gap: 0.2, maxPerRow: 3, landscapeMaxPerRow: 2, minHeight: 3.5, targetHeight: 4.5, maxHeight: 6 };
+
+/** Wider than tall. A square photo counts as landscape (two to a row), so it is not shrunk to portrait size. */
+export const isLandscape = (aspect: number): boolean => aspect >= 1;
 
 export function packPhotoRows(aspects: number[], o: PackOptions): PackedRow[] {
   const n = aspects.length;
   if (n === 0) return [];
 
-  // The cost of drawing photos [i, i+k) as one row; `short` rows (too few photos to fill the width) are only allowed as the last row.
-  const rowFor = (i: number, k: number): { height: number; full: boolean; cost: number } => {
-    let sum = 0;
-    for (let j = i; j < i + k; j++) sum += aspects[j];
-    const fillHeight = (o.width - (k - 1) * o.gap) / sum;
-    if (fillHeight > o.maxHeight) {
-      if (i + k < n) return { height: o.maxHeight, full: false, cost: Infinity };
-      return { height: o.maxHeight, full: false, cost: (o.maxHeight - o.targetHeight) ** 2 + 0.5 };
+  // Rows in order: a row closes when it is at its capacity (three portraits, or two once a landscape is in it), or when the next photo
+  // would push it past that capacity.
+  const capacity = (idx: number[]) => (idx.some((j) => isLandscape(aspects[j]!)) ? o.landscapeMaxPerRow : o.maxPerRow);
+  const groups: number[][] = [];
+  let row: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (row.length > 0 && row.length + 1 > capacity([...row, i])) {
+      groups.push(row);
+      row = [];
     }
-    const tooSmall = fillHeight < o.minHeight ? 25 * (o.minHeight - fillHeight) ** 2 : 0;
-    return { height: fillHeight, full: true, cost: (fillHeight - o.targetHeight) ** 2 + tooSmall };
+    row.push(i);
+    if (row.length >= capacity(row)) {
+      groups.push(row);
+      row = [];
+    }
+  }
+  if (row.length > 0) groups.push(row);
+
+  // Every portrait is a third of the row wide (less the gaps); every landscape is exactly that tall. The other side follows the photo's own
+  // shape, so nothing is cropped or stretched. Limits: a portrait is never taller than maxHeight, and a landscape never wider than half the
+  // row (so two always fit side by side) -- only an unusually tall or wide photo reaches them, and is then scaled down whole.
+  const portraitW = (o.width - (o.maxPerRow - 1) * o.gap) / o.maxPerRow;
+  const landscapeMaxW = (o.width - (o.landscapeMaxPerRow - 1) * o.gap) / o.landscapeMaxPerRow;
+  const fit = (a: number) => {
+    let height = isLandscape(a) ? Math.min(portraitW, landscapeMaxW / a) : portraitW / a;
+    height = Math.min(height, o.maxHeight);
+    return { width: a * height, height };
   };
 
-  // best[i] = cheapest way to lay out photos i..n-1
-  const best: number[] = new Array(n + 1).fill(Infinity);
-  const take: number[] = new Array(n + 1).fill(1);
-  best[n] = 0;
-  for (let i = n - 1; i >= 0; i--) {
-    for (let k = 1; k <= o.maxPerRow && i + k <= n; k++) {
-      const total = rowFor(i, k).cost + best[i + k];
-      if (total < best[i]) {
-        best[i] = total;
-        take[i] = k;
-      }
-    }
-  }
-
-  const rows: PackedRow[] = [];
-  for (let i = 0; i < n; ) {
-    const k = take[i];
-    const r = rowFor(i, k);
-    rows.push({ indices: Array.from({ length: k }, (_, j) => i + j), height: r.height, full: r.full });
-    i += k;
-  }
-  // A short last row (a lone photo) is drawn at the same height as the rows above it, not blown up to the maximum; the grid centres it.
-  // Only when it is all there is (one photo in the section) does it keep the larger size.
-  const last = rows[rows.length - 1];
-  if (rows.length > 1 && last && !last.full) last.height = Math.min(last.height, rows[rows.length - 2].height);
+  const rows: PackedRow[] = groups.map((idx) => {
+    const sizes = idx.map((j) => fit(aspects[j]!));
+    return { indices: idx, sizes, height: Math.max(...sizes.map((z) => z.height)), full: idx.length >= capacity(idx) };
+  });
   return rows;
 }
