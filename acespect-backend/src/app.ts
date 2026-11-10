@@ -20,6 +20,7 @@ import { mediaRouter } from './modules/media/media.routes';
 import { adminUsersRouter } from './modules/adminUsers/adminUsers.routes';
 import { qcRouter } from './modules/qc/qc.routes';
 import { auditRouter } from './modules/audit/audit.routes';
+import { reportPageMisconfigured, reportPageOrigin } from './lib/reportPdf';
 
 export function createApp() {
   const app = express();
@@ -74,7 +75,9 @@ export function createApp() {
       } catch { /* folder or table not readable here: report unknown */ }
       // Is this connection to the database encrypted? (Postgres reports it per connection.)
       const tls = await prisma.$queryRaw<Array<{ ssl: boolean }>>`SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()`.catch(() => []);
-      res.json({ status: 'ok', dbMs: Date.now() - t0, schema, dbTls: tls[0]?.ssl ?? null, timestamp: new Date().toISOString() });
+      // Where PDF / Word reports open the report page from; "not-set" in production means reports will fail (WEB_APP_URL missing).
+      const reportsFrom = reportPageMisconfigured() ? 'not-set' : reportPageOrigin();
+      res.json({ status: 'ok', dbMs: Date.now() - t0, schema, dbTls: tls[0]?.ssl ?? null, reportsFrom, timestamp: new Date().toISOString() });
     } catch {
       res.status(503).json({ status: 'degraded', dbMs: Date.now() - t0 });
     }

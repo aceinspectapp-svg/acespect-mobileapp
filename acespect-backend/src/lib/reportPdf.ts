@@ -120,22 +120,50 @@ export async function withReportPage<T>(
   }
 }
 
+/** Where the report pages are opened from. Production must point at the deployed web app, never the local default. */
+export function reportPageOrigin(): string {
+  return env.WEB_APP_URL.replace(/\/+$/, '');
+}
+
+/** True when the backend runs in production but WEB_APP_URL was never set (still the local default), so no report can be made. */
+export function reportPageMisconfigured(): boolean {
+  const origin = reportPageOrigin();
+  return process.env.NODE_ENV === 'production' && (!origin || /\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(origin));
+}
+
+/** A failure while making a report: logged with its real cause for the server log, answered with a plain message and a code. */
+function reportFailure(stage: string, message: string, cause: unknown): ApiError {
+  console.error(`[report] ${stage} failed:`, cause);
+  return new ApiError(502, message, 'REPORT_FAILED', { stage });
+}
+
 async function withReportPageNow<T>(
   inspectionId: string,
   authToken: string,
   use: (page: Page) => Promise<T>,
   options: { print?: boolean; width?: number } = {},
 ): Promise<T> {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    // In the production container this points at Alpine's own `chromium`
-    // package (see Dockerfile) instead of Puppeteer's bundled download --
-    // that download is a glibc build that doesn't run on Alpine's musl libc
-    // anyway, and PUPPETEER_SKIP_DOWNLOAD skips fetching it at install time.
-    // Unset locally, so `npm install`'s own downloaded Chrome is used as-is.
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-  });
+  if (reportPageMisconfigured()) {
+    console.error('[report] WEB_APP_URL is not set on this server (still ' + reportPageOrigin() + '), so the report page cannot be opened.');
+    throw new ApiError(503, 'Reports cannot be made yet: the server is not told where the web app is (WEB_APP_URL). Ask an administrator to set it.', 'REPORT_NOT_CONFIGURED');
+  }
+  let browser: Awaited<ReturnType<typeof puppeteer.launch>>;
+  try {
+    browser = await puppeteer.launch({
+      headless: true,
+      // --disable-dev-shm-usage: containers (Azure App Service included) give /dev/shm only 64 MB, which a long report with many photos
+      // overruns, crashing the page part-way ("Target closed"); Chromium then uses /tmp instead.
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      // In the production container this points at Alpine's own `chromium`
+      // package (see Dockerfile) instead of Puppeteer's bundled download --
+      // that download is a glibc build that doesn't run on Alpine's musl libc
+      // anyway, and PUPPETEER_SKIP_DOWNLOAD skips fetching it at install time.
+      // Unset locally, so `npm install`'s own downloaded Chrome is used as-is.
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    });
+  } catch (e) {
+    throw reportFailure('browser', 'The server could not start its report printer (headless browser). Check the server log for "[report] browser".', e);
+  }
   try {
     const page = await browser.newPage();
     if (options.print) await page.emulateMediaType('print');
@@ -151,13 +179,24 @@ async function withReportPageNow<T>(
       localStorage.setItem('acespect_token', token);
     }, authToken);
 
-    await page.goto(`${env.WEB_APP_URL}/report/${inspectionId}`, {
-      waitUntil: 'networkidle0',
-      timeout: PHOTO_LOAD_TIMEOUT_MS,
-    });
+    const url = `${reportPageOrigin()}/report/${inspectionId}`;
+    try {
+      await page.goto(url, { waitUntil: 'networkidle0', timeout: PHOTO_LOAD_TIMEOUT_MS });
+    } catch (e) {
+      throw reportFailure('open', `The server could not open the report page at ${reportPageOrigin()}. Check WEB_APP_URL on the server.`, e);
+    }
     // Past the "Loading…" / "Inspection not found." placeholder -- the real
     // document only exists once this class mounts.
-    await page.waitForSelector('.report-page', { timeout: 15_000 });
+    try {
+      await page.waitForSelector('.report-page', { timeout: 15_000 });
+    } catch (e) {
+      const shown = String(await page.evaluate("(document.body && document.body.innerText || '').slice(0, 200)").catch(() => ''));
+      throw reportFailure(
+        'render',
+        `The report page at ${reportPageOrigin()} did not show the report${shown ? ` (it showed: "${shown.replace(/\s+/g, ' ').trim()}")` : ''}. Check that the web app and this server point at each other.`,
+        e,
+      );
+    }
     // The photo grids lay themselves out from each photo's real shape, which is
     // only known once the images have loaded -- print after that has settled
     // (a grid marks itself data-photo-grid-pending until then). Bounded, so one
@@ -165,9 +204,14 @@ async function withReportPageNow<T>(
     await page
       .waitForFunction("!document.querySelector('[data-photo-grid-pending]')", { timeout: PHOTO_LOAD_TIMEOUT_MS })
       .catch(() => undefined);
-    return await use(page);
+    try {
+      return await use(page);
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      throw reportFailure('print', 'The report page opened but could not be turned into a file. Check the server log for "[report] print".', e);
+    }
   } finally {
-    await browser.close();
+    await browser.close().catch(() => undefined);
   }
 }
 
