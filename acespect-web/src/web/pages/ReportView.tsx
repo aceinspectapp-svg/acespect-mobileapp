@@ -44,8 +44,22 @@ export function ReportView() {
   // the auth header, since a plain <a href> can't attach one and the
   // endpoint requires it.
   // The same report as a PDF or an editable Word file -- both made server-side from this same report page.
+  // Opens in a new tab. The tab is opened straight away (inside the click, so the browser does not block it as a pop-up) and shows a
+  // short "Preparing" note while the server builds the file; then a PDF shows in the browser's own viewer, and a Word file (which a
+  // browser cannot show) is saved from that tab under its proper name. If the browser blocks new tabs, the file downloads here as before.
   async function handleDownload(format: "pdf" | "docx") {
     if (!id) return;
+    const label = format === "pdf" ? "PDF" : "Word document";
+    const pdfName = construction ? constructionFileName(inspection?.jobNo || id) : `${(inspection?.jobNo || id).replace(/[^a-z0-9.-]+/gi, "-")}-dilapidation-report.pdf`;
+    const fileName = format === "pdf" ? pdfName : pdfName.replace(/\.pdf$/, ".docx");
+    const win = window.open("", "_blank");
+    const note = (title: string, text: string) => {
+      if (!win || win.closed) return;
+      win.document.title = title;
+      win.document.body.style.cssText = "font-family: Inter, system-ui, sans-serif; color: #1a2a4a; padding: 48px; text-align: center;";
+      win.document.body.textContent = text;
+    };
+    note(fileName, `Preparing the ${label}… this can take a few seconds.`);
     setDownloading(true);
     setDownloadError(null);
     try {
@@ -60,16 +74,24 @@ export function ReportView() {
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      // Kept for a while so the new tab can finish loading (and the viewer can save) the file; freed with this page at the latest.
+      setTimeout(() => URL.revokeObjectURL(url), 10 * 60_000);
+      if (win && !win.closed && format === "pdf") {
+        win.location.href = url;
+        return;
+      }
+      const doc = win && !win.closed ? win.document : document;
+      const a = doc.createElement("a");
       a.href = url;
-      const pdfName = construction ? constructionFileName(inspection?.jobNo || id) : `${(inspection?.jobNo || id).replace(/[^a-z0-9.-]+/gi, "-")}-dilapidation-report.pdf`;
-      a.download = format === "pdf" ? pdfName : pdfName.replace(/\.pdf$/, ".docx");
-      document.body.appendChild(a);
+      a.download = fileName;
+      doc.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      note(fileName, `${fileName} has been downloaded. You can close this tab.`);
     } catch (e) {
-      setDownloadError(e instanceof Error ? e.message : `Failed to download the ${format === "pdf" ? "PDF" : "Word document"}`);
+      const message = e instanceof Error ? e.message : `Failed to download the ${label}`;
+      setDownloadError(message);
+      note("Report not available", message);
     } finally {
       setDownloading(false);
     }
