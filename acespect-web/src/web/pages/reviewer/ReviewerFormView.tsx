@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
-  ArrowLeft, CheckCircle, RotateCcw, Send, ChevronRight, ChevronDown,
-  Image as ImageIcon, FileText, AlertTriangle, Layers, Save,
+  ArrowLeft, CheckCircle, RotateCcw, Send, ChevronRight, ChevronDown, ChevronLeft,
+  Image as ImageIcon, FileText, AlertTriangle, Layers, Save, X,
 } from "lucide-react";
 import {
   STATUS_CONFIG,
@@ -504,7 +504,56 @@ function DamageCard({ damage }: { damage: FormSection["damages"][0] }) {
   );
 }
 
+/** A full-size view of one photo, with previous/next. Closes on the backdrop, the ✕ button or Escape; ← and → step through. */
+function PhotoViewer({ photos, index, onIndex, onClose }: { photos: string[]; index: number; onIndex: (i: number) => void; onClose: () => void }) {
+  const count = photos.length;
+  const step = (d: number) => onIndex((index + d + count) % count);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowLeft" && count > 1) step(-1);
+      else if (e.key === "ArrowRight" && count > 1) step(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+  const navBtn: React.CSSProperties = { position: "absolute", top: "50%", transform: "translateY(-50%)", width: "44px", height: "44px", borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.15)", color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Photo ${index + 1} of ${count}`}
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,0.88)", display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 72px" }}
+    >
+      <img
+        src={resolveMediaUrl(photos[index]!)}
+        alt={`Photo ${index + 1} of ${count}`}
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: "6px", boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }}
+      />
+      <span style={{ position: "absolute", top: "16px", left: "50%", transform: "translateX(-50%)", color: "white", fontSize: "13px", fontWeight: 600 }}>
+        {index + 1} / {count}
+      </span>
+      <button type="button" aria-label="Close" onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ ...navBtn, top: "16px", right: "16px", transform: "none", width: "36px", height: "36px" }}>
+        <X size={18} />
+      </button>
+      {count > 1 && (
+        <>
+          <button type="button" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); step(-1); }} style={{ ...navBtn, left: "16px" }}>
+            <ChevronLeft size={22} />
+          </button>
+          <button type="button" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); step(1); }} style={{ ...navBtn, right: "16px" }}>
+            <ChevronRight size={22} />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PhotosGrid({ photos }: { photos: string[] }) {
+  const [open, setOpen] = useState<number | null>(null);
   if (photos.length === 0) return null;
   return (
     <div style={{ marginTop: "16px" }}>
@@ -514,21 +563,29 @@ function PhotosGrid({ photos }: { photos: string[] }) {
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: "6px" }}>
         {photos.map((url, i) => (
-          <img
+          <button
             key={i}
-            src={resolveMediaUrl(url)}
-            alt={`Photo ${i + 1}`}
-            style={{
-              width: "100%",
-              aspectRatio: "4/3",
-              objectFit: "cover",
-              borderRadius: "10px",
-              border: "1px solid #e5e7eb",
-              cursor: "zoom-in",
-            }}
-          />
+            type="button"
+            onClick={() => setOpen(i)}
+            title="Click to enlarge"
+            style={{ padding: 0, border: "none", background: "none", cursor: "zoom-in", borderRadius: "10px", overflow: "hidden", display: "block", width: "100%" }}
+          >
+            <img
+              src={resolveMediaUrl(url)}
+              alt={`Photo ${i + 1}`}
+              style={{
+                width: "100%",
+                aspectRatio: "4/3",
+                objectFit: "cover",
+                borderRadius: "10px",
+                border: "1px solid #e5e7eb",
+                display: "block",
+              }}
+            />
+          </button>
         ))}
       </div>
+      {open !== null && open < photos.length && <PhotoViewer photos={photos} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />}
     </div>
   );
 }
@@ -568,7 +625,7 @@ function SelectablePhotoGrid({
             }}
           >
             <img
-              src={url}
+              src={resolveMediaUrl(url)}
               alt={`Photo ${i + 1}`}
               style={{
                 width: "100%",
