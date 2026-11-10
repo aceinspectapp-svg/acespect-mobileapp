@@ -301,11 +301,10 @@ export function MetaRow({
  * The report's photo grid -- one reusable component for every group of photos
  * that sits under a title (a category's own photos, each crack/damage's
  * photos). It looks at each photo's real shape and packs them into tidy rows
- * (see photoLayout.ts): three portraits side by side in one row, two
- * portraits and a landscape in one row, two landscapes per row, a lone photo
- * at a sensible size. All photos in a row share one height and the row fills
- * the page width, so the edges line up; each photo is drawn at exactly its
- * own shape, so nothing is ever cropped or stretched -- these are evidence of
+ * (see photoLayout.ts): three portraits side by side in one row, at most two
+ * photos in a row that holds a landscape. Every portrait is the same size and
+ * every landscape is as tall as a portrait is wide; rows start at the left
+ * margin and photos in a row share a bottom line. Each photo is drawn at exactly its own shape, so nothing is ever cropped or stretched -- these are evidence of
  * a specific defect, not decoration. Rows never split across a page break.
  * Each photo is a real hyperlink to its own full-size URL (matching the
  * reference report's convention), so it survives as a clickable link in the
@@ -346,14 +345,14 @@ export function PhotoGrid({
       {rows.map((row, ri) => (
         <div key={ri} style={{ breakInside: "avoid" }}>
           {ri === 0 && caption}
-          <div style={{ display: "flex", gap: `${options.gap}cm`, alignItems: "flex-start", justifyContent: row.full ? undefined : "center" }}>
-          {row.indices.map((i) => (
+          {/* Photos in a row share a bottom line (a landscape next to a portrait lines up with the portrait's bottom edge); rows start at the left margin. */}
+          <div style={{ display: "flex", gap: `${options.gap}cm`, alignItems: "flex-end", justifyContent: "flex-start" }}>
+          {row.indices.map((i, k) => (
             <div
               key={i}
               style={
-                // Full row: widths share the row in proportion to each photo's shape, which makes every height equal.
-                // Short last row: each photo at the row's height (the same as the rows above it), centred.
-                row.full ? { flex: `${aspects[i]} 1 0`, minWidth: 0 } : { flex: "0 0 auto", width: `${aspects[i] * row.height}cm`, maxWidth: "100%" } // (the cap only matters in a column narrower than the page, like the reviewer's preview)
+                // Every photo at its kind's fixed size (photoLayout.ts), as a share of the row so it scales with the page as drawn.
+                { flex: "0 0 auto", width: `${(row.sizes[k]!.width / options.width) * 100}%`, maxWidth: "100%" }
               }
             >
               {failed[i] ? (
