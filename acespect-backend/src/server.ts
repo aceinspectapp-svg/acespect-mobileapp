@@ -4,6 +4,7 @@ import { prisma } from './lib/prisma';
 import { drainAudit, flushPhotoBatches, startAuditFlusher } from './lib/auditTrail';
 import { ensureBucket, isStorageEnabled, storageDescription, storageProvider } from './lib/storage';
 import { startQueue, stopQueue } from './lib/queue';
+import { reportBrowserPath } from './lib/reportBrowserSetup';
 import { startReviewWorker } from './worker';
 import { startQcJobs } from './modules/qc/qc.jobs';
 import { ensureTemplateReferenceData } from './modules/qc/qc.templates.service';
@@ -45,6 +46,9 @@ async function main() {
     // eslint-disable-next-line no-console
     console.log(`🚀 acespect-backend listening on http://localhost:${env.PORT} (${env.NODE_ENV})`);
   });
+
+  // On Azure App Service, get the report printer's Chrome ready in the background (a no-op elsewhere; see lib/reportBrowserSetup.ts).
+  void reportBrowserPath();
 
   // Standard stages and the seven result codes, created once.
   try {

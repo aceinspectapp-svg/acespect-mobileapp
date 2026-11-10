@@ -1,6 +1,7 @@
 import puppeteer, { type Page } from 'puppeteer';
 import { env } from '../config/env';
 import { ApiError } from '../utils/ApiError';
+import { reportBrowserPath } from './reportBrowserSetup';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
 
 /**
@@ -159,7 +160,8 @@ async function withReportPageNow<T>(
       // that download is a glibc build that doesn't run on Alpine's musl libc
       // anyway, and PUPPETEER_SKIP_DOWNLOAD skips fetching it at install time.
       // Unset locally, so `npm install`'s own downloaded Chrome is used as-is.
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      // On Azure App Service (Node code deployment, no Dockerfile) it is the Chrome set up at start-up -- see reportBrowserSetup.ts.
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (await reportBrowserPath()) || undefined,
     });
   } catch (e) {
     throw reportFailure('browser', 'The server could not start its report printer (headless browser). Check the server log for "[report] browser".', e);
