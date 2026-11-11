@@ -1,6 +1,7 @@
 import type { ConditionSummaryRow } from "../templateFields";
 import { conditionTagColors, GRADE_LEGEND } from "../conditionGrades";
 import { PageTitle, reportTextStyle, reportTokens } from "./reportKit";
+import { GRADE_MEANINGS_NOV2026 } from "../reportAgreement";
 
 /** One category's rows for the Condition Summary page -- `sectionName` is
  *  the category's own display name (e.g. "Driveway", "Elevations"), kept
@@ -108,7 +109,7 @@ function CategoryBlock({ category }: { category: ConditionSummaryCategory }) {
 }
 
 /** What each grade in the table means, in the report's own wording (also printed in the Scope appendix). Kept in one block so it never splits across a page break. */
-function ConditionLegend() {
+function ConditionLegend({ nov2026 = false }: { nov2026?: boolean }) {
   return (
     <div style={{ breakInside: "avoid", marginTop: "22px" }}>
       <div
@@ -130,7 +131,7 @@ function ConditionLegend() {
           <div style={{ flex: "0 0 108px" }}>
             <ConditionPill color={g.color} label={g.label} />
           </div>
-          <div style={{ fontSize: "0.92em", color: reportTokens.ink }}>{g.meaning}</div>
+          <div style={{ fontSize: "0.92em", color: reportTokens.ink }}>{(nov2026 && GRADE_MEANINGS_NOV2026[g.label]) || g.meaning}</div>
         </div>
       ))}
     </div>
@@ -148,9 +149,12 @@ function ConditionLegend() {
 export function ReportConditionSummary({
   categories,
   compact = false,
+  nov2026 = false,
 }: {
   categories: ConditionSummaryCategory[];
   compact?: boolean;
+  /** Dilapidation / Residential House: the grade meanings as the Nov 2026 template words them. */
+  nov2026?: boolean;
 }) {
   if (categories.length === 0) return null;
   return (
@@ -179,7 +183,7 @@ export function ReportConditionSummary({
       {categories.map((c, i) => (
         <CategoryBlock key={i} category={c} />
       ))}
-      <ConditionLegend />
+      <ConditionLegend nov2026={nov2026} />
     </div>
   );
 }

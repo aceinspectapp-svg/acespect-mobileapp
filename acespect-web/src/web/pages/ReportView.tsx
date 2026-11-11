@@ -10,13 +10,15 @@ import { sectionPhotoArchiveUrl } from "../photoArchive";
 import { ReportDescription } from "../components/ReportDescription";
 import { ReportScope } from "../components/ReportScope";
 import { ReportConditions } from "../components/ReportConditions";
+import { ReportAgreement } from "../components/ReportAgreement";
+import { printsAgreement } from "../reportAgreement";
 import { ReportSection } from "../components/ReportSection";
 import { ReportConditionSummary, type ConditionSummaryCategory } from "../components/ReportConditionSummary";
 import { ReportPoolSpaDisclaimer } from "../components/ReportPoolSpaDisclaimer";
 import { reportProfileOf } from "../wording/profile";
 import { wordingFor } from "../wording/registry";
 import type { ConditionSummaryRow } from "../templateFields";
-import { DILAPIDATION_BRAND, PhotoNumberProvider, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
+import { DILAPIDATION_BRAND, PhotoNumberProvider, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 import { ConstructionReportBody, constructionFileName, useConstructionReport } from "../construction/ConstructionReport";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
@@ -285,6 +287,7 @@ export function ReportView() {
             report's per-item photo cross-referencing instead of one vague
             "Please refer to Photographs:" line repeated everywhere. */}
         <PhotoNumberProvider>
+          <ReportWordingStyleContext.Provider value={{ nov2026: printsAgreement(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "")) }}>
           {/* 1-3. Description and Overview, Photographs, Scope of Inspection
               and Comments -- all rendered by ReportDescription, straight after
               the cover and ABOVE the Condition Summary. */}
@@ -301,7 +304,7 @@ export function ReportView() {
               near-empty page. */}
           {conditionSummaryCategories.length > 0 && (
             <div className="report-page-break">
-              <ReportConditionSummary categories={conditionSummaryCategories} />
+              <ReportConditionSummary categories={conditionSummaryCategories} nov2026={printsAgreement(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? ""))} />
             </div>
           )}
 
@@ -336,16 +339,26 @@ export function ReportView() {
               empty Notes section (the `notes` composer now produces no text
               at all when nothing was notable -- see the report type's wording (src/web/wording/)) would
               have silently dropped this entire legal appendix along with it. */}
-          <div className="report-page-break">
-            <ReportScope />
-          </div>
-          {/* Conditions starts on its own fresh page too, separate from
-              Scope -- previously they shared one page-break (before Scope
-              only), so Conditions just ran on wherever Scope happened to
-              end. */}
-          <div className="report-page-break" style={{ marginTop: "20px" }}>
-            <ReportConditions />
-          </div>
+          {printsAgreement(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "")) ? (
+            // Dilapidation / Residential House: the office template's Agreement (Nov 2026), which covers both the scope and the conditions.
+            <div className="report-page-break">
+              <ReportAgreement />
+            </div>
+          ) : (
+            <>
+              <div className="report-page-break">
+                <ReportScope />
+              </div>
+              {/* Conditions starts on its own fresh page too, separate from
+                  Scope -- previously they shared one page-break (before Scope
+                  only), so Conditions just ran on wherever Scope happened to
+                  end. */}
+              <div className="report-page-break" style={{ marginTop: "20px" }}>
+                <ReportConditions />
+              </div>
+            </>
+          )}
+          </ReportWordingStyleContext.Provider>
         </PhotoNumberProvider>
           </>
         )}
@@ -402,7 +415,7 @@ export function ReportView() {
                   : null
               }
             />
-            {slug(s).startsWith("pool") && <ReportPoolSpaDisclaimer />}
+            {slug(s).startsWith("pool") && <ReportPoolSpaDisclaimer nov2026={printsAgreement(reportProfileOf(inspection?.type ?? "", inspection?.propertyType ?? ""))} />}
           </>
         )}
       </div>
