@@ -17,7 +17,20 @@ import { asString, buildDefectNote, isGateSatisfied, withPeriod } from "../templ
 import { gradeOf } from "../conditionGrades";
 import type { Composer } from "./shared";
 import { article, capitalize, conditionOf, defectOffsets, joinClauses, joinList, lower, many, one, withThe } from "./shared";
-import { houseDamageSentences, residentialHouseComposers as house, typically, wallsOf } from "./dilapidation.residential_house";
+import {
+  houseDamageSentences,
+  houseDamageSentencesNov2026,
+  NOV2026,
+  NOV2026_INTERNAL,
+  residentialHouseComposersNov2026 as house,
+  typically,
+  wallsOf,
+} from "./dilapidation.residential_house";
+
+// The defects, the grades and the other shared sentences follow Houspect's Nov 2026 "Dilapidation Multi Level Office Building" office
+// template (whose terms are the same Agreement as the Residential one): "At the door, there is corrosion to the board.", "The crack
+// is approximately 2 millimetres wide and approximately 600 millimetres long." (approximately inside the unit only), "Satisfactory
+// condition with typical wear and tear.", "Sections of the fence are obscured by ...".
 import type { ReportWording } from "./types";
 
 const clean = (v: unknown): string =>
@@ -154,10 +167,10 @@ function structureComposer(kind: "fence" | "retaining wall", flags: [string, str
     } else {
       text = `There is ${article(structure || "retaining")} ${structure ? `${structure} ` : ""}retaining wall${location ? ` to ${withThe(location)}` : ""}${material ? `, constructed of ${material}` : ""}.${grade ? ` It is ${grade}.` : ""}`;
     }
-    if (obscured.length) text += ` Sections of the ${noun} were obscured by ${joinList(obscured)}.`;
+    if (obscured.length) text += ` Sections of the ${noun} ${kind === "fence" ? "are" : "were"} obscured by ${joinList(obscured)}.`;
     parts.push(text);
     const notes = clean(inst.notes);
-    return [...parts, ...flagSentences(inst, flags), houseDamageSentences(inst, itemFields), notes ? capitalize(withPeriod(notes)) : ""].filter(Boolean).join("\n\n");
+    return [...parts, ...flagSentences(inst, flags), houseDamageSentences(inst, itemFields, { style: NOV2026 }), notes ? capitalize(withPeriod(notes)) : ""].filter(Boolean).join("\n\n");
   };
 }
 const fences = structureComposer("fence", [
@@ -515,7 +528,12 @@ function checklistComposer(sectionKey: string): Composer {
       // Not applicable / not accessible: say so (and why) and keep only what the inspector added.
       if (notApplicable) {
         const reason = lower(one(itemFields, inst, [`${group.prefix}_naReason`]));
-        blocks.push(`${group.subject} ${be} not applicable${reason && reason !== "not applicable" ? ` (${reason})` : ""}.`);
+        if (group.prefix === "roof_covering" && /complex/.test(reason))
+          // The template's own sentence for the roof of a multi-level building.
+          blocks.push(
+            "The roof could not be inspected as the building is a multi-level building complex. Roof coverings in a building complex are common property and need to be maintained through the Owners Corporation.",
+          );
+        else blocks.push(`${group.subject} ${be} not applicable${reason && reason !== "not applicable" ? ` (${reason})` : ""}.`);
         const comment = typed(inst[`${group.prefix}_comments`]);
         if (comment) blocks.push(comment);
         continue;
@@ -525,7 +543,12 @@ function checklistComposer(sectionKey: string): Composer {
       // The grade is said where the form asks for it, then the template's "no visible significant cracking" line when nothing is wrong with this part.
       const flagged = fields.some((f) => /_(majorCracking|sigCracking)$/.test(f.key) && asString(inst[f.key]) === "yes");
       const sayGrade = (): void => {
-        if (cond?.word) sentences.push(`${group.subject} ${be} in ${cond.word} condition${typically(cond.word, "wear and tear")}.`);
+        if (cond?.word)
+          sentences.push(
+            cond.word === "satisfactory"
+              ? "Satisfactory condition with typical wear and tear."
+              : `${group.plural ? "They are" : "It is"} in ${cond.word} condition.`,
+          );
         if (group.good && list.length === 0 && !flagged) sentences.push(group.good);
       };
       if (!condField) sayGrade();
@@ -539,7 +562,11 @@ function checklistComposer(sectionKey: string): Composer {
         }
         if (field.type === "damage-list") {
           if (sentences.length) blocks.push(sentences.splice(0).join(" "));
-          if (list.length) blocks.push(significantLead(list), houseDamageSentences(inst, itemFields, { key, indexOffset: offsets[key] ?? 0 }));
+          if (list.length)
+            blocks.push(
+              significantLead(list),
+              houseDamageSentences(inst, itemFields, { key, indexOffset: offsets[key] ?? 0, style: sectionKey === "internal_areas" || sectionKey === "notes" ? NOV2026_INTERNAL : NOV2026 }),
+            );
           continue;
         }
         if (!hasAnswer(inst[key])) continue;
@@ -621,7 +648,7 @@ export const dilapidationApartment: ReportWording = {
   metadataFields: {},
   noSummarySections: ["description"],
   absentSlotSections: [],
-  damageSentences: houseDamageSentences,
+  damageSentences: houseDamageSentencesNov2026,
   summaryRows,
   descriptionBlocks,
 };

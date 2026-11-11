@@ -54,9 +54,11 @@ describe("Dilapidation / Residential House Agreement (Nov 2026 template)", () =>
     assert.equal(GRADE_MEANINGS_NOV2026.Average, "Working but needs maintenance within 6 months.");
   });
 
-  it("prints only for Dilapidation / Residential House", () => {
+  it("prints for Dilapidation / Residential House and Apartment only", () => {
     assert.equal(printsAgreement(reportProfileOf("Dilapidation", "Residential House")), true);
-    for (const [type, property] of [["Dilapidation", "Apartment"], ["Dilapidation", "Commercial Properties"], ["Dilapidation", "Public Assets"], ["Pre-Purchase", "Residential House"]]) {
+    // Apartment follows the Nov 2026 Multi Level Office Building template, whose terms are the same Agreement.
+    assert.equal(printsAgreement(reportProfileOf("Dilapidation", "Apartment")), true);
+    for (const [type, property] of [["Dilapidation", "Commercial Properties"], ["Dilapidation", "Public Assets"], ["Pre-Purchase", "Residential House"]]) {
       assert.equal(printsAgreement(reportProfileOf(type, property)), false, `${type} / ${property}`);
     }
   });

@@ -296,5 +296,6 @@ export const GRADE_MEANINGS_NOV2026: Record<string, string> = Object.fromEntries
 
 /** The report types worded by the Nov 2026 template: they print this Agreement (instead of the older SCOPE and Conditions pages) and its other wording. */
 export function printsAgreement(profile: { inspectionType: string; propertyType: string }): boolean {
-  return profile.inspectionType === "dilapidation" && profile.propertyType === "residential_house";
+  // Residential (Nov 2026 Residential template) and Apartment (Nov 2026 Multi Level Office Building template): the same Agreement.
+  return profile.inspectionType === "dilapidation" && (profile.propertyType === "residential_house" || profile.propertyType === "apartment");
 }
