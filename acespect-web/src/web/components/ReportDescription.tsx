@@ -4,6 +4,7 @@ import { Note, Para, Placeholder, PhotoGrid, reportTextStyle, SectionBand, usePh
 import { reportProfileOf } from "../wording/profile";
 import { wordingFor } from "../wording/registry";
 import { scopeOfInspectionSentences } from "../descriptionScope";
+import { DILAPIDATION_METHOD_NOV2026, printsAgreement } from "../reportAgreement";
 
 /** Every photo that actually appears in the printed report -- general section photos plus each damage/crack's own -- matching what the reader can actually count, for the "full download of N photographs" disclosure. */
 function countReportPhotos(inspection: Inspection): number {
@@ -130,6 +131,7 @@ export function ReportDescription({
           scope.
         </Placeholder>
       )}
+      {printsAgreement(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "")) && <Para>{DILAPIDATION_METHOD_NOV2026}</Para>}
       {photoArchiveUrl ? (
         <Para>
           Selected photographs are displayed in this report. For a full download

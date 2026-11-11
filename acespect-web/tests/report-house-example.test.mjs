@@ -72,12 +72,12 @@ describe("House example report: External", () => {
   it("driveway and paving", () => {
     const d = draft("driveway", { present: "yes", locatedAt: "Front right", material: "Concrete", condition: SAT, obscuredBy: [OTHER + "plant pots"], damages: [crack("middle of the driveway", 0.9, 2000, "Vertical")] });
     assert.ok(paras(d).includes("The driveway is to the front right of the block and is constructed of concrete. It is in satisfactory condition with typical wear and tear. Sections of the driveway were obscured by plant pots."));
-    assert.ok(paras(d).some((p) => p.includes("there is a vertical crack approximately 0.9 millimetres wide and approximately 2000 millimetres long.")));
+    assert.ok(paras(d).some((p) => p.includes("there is a vertical crack. The crack is 0.9 millimetres wide and 2000 millimetres long.")));
     const paving = draft("paving_paths", { areas: { front: { present: "yes", material: ["Concrete"], condition: SAT, obscuredBy: [OTHER + "plant pots", "Stored goods"] }, left: { present: "yes", material: ["Concrete"], condition: SAT, obscuredBy: ["Vegetation", "Stored goods"] }, rear: { present: "yes", material: ["Concrete"], condition: SAT, damages: [crack("right corner", 1.4, 500, "Diagonal")] } } });
     const p = paras(paving);
     assert.ok(p.includes("There is paving to the front of the block, constructed of concrete. It is in satisfactory condition with typical wear and tear. Sections of the paving were obscured by plant pots and stored goods."));
     assert.ok(p.includes("There is paving to the left-hand side of the block, constructed of concrete. It is in satisfactory condition with typical wear and tear. Sections of the paving were obscured by vegetation and stored goods."));
-    assert.ok(p.some((x) => x === "DEFECT::0::At the right corner there is a diagonal crack approximately 1.4 millimetres wide and approximately 500 millimetres long."));
+    assert.ok(p.some((x) => x === "DEFECT::0::At the right corner, there is a diagonal crack. The crack is 1.4 millimetres wide and 500 millimetres long."));
   });
 
   it("fences", () => {
@@ -94,7 +94,7 @@ describe("House example report: External", () => {
         granny_flat: { present: "yes", structureName: "Pergola", attachment: "Attached to house", position: "Rear", walls: [OTHER + "timber"], wallsCondition: SAT, roof: [OTHER + "laserlite roof covering"] },
       },
     }));
-    assert.ok(p.includes("There is a garage attached to the house at the front, constructed of brick with a tiled roof and concrete hardstand, and is generally in satisfactory state of repair. Sections of the walls and floor were obscured by shelving and stored goods."));
+    assert.ok(p.includes("There is a garage attached to the house at the front, constructed of brick with a tiled roof and concrete hardstand, and is generally in satisfactory state of repair. Sections of the walls and hardstand were obscured by shelving and stored goods."));
     assert.ok(p.includes("There is a shed located at the rear of the property, constructed of metal with a metal roof and concrete hardstand, and is generally in satisfactory state of repair. Sections of the walls and hardstand were obscured by shelving and stored goods."));
     assert.ok(p.includes("There is a pergola attached to the house at the rear, constructed of timber with a laserlite roof covering, which is generally in satisfactory state of repair."));
   });
@@ -108,8 +108,8 @@ describe("House example report: External", () => {
     }));
     assert.ok(p.includes("ROOMHEAD::Front Elevation (east)"));
     assert.ok(p.includes("Satisfactory and in typical condition. Sections were obscured by plant pots."));
-    assert.ok(p.includes("DEFECT::0::At the porch there is a chip to the rendered pier."));
-    assert.ok(p.includes("The right elevation is a party wall abutting the next property at No. 2 and could only be partly inspected to the rear which is in satisfactory and in typical condition. Sections were obscured by stored goods and outdoor furniture."));
+    assert.ok(p.includes("DEFECT::0::At the porch, there is a chip to the rendered pier."));
+    assert.ok(p.includes("The right elevation is a party wall abutting the next property at No. 2 and could only be partly inspected to the rear. To the sections observed, it appears to be in satisfactory and typical condition. Sections were obscured by stored goods and outdoor furniture."));
   });
 
   it("roof", () => {
@@ -133,12 +133,12 @@ describe("House example report: Internal", () => {
   const p = paras(d);
 
   it("words each room as the report does", () => {
-    assert.ok(p.includes("The entry and hallway are in satisfactory and typical condition. Sections were obscured by furniture and stored goods."));
-    assert.ok(p.includes("The kitchen, family and dining areas are in satisfactory and typical condition. Sections were obscured by furniture and stored goods."));
-    assert.ok(p.includes("The bedroom and ensuite are in satisfactory and typical condition. Sections were obscured by furniture and stored goods."));
-    assert.ok(p.includes("The bathroom is in satisfactory and typical condition. Sections were obscured by stored goods."));
-    assert.ok(p.includes("The powder room is in satisfactory and typical condition."));
-    assert.ok(p.includes("DEFECT::0::At the entry door architrave mitre there is a diagonal crack approximately 0.4 millimetres wide and approximately 70 millimetres long."));
+    assert.ok(p.includes("Satisfactory and in typical condition. Sections were obscured by furniture and stored goods."));
+    assert.ok(p.includes("Satisfactory and in typical condition. Sections were obscured by furniture and stored goods."));
+    assert.ok(p.includes("Satisfactory and in typical condition. Sections were obscured by furniture and stored goods."));
+    assert.ok(p.includes("Satisfactory and in typical condition. Sections were obscured by stored goods."));
+    assert.ok(p.includes("Satisfactory and in typical condition."));
+    assert.ok(p.includes("DEFECT::0::At the entry door architrave mitre, there is a diagonal crack. The crack is approximately 0.4 millimetres wide and approximately 70 millimetres long."));
   });
 
   it("says what the report's notes say about renovations and rooms not accessed", () => {
@@ -196,7 +196,7 @@ describe("House form: the real inspector template's choices and fields", () => {
   it("still prints a recorded crack, with the overview sentence, and says nothing when the part is good", () => {
     const bad = paras(draft("driveway", { present: "yes", locatedAt: "Front left", material: "Concrete", condition: SAT, crackingSummary: "Several minor cracks", damages: [crack("middle of the driveway", 0.9, 2000, "Vertical")] })).join(" ");
     assert.ok(bad.includes("Several minor cracks observed."));
-    assert.ok(/crack approximately 0\.9 millimetres wide/.test(bad), bad);
+    assert.ok(/The crack is 0\.9 millimetres wide/.test(bad), bad);
     const good = paras(draft("driveway", { present: "yes", locatedAt: "Front left", material: "Concrete", condition: SAT, crackingSummary: "No visible significant cracking" })).join(" ");
     assert.ok(!/crack|observed/i.test(good), good);
   });
@@ -248,9 +248,9 @@ describe("House form: the real inspector template's choices and fields", () => {
     const compose = (rooms) => paras(draft("internal_areas", { rooms }));
     const room = compose({ bedroom: { present: "yes", floorLevel: "Ground floor", withEnsuite: "yes", obscuredBy: ["Furniture", "Stored goods"], generalCondition: SAT } });
     assert.ok(room.includes("ROOMHEAD::Bedroom 1 and ensuite"));
-    assert.ok(room.includes("The bedroom and ensuite are in satisfactory and typical condition. Sections were obscured by furniture and stored goods."));
+    assert.ok(room.includes("Satisfactory and in typical condition. Sections were obscured by furniture and stored goods."));
     const plain = compose({ bedroom: { present: "yes", floorLevel: "Ground floor", generalCondition: "Fair" } });
-    assert.ok(plain.includes("ROOMHEAD::Bedroom 1") && plain.includes("The bedroom is in fair condition."));
+    assert.ok(plain.includes("ROOMHEAD::Bedroom 1") && plain.includes("It is in fair condition."));
   });
 
   it("words cladding, windows and doors, eaves and downpipes as full sentences, not 'Label: value'", () => {

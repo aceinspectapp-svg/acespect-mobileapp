@@ -20,6 +20,8 @@ import { ReportCover } from "../../components/ReportCover";
 import { isConstructionInspection, jobInfoFieldsFor } from "./jobInfoFields";
 import { ReportDescription } from "../../components/ReportDescription";
 import { ReportScope } from "../../components/ReportScope";
+import { ReportAgreement } from "../../components/ReportAgreement";
+import { printsAgreement } from "../../reportAgreement";
 import { ReportConditions } from "../../components/ReportConditions";
 import { ReportSection } from "../../components/ReportSection";
 import { buildReportHeader, defaultPurposeFor, withExcludedPhotosRemoved } from "../../report";
@@ -1622,10 +1624,16 @@ export function ReviewerFormView() {
                       </button>
                       {/* Standard SCOPE + Conditions appendices that print with this section */}
                       <div style={{ marginTop: "16px", borderTop: "1px solid #f1f5f9", paddingTop: "14px" }}>
-                        <ReportScope compact />
-                        <div style={{ marginTop: "20px" }}>
-                          <ReportConditions compact />
-                        </div>
+                        {printsAgreement(reportProfileOf(inspection.type, inspection.propertyType)) ? (
+                          <ReportAgreement compact />
+                        ) : (
+                          <>
+                            <ReportScope compact />
+                            <div style={{ marginTop: "20px" }}>
+                              <ReportConditions compact />
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

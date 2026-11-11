@@ -10,6 +10,8 @@ import { sectionPhotoArchiveUrl } from "../photoArchive";
 import { ReportDescription } from "../components/ReportDescription";
 import { ReportScope } from "../components/ReportScope";
 import { ReportConditions } from "../components/ReportConditions";
+import { ReportAgreement } from "../components/ReportAgreement";
+import { printsAgreement } from "../reportAgreement";
 import { ReportSection } from "../components/ReportSection";
 import { ReportConditionSummary, type ConditionSummaryCategory } from "../components/ReportConditionSummary";
 import { ReportPoolSpaDisclaimer } from "../components/ReportPoolSpaDisclaimer";
@@ -301,7 +303,7 @@ export function ReportView() {
               near-empty page. */}
           {conditionSummaryCategories.length > 0 && (
             <div className="report-page-break">
-              <ReportConditionSummary categories={conditionSummaryCategories} />
+              <ReportConditionSummary categories={conditionSummaryCategories} nov2026={printsAgreement(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? ""))} />
             </div>
           )}
 
@@ -336,16 +338,25 @@ export function ReportView() {
               empty Notes section (the `notes` composer now produces no text
               at all when nothing was notable -- see the report type's wording (src/web/wording/)) would
               have silently dropped this entire legal appendix along with it. */}
-          <div className="report-page-break">
-            <ReportScope />
-          </div>
-          {/* Conditions starts on its own fresh page too, separate from
-              Scope -- previously they shared one page-break (before Scope
-              only), so Conditions just ran on wherever Scope happened to
-              end. */}
-          <div className="report-page-break" style={{ marginTop: "20px" }}>
-            <ReportConditions />
-          </div>
+          {printsAgreement(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "")) ? (
+            // Dilapidation / Residential House: the office template's Agreement (Nov 2026), which covers both the scope and the conditions.
+            <div className="report-page-break">
+              <ReportAgreement />
+            </div>
+          ) : (
+            <>
+              <div className="report-page-break">
+                <ReportScope />
+              </div>
+              {/* Conditions starts on its own fresh page too, separate from
+                  Scope -- previously they shared one page-break (before Scope
+                  only), so Conditions just ran on wherever Scope happened to
+                  end. */}
+              <div className="report-page-break" style={{ marginTop: "20px" }}>
+                <ReportConditions />
+              </div>
+            </>
+          )}
         </PhotoNumberProvider>
           </>
         )}
@@ -402,7 +413,7 @@ export function ReportView() {
                   : null
               }
             />
-            {slug(s).startsWith("pool") && <ReportPoolSpaDisclaimer />}
+            {slug(s).startsWith("pool") && <ReportPoolSpaDisclaimer nov2026={printsAgreement(reportProfileOf(inspection?.type ?? "", inspection?.propertyType ?? ""))} />}
           </>
         )}
       </div>
