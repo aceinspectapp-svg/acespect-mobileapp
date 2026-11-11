@@ -1,6 +1,7 @@
 import type { DamageRecord, FormSection } from "../mockData";
 import { conditionTagColors } from "../conditionGrades";
-import { Heading, Para, PhotoGrid, reportTextStyle, reportTokens, SectionBand, usePhotoNumbering } from "./reportKit";
+import { useContext } from "react";
+import { Heading, Para, PhotoGrid, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand, usePhotoNumbering } from "./reportKit";
 
 // Internal Areas' floor headings (see the report type's wording (src/web/wording/) internal_areas
 // composer) are injected as plain uppercase lines within the section's flat
@@ -133,6 +134,7 @@ function DefectBlock({ text, damage, compact }: { text: string; damage?: DamageR
 /** The section's own general photos (not tied to a defect) -- printed after the defects, with their own photo numbers. */
 function GeneralPhotos({ photos, compact }: { photos: string[]; compact: boolean }) {
   const numbering = usePhotoNumbering(photos, "general");
+  const { nov2026 } = useContext(ReportWordingStyleContext);
   if (photos.length === 0) return null;
   return (
     <div style={{ marginTop: "6px" }}>
@@ -142,7 +144,8 @@ function GeneralPhotos({ photos, compact }: { photos: string[]; compact: boolean
         startNumber={numbering.start}
         caption={
           <Para style={{ margin: "0 0 4px", fontSize: "0.92em", color: reportTokens.inkMuted }}>
-            General photographs — {numbering.label.charAt(0).toLowerCase() + numbering.label.slice(1)}
+            {/* The Nov 2026 template's own words: just "Please refer to Photographs 10 to 18." */}
+            {nov2026 ? numbering.label : `General photographs — ${numbering.label.charAt(0).toLowerCase() + numbering.label.slice(1)}`}
           </Para>
         }
       />

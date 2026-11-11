@@ -18,7 +18,7 @@ import { ReportPoolSpaDisclaimer } from "../components/ReportPoolSpaDisclaimer";
 import { reportProfileOf } from "../wording/profile";
 import { wordingFor } from "../wording/registry";
 import type { ConditionSummaryRow } from "../templateFields";
-import { DILAPIDATION_BRAND, PhotoNumberProvider, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
+import { DILAPIDATION_BRAND, PhotoNumberProvider, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 import { ConstructionReportBody, constructionFileName, useConstructionReport } from "../construction/ConstructionReport";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
@@ -287,6 +287,7 @@ export function ReportView() {
             report's per-item photo cross-referencing instead of one vague
             "Please refer to Photographs:" line repeated everywhere. */}
         <PhotoNumberProvider>
+          <ReportWordingStyleContext.Provider value={{ nov2026: printsAgreement(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "")) }}>
           {/* 1-3. Description and Overview, Photographs, Scope of Inspection
               and Comments -- all rendered by ReportDescription, straight after
               the cover and ABOVE the Condition Summary. */}
@@ -357,6 +358,7 @@ export function ReportView() {
               </div>
             </>
           )}
+          </ReportWordingStyleContext.Provider>
         </PhotoNumberProvider>
           </>
         )}

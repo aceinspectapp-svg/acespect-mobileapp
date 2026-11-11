@@ -64,7 +64,7 @@ describe("House example report: Description and Overview", () => {
   it("words the project works as 'the {project}' for works that are not to a residential property", () => {
     assert.equal(wordingFor(HOUSE).descriptionBlocks({ fields: d.fields, areaCount: 0 }).works, "The project works are the Highlands Estate Stage 450, Mickleham, which is at the rear - approximately west - of the site of this inspection.");
     const house = draft("description", { proposedWorksType: "Residential property", projectSiteAddress: "3 Test Street", siteSide: "Left-hand side", siteDirection: "North" });
-    assert.equal(wordingFor(HOUSE).descriptionBlocks({ fields: house.fields, areaCount: 0 }).works, "The project works are to the property at 3 Test Street, which is at the left-hand side - approximately north - of the site of this inspection.");
+    assert.equal(wordingFor(HOUSE).descriptionBlocks({ fields: house.fields, areaCount: 0 }).works, "The project works are to the property at 3 Test Street, which is at the left - approximately north - of the site of this inspection.");
   });
 });
 

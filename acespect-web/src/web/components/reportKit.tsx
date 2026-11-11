@@ -429,15 +429,22 @@ export function PhotoNumberProvider({ children }: { children: ReactNode }) {
   return <PhotoNumberContext.Provider value={{ next }}>{children}</PhotoNumberContext.Provider>;
 }
 
+/**
+ * Which wording the report body uses. `nov2026`: Houspect's Nov 2026 Dilapidation Residential template, which refers to photographs as
+ * "Please refer to Photographs 9 to 12." (a full stop, and no "General photographs —" in front).
+ */
+export const ReportWordingStyleContext = createContext<{ nov2026: boolean }>({ nov2026: false });
+
 /** "Please refer to Photographs 9 to 12:" / "Please refer to Photograph 9:" / falls back to the old generic line when no PhotoNumberProvider is in scope (e.g. the reviewer's isolated single-section preview, which doesn't represent the whole document's running order). */
 export function usePhotoNumbering(photos: string[], where: string): { start?: number; label: string } {
   const ctx = useContext(PhotoNumberContext);
+  const end_ = useContext(ReportWordingStyleContext).nov2026 ? "." : ":";
   const count = photos.length;
-  if (!ctx || count === 0) return { label: "Please refer to Photographs:" };
+  if (!ctx || count === 0) return { label: `Please refer to Photographs${end_}` };
   // Named by where the group sits and which photographs it holds, so the same group always gets the same numbers however many times React renders it.
   const start = ctx.next(`${where}\u0001${photos.join("\u0001")}`, count);
   const end = start + count - 1;
-  const label = count === 1 ? `Please refer to Photograph ${start}:` : `Please refer to Photographs ${start} to ${end}:`;
+  const label = count === 1 ? `Please refer to Photograph ${start}${end_}` : `Please refer to Photographs ${start} to ${end}${end_}`;
   return { start, label };
 }
 

@@ -180,7 +180,7 @@ describe("published templates: Retaining Walls and Pool / Spa", () => {
       present: "yes",
       items: [{ location: "rear", materials: ["timber_sleepers"], condition: "fair" }],
     });
-    assert.ok(out.includes("There is a retaining wall to the rear, constructed of timber sleepers. It is in fair condition."));
+    assert.ok(out.includes("There is a retaining wall to the rear. It is constructed of timber sleepers. It is in fair condition."));
   });
 
   it("words a pool and its fence from the flat template", () => {
@@ -395,7 +395,7 @@ describe("original seed field layout (still accepted)", () => {
     );
     assert.ok(
       composeSectionSentence("retaining_walls", { location: "left", material: "block", condition: "new" }, [opt("location", ["left", "Left"]), opt("material", ["block", "Block"]), condition], "Items 1")
-        .includes("There is a retaining wall to the left, constructed of block."),
+        .includes("There is a retaining wall to the left. It is constructed of block."),
     );
   });
 

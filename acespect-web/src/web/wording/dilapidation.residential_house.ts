@@ -386,9 +386,10 @@ const make_retainingWalls = (nov: boolean): Composer => (inst, itemFields) => {
   const grade = cond.word || (details.someGaps ? "satisfactory" : "");
   const parts: string[] = [];
   if (cond.tag) parts.push(cond.tag);
-  const first = `There is a retaining wall${location ? ` to ${withThe(lower(location))}` : ""}${
-    materials.length ? `, constructed of ${joinList(materials)}` : ""
-  }.`;
+  // The Nov 2026 template: "There is a retaining wall to the left. It is constructed of timber sleepers."
+  const first = nov
+    ? `There is a retaining wall${location ? ` to ${withThe(lower(location))}` : ""}.${materials.length ? ` It is constructed of ${joinList(materials)}.` : ""}`
+    : `There is a retaining wall${location ? ` to ${withThe(lower(location))}` : ""}${materials.length ? `, constructed of ${joinList(materials)}` : ""}.`;
   const second = grade ? ` It is in ${grade} condition${typically(grade, "weathering", details.someGaps)}.` : "";
   parts.push(`${first}${second}${details.noted}${obstructionsSentence(itemFields, inst, nov ? "" : "wall")}`);
   return houseTail(parts, itemFields, inst, nov ? NOV2026 : undefined);
@@ -910,12 +911,22 @@ const ABSENCE: Record<string, string> = {
  * to the property at {address}, which is at the ..."); for any other kind of works the report says "The project works are the
  * Highlands Estate Stage 450, Mickleham, which is at the rear - approximately west - of the site of this inspection."
  */
-export function descriptionBlocks({ fields }: { fields: Record<string, unknown>; areaCount: number }): { works?: string; scope?: string } {
+export function descriptionBlocks(input: { fields: Record<string, unknown>; areaCount: number }): { works?: string; scope?: string } {
+  return worksBlock(input, false);
+}
+
+/** The Nov 2026 template's "which is at the left/right/rear/front - approximately east - of the site of this inspection". */
+export function descriptionBlocksNov2026(input: { fields: Record<string, unknown>; areaCount: number }): { works?: string; scope?: string } {
+  return worksBlock(input, true);
+}
+
+function worksBlock({ fields }: { fields: Record<string, unknown>; areaCount: number }, nov: boolean): { works?: string; scope?: string } {
   const text = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
   const type = text(fields.worksTypeLabel) || text(fields.proposedWorksType);
   const address = text(fields.projectSiteAddress);
   if (!address || !type) return {};
-  const side = lower(text(fields.siteSide));
+  const sideLabel = lower(text(fields.siteSide));
+  const side = nov ? sideLabel.replace(/^(left|right)-hand side$/, "$1") : sideLabel;
   const direction = text(fields.siteDirection);
   const where = side && direction ? `, which is at the ${side} - approximately ${compassPhrase(direction)} - of the site of this inspection` : "";
   // Works to a residential property: "to the property at {address}"; any other works: "the {project}".
@@ -947,6 +958,6 @@ export const dilapidationResidentialHouse: ReportWording = {
   noSummarySections: ["description"],
   absentSlotSections: ["fences"],
   damageSentences: houseDamageSentencesNov2026,
-  descriptionBlocks,
+  descriptionBlocks: descriptionBlocksNov2026,
   derivedFields,
 };
