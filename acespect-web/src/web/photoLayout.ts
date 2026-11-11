@@ -4,9 +4,9 @@
  * Photos keep their order and are placed in rows by a fixed rule:
  *   - portrait photos go three to a row;
  *   - a row that holds a landscape photo has at most two photos (two landscapes, or a landscape and a portrait).
- * Every portrait is as wide as a third of the row (less the gaps), and every landscape is as TALL as a portrait is wide. The other side
- * follows the photo's own shape, so nothing is ever cropped or stretched (a 3:4 portrait and a 4:3 landscape are the same box turned on
- * its side). Rows start at the left margin and the photos in a row share a bottom line; a lone photo stays at its normal size.
+ * Every photo sits in a box of its kind's one size: three portrait boxes (3:4) fill a row exactly, and so do two landscape boxes (4:3).
+ * A photo of the usual phone shape fills its box; any other shape (a screenshot, a panorama) is shown whole inside it, never cropped or
+ * stretched. Rows start at the left margin and the photos in a row share a bottom line; a lone photo stays at its normal size.
  *
  * Pure and unit-tested (tests/photo-layout.test.mjs); the React side lives in
  * PhotoGrid (components/reportKit.tsx). Units are centimetres throughout.
@@ -32,7 +32,7 @@ export interface PackOptions {
 export interface PackedRow {
   /** Indices (into the input) of the photos in this row, in order. */
   indices: number[];
-  /** Each photo's drawn size, in the same order as `indices`; `width / height` is always the photo's own shape. */
+  /** Each photo's box, in the same order as `indices`: every portrait's box is the same (3:4), and every landscape's (4:3). */
   sizes: { width: number; height: number }[];
   /** The tallest photo in the row. */
   height: number;
@@ -47,6 +47,10 @@ export const COMPACT_PACK: PackOptions = { width: 9, gap: 0.2, maxPerRow: 3, lan
 
 /** Wider than tall. A square photo counts as landscape (two to a row), so it is not shrunk to portrait size. */
 export const isLandscape = (aspect: number): boolean => aspect >= 1;
+
+/** The shape of every portrait photo's box (a phone photo held upright), and of every landscape one's. */
+export const PORTRAIT_BOX = 3 / 4;
+export const LANDSCAPE_BOX = 4 / 3;
 
 export function packPhotoRows(aspects: number[], o: PackOptions): PackedRow[] {
   const n = aspects.length;
@@ -70,16 +74,17 @@ export function packPhotoRows(aspects: number[], o: PackOptions): PackedRow[] {
   }
   if (row.length > 0) groups.push(row);
 
-  // Every portrait is a third of the row wide (less the gaps); every landscape is exactly that tall. The other side follows the photo's own
-  // shape, so nothing is cropped or stretched. Limits: a portrait is never taller than maxHeight, and a landscape never wider than half the
-  // row (so two always fit side by side) -- only an unusually tall or wide photo reaches them, and is then scaled down whole.
+  // Three portrait boxes fill the row, and so do two landscape boxes. Only a spot that limits the height (the cover photo) makes them smaller,
+  // and then every box of that kind shrinks alike.
   const portraitW = (o.width - (o.maxPerRow - 1) * o.gap) / o.maxPerRow;
-  const landscapeMaxW = (o.width - (o.landscapeMaxPerRow - 1) * o.gap) / o.landscapeMaxPerRow;
-  const fit = (a: number) => {
-    let height = isLandscape(a) ? Math.min(portraitW, landscapeMaxW / a) : portraitW / a;
-    height = Math.min(height, o.maxHeight);
-    return { width: a * height, height };
+  const landscapeW = (o.width - (o.landscapeMaxPerRow - 1) * o.gap) / o.landscapeMaxPerRow;
+  const box = (width: number, aspect: number) => {
+    const height = Math.min(width / aspect, o.maxHeight);
+    return { width: height * aspect, height };
   };
+  const portraitBox = box(portraitW, PORTRAIT_BOX);
+  const landscapeBox = box(landscapeW, LANDSCAPE_BOX);
+  const fit = (a: number) => ({ ...(isLandscape(a) ? landscapeBox : portraitBox) });
 
   const rows: PackedRow[] = groups.map((idx) => {
     const sizes = idx.map((j) => fit(aspects[j]!));

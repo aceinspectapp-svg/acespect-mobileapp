@@ -20,7 +20,10 @@ const isConstruction = (inspection?: Inspection) => !!inspection && /constructio
 export function useConstructionReport(inspection?: Inspection, opts?: { includeUnapproved?: boolean }): ConstructionReportModel | null | undefined {
   const all = !!opts?.includeUnapproved;
   const [model, setModel] = useState<ConstructionReportModel | null | undefined>(isConstruction(inspection) ? undefined : null);
-  const key = inspection ? `${all ? "all" : "approved"}:${inspection.id}:${inspection.sections.map((s) => `${s.key ?? s.id}:${s.reviewStatus}:${s.reportText.length}`).join(",")}` : "";
+  // Rebuilt whenever a section's text, answers (a photo added to a defect) or left-out photos change, so the preview follows every edit.
+  const key = inspection
+    ? `${all ? "all" : "approved"}:${inspection.id}:${inspection.sections.map((s) => `${s.key ?? s.id}:${s.reviewStatus}:${s.reportText.length}:${(s.excludedPhotoUrls ?? []).join("|")}:${JSON.stringify(s.answers ?? null)}`).join(",")}`
+    : "";
 
   useEffect(() => {
     if (!inspection || !isConstruction(inspection)) { setModel(null); return; }
@@ -172,12 +175,13 @@ function countsLine(t: ChecklistTable): string {
   return parts.join(" · ");
 }
 
-function RowPhotos({ heading, photos }: { heading: string; photos: string[] }) {
+function RowPhotos({ heading, photos, compact }: { heading: string; photos: string[]; compact?: boolean }) {
   const numbering = usePhotoNumbering(photos, `row:${heading}`);
+  // The caption is printed with the first row of photos (kept on one page together); the rest of the photos may run on to the next page.
+  const caption = <div style={{ fontSize: "11px", color: C.grey }}>Photographs — {heading}{numbering.start !== undefined ? ` (${photoRange(numbering.start, photos.length)})` : ""}</div>;
   return (
-    <div style={{ margin: "6px 0 4px", breakInside: "avoid" }}>
-      <div style={{ fontSize: "11px", color: C.grey }}>Photographs — {heading}{numbering.start !== undefined ? ` (${photoRange(numbering.start, photos.length)})` : ""}</div>
-      <PhotoGrid photos={photos} compact={false} startNumber={numbering.start} />
+    <div style={{ margin: "6px 0 4px" }}>
+      <PhotoGrid photos={photos} compact={!!compact} startNumber={numbering.start} caption={caption} />
     </div>
   );
 }
@@ -213,18 +217,21 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
           })}
         </Fragment>
       ))}
-      {t.photos.map((p, i) => <RowPhotos key={i} heading={p.heading} photos={p.photos} />)}
+      {t.photos.map((p, i) => <RowPhotos key={i} heading={p.heading} photos={p.photos} compact={compact} />)}
     </div>
   );
 }
 
 // ───────────────────────── Defects ─────────────────────────
 
-function Defect({ d }: { d: DefectEntry }) {
+function Defect({ d, lead, compact }: { d: DefectEntry; lead?: ReactNode; compact?: boolean }) {
   const numbering = usePhotoNumbering(d.photos, `defect:${d.no}`);
   const small: CSSProperties = { fontSize: "11px", color: "#4b5563", marginTop: "2px" };
-  return (
-    <div id={`defect-${d.no}`} style={{ margin: "0 0 14px", breakInside: "avoid" }}>
+  // The topic heading (for the first defect of a topic) and the defect's own card print together with the first row of its photos,
+  // so neither is left alone at the bottom of a page; the rest of a long run of photos carries on over the page.
+  const card = (
+    <>
+      {lead}
       <div style={{ display: "grid", gridTemplateColumns: "30px 1fr", background: "#fff1f1" }}>
         <div style={{ background: C.red, color: "white", fontWeight: 700, fontSize: "12px", padding: "6px 0 0", textAlign: "center" }}>{d.no}</div>
         <div style={{ padding: "6px 10px 7px" }}>
@@ -240,7 +247,13 @@ function Defect({ d }: { d: DefectEntry }) {
           {d.codeTitle && <div style={small}><b style={{ color: C.ink }}>NCC / AS reference:</b> {d.codeTitle}</div>}
         </div>
       </div>
-      <div style={{ marginLeft: "30px" }}><PhotoGrid photos={d.photos} compact={false} startNumber={numbering.start} /></div>
+    </>
+  );
+  return (
+    <div id={`defect-${d.no}`} style={{ margin: "0 0 14px" }}>
+      {d.photos.length > 0
+        ? <PhotoGrid photos={d.photos} compact={!!compact} startNumber={numbering.start} caption={<div style={{ marginBottom: "6px" }}>{card}</div>} />
+        : <div style={{ breakInside: "avoid" }}>{card}</div>}
     </div>
   );
 }
@@ -249,25 +262,53 @@ function Defects({ model, archiveUrl }: { model: ConstructionReportModel; archiv
   if (model.defectCount === 0) return <p style={{ margin: "0 0 12px" }}>No defects were identified at the time of inspection.</p>;
   return (
     <>
-      {model.defectGroups.map((g) => (
-        <div key={g.heading}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: `1px solid ${C.rule}`, margin: "14px 0 8px", paddingBottom: "3px", breakAfter: "avoid" }}>
+      {model.defectGroups.map((g) => {
+        const heading = (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: `1px solid ${C.rule}`, margin: "14px 0 8px", paddingBottom: "3px" }}>
             <span style={{ color: C.navy, fontWeight: 700, fontSize: "14.5px" }}>{g.heading}</span>
             {archiveUrl && <a href={archiveUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", fontSize: "11px", fontWeight: 700 }}>View additional photos ›</a>}
           </div>
-          {g.defects.map((d) => <Defect key={d.no} d={d} />)}
-        </div>
-      ))}
+        );
+        return (
+          <div key={g.heading}>
+            {g.defects.map((d, i) => <Defect key={d.no} d={d} lead={i === 0 ? heading : undefined} />)}
+          </div>
+        );
+      })}
     </>
   );
 }
 
 // ───────────────────────── Previous defects / client concerns ─────────────────────────
 
-function ListTable({ heads, intro, na, list, row }: { heads: string[]; intro: string; na: string; list: AttachedList; row: (list: AttachedList) => ReactNode[] }) {
+function ListTable({ heads, intro, na, list, row, compact }: { heads: string[]; intro: string; na: string; list: AttachedList; row: (list: AttachedList) => ReactNode[]; compact?: boolean }) {
   const numbering = usePhotoNumbering(list.photos, "list:" + heads.join("|"));
   const cols = "74px 108px 1fr 112px 150px";
   const cells = list.attached ? row(list) : [];
+  const caption = <div style={{ fontSize: "11px", color: C.grey }}>Photographs{numbering.start !== undefined ? `: ${photoRange(numbering.start, list.photos.length)}` : ""}</div>;
+  if (compact) {
+    // The reviewer's narrow panel: each column as a labelled line, then the photos at the panel's own size -- as every other section shows them.
+    return (
+      <div>
+        <p style={{ margin: "0 0 8px" }}>{intro}</p>
+        {list.attached ? (
+          <>
+            <div style={{ border: `1px solid ${C.rule}`, borderRadius: "6px", overflow: "hidden", fontSize: "12px" }}>
+              {heads.map((h, i) => (
+                <div key={h} style={{ display: "grid", gridTemplateColumns: "92px 1fr", borderTop: i ? `1px solid ${C.rule}` : undefined }}>
+                  <div style={{ background: C.band, color: C.navy, fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", padding: "6px 8px" }}>{h}</div>
+                  <div style={{ padding: "6px 8px" }}>{cells[i]}</div>
+                </div>
+              ))}
+            </div>
+            {list.photos.length > 0 && <div style={{ margin: "8px 0 0" }}><PhotoGrid photos={list.photos} compact caption={caption} startNumber={numbering.start} /></div>}
+          </>
+        ) : (
+          <p style={{ margin: "6px 0 0", fontStyle: "italic", fontSize: "11.5px", color: C.grey }}>{na}</p>
+        )}
+      </div>
+    );
+  }
   return (
     <div>
       <p style={{ margin: "0 0 10px", breakAfter: "avoid" }}>{intro}</p>
@@ -281,8 +322,7 @@ function ListTable({ heads, intro, na, list, row }: { heads: string[]; intro: st
           </div>
           {list.photos.length > 0 && (
             <div style={{ margin: "8px 0 0" }}>
-              <div style={{ fontSize: "11px", color: C.grey }}>Photographs: {photoRange(numbering.start, list.photos.length)}</div>
-              <PhotoGrid photos={list.photos} compact={false} startNumber={numbering.start} />
+              <PhotoGrid photos={list.photos} compact={false} startNumber={numbering.start} caption={caption} />
             </div>
           )}
         </>
@@ -401,14 +441,16 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
         </div>
 
         {model.notes.length > 0 && (
-          <div id="notes" style={{ marginTop: "26px" }}>
+          <div id="notes" className="report-page-break">
             <Heading>Notes</Heading>
             <Back />
             <Bullets items={model.notes} />
           </div>
         )}
 
-        <div style={{ marginTop: "26px" }}>
+        {/* Only a stage that has a Previous Defects section prints this page (Pre-Pour has none). */}
+        {model.attachedKeys.previous !== undefined && (
+        <div className="report-page-break">
           <Heading>Previous Defects</Heading>
           <ListTable
             heads={["Defect No", "Report Reference", "Defect Description", "Current Status", "Remarks / Photos"]}
@@ -418,6 +460,7 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
             row={(l) => ["1", "—", "Defects listed in the previous report (attached)", "Updated", l.text || "See the attached list."]}
           />
         </div>
+        )}
 
         <div className="report-page-break">
           <Heading>Client Concerns</Heading>
@@ -473,7 +516,7 @@ export function ConstructionSectionPreview({ model, sectionKey }: { model: Const
           {defects.map((g) => (
             <div key={g.heading}>
               <div style={{ color: C.navy, fontWeight: 700, fontSize: "13.5px", borderBottom: `1px solid ${C.rule}`, margin: "10px 0 8px", paddingBottom: "3px" }}>{g.heading}</div>
-              {g.defects.map((d) => <Defect key={d.no} d={d} />)}
+              {g.defects.map((d) => <Defect key={d.no} d={d} compact />)}
             </div>
           ))}
         </>
@@ -491,6 +534,7 @@ export function ConstructionSectionPreview({ model, sectionKey }: { model: Const
           na="Not applicable where no previous report exists."
           list={model.previous}
           row={(l) => ["1", "—", "Defects listed in the previous report (attached)", "Updated", l.text || "See the attached list."]}
+          compact
         />
       )}
       {showClient && (
@@ -500,6 +544,7 @@ export function ConstructionSectionPreview({ model, sectionKey }: { model: Const
           na="Not applicable where the client has not supplied a list of concerns."
           list={model.clientConcerns}
           row={(l) => ["1", "—", "Concerns as listed by the client (attached)", "Answered", l.text || "See the attached list."]}
+          compact
         />
       )}
       {empty && <p style={{ margin: 0, color: C.faint, fontStyle: "italic" }}>Nothing from this section is printed in the report.</p>}

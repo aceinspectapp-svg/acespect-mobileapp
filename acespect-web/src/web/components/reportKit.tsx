@@ -351,7 +351,7 @@ export function PhotoGrid({
             <div
               key={i}
               style={
-                // Every photo at its kind's fixed size (photoLayout.ts), as a share of the row so it scales with the page as drawn.
+                // Every photo in its kind's one box size (photoLayout.ts), as a share of the row so it scales with the page as drawn.
                 { flex: "0 0 auto", width: `${(row.sizes[k]!.width / options.width) * 100}%`, maxWidth: "100%" }
               }
             >
@@ -361,7 +361,7 @@ export function PhotoGrid({
                   data-photo-missing=""
                   style={{
                     width: "100%",
-                    aspectRatio: `${aspects[i]}`,
+                    aspectRatio: `${row.sizes[k]!.width / row.sizes[k]!.height}`,
                     boxSizing: "border-box",
                     border: `1px solid ${reportTokens.border}`,
                     background: reportTokens.placeholderBg,
@@ -381,9 +381,11 @@ export function PhotoGrid({
                   alt=""
                   style={{
                     width: "100%",
-                    aspectRatio: `${aspects[i]}`,
-                    // The box is exactly the photo's own shape, so nothing is cropped; `contain` also guarantees it if the shape were ever off by a pixel.
+                    aspectRatio: `${row.sizes[k]!.width / row.sizes[k]!.height}`,
+                    // Every photo of a kind has the same box (photoLayout.ts); `contain` shows a photo of an unusual shape whole inside it, never cropped.
                     objectFit: "contain",
+                    boxSizing: "border-box",
+                    background: "#ffffff",
                     border: `1px solid ${reportTokens.border}`,
                     display: "block",
                   }}

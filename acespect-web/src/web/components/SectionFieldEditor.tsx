@@ -12,6 +12,7 @@ import {
   resolveInstances,
 } from "../templateFields";
 import { api, resolveMediaUrl } from "../api";
+import { DEFECT_DETAIL_FIELDS, defectKey, defectScope, isDefectAnswer } from "../construction/defectDetail";
 
 /**
  * Which inspection/section a "photos" field's uploads belong to, so an
@@ -99,10 +100,29 @@ export function SectionFieldEditor({
                 showMissing={showMissing}
                 disablePhotoEditing={disablePhotoEditing}
               />
+              {/* A row answered "Defect" carries its own details and photos (the same form the iOS app opens under the row), printed as that row's defect. */}
+              {isDefectAnswer(field, scope[field.key]) && (
+                <DefectDetail
+                  scope={defectScope(field, scope)}
+                  onChange={(k, v) => onChange(defectKey(field.key), { ...defectScope(field, scope), [k]: v })}
+                  readOnly={readOnly}
+                  disablePhotoEditing={disablePhotoEditing}
+                />
+              )}
             </div>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** The defect details under a row answered "Defect": location, category, severity, photographs, comments, construction code. */
+function DefectDetail({ scope, onChange, readOnly, disablePhotoEditing }: { scope: AnswerTree; onChange: (key: string, value: AnswerValue) => void; readOnly: boolean; disablePhotoEditing?: boolean }) {
+  return (
+    <div data-defect-detail="" style={{ marginTop: "10px", border: "1px solid #fecaca", borderLeft: "3px solid #dc2626", background: "#fff7f7", borderRadius: "8px", padding: "12px 14px" }}>
+      <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "#b91c1c", marginBottom: "10px" }}>Defect details</div>
+      <SectionFieldEditor fields={DEFECT_DETAIL_FIELDS} scope={scope} onChange={onChange} readOnly={readOnly} disablePhotoEditing={disablePhotoEditing} />
     </div>
   );
 }
