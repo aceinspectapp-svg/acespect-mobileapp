@@ -1,4 +1,4 @@
-import type { ReportHeader } from "../report";
+import { registrationLabel, type ReportHeader } from "../report";
 import { COVER_COLORS, CoverPage } from "./CoverPage";
 
 // Acespect Pty Ltd trades AS Houspect Victoria -- this report carries that
@@ -41,7 +41,7 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
         ],
         ["Inspection Date", r.inspectionDate],
         ["Weather Conditions", r.weather],
-        ["Inspector", `${r.inspector}${r.inspectorRegistration ? ` (Builder Registration No ${r.inspectorRegistration})` : ""}`],
+        ["Inspector", `${r.inspector}${r.inspectorRegistration ? ` ${registrationLabel(r.inspectorRegistration)}` : ""}`],
         ["Purpose", r.purpose],
       ]}
       signatureName={r.signatureName}
