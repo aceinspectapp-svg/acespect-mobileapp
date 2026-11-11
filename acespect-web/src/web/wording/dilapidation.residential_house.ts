@@ -130,8 +130,8 @@ export interface DefectStyle {
   nov2026?: boolean;
   approx?: boolean;
 }
-const NOV2026: DefectStyle = { nov2026: true };
-const NOV2026_INTERNAL: DefectStyle = { nov2026: true, approx: true };
+export const NOV2026: DefectStyle = { nov2026: true };
+export const NOV2026_INTERNAL: DefectStyle = { nov2026: true, approx: true };
 
 const num = (n: number): string => String(Number(n.toFixed(2)));
 

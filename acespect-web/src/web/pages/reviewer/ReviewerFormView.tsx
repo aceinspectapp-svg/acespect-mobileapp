@@ -252,7 +252,14 @@ function JobInfoFieldsForm({
       case "inspectorRegistration":
         return asDraftString(raw, inspector?.licenseNumber ?? "");
       case "purpose":
-        return asDraftString(raw, defaultPurposeFor(inspection, asDraftString((section.fields as Record<string, unknown>).inspector, inspector?.name ?? "")));
+        return asDraftString(
+          raw,
+          defaultPurposeFor(
+            inspection,
+            asDraftString((section.fields as Record<string, unknown>).inspector, inspector?.name ?? ""),
+            asDraftString((section.fields as Record<string, unknown>).inspectorRegistration, inspector?.licenseNumber ?? ""),
+          ),
+        );
       default:
         return asDraftString(raw);
     }

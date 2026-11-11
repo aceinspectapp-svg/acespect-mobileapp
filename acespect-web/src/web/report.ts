@@ -40,6 +40,28 @@ export const DEFAULT_PURPOSE =
   "in scope and may include internal walls, ceilings and floors, external walls, garage, driveway, " +
   "paths and fencing and is the result of a visual survey only.";
 
+/**
+ * The office templates' choices that follow the inspector's registration: "Con Efremidis (Builder Registration No DBU 42135)",
+ * "Trevor Scott (Architect Registration No ARBV 13238)", "Peter Shearer (Inspection Registration No. INL 41888)", and in the purpose
+ * "a licensed builder / building consultant / building practitioner". The kind of registration is read from the number's prefix.
+ */
+export type RegistrationKind = "builder" | "architect" | "inspection";
+export function registrationKind(registration = ""): RegistrationKind | undefined {
+  const r = registration.trim().toUpperCase();
+  if (!r) return undefined;
+  if (r.startsWith("ARBV") || r.startsWith("ARB")) return "architect";
+  if (r.startsWith("INL")) return "inspection";
+  return "builder"; // DBU and any other builder registration
+}
+
+/** "(Builder Registration No DBU 42135)" -- the bracket after the inspector's name on the cover. */
+export function registrationLabel(registration = ""): string {
+  const r = registration.trim();
+  if (!r) return "";
+  const kind = registrationKind(r);
+  return kind === "architect" ? `(Architect Registration No ${r})` : kind === "inspection" ? `(Inspection Registration No. ${r})` : `(Builder Registration No ${r})`;
+}
+
 /** The inspectors who are shown as a "building consultant" rather than a "builder" in the purpose paragraph. */
 const BUILDING_CONSULTANTS = /trevor scott|peter farries/i;
 
@@ -48,11 +70,17 @@ const BUILDING_CONSULTANTS = /trevor scott|peter farries/i;
  * and environs ... insofar as a licensed builder can reasonably identify ..."); every other report type uses the standard one.
  * The Public Assets template says "builder" for every inspector except Trevor Scott and Peter Farries, who are "building consultant".
  */
-export function defaultPurposeFor(inspection: { type?: string; propertyType?: string }, inspectorName = ""): string {
+export function defaultPurposeFor(inspection: { type?: string; propertyType?: string }, inspectorName = "", registration = ""): string {
   const profile = reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "");
   // Every other report: the standard paragraph, with the Industrial-Commercial template's rule -- "builder" except Trevor Scott, a "building consultant".
   if (profile.inspectionType !== "dilapidation" || profile.propertyType !== "public_assets") {
-    return /trevor scott/i.test(inspectorName) ? DEFAULT_PURPOSE.replace("a licensed builder", "a licensed building consultant") : DEFAULT_PURPOSE;
+    // The Nov 2026 Multi Level Office Building template (Apartment): "... in relation to the project works nearby ...".
+    const base = profile.inspectionType === "dilapidation" && profile.propertyType === "apartment" ? DEFAULT_PURPOSE.replace("in relation to project works", "in relation to the project works") : DEFAULT_PURPOSE;
+    // "builder / building consultant / building practitioner": from the inspector's registration (an architect is a building consultant,
+    // an inspection registration a building practitioner); with no registration on file, Trevor Scott is still a building consultant.
+    const kind = registrationKind(registration);
+    const who = kind === "architect" ? "building consultant" : kind === "inspection" ? "building practitioner" : kind === "builder" ? "builder" : /trevor scott/i.test(inspectorName) ? "building consultant" : "builder";
+    return base.replace("a licensed builder", `a licensed ${who}`);
   }
   const who = BUILDING_CONSULTANTS.test(inspectorName) ? "building consultant" : "builder";
   return (
@@ -209,7 +237,7 @@ export function buildReportHeader(inspection: Inspection, inspector?: Pick<User,
     weather: str(f.weather, "—"),
     inspector: str(f.inspector, inspector?.name ?? "—"),
     inspectorRegistration: str(f.inspectorRegistration) || inspector?.licenseNumber || undefined,
-    purpose: str(f.purpose) || defaultPurposeFor(inspection, str(f.inspector, inspector?.name ?? "")),
+    purpose: str(f.purpose) || defaultPurposeFor(inspection, str(f.inspector, inspector?.name ?? ""), str(f.inspectorRegistration) || inspector?.licenseNumber || ""),
     signatureUrl: signer?.signatureUrl,
     signatureName: signer?.signatureName ?? signer?.name,
     signatureTitle: signer?.signatureTitle,

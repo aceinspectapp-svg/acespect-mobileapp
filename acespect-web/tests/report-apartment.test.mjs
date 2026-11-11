@@ -80,7 +80,7 @@ describe("Apartment: items listed one by one", () => {
     assert.ok(p.includes("The driveway is to the front of the block and is constructed of concrete. It is in fair condition. Sections of the driveway were obscured by parked vehicle."));
     assert.ok(p.includes("Notable damage was observed."));
     assert.ok(p.includes("A safety hazard was identified."));
-    assert.ok(p.some((x) => x.startsWith("DEFECT::0::Near the ramp there is a vertical fine crack")));
+    assert.ok(p.some((x) => x.startsWith("DEFECT::0::Near the ramp, there is a vertical fine crack")));
   });
 
   it("says both the type and the material of a fence, and of a retaining wall, and 'typical weathering' only for a satisfactory one", () => {
@@ -113,17 +113,17 @@ describe("Apartment: the checklist sections", () => {
   it("uses the template's sentences where it has them", () => {
     assert.ok(p.some((x) => x.includes("This elevation is on the boundary and could not be inspected.")));
     assert.ok(p.includes("There is significant cracking. The most significant items are:"));
-    assert.ok(p.some((x) => x.startsWith("DEFECT::0::At the east wall there is a vertical fine crack")));
+    assert.ok(p.some((x) => x.startsWith("DEFECT::0::At the east wall, there is a vertical fine crack")));
   });
 
   it("reads each answer as a sentence, never as 'Label: value'", () => {
     assert.ok(p.some((x) => x.includes("The external walls are constructed of brick.")));
     assert.ok(p.some((x) => x.includes("The external walls are rendered.")));
-    assert.ok(p.some((x) => x.includes("The external walls are in fair condition.")));
+    assert.ok(p.some((x) => x.includes("They are in fair condition.")));
     assert.ok(p.some((x) => x.includes("The front door requires re-painting.")));
     assert.ok(p.some((x) => x.includes("Deadlocks are fitted to the front door.")));
     assert.ok(p.some((x) => x.includes("The front door is constructed of timber.")));
-    assert.ok(p.some((x) => x.includes("The front door is in satisfactory condition with typical wear and tear.")));
+    assert.ok(p.some((x) => x.includes("Satisfactory condition with typical wear and tear.")));
     assert.ok(p.some((x) => x.includes("The cladding is fair.")));
     assert.ok(p.includes("Access from balconies only."));
   });
@@ -157,7 +157,7 @@ describe("Apartment: the checklist sections", () => {
 
   it("says each observation the inspector ticked as its own sentence", () => {
     const p2 = paras(draft("roof_chimneys", { eaves_applicable: "yes", eaves_material: "Timber", eaves_condition: "Poor", eaves_comments: "Water staining at the north end" })).join(" ");
-    assert.ok(p2.includes("The eaves are constructed of timber. The eaves are in poor condition."));
+    assert.ok(p2.includes("The eaves are constructed of timber. They are in poor condition."));
     assert.ok(p2.includes("Water staining at the north end."));
   });
 
