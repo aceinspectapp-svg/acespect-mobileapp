@@ -164,7 +164,7 @@ export const AGREEMENT_BLOCKS: AgreementBlock[] = [
   {"kind": "item", "n": "(c)", "text": "applies to domestic building contracts entered into, or building work that commences, on or after 1 August 2026, and is not applied retrospectively. For building work that commenced before that date, Houspect may refer to the edition of the Guide, or other applicable building standard, that was published when the building work commenced; and"},
   {"kind": "item", "n": "(d)", "text": "where applied, is applied by the Inspector in the manner described in Part B (Measurement and Inspection) of the Guide, including inspecting surfaces from a normal viewing position."},
   {"kind": "item", "n": "(e)", "text": "Houspect has tried to categorise our gradings as:"},
-  {"kind": "grade", "text": "New: Self-explanatory/newly built or constructed with none to minimal use."},
+  {"kind": "grade", "text": "New: Newly built or constructed with none to minimal use."},
   {"kind": "grade", "text": "Satisfactory: Generally good condition."},
   {"kind": "grade", "text": "Fair: Starting to look like it needs maintenance."},
   {"kind": "grade", "text": "Average: Working but needs maintenance within 6 months."},

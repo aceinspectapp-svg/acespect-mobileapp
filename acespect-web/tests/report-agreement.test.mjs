@@ -50,7 +50,8 @@ describe("Dilapidation / Residential House Agreement (Nov 2026 template)", () =>
       ["Standards and Guide", "Dilapidation Inspection", "Building Act 1993 (Vic) – Section 94", "Access and Site Conditions", "Inspection Limits and Exclusions"],
     );
     assert.ok(AGREEMENT_BLOCKS.some((b) => b.kind === "definition" && b.text.startsWith("“Houspect” means Acespect Pty Ltd trading as Houspect Victoria ABN 24 237 148 557")));
-    assert.equal(GRADE_MEANINGS_NOV2026.New, "Self-explanatory/newly built or constructed with none to minimal use.");
+    // The template offers "Self-explanatory/newly built ..." as a choice; the report uses one meaning.
+    assert.equal(GRADE_MEANINGS_NOV2026.New, "Newly built or constructed with none to minimal use.");
     assert.equal(GRADE_MEANINGS_NOV2026.Average, "Working but needs maintenance within 6 months.");
   });
 
