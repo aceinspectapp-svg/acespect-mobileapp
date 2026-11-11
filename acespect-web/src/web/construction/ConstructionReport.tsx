@@ -115,6 +115,12 @@ const Bullets = ({ items, lead }: { items: string[]; lead?: ReactNode }) => {
   );
 };
 
+/** "Please refer to Photographs 397 to 418." / "Please refer to Photograph 12." -- empty where the photos carry no report numbers (the reviewer's preview). */
+export function photoReference(start: number | undefined, count: number): string {
+  if (start === undefined || count === 0) return "";
+  return count === 1 ? `Please refer to Photograph ${start}.` : `Please refer to Photographs ${start} to ${start + count - 1}.`;
+}
+
 function photoRange(start: number | undefined, count: number): string {
   if (start === undefined) return "";
   return count === 1 ? `${start}` : `${start} to ${start + count - 1}`;
@@ -257,11 +263,13 @@ function Defect({ d, lead }: { d: DefectEntry; lead?: ReactNode }) {
   const card = (
     <>
       {lead}
+      {/* The template's format: the location in bold (the checklist item when no location was recorded), then the numbered description
+          ending with its own photographs: "Please refer to Photographs 397 to 418." */}
+      {d.heading && <div data-defect-heading="" style={{ fontWeight: 700, fontSize: "13.5px", color: C.ink, margin: "0 0 4px" }}>{d.heading}</div>}
       <div style={{ display: "grid", gridTemplateColumns: "30px 1fr", background: "#fff1f1" }}>
         <div style={{ background: C.red, color: "white", fontWeight: 700, fontSize: "12px", padding: "6px 0 0", textAlign: "center" }}>{d.no}</div>
         <div style={{ padding: "6px 10px 7px" }}>
-          <div style={{ fontSize: "13.5px" }}>{d.text}</div>
-          {d.photos.length > 0 && numbering.start !== undefined && <div style={small}><b style={{ color: C.ink }}>Photographs:</b> {photoRange(numbering.start, d.photos.length)}</div>}
+          <div style={{ fontSize: "13.5px" }}>{[d.description, photoReference(numbering.start, d.photos.length)].filter(Boolean).join(" ")}</div>
           {(d.severity || d.category) && (
             <div style={small}>
               {d.severity && <><b style={{ color: C.ink }}>Severity:</b> {d.severity}</>}

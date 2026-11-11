@@ -26,6 +26,10 @@ export interface ComposedDamage {
   lengthMm: number;
   notes: string;
   photos: string[];
+  /** The checklist row the defect was recorded against (printed as its heading when it has no location). */
+  item?: string;
+  /** The numbered line the report prints for it (not saved). */
+  description?: string;
 }
 export interface Composed { text: string; damages: ComposedDamage[] }
 
@@ -81,7 +85,18 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartm
 
 // ───────────────────────── Defects ─────────────────────────
 
-interface Defect { sub: string; area: "EXTERNAL" | "INTERNAL"; location: string; text: string; photos: string[] }
+/**
+ * A recorded defect. `text` is its full line for the section's report text; `item` (the checklist row) and `description` are what the
+ * report's Identified Defects prints, as the template does: the location in bold (the item when there is no location), then the
+ * numbered description.
+ */
+interface Defect { sub: string; area: "EXTERNAL" | "INTERNAL"; location: string; text: string; photos: string[]; item: string; description: string }
+
+/** A checklist row's defect as the template's numbered line reads under its location: the row, then the inspector's comments. */
+function rowDescription(item: string, location: string, comments: string): string {
+  if (!location) return comments ? sentence(comments) : sentence(cap(item));
+  return [sentence(cap(item)), comments ? sentence(comments) : ""].filter(Boolean).join(" ");
+}
 
 function defectText(heading: string, location: string, comments: string, severities: string[], categories: string[], code: string): string {
   const head = heading ? cap(heading) : "";
@@ -97,17 +112,6 @@ function defectText(heading: string, location: string, comments: string, severit
   return parts.join(" ") || "Defect noted.";
 }
 
-/**
- * "Timber pergola. Cracked at the post." -> the item ("Timber pergola") and the rest ("Cracked at the post."): a Defects-list entry has
- * no item field of its own, so its description's first sentence names it, as "Item — Location." does for every other defect.
- */
-export function itemOfDescription(description: string): { item: string; rest: string } {
-  const d = description.trim();
-  const m = /^(.+?[.!?])(?:\s+([\s\S]*))?$/.exec(d);
-  if (!m) return { item: d, rest: "" };
-  return { item: m[1]!.replace(/[.]$/, "").trim(), rest: (m[2] ?? "").trim() };
-}
-
 function tableDefects(a: AnswerTree): Defect[] {
   const rows = Array.isArray(a.defects) ? (a.defects as AnswerTree[]) : [];
   const out: Defect[] = [];
@@ -116,8 +120,7 @@ function tableDefects(a: AnswerTree): Defect[] {
     const description = asString(row.description).trim();
     const photos = photosIn(row.photos);
     if (!location && !description && photos.length === 0) continue;
-    const { item, rest } = itemOfDescription(description);
-    out.push({ sub: "General", area: EXTERNAL_WORDS.test(`${location} ${description}`) ? "EXTERNAL" : "INTERNAL", location, text: defectText(item || "Defect", location, rest, [], [], ""), photos });
+    out.push({ sub: "General", area: EXTERNAL_WORDS.test(`${location} ${description}`) ? "EXTERNAL" : "INTERNAL", location, text: defectText("", location, description, [], [], ""), photos, item: "", description: description ? sentence(description) : "" });
   }
   return out;
 }
@@ -130,7 +133,7 @@ function typicalDefects(fields: TemplateField[], a: AnswerTree): Defect[] {
       const opt = f.options?.find((o) => o.value === optKey);
       if (!opt) continue;
       const at = asString(a[`${optKey}_at`]).trim();
-      out.push({ sub: "General", area: f.sectionLetter === "External" ? "EXTERNAL" : "INTERNAL", location: "", text: defectText(opt.label, at, "", [], [], ""), photos: photosIn(a[`${optKey}_pics`]) });
+      out.push({ sub: "General", area: f.sectionLetter === "External" ? "EXTERNAL" : "INTERNAL", location: "", text: defectText(opt.label, at, "", [], [], ""), photos: photosIn(a[`${optKey}_pics`]), item: opt.label, description: sentence(at ? `${opt.label} ${at}` : opt.label) });
     }
   }
   return out;
@@ -202,6 +205,7 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
     defects.push({
       sub: f.sectionLetter ? groupOf(f.sectionLetter) : "General", area, location: asString(d.location).trim(),
       text: defectText(heading, asString(d.location).trim(), asString(d.comments).trim(), mapLabels(d.severity, SEVERITY_LABELS), mapLabels(d.category, CATEGORY_LABELS), asString(d.constructionCode).trim()),
+      item: heading, description: rowDescription(heading, asString(d.location).trim(), asString(d.comments).trim()),
       photos: photosIn(d.photos),
     });
     return true;
@@ -499,6 +503,6 @@ export function composeConstructionSection(key: string, fields: TemplateField[],
   }
   return {
     text: lines.join("\n\n"),
-    damages: defects.map((d) => ({ type: d.sub, location: d.location, direction: d.area, widthMm: 0, lengthMm: 0, notes: "", photos: d.photos })),
+    damages: defects.map((d) => ({ type: d.sub, location: d.location, direction: d.area, widthMm: 0, lengthMm: 0, notes: "", photos: d.photos, item: d.item, description: d.description })),
   };
 }

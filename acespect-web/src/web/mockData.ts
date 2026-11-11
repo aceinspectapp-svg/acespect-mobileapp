@@ -41,6 +41,10 @@ export interface DamageRecord {
   lengthMm: number;
   notes: string;
   photos: string[];
+  /** Construction Stage only (not stored): the checklist row a defect was recorded against, printed when it has no location. */
+  item?: string;
+  /** Construction Stage only (not stored): the defect's numbered line in the report. */
+  description?: string;
   /** Photo URLs from `photos` the reviewer has excluded from the generated report. */
   excludedPhotoUrls?: string[];
 }

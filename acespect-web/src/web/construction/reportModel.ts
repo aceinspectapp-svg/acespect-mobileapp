@@ -76,6 +76,10 @@ export interface DefectEntry {
   no: number;
   /** The sentence: the checklist row, where it is and the inspector's comments. */
   text: string;
+  /** The template's bold line above the defect: where it is (the room / area), or its checklist item when no location was recorded. */
+  heading: string;
+  /** The template's numbered line: the defect's description (followed in print by "Please refer to Photographs X to Y."). */
+  description: string;
   severity: string;
   category: string;
   /** What the inspector typed as the construction code ("2.04") and the library's name for it. */
@@ -124,7 +128,7 @@ export interface SectionInput {
   /** The section's report text (what the reviewer portal shows). */
   reportText: string;
   /** The section's defect records, in the order its DEFECT lines number them. */
-  damages: { type: string; location: string; direction: string; photos: string[] }[];
+  damages: { type: string; location: string; direction: string; photos: string[]; item?: string; description?: string }[];
   /** Used only for photos: the photograph fields sit beside the text. */
   answers: AnswerTree | null;
   fields: TemplateField[];
@@ -245,7 +249,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
   let previous = noList();
   let clientConcerns = noList();
 
-  interface Raised { key: string; sub: string; text: string; photos: string[]; fromId?: string }
+  interface Raised { key: string; sub: string; text: string; photos: string[]; fromId?: string; heading: string; description: string }
   const raised: Raised[] = [];
   /** Checklist rows that say "refer defects", per section, to be tied to their defects once those are numbered. */
   const pending: { item: ChecklistItem; raisedIndex: number }[] = [];
@@ -262,7 +266,11 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
     for (const l of lines) {
       if (l.kind !== "defect") continue;
       const dmg = s.damages[l.index];
-      raised.push({ key: s.key, sub: dmg?.type || "General", text: l.text, photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)) });
+      const where = (dmg?.location ?? "").trim();
+      raised.push({
+        key: s.key, sub: dmg?.type || "General", text: l.text, photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)),
+        heading: where || (dmg?.item ?? "").trim(), description: (dmg?.description ?? "").trim() || splitDefect(l.text).sentence,
+      });
     }
 
     if (kind === "description") {
@@ -343,7 +351,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       n += 1;
       numberOf.set(i, n);
       const parts = splitDefect(d.text);
-      group.defects.push({ no: n, text: parts.sentence, severity: parts.severity, category: parts.category, code: parts.code, codeTitle: parts.code ? codeTitle(parts.code) : "", photos: d.photos, sectionKey: d.key });
+      group.defects.push({ no: n, text: parts.sentence, heading: d.heading, description: d.description, severity: parts.severity, category: parts.category, code: parts.code, codeTitle: parts.code ? codeTitle(parts.code) : "", photos: d.photos, sectionKey: d.key });
     });
     defectGroups.push(group);
   }

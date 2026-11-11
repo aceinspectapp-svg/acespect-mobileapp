@@ -80,7 +80,8 @@ describe("Pre-pour: page breaks follow the template", () => {
       const depth = (between.match(/<div/g) ?? []).length - (between.match(/<\/div>/g) ?? []).length;
       assert.ok(depth > 0, `${heading} is kept on one page with ${first}`);
     };
-    keepWith("Identified Defects Requiring Attention", "Slab formwork dimensions — Front left.");
+    keepWith("Identified Defects Requiring Attention", ">Front left<");
+    keepWith(">Front left<", "Slab formwork dimensions. Please refer to Photograph");
     keepWith(">Notes<", "The finish and workmanship of the set out for the slab");
     keepWith(">Client Concerns<", "Concerns listed by the client");
     assert.doesNotMatch(html, /report-page-break"[^>]*id="defects"|id="defects"[^>]*report-page-break/);
@@ -192,33 +193,55 @@ describe("Pre-pour: every 'Refer notes' row leads to a note", () => {
   });
 });
 
-describe("Defects read 'Item — Location.'", () => {
-  it("names a Defects-list entry by its description", () => {
-    const model = build({ pp_defects: { defects: [{ location: "Front right corner", description: "Edge beam cracked. There isn't major damage, but it needs to be repaired.", photos: ["/a.jpg"] }] } });
-    const d = model.defectGroups.flatMap((g) => g.defects).find((x) => x.sectionKey === "pp_defects");
-    assert.equal(d.text, "Edge beam cracked — Front right corner. There isn't major damage, but it needs to be repaired.");
+describe("Defects as the template writes them: the location in bold, then the numbered description and its photographs", () => {
+  const defects = (model) => model.defectGroups.flatMap((g) => g.defects);
+  const photos = (n, from = 0) => Array.from({ length: n }, (_, i) => `/p${from + i}.jpg`);
+
+  it("prints a Defects-list entry with its location as the heading and its description as the numbered line", () => {
+    const model = build({ pp_defects: { defects: [{ location: "Front right corner", description: "There isn't major damage, but it needs to be repaired.", photos: photos(22) }] } });
+    const d = defects(model).find((x) => x.sectionKey === "pp_defects");
+    assert.equal(d.heading, "Front right corner");
+    assert.equal(d.description, "There isn't major damage, but it needs to be repaired.");
+    const out = text(render(model));
+    assert.match(out, new RegExp(`Front right corner ${d.no} There isn't major damage, but it needs to be repaired\\. Please refer to Photographs \\d+ to \\d+\\.`));
   });
 
-  it("names a checklist row's defect by the row, with its location", () => {
-    const model = build({ pp_formwork: { slabDimensions: "defect", slabDimensions__defect: { location: "Front left", photos: ["/a.jpg"] } } });
-    assert.match(model.defectGroups.flatMap((g) => g.defects)[0].text, /^Slab formwork dimensions — Front left\./);
+  it("does not make an item name out of the description any more", () => {
+    const model = build({ pp_defects: { defects: [{ location: "Porch", description: "Edge beam cracked. Needs repair.", photos: photos(1) }] } });
+    const d = defects(model).find((x) => x.sectionKey === "pp_defects");
+    assert.deepEqual([d.heading, d.description], ["Porch", "Edge beam cracked. Needs repair."]);
+    assert.doesNotMatch(text(render(model)), /Edge beam cracked — Porch/);
   });
 
-  it("names an 'Other' row's defect by what the inspector typed", () => {
-    const fields = [{ key: "walls_other", label: "Other", type: "pill-select", order: 0, sectionLetter: "Walls", defectOn: ["defect"], options: [{ value: "ok", label: "OK", color: "#1FA463" }, { value: "defect", label: "Defect", color: "#E63329" }] }];
-    const answers = { walls_other: "defect", walls_other_note: "cracked render", walls_other__defect: { location: "North wall", photos: ["/a.jpg"] } };
-    const d = flattenSectionToDraft(fields, answers, "lu_external_walls", PROFILE);
-    assert.match(d.reportText, /DEFECT::0::Cracked render — North wall\./);
+  it("prints a checklist row's defect under its location, the row and the inspector's comments as the numbered line", () => {
+    const model = build({ pp_formwork: { slabDimensions: "defect", slabDimensions__defect: { location: "Front left", comments: "Overhang too short", photos: photos(2) } } });
+    const d = defects(model)[0];
+    assert.deepEqual([d.heading, d.description], ["Front left", "Slab formwork dimensions. Overhang too short."]);
   });
 
-  it("every defect of a report with defects everywhere has an item name before its location", () => {
-    const model = build({
-      pp_site_facilities: { builderSign: "no_defect", builderSign__defect: { location: "Gate" } },
-      pp_formwork: { reoClearances: "no_defect", reoClearances__defect: { location: "Truss" } },
-      pp_general: { siteDrainage: "yes_defect", siteDrainage__defect: { location: "Rear" } },
-      pp_defects: { defects: [{ location: "Front right corner", description: "There isn't major damage, but it needs to be repaired." }] },
-    });
-    for (const d of model.defectGroups.flatMap((g) => g.defects)) assert.match(d.text, /^[^—]+ — [^.]+\./, d.text);
+  it("uses the checklist item as the heading when no location was recorded", () => {
+    const model = build({ pp_formwork: { formworkBowed: "yes_defect", formworkBowed__defect: { comments: "Bowed at the rear", photos: photos(1) } } });
+    const d = defects(model)[0];
+    assert.deepEqual([d.heading, d.description], ["Formwork bowed", "Bowed at the rear."]);
+  });
+
+  it("writes 'Please refer to Photograph X.' for one photo, and has no separate Photographs line", () => {
+    const model = build({ pp_defects: { defects: [{ location: "Garage", description: "Pegs loose.", photos: photos(1) }] } });
+    const out = text(render(model));
+    assert.match(out, /Garage \d+ Pegs loose\. Please refer to Photograph \d+\./);
+    assert.doesNotMatch(out, /Photographs: \d/);
+  });
+
+  it("numbers each defect's photographs with its own photo numbers", () => {
+    const model = build({ pp_defects: { defects: [{ location: "A", description: "First.", photos: photos(3) }, { location: "B", description: "Second.", photos: photos(2, 10) }] } });
+    const out = text(render(model));
+    const refs = [...out.matchAll(/Please refer to Photographs (\d+) to (\d+)\./g)].map((m) => [+m[1], +m[2]]);
+    const [first, second] = refs.slice(-2);
+    assert.equal(first[1] - first[0] + 1, 3);
+    assert.equal(second[1] - second[0] + 1, 2);
+    assert.equal(second[0], first[1] + 1);
+    // and the "Photo N" captions under each defect are those same numbers
+    assert.match(out, new RegExp(`Photo ${second[0]} .*Photo ${second[1]}`));
   });
 });
 
