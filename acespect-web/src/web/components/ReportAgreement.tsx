@@ -43,14 +43,34 @@ function Block({ b }: { b: AgreementBlock }) {
   }
 }
 
-/** The Dilapidation / Residential House Agreement: "Conditions for the Provision of the Report and Scope". `compact` shrinks it for the panel. */
-export function ReportAgreement({ compact = false }: { compact?: boolean }) {
+/**
+ * An Agreement: "Conditions for the Provision of the Report and Scope". The Dilapidation one by default; a Construction report passes its
+ * own wording (construction/agreementText.ts). `compact` shrinks it for the panel.
+ */
+export function ReportAgreement({ compact = false, title = AGREEMENT_TITLE, blocks = AGREEMENT_BLOCKS }: { compact?: boolean; title?: string; blocks?: AgreementBlock[] }) {
   return (
     <div style={reportTextStyle(compact, { normal: "12px", compact: "11px" })}>
-      <PageTitle compact={compact}>{AGREEMENT_TITLE}</PageTitle>
-      {AGREEMENT_BLOCKS.map((b, i) => (
-        <Block key={i} b={b} />
-      ))}
+      <PageTitle compact={compact}>{title}</PageTitle>
+      {keepWithNext(blocks).map((run, i) =>
+        run.length === 1 ? <Block key={i} b={run[0]!} /> : (
+          // A clause heading (or a clause 4 sub-heading) is kept on one page with what follows it, never left alone at a page bottom.
+          <div key={i} style={{ breakInside: "avoid" }}>{run.map((b, j) => <Block key={j} b={b} />)}</div>
+        ),
+      )}
     </div>
   );
+}
+
+/** The blocks in runs that print together: a heading with the next block after it (a section heading and a sub-heading in a row stay with the clause after both). */
+function keepWithNext(blocks: AgreementBlock[]): AgreementBlock[][] {
+  const runs: AgreementBlock[][] = [];
+  let pending: AgreementBlock[] = [];
+  for (const b of blocks) {
+    pending.push(b);
+    if (b.kind === "section" || b.kind === "subheading") continue;
+    runs.push(pending);
+    pending = [];
+  }
+  if (pending.length) runs.push(pending);
+  return runs;
 }

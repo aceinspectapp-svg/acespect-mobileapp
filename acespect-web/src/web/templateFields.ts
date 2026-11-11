@@ -357,6 +357,10 @@ export interface FlattenedSection {
     lengthMm: number;
     notes: string;
     photos: string[];
+    /** Construction Stage: the checklist row a defect was recorded against (used by the report only; not saved). */
+    item?: string;
+    /** Construction Stage: the defect's numbered line in the report (used by the report only; not saved). */
+    description?: string;
   }[];
   reportText: string;
 }

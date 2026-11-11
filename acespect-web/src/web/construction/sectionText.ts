@@ -24,7 +24,7 @@ ${defectTail}`;
   return {
     reportText: overridden ? typedOver : derived.reportText,
     damages: derived.damages.map((d, i): DamageRecord => ({
-      id: `${section.id}-defect-${i}`, type: d.type, location: d.location, direction: d.direction, widthMm: d.widthMm, lengthMm: d.lengthMm, notes: d.notes, photos: d.photos,
+      id: `${section.id}-defect-${i}`, type: d.type, location: d.location, direction: d.direction, widthMm: d.widthMm, lengthMm: d.lengthMm, notes: d.notes, photos: d.photos, item: d.item, description: d.description,
     })),
   };
 }
