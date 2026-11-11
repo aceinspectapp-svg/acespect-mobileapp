@@ -1,12 +1,13 @@
 import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { Inspection } from "../mockData";
-import { formatLongDate, type ReportHeader } from "../report";
+import { formatLongDate, registrationLabel, type ReportHeader } from "../report";
 import { fetchActiveTemplate, type AnswerTree, type TemplateField } from "../templateFields";
 import { reportProfileOf } from "../wording/profile";
 import { PhotoGrid, PhotoNumberProvider, usePhotoNumbering } from "../components/reportKit";
 import { COVER_COLORS, CoverPage } from "../components/CoverPage";
 import { constructionSectionText } from "./sectionText";
-import { CONDITIONS, SCOPE } from "./scopeText";
+import { ReportAgreement } from "../components/ReportAgreement";
+import { CONSTRUCTION_AGREEMENT_BLOCKS, CONSTRUCTION_AGREEMENT_TITLE } from "./agreementText";
 import {
   ITEM_STATUSES, buildConstructionReport, type AttachedList, type ChecklistTable, type ConstructionReportModel, type DefectEntry, type ItemStatus, type SectionInput,
 } from "./reportModel";
@@ -87,21 +88,32 @@ function Heading({ children }: { children: ReactNode }) {
 const SubHeading = ({ children }: { children: ReactNode }) => (
   <h3 style={{ margin: "18px 0 6px", color: C.navy, fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", breakAfter: "avoid" }}>{children}</h3>
 );
+/**
+ * Prints its children on one page: a heading and the first thing under it, so a heading is never left alone at the bottom of a page
+ * (Chrome's PDF does not honour break-after: avoid reliably; break-inside: avoid on a wrapper is honoured).
+ */
+const KeepTogether = ({ children }: { children: ReactNode }) => <div style={{ breakInside: "avoid" }}>{children}</div>;
 const Back = () => (
   <div style={{ textAlign: "right", margin: "-4px 0 12px" }}>
     <a href="#checklist" style={{ color: "#2563eb", fontSize: "11.5px" }}>↑ Back to summary</a>
   </div>
 );
-const Bullets = ({ items }: { items: string[] }) => (
-  <ul style={{ listStyle: "none", margin: "0 0 10px", padding: 0 }}>
-    {items.map((t, i) => (
-      <li key={i} style={{ display: "flex", gap: "10px", margin: "0 0 4px" }}>
-        <span style={{ color: C.red, lineHeight: 1.45 }}>•</span>
-        <span style={{ flex: 1 }}>{t}</span>
-      </li>
-    ))}
-  </ul>
-);
+const Bullets = ({ items, lead }: { items: string[]; lead?: ReactNode }) => {
+  const li = (t: string, i: number) => (
+    <li key={i} style={{ display: "flex", gap: "10px", margin: "0 0 4px", breakInside: "avoid" }}>
+      <span style={{ color: C.red, lineHeight: 1.45 }}>•</span>
+      <span style={{ flex: 1 }}>{t}</span>
+    </li>
+  );
+  const ul = { listStyle: "none", margin: 0, padding: 0 } as const;
+  // `lead` (a heading) is printed on the same page as the first bullet.
+  return (
+    <div style={{ margin: "0 0 10px" }}>
+      <KeepTogether>{lead}<ul style={ul}>{items.slice(0, 1).map(li)}</ul></KeepTogether>
+      {items.length > 1 && <ul style={ul}>{items.slice(1).map((t, i) => li(t, i + 1))}</ul>}
+    </div>
+  );
+};
 
 function photoRange(start: number | undefined, count: number): string {
   if (start === undefined) return "";
@@ -127,8 +139,9 @@ export function Cover({ r, model, inspection, compact = false }: { r: ReportHead
       rows={[
         ["Property", r.property],
         ["Inspection Date", r.inspectionDate],
-        ["Weather", r.weather],
-        ["Inspector", `${r.inspector}${r.inspectorRegistration ? ` (Registration No. ${r.inspectorRegistration})` : ""}`],
+        ["Weather Conditions", r.weather],
+        // "Joe Briffa (Builder Registration No DBU 58070)", "Trevor Scott (Architect Registration No ARBV 13238)" -- as the template words it.
+        ["Inspector", `${r.inspector}${r.inspectorRegistration ? ` ${registrationLabel(r.inspectorRegistration)}` : ""}`],
         ["Stage", model.stageLabel],
         ["Report Purpose", model.purpose],
         ["General", model.general],
@@ -174,31 +187,33 @@ function countsLine(t: ChecklistTable): string {
 
 function RowPhotos({ heading, photos }: { heading: string; photos: string[] }) {
   const numbering = usePhotoNumbering(photos, `row:${heading}`);
+  // The caption prints with the first row of photos; a long run of photos may carry on over the page.
+  const caption = <div style={{ fontSize: "11px", color: C.grey }}>Photographs — {heading}{numbering.start !== undefined ? ` (${photoRange(numbering.start, photos.length)})` : ""}</div>;
   return (
-    <div style={{ margin: "6px 0 4px", breakInside: "avoid" }}>
-      <div style={{ fontSize: "11px", color: C.grey }}>Photographs — {heading}{numbering.start !== undefined ? ` (${photoRange(numbering.start, photos.length)})` : ""}</div>
-      <PhotoGrid photos={photos} compact={false} startNumber={numbering.start} />
+    <div style={{ margin: "6px 0 4px" }}>
+      <PhotoGrid photos={photos} compact={false} startNumber={numbering.start} caption={caption} />
     </div>
   );
 }
 
 function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
+  const titleBar = (
+    <div style={{ background: C.navy, color: "white", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px" }}>
+      <span style={{ fontWeight: 700, letterSpacing: "0.05em", fontSize: "13px" }}>{t.title}</span>
+      <span style={{ fontSize: "10.5px", fontWeight: 700, opacity: 0.95 }}>{countsLine(t)}</span>
+    </div>
+  );
   return (
     <div style={{ margin: "0 0 20px" }}>
-      <div style={{ background: C.navy, color: "white", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", breakAfter: "avoid" }}>
-        <span style={{ fontWeight: 700, letterSpacing: "0.05em", fontSize: "13px" }}>{t.title}</span>
-        <span style={{ fontSize: "10.5px", fontWeight: 700, opacity: 0.95 }}>{countsLine(t)}</span>
-      </div>
+      {t.intro && !t.groups.length && <p style={{ margin: "0 0 8px" }}>{t.intro}</p>}
+      {!t.groups.length && titleBar}
       {t.groups.map((g, gi) => (
         <Fragment key={gi}>
-          {g.heading && (
-            <div style={{ background: C.band, color: C.navy, fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "4px 10px", breakAfter: "avoid" }}>{g.heading}</div>
-          )}
-          {g.items.map((it) => {
+          {g.items.map((it, ii) => {
             const s = STATUS[it.status];
             const href = it.status === "defect" && it.defectNo ? `#defect-${it.defectNo}` : it.status === "note" ? "#notes" : undefined;
             const name = <span style={{ fontWeight: 700, fontSize: "13px", color: href ? C.navy : C.ink, textDecoration: href ? "underline" : "none" }}>{it.heading}</span>;
-            return (
+            const rowEl = (
               <div key={it.id} id={it.id} style={{ display: "grid", gridTemplateColumns: compact ? "5px 1fr 88px" : "6px 1fr 146px", borderBottom: `1px solid ${C.rule}`, breakInside: "avoid" }}>
                 <div style={{ background: s.stripe }} />
                 <div style={{ padding: "6px 10px 7px" }}>
@@ -210,9 +225,23 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
                 </div>
               </div>
             );
+            if (ii > 0) return rowEl;
+            // The first row of a group prints on one page with the group's sub-heading -- and, for the table's first group, with the
+            // template's sentence above the table and the table's title bar -- so none of them is ever left alone at a page bottom.
+            return (
+              <KeepTogether key={it.id}>
+                {gi === 0 && t.intro && <p style={{ margin: "0 0 8px" }}>{t.intro}</p>}
+                {gi === 0 && titleBar}
+                {g.heading && (
+                  <div style={{ background: C.band, color: C.navy, fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "4px 10px" }}>{g.heading}</div>
+                )}
+                {rowEl}
+              </KeepTogether>
+            );
           })}
         </Fragment>
       ))}
+      {t.footnote && <p style={{ margin: "8px 0 4px", fontStyle: "italic", fontSize: "12px", lineHeight: 1.4, breakInside: "avoid" }}>{t.footnote}</p>}
       {t.photos.map((p, i) => <RowPhotos key={i} heading={p.heading} photos={p.photos} />)}
     </div>
   );
@@ -220,11 +249,14 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
 
 // ───────────────────────── Defects ─────────────────────────
 
-function Defect({ d }: { d: DefectEntry }) {
+function Defect({ d, lead }: { d: DefectEntry; lead?: ReactNode }) {
   const numbering = usePhotoNumbering(d.photos, `defect:${d.no}`);
   const small: CSSProperties = { fontSize: "11px", color: "#4b5563", marginTop: "2px" };
-  return (
-    <div id={`defect-${d.no}`} style={{ margin: "0 0 14px", breakInside: "avoid" }}>
+  // `lead` (the headings above the first defect of a topic) and the defect's card print on one page with the first row of its photos;
+  // the rest of a long run of photos carries on over the page.
+  const card = (
+    <>
+      {lead}
       <div style={{ display: "grid", gridTemplateColumns: "30px 1fr", background: "#fff1f1" }}>
         <div style={{ background: C.red, color: "white", fontWeight: 700, fontSize: "12px", padding: "6px 0 0", textAlign: "center" }}>{d.no}</div>
         <div style={{ padding: "6px 10px 7px" }}>
@@ -240,115 +272,81 @@ function Defect({ d }: { d: DefectEntry }) {
           {d.codeTitle && <div style={small}><b style={{ color: C.ink }}>NCC / AS reference:</b> {d.codeTitle}</div>}
         </div>
       </div>
-      <div style={{ marginLeft: "30px" }}><PhotoGrid photos={d.photos} compact={false} startNumber={numbering.start} /></div>
+    </>
+  );
+  return (
+    <div id={`defect-${d.no}`} style={{ margin: "0 0 14px" }}>
+      {d.photos.length > 0
+        ? <div style={{ marginLeft: "30px" }}><PhotoGrid photos={d.photos} compact={false} startNumber={numbering.start} caption={<div style={{ marginLeft: "-30px", marginBottom: "6px" }}>{card}</div>} /></div>
+        : <KeepTogether>{card}</KeepTogether>}
     </div>
   );
 }
 
-function Defects({ model, archiveUrl }: { model: ConstructionReportModel; archiveUrl?: string | null }) {
-  if (model.defectCount === 0) return <p style={{ margin: "0 0 12px" }}>No defects were identified at the time of inspection.</p>;
+/** The numbered defects, by topic. `lead` (the section's own heading) prints on one page with the first defect. */
+function Defects({ model, archiveUrl, lead }: { model: ConstructionReportModel; archiveUrl?: string | null; lead?: ReactNode }) {
+  if (model.defectCount === 0) return <KeepTogether>{lead}<p style={{ margin: "0 0 12px" }}>No defects were identified at the time of inspection.</p></KeepTogether>;
+  const groups = model.defectGroups.filter((g) => g.defects.length > 0);
   return (
     <>
-      {model.defectGroups.map((g) => (
-        <div key={g.heading}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: `1px solid ${C.rule}`, margin: "14px 0 8px", paddingBottom: "3px", breakAfter: "avoid" }}>
+      {groups.map((g, gi) => {
+        const topic = (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: `1px solid ${C.rule}`, margin: "14px 0 8px", paddingBottom: "3px" }}>
             <span style={{ color: C.navy, fontWeight: 700, fontSize: "14.5px" }}>{g.heading}</span>
             {archiveUrl && <a href={archiveUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", fontSize: "11px", fontWeight: 700 }}>View additional photos ›</a>}
           </div>
-          {g.defects.map((d) => <Defect key={d.no} d={d} />)}
-        </div>
-      ))}
+        );
+        return (
+          <div key={g.heading}>
+            {g.defects.map((d, i) => <Defect key={d.no} d={d} lead={i === 0 ? <>{gi === 0 && lead}{topic}</> : undefined} />)}
+          </div>
+        );
+      })}
     </>
   );
 }
 
 // ───────────────────────── Previous defects / client concerns ─────────────────────────
 
-function ListTable({ heads, intro, na, list, row }: { heads: string[]; intro: string; na: string; list: AttachedList; row: (list: AttachedList) => ReactNode[] }) {
+function ListTable({ heads, intro, na, list, row, lead }: { heads: string[]; intro: string; na: string; list: AttachedList; row: (list: AttachedList) => ReactNode[]; lead?: ReactNode }) {
   const numbering = usePhotoNumbering(list.photos, "list:" + heads.join("|"));
   const cols = "74px 108px 1fr 112px 150px";
   const cells = list.attached ? row(list) : [];
   return (
     <div>
-      <p style={{ margin: "0 0 10px", breakAfter: "avoid" }}>{intro}</p>
-      {list.attached && (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: cols, background: C.navy, color: "white", fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", breakAfter: "avoid" }}>
-            {heads.map((h) => <div key={h} style={{ padding: "8px" }}>{h}</div>)}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: cols, borderBottom: `1px solid ${C.rule}`, fontSize: "12px" }}>
-            {cells.map((c, i) => <div key={i} style={{ padding: "8px", background: i === 3 ? "#f3f4f6" : undefined }}>{c}</div>)}
-          </div>
-          {list.photos.length > 0 && (
-            <div style={{ margin: "8px 0 0" }}>
-              <div style={{ fontSize: "11px", color: C.grey }}>Photographs: {photoRange(numbering.start, list.photos.length)}</div>
-              <PhotoGrid photos={list.photos} compact={false} startNumber={numbering.start} />
+      {/* The heading (`lead`), the introduction and the table print on one page. */}
+      <KeepTogether>
+        {lead}
+        <p style={{ margin: "0 0 10px" }}>{intro}</p>
+        {list.attached && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: cols, background: C.navy, color: "white", fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              {heads.map((h) => <div key={h} style={{ padding: "8px" }}>{h}</div>)}
             </div>
-          )}
-        </>
+            <div style={{ display: "grid", gridTemplateColumns: cols, borderBottom: `1px solid ${C.rule}`, fontSize: "12px" }}>
+              {cells.map((c, i) => <div key={i} style={{ padding: "8px", background: i === 3 ? "#f3f4f6" : undefined }}>{c}</div>)}
+            </div>
+          </>
+        )}
+        {!list.attached && <p style={{ margin: "6px 0 0", fontStyle: "italic", fontSize: "11.5px", color: C.grey }}>{na}</p>}
+      </KeepTogether>
+      {list.attached && list.photos.length > 0 && (
+        <div style={{ margin: "8px 0 0" }}>
+          <PhotoGrid photos={list.photos} compact={false} startNumber={numbering.start} caption={<div style={{ fontSize: "11px", color: C.grey }}>Photographs: {photoRange(numbering.start, list.photos.length)}</div>} />
+        </div>
       )}
-      {!list.attached && <p style={{ margin: "6px 0 0", fontStyle: "italic", fontSize: "11.5px", color: C.grey }}>{na}</p>}
     </div>
   );
 }
 
-// ───────────────────────── Scope and Conditions ─────────────────────────
+// ───────────────────────── Terms ─────────────────────────
 
-function ScopePages() {
+/** The template's "Conditions for the Provision of the Report and Scope", on a page of its own. */
+function TermsPages() {
   return (
-    <>
-      <div className="report-page-break">
-        <Heading>Scope</Heading>
-        {SCOPE.map((b, i) => {
-          if (b.type === "section") {
-            return (
-              <div key={i} style={{ margin: "14px 0 6px", fontWeight: 700, fontSize: "13px", breakAfter: "avoid" }}>
-                <span style={{ color: C.red }}>{b.n}.</span>
-                <span style={{ color: C.navy, marginLeft: "10px", letterSpacing: "0.02em" }}>{b.title}</span>
-              </div>
-            );
-          }
-          if (b.type === "p") return <p key={i} style={{ margin: "0 0 8px" }}>{b.text}</p>;
-          if (b.type === "note") return <p key={i} style={{ margin: "0 0 8px", fontStyle: "italic", color: C.grey }}>{b.text}</p>;
-          if (b.type === "clause") {
-            return (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "40px 1fr", margin: "0 0 8px" }}>
-                <span style={{ color: C.navy, fontWeight: 700 }}>{b.num}</span>
-                <span>{b.lead && <b>{b.lead} </b>}{b.text}</span>
-              </div>
-            );
-          }
-          if (b.type === "bullets") return <div key={i} style={{ margin: "0 0 8px" }}><Bullets items={b.items} /></div>;
-          return (
-            <div key={i} style={{ margin: "0 0 8px 40px" }}>
-              {b.items.map((it) => (
-                <div key={it.k} style={{ display: "grid", gridTemplateColumns: "34px 1fr", margin: "0 0 5px" }}>
-                  <span>{it.k}</span>
-                  <span>{it.lead && <b>{it.lead} </b>}{it.text}</span>
-                </div>
-              ))}
-            </div>
-          );
-        })}
-      </div>
-      <div className="report-page-break">
-        <Heading>Conditions for the provision of the report</Heading>
-        {CONDITIONS.map((c, i) => (
-          <div key={i} style={{ display: "grid", gridTemplateColumns: "38px 1fr", margin: "0 0 7px" }}>
-            <span style={{ color: C.navy, fontWeight: 700 }}>{i + 1}.</span>
-            <div>
-              <div>{c.text}</div>
-              {c.sub?.map((s) => (
-                <div key={s.k} style={{ display: "grid", gridTemplateColumns: "34px 1fr", margin: "4px 0 0 4px" }}>
-                  <span>{s.k}</span>
-                  <span>{s.text}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </>
+    <div className="report-page-break">
+      <ReportAgreement title={CONSTRUCTION_AGREEMENT_TITLE} blocks={CONSTRUCTION_AGREEMENT_BLOCKS} />
+    </div>
   );
 }
 
@@ -369,11 +367,13 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           {front && (
             <PhotoGrid photos={[front]} compact={false} maxHeight={7.5} />
           )}
+          <KeepTogether>
           <SubHeading>Photographs</SubHeading>
           <p style={{ margin: "0 0 8px" }}>
             Selected photographs are included in the body of this report. For a full download please{" "}
             {archive ? <a href={archive} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>Click here</a> : "Click here"} to access. We recommend that you download the digital photographs immediately and save in a secure folder on your device, as the link will remain active for only a few months from the date of this report.
           </p>
+          </KeepTogether>
           <p style={{ margin: 0, fontStyle: "italic", fontSize: "10.5px", color: C.grey, lineHeight: 1.7 }}>
             You may view/save individual photographs by clicking on a file in the list. To save a copy of all photographs, click the Download All button above the list of files and follow the prompts. The security settings on your computer may display a bar at the top of the window, indicating that you need to allow your browser to download from the site. If this message appears, please allow downloads temporarily from this site. If a window does not then appear asking where you would like the download saved, simply click on the Download All button again to commence the download.
           </p>
@@ -388,40 +388,37 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           {model.tables.map((t, i) => <Table key={`${t.title}-${i}`} t={t} />)}
         </div>
 
-        <div className="report-page-break" id="defects">
-          <Heading>Identified Defects Requiring Attention</Heading>
-          <Back />
-          <Defects model={model} archiveUrl={archive} />
+        {/* The template does not start these on a new page: each follows on, with its heading kept with its first item. */}
+        <div id="defects" style={{ marginTop: "26px" }}>
+          <Defects model={model} archiveUrl={archive} lead={<><Heading>Identified Defects Requiring Attention</Heading><Back /></>} />
           {noDefectsPhotos.length > 0 && (
-            <>
-              <SubHeading>General photographs of the site</SubHeading>
-              <PhotoGrid photos={noDefectsPhotos} compact={false} />
-            </>
+            <PhotoGrid photos={noDefectsPhotos} compact={false} caption={<SubHeading>General photographs of the site</SubHeading>} />
           )}
         </div>
 
         {model.notes.length > 0 && (
           <div id="notes" style={{ marginTop: "26px" }}>
-            <Heading>Notes</Heading>
-            <Back />
-            <Bullets items={model.notes} />
+            <Bullets items={model.notes} lead={<><Heading>Notes</Heading><Back /></>} />
+          </div>
+        )}
+
+        {/* Only where a previous report with defects exists -- never in Pre-pour, the first stage. */}
+        {model.stage !== "pre_pour" && model.previous.attached && (
+          <div style={{ marginTop: "26px" }}>
+            <ListTable
+              lead={<Heading>Previous Defects</Heading>}
+              heads={["Defect No", "Report Reference", "Defect Description", "Current Status", "Remarks / Photos"]}
+              intro="Where a previous report exists, each defect from that report is updated below with its current status."
+              na="Not applicable where no previous report exists."
+              list={model.previous}
+              row={(l) => ["1", "—", "Defects listed in the previous report (attached)", "Updated", l.text || "See the attached list."]}
+            />
           </div>
         )}
 
         <div style={{ marginTop: "26px" }}>
-          <Heading>Previous Defects</Heading>
           <ListTable
-            heads={["Defect No", "Report Reference", "Defect Description", "Current Status", "Remarks / Photos"]}
-            intro="Where a previous report exists, each defect from that report is updated below with its current status."
-            na="Not applicable where no previous report exists."
-            list={model.previous}
-            row={(l) => ["1", "—", "Defects listed in the previous report (attached)", "Updated", l.text || "See the attached list."]}
-          />
-        </div>
-
-        <div className="report-page-break">
-          <Heading>Client Concerns</Heading>
-          <ListTable
+            lead={<Heading>Client Concerns</Heading>}
             heads={["Concern No", "Date Raised", "Client Concern", "Current Status", "Remarks / Photos"]}
             intro="Concerns listed by the client are answered below with the inspector’s findings."
             na="Not applicable where the client has not supplied a list of concerns."
@@ -430,7 +427,7 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           />
         </div>
 
-        <ScopePages />
+        <TermsPages />
       </PhotoNumberProvider>
 
       {model.waitingSections.length > 0 && (

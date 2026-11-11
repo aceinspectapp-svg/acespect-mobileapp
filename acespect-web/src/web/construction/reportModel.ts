@@ -42,6 +42,34 @@ export interface ChecklistTable {
   counts: Record<ItemStatus, number>;
   /** Photographs the inspector took against rows of this section (measurements, levels), with the row they belong to. */
   photos: { heading: string; photos: string[] }[];
+  /** The template's fixed sentence printed above the table (Pre-pour: "These items were checked for construction and workmanship."). */
+  intro?: string;
+  /** The template's fixed note printed after the table's rows, in italics (Pre-pour: the land surveying note after the setbacks). */
+  footnote?: string;
+}
+
+/** Pre-pour template: the sentence under the PRE POUR heading, before the first of its checks. */
+export const PRE_POUR_INTRO = "These items were checked for construction and workmanship.";
+/** Pre-pour template: the italic note after the four setback items (the template's wording, kept exactly). */
+export const SETBACK_NOTE =
+  "Houspect Building Inspector is not a providing a land surveying service therefore the comments are observations by the inspector only. Note; pegs on site may sometimes be knocked over or inadvertently moved during base/slab preparation and concrete pour and the inspector is providing estimates only from site markers available on the day of inspection.";
+
+/**
+ * Each note once. The same template note can be asked for from two places -- the security fence from the Site & Facilities answer and
+ * from the Statements & Notes tick, the ground falls from General Other and from the tick -- so notes are kept by what they are about:
+ * one security-fence note (the first, which is the one with the inspector's detail when given), and no sentence twice.
+ */
+export function uniqueNotes(notes: string[]): string[] {
+  // The security-fence note in either of its two wordings (the template's sentence, or the tick's with the inspector's detail).
+  const FENCE_NOTE = /^(sections of the security fence\b|security fencing is .+ needs to be reinstated)/i;
+  const topic = (t: string) => (FENCE_NOTE.test(t) ? "security-fence" : t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim());
+  const seen = new Set<string>();
+  return notes.filter((t) => {
+    const k = topic(t);
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 export interface DefectEntry {
@@ -281,7 +309,14 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       if (kept.length || photos.length) {
         const counts = emptyCounts();
         for (const g of kept) for (const it of g.items) counts[it.status] += 1;
-        tables.push({ sectionKey: s.key, title, groups: kept, counts, photos });
+        const table: ChecklistTable = { sectionKey: s.key, title, groups: kept, counts, photos };
+        if (stage === "pre_pour" && kind === "stage") {
+          // The template's PRE POUR heading opens with this sentence: printed above the first of the Pre-pour checks.
+          if (!tables.some((t) => t.intro === PRE_POUR_INTRO)) table.intro = PRE_POUR_INTRO;
+          // ... and closes its four setbacks with the land surveying note (not when the setbacks are not there or not applicable).
+          if (kept.some((g) => g.items.some((it) => /setback/i.test(it.heading) && it.status !== "na"))) table.footnote = SETBACK_NOTE;
+        }
+        tables.push(table);
       }
     } else if (kind === "summary") {
       summaryLines = paragraphs(lines);
@@ -322,9 +357,10 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
   const appliances = stage === "pci" ? pciAppliances(status) : "";
   if (appliances) notes.splice(Math.min(1, notes.length), 0, appliances);
   notes.push(...siteNotes);
+  const printedNotes = uniqueNotes(notes);
 
   return {
     stage, stageLabel, coverTitle: coverTitleOf(stage), purpose: PURPOSE, general: GENERAL, description, streetPhotos, otherPhotos, tables, totals,
-    defectGroups, defectCount: n, notes, notesBySection, previous, clientConcerns, waitingSections, attachedKeys,
+    defectGroups, defectCount: n, notes: printedNotes, notesBySection, previous, clientConcerns, waitingSections, attachedKeys,
   };
 }

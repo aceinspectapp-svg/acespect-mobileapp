@@ -97,6 +97,17 @@ function defectText(heading: string, location: string, comments: string, severit
   return parts.join(" ") || "Defect noted.";
 }
 
+/**
+ * "Timber pergola. Cracked at the post." -> the item ("Timber pergola") and the rest ("Cracked at the post."): a Defects-list entry has
+ * no item field of its own, so its description's first sentence names it, as "Item — Location." does for every other defect.
+ */
+export function itemOfDescription(description: string): { item: string; rest: string } {
+  const d = description.trim();
+  const m = /^(.+?[.!?])(?:\s+([\s\S]*))?$/.exec(d);
+  if (!m) return { item: d, rest: "" };
+  return { item: m[1]!.replace(/[.]$/, "").trim(), rest: (m[2] ?? "").trim() };
+}
+
 function tableDefects(a: AnswerTree): Defect[] {
   const rows = Array.isArray(a.defects) ? (a.defects as AnswerTree[]) : [];
   const out: Defect[] = [];
@@ -105,7 +116,8 @@ function tableDefects(a: AnswerTree): Defect[] {
     const description = asString(row.description).trim();
     const photos = photosIn(row.photos);
     if (!location && !description && photos.length === 0) continue;
-    out.push({ sub: "General", area: EXTERNAL_WORDS.test(`${location} ${description}`) ? "EXTERNAL" : "INTERNAL", location, text: defectText("", location, description, [], [], ""), photos });
+    const { item, rest } = itemOfDescription(description);
+    out.push({ sub: "General", area: EXTERNAL_WORDS.test(`${location} ${description}`) ? "EXTERNAL" : "INTERNAL", location, text: defectText(item || "Defect", location, rest, [], [], ""), photos });
   }
   return out;
 }
@@ -118,7 +130,7 @@ function typicalDefects(fields: TemplateField[], a: AnswerTree): Defect[] {
       const opt = f.options?.find((o) => o.value === optKey);
       if (!opt) continue;
       const at = asString(a[`${optKey}_at`]).trim();
-      out.push({ sub: "General", area: f.sectionLetter === "External" ? "EXTERNAL" : "INTERNAL", location: "", text: defectText("", "", at ? `${opt.label} ${at}` : opt.label, [], [], ""), photos: photosIn(a[`${optKey}_pics`]) });
+      out.push({ sub: "General", area: f.sectionLetter === "External" ? "EXTERNAL" : "INTERNAL", location: "", text: defectText(opt.label, at, "", [], [], ""), photos: photosIn(a[`${optKey}_pics`]) });
     }
   }
   return out;
@@ -160,10 +172,11 @@ function textFor(status: ItemStatus, c: Chosen, hasRedOption: boolean, plainYesN
 const SEVERITY_ORDER: ItemStatus[] = ["defect", "note", "notcomplete", "progress", "ok", "na"];
 const worst = (list: ItemStatus[]): ItemStatus => SEVERITY_ORDER.find((s) => list.includes(s)) ?? "ok";
 
-interface Row { group?: string; heading: string; status: ItemStatus; text: string }
+interface Row { group?: string; heading: string; status: ItemStatus; text: string; key?: string; answer?: string }
 
 /** One checklist section -> its rows (heading, status and sentence) and the defects raised in it. */
 function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind: "site" | "stage"): { rows: Row[]; defects: Defect[] } {
+  const prePour = stageOfKey(key) === "pre_pour";
   const rows: Row[] = [];
   const defects: Defect[] = [];
   const used = new Set<string>();
@@ -172,7 +185,7 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
   const headings = headingMap(fields);
   const area = kind === "site" ? "EXTERNAL" : areaOfSection(key);
   const add = (f: TemplateField, heading: string, status: ItemStatus, text: string) => {
-    if (text) rows.push({ group: f.sectionLetter ? groupOf(f.sectionLetter) : undefined, heading, status, text });
+    if (text) rows.push({ group: f.sectionLetter ? groupOf(f.sectionLetter) : undefined, heading, status, text, key: f.key });
   };
   const hasRed = (f: TemplateField) => !!f.options?.some((x) => toneOfOption(x.color) === "bad");
 
@@ -183,6 +196,9 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
     const isDefect = f.defectOn ? f.defectOn.includes(v) : chosen(f, v).tone === "bad";
     if (!isDefect) return false;
     const d = asAnswerTree(a[`${f.key}${DEFECT_SUFFIX}`]);
+    // An "Other" row is named by what the inspector typed for it ("Other: reclaimed hardwood" -> "Reclaimed hardwood — Front yard.").
+    const typed = /_other$/.test(f.key) ? asString(a[`${f.key}_note`]).trim().replace(/[.]$/, "") : "";
+    if (typed) heading = cap(typed);
     defects.push({
       sub: f.sectionLetter ? groupOf(f.sectionLetter) : "General", area, location: asString(d.location).trim(),
       text: defectText(heading, asString(d.location).trim(), asString(d.comments).trim(), mapLabels(d.severity, SEVERITY_LABELS), mapLabels(d.category, CATEGORY_LABELS), asString(d.constructionCode).trim()),
@@ -318,6 +334,9 @@ const observed = (c: Chosen): string => {
       // "Yes" / "No" on a check that also offers "see notes" (power supply: Yes / No - see notes) means it is fine; "Complete? Yes" is an answer in itself.
       const plainYesNo = !/complete\??$/i.test(heading) && !!f.options?.some((x) => toneOfOption(x.color) !== "ok");
       let text = textFor(status, c, hasRed(f), plainYesNo);
+      // The Pre-pour template's fixed wording for two rows: the power supply's "Meter & Pole at Slab", and the note above the kitchen bench penetrations.
+      if (prePour && f.key === "powerSupply" && status === "ok") text = POWER_SUPPLY_OK;
+      if (prePour && f.key === "kitchenBenchPenetrations" && status !== "na") text = `${KITCHEN_BENCH_FIXED} ${text}`;
       if (isOtherRow) {
         // "Other": printed only when the inspector said what it was (or it is a defect).
         const note = asString(a[`${f.key}_note`]).trim();
@@ -327,7 +346,7 @@ const observed = (c: Chosen): string => {
           if (status === "ok" || status === "na") status = "note";
         }
       }
-      const row: Row = { group: f.sectionLetter ? groupOf(f.sectionLetter) : undefined, heading, status, text };
+      const row: Row = { group: f.sectionLetter ? groupOf(f.sectionLetter) : undefined, heading, status, text, key: f.key, answer: c.label };
       rows.push(row);
       rowByKey.set(f.key, row);
       if (isDefect) captureDefect(f, heading);
@@ -338,7 +357,11 @@ const observed = (c: Chosen): string => {
     if (f.type === "chip-multiselect" || f.type === "tile-multiselect") {
       const list = labelsOf(f, v);
       if (!list.length) continue;
-      if (/visible at$/i.test(heading)) add(f, heading.replace(/\s+(are\s+)?visible at$/i, ""), "ok", /none/i.test(list[0]!) ? "None visible." : `Visible at ${joinList(list.map(lower))}.`);
+      if (/visible at$/i.test(heading)) {
+        const name = heading.replace(/\s+(are\s+)?visible at$/i, "");
+        // Pre-pour: "Boundary survey pegs visible at front and rear." as the template words it.
+        add(f, name, "ok", /none/i.test(list[0]!) ? "None visible." : prePour ? `${name} visible at ${joinList(list.map(lower))}.` : `Visible at ${joinList(list.map(lower))}.`);
+      }
       else add(f, heading, "ok", sentence(joinList(list)));
       continue;
     }
@@ -374,8 +397,33 @@ function siteNotes(stage: StageId, fields: TemplateField[], a: AnswerTree): stri
 
 // ───────────────────────── Statement and notes ─────────────────────────
 
-const GROUND_FALLS =
-  "Due to ground falls towards the slab stormwater may pond and affect the footings. Stormwater needs to be controlled on site by the construction company to protect the foundations and surface to be graded to fall away from the building/s – refer to Codes 2. Footings and to Site Drainage requirements. Soil may erode and potentially block stormwater pipes – some protection may be advisable until landscaping/retaining works are done.";
+/** The Pre-pour template's ground-falls note (Notes section). */
+export const GROUND_FALLS =
+  "Due to ground falls towards the slab stormwater may pond and affect the footings. Stormwater needs to be controlled on site by the construction company to protect the foundations and surface to be graded to fall away from the building/s – refer to Codes 2. Footings and to Site Drainage requirements.";
+/** The Pre-pour template's text under "Power supply to site" when the supply is in place. */
+export const POWER_SUPPLY_OK = "Meter & Pole at Slab";
+/** The Pre-pour template's fixed sentence under "Kitchen Bench Supply Penetrations Correctly Positioned", above the inspector's comment. */
+export const KITCHEN_BENCH_FIXED = "Positions are estimates only from formwork. The positions will need to be measured after Slab Down.";
+
+/**
+ * The notes a section's "Refer notes" rows lead to. Rows that already have one of the template's own notes are left to it -- security
+ * fencing, site clean-up and kerb damage (Site & Facilities, siteNotes) and the ground falls (site drainage / agi drains, below); any other
+ * row gets a note made of its name and the inspector's answer: "Excess water to footings — could not see."
+ */
+const OWN_NOTE = new Set(["securityFencing", "rubbishDangerous", "siteManaged", "finalSiteClean", "kerbDamage", "siteDrainage", "agiDrain"]);
+function referredNotes(rows: Row[]): string[] {
+  const notes: string[] = [];
+  const drainage = rows.some((r) => (r.key === "siteDrainage" && r.status === "defect") || (r.key === "agiDrain" && r.status === "note"));
+  if (drainage) notes.push(GROUND_FALLS);
+  for (const r of rows) {
+    if (r.status !== "note" || (r.key && OWN_NOTE.has(r.key))) continue;
+    // "Refer notes." / "Infill later — refer notes" / "… noted for attention (refer notes)." -> what is left of the inspector's answer
+    const strip = (t: string) => t.replace(/[\s,—–-]*\(?\s*\b(refer|see)\s+(to\s+)?notes\b\s*\)?\.?/gi, "").trim().replace(/^[—–-]\s*/, "").replace(/[\s,—–-]+$/, "");
+    const detail = strip(r.text) || strip(r.answer ?? "");
+    notes.push(detail ? sentence(`${r.heading} — ${lower(detail)}`) : sentence(r.heading));
+  }
+  return notes;
+}
 
 function summaryLines(stage: StageId, fields: TemplateField[], a: AnswerTree): string[] {
   const meta = STAGES[stage];
@@ -442,6 +490,7 @@ export function composeConstructionSection(key: string, fields: TemplateField[],
     }
     defects.push(...raised);
     if (kind === "site") for (const n of siteNotes(stage, fields, a)) lines.push(`${TAGS.note}${n}`);
+    for (const n of referredNotes(rows)) lines.push(`${TAGS.note}${n}`);
   }
 
   if (defects.length > 0) {
