@@ -147,6 +147,8 @@ export const REPORT_EXTRACT_SOURCE = String.raw`
     const kicker = one(banner, 'kicker');
     const rows = all(root, 'row');
     const rowCs = rows.length ? style(rows[0]) : null;
+    // the signature picture above the name: its address and the size it is drawn at
+    const sigImage = (sig) => { const img = sig.querySelector('[data-cover="sig-image"]'); if (!img) return null; const r = img.getBoundingClientRect(); return r.width > 1 ? { src: img.currentSrc || img.src, w: r.width, h: r.height, gap: px(getComputedStyle(img).marginBottom) } : null; };
     const sig = one(root, 'signature');
     return {
       k: 'cover',
@@ -173,7 +175,7 @@ export const REPORT_EXTRACT_SOURCE = String.raw`
       rule: rowCs && px(rowCs.borderBottomWidth) > 0 ? { w: px(rowCs.borderBottomWidth), color: rowCs.borderBottomColor } : null,
       // the label column and the gap after it (the grid's first column + its column-gap)
       labelColumn: rows.length ? one(rows[0], 'row-value').getBoundingClientRect().left - rows[0].getBoundingClientRect().left : 180,
-      signature: sig ? { gap: px(style(sig).marginTop), name: para(one(sig, 'sig-name')), title: para(one(sig, 'sig-title')) } : null,
+      signature: sig ? { gap: px(style(sig).marginTop), image: sigImage(sig), name: para(one(sig, 'sig-name')), title: para(one(sig, 'sig-title')) } : null,
     };
   }
 

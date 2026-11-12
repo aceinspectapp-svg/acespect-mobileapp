@@ -104,7 +104,7 @@ interface CoverBlock {
   rowPad: { t: number; b: number };
   rule: { w: number; color: string } | null;
   labelColumn: number;
-  signature: { gap: number; name: ParaBlock | null; title: ParaBlock | null } | null;
+  signature: { gap: number; image?: { src: string; w: number; h: number; gap: number } | null; name: ParaBlock | null; title: ParaBlock | null } | null;
 }
 type Block = ParaBlock | ImgBlock | TableBlock | BreakBlock | CoverBlock;
 interface Extracted {
@@ -353,7 +353,12 @@ class Writer {
 
     // the sign-off, kept together
     if (b.signature) {
-      out.push(para(b.signature.name, { before: b.signature.gap, keepNext: true }));
+      const sig = b.signature.image;
+      const loaded = sig ? this.image(sig.src) : undefined;
+      if (sig && loaded) {
+        out.push(new Paragraph({ keepNext: true, spacing: { before: tw(b.signature.gap), after: tw(sig.gap) }, children: [new ImageRun({ type: loaded.kind, data: loaded.data, transformation: { width: Math.round(sig.w * this.scale), height: Math.round(sig.h * this.scale) }, altText: { name: 'Signature', description: 'Signature', title: 'Signature' } })] }));
+      }
+      out.push(para(b.signature.name, { before: sig && loaded ? 0 : b.signature.gap, keepNext: true }));
       if (b.signature.title) out.push(para(b.signature.title));
     }
     return out;
@@ -453,6 +458,7 @@ async function loadPictures(blocks: Block[], page: Page, token: string): Promise
   const collect = (list: Block[]): void => {
     for (const b of list) {
       if (b.k === 'img') srcs.add(b.src);
+      else if (b.k === 'cover' && b.signature?.image) srcs.add(b.signature.image.src);
       else if (b.k === 'table') b.rows.forEach((r) => r.cells.forEach((c) => collect(c.blocks)));
     }
   };
