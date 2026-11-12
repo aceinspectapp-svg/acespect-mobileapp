@@ -4,7 +4,7 @@ import { formatLongDate, registrationLabel, type ReportHeader } from "../report"
 import { fetchActiveTemplate, type AnswerTree, type TemplateField } from "../templateFields";
 import { reportProfileOf } from "../wording/profile";
 import { PhotoGrid, PhotoNumberProvider, usePhotoNumbering } from "../components/reportKit";
-import { COVER_COLORS, CoverPage } from "../components/CoverPage";
+import { COVER_COLORS, CoverPage, DEFAULT_SIGNATURE } from "../components/CoverPage";
 import { constructionSectionText } from "./sectionText";
 import { ReportAgreement } from "../components/ReportAgreement";
 import { CONSTRUCTION_AGREEMENT_BLOCKS, CONSTRUCTION_AGREEMENT_TITLE } from "./agreementText";
@@ -157,6 +157,7 @@ export function Cover({ r, model, inspection, compact = false }: { r: ReportHead
       ]}
       signatureName="Dinuke De Coonghe"
       signatureTitle="Director – Houspect Victoria"
+      signatureImage={r.signatureUrl || DEFAULT_SIGNATURE}
     />
   );
 }

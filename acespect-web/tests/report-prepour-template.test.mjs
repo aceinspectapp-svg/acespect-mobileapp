@@ -298,3 +298,16 @@ describe("Terms: the template's Conditions for the Provision of the Report and S
     assert.doesNotMatch(out, /PURPOSE OF INSPECTION|LIMITATIONS OF STANDARD/);
   });
 });
+
+describe("Signature on the first page", () => {
+  it("draws the handwritten signature above the director's name on the Construction cover", () => {
+    const html = renderToStaticMarkup(createElement(Cover, { r: HEADER, model: build(), inspection: INSPECTION }));
+    assert.match(html, /<img data-cover="sig-image" src="\/houspect-signature\.png"/);
+    assert.ok(html.indexOf('data-cover="sig-image"') < html.indexOf("Dinuke De Coonghe"), "the signature sits above the name");
+  });
+  it("draws it on the Dilapidation cover too", async () => {
+    const { ReportCover } = await server.ssrLoadModule("/src/web/components/ReportCover.tsx");
+    const html = renderToStaticMarkup(createElement(ReportCover, { header: { ...HEADER, signatureName: "Dinuke De Coonghe", signatureTitle: "Director – Houspect Victoria" } }));
+    assert.match(html, /<img data-cover="sig-image" src="\/houspect-signature\.png"/);
+  });
+});
