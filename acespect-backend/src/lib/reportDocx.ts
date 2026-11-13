@@ -22,6 +22,8 @@ import type { Page } from 'puppeteer';
 import { REPORT_EXTRACT_SOURCE } from './reportDocxExtract';
 import { BRAND_NAVY, BRAND_RED, COMPANY_ABN_ACN, COMPANY_NAME, withReportPage } from './reportPdf';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
+import { fetchReportPhoto, isMediaUrl, photosFailedMessage, ReportPhotoError } from './reportPhotos';
+import { ApiError } from '../utils/ApiError';
 
 /**
  * The inspection report as an editable Word file. It is made from the same page the PDF is printed from: the page is read as it prints
@@ -144,7 +146,17 @@ function kindOf(buf: Buffer): ImageKind | null {
   return null;
 }
 
+/**
+ * A picture's bytes, or null when they are not a kind Word takes (the caller then has the browser draw it). A report photograph (a media
+ * link) goes through the same queue and retries as the page's own (reportPhotos.ts); one that still cannot be loaded stops the Word file
+ * (ReportPhotoError) instead of being left out.
+ */
 async function loadImage(src: string, token: string): Promise<{ data: Buffer; kind: ImageKind } | null> {
+  if (isMediaUrl(src)) {
+    const { body } = await fetchReportPhoto(src, { Authorization: `Bearer ${token}` });
+    const kind = kindOf(body);
+    return kind ? { data: body, kind } : null;
+  }
   try {
     let data: Buffer;
     if (src.startsWith('data:')) {
@@ -488,7 +500,13 @@ async function loadPictures(blocks: Block[], page: Page, token: string): Promise
       await scratch?.close().catch(() => undefined);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
+  try {
+    await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
+  } catch (e) {
+    // A photograph that could not be loaded stops the Word file with the same plain message as the PDF.
+    if (e instanceof ReportPhotoError) throw new ApiError(502, photosFailedMessage({ failed: [e], pending: () => 0 })!, 'REPORT_PHOTOS_FAILED', { stage: 'photos' });
+    throw e;
+  }
   return out;
 }
 
