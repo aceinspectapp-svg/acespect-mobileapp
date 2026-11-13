@@ -34,6 +34,7 @@ import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSe
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { reportProfileOf } from "../../wording/profile";
 import { api, resolveMediaUrl } from "../../api";
+import { openReportFile, reportFileName } from "../../reportFile";
 
 /* ─── helpers ─────────────────────────────────────────────────────── */
 function formatFieldKey(key: string): string {
@@ -563,7 +564,11 @@ function PhotoViewer({ photos, index, onIndex, onClose }: { photos: string[]; in
   );
 }
 
-function PhotosGrid({ photos }: { photos: string[] }) {
+/**
+ * The section's photos as thumbnails; click one to enlarge it. When `onToggle` is given, each also has the same small remove button as
+ * the Report Content panel's photos: the photo is left out of the report, not deleted, and "Add back" undoes it.
+ */
+function PhotosGrid({ photos, excluded = [], onToggle }: { photos: string[]; excluded?: string[]; onToggle?: (url: string) => void }) {
   const [open, setOpen] = useState<number | null>(null);
   if (photos.length === 0) return null;
   return (
@@ -573,28 +578,48 @@ function PhotosGrid({ photos }: { photos: string[] }) {
         Photos ({photos.length})
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: "6px" }}>
-        {photos.map((url, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => setOpen(i)}
-            title="Click to enlarge"
-            style={{ padding: 0, border: "none", background: "none", cursor: "zoom-in", borderRadius: "10px", overflow: "hidden", display: "block", width: "100%" }}
-          >
-            <img
-              src={resolveMediaUrl(url)}
-              alt={`Photo ${i + 1}`}
-              style={{
-                width: "100%",
-                aspectRatio: "4/3",
-                objectFit: "cover",
-                borderRadius: "10px",
-                border: "1px solid #e5e7eb",
-                display: "block",
-              }}
-            />
-          </button>
-        ))}
+        {photos.map((url, i) => {
+          const out = !!onToggle && excluded.includes(url);
+          return (
+            <div key={i} data-photo-thumb={onToggle ? (out ? "removed" : "included") : undefined} style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => setOpen(i)}
+                title="Click to enlarge"
+                style={{ padding: 0, border: "none", background: "none", cursor: "zoom-in", borderRadius: "10px", overflow: "hidden", display: "block", width: "100%" }}
+              >
+                <img
+                  src={resolveMediaUrl(url)}
+                  alt={`Photo ${i + 1}`}
+                  style={{
+                    width: "100%",
+                    aspectRatio: "4/3",
+                    objectFit: "cover",
+                    borderRadius: "10px",
+                    border: `1px solid ${out ? "#fca5a5" : "#e5e7eb"}`,
+                    display: "block",
+                    opacity: out ? 0.35 : 1,
+                  }}
+                />
+              </button>
+              {onToggle && (out ? (
+                <button type="button" onClick={() => onToggle(url)} title="Put this photo back in the report" style={{ position: "absolute", inset: "auto 4px 4px 4px", fontSize: "10.5px", fontWeight: 700, color: "#1d4ed8", background: "rgba(255,255,255,0.92)", border: "1px solid #93c5fd", borderRadius: "6px", padding: "2px 0", cursor: "pointer" }}>
+                  Add back
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onToggle(url)}
+                  title="Remove from the report"
+                  aria-label="Remove from the report"
+                  style={{ position: "absolute", top: "3px", right: "3px", width: "18px", height: "18px", borderRadius: "50%", background: "rgba(15,23,42,0.7)", color: "white", border: "none", cursor: "pointer", fontSize: "11px", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+                >
+                  ×
+                </button>
+              ))}
+            </div>
+          );
+        })}
       </div>
       {open !== null && open < photos.length && <PhotoViewer photos={photos} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />}
     </div>
@@ -807,6 +832,8 @@ export function ReviewerFormView() {
   const [, setBusy] = useState(false);
   /** id of the section/damage a photo upload is currently in flight for -- disables just that one "Add Photo" button. */
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  // The Report button while the PDF is being made for its new tab.
+  const [openingReport, setOpeningReport] = useState(false);
   // sectionKey -> its current published template (or null once we know none
   // exists for that key, e.g. a legacy/custom section).
   const [templates, setTemplates] = useState<Record<string, ActiveTemplate | null>>({});
@@ -1169,7 +1196,15 @@ export function ReviewerFormView() {
         <AuditHistoryButton inspectionId={inspection.id} jobNo={inspection.jobNo} />
 
         <button
-          onClick={() => navigate(`/report/${inspection.id}`)}
+          onClick={() => {
+            // Straight to the report PDF in a new tab, exactly like the report page's Download PDF.
+            if (openingReport) return;
+            setOpeningReport(true);
+            openReportFile(inspection.id, "pdf", reportFileName(inspection, isConstructionInspection(inspection), "pdf"))
+              .catch((e) => window.alert(e instanceof Error ? e.message : "Could not open the report."))
+              .finally(() => setOpeningReport(false));
+          }}
+          disabled={openingReport}
           style={{
             height: "32px",
             padding: "0 12px",
@@ -1188,7 +1223,7 @@ export function ReviewerFormView() {
           title={isConstructionInspection(inspection) ? "Generate Construction Report" : "Generate Dilapidation Report"}
         >
           <FileText size={14} />
-          Report
+          {openingReport ? "Opening…" : "Report"}
         </button>
 
         <div style={{ fontSize: "12px", color: "#94a3b8", flexShrink: 0 }}>
@@ -1507,7 +1542,7 @@ export function ReviewerFormView() {
                           Download all
                         </button>
                       </div>
-                      <PhotosGrid photos={selectedSection.photos} />
+                      <PhotosGrid photos={selectedSection.photos} excluded={selectedSection.excludedPhotoUrls ?? []} onToggle={(url) => toggleSectionPhoto(selectedSection, url)} />
                     </div>
                   )}
 
