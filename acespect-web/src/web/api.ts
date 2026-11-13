@@ -543,6 +543,12 @@ export const api = {
     a.remove();
   },
 
+  /** The long-lived "download all original photos" link printed in the report (absolute, so it works from the PDF), and how many photos it holds. */
+  getOriginalPhotosLink: async (inspectionId: string): Promise<{ url: string; count: number; expiresAt: string }> => {
+    const r = await req<{ url: string; count: number; expiresAt: string }>(`/inspections/${inspectionId}/original-photos-link`);
+    return { ...r, url: new URL(r.url, new URL(API_BASE, window.location.origin).origin).toString() };
+  },
+
   getTemplateSummary: (inspectionType: string, propertyType: string) =>
     req<{ summary: TemplateSummaryRow[] }>(
       `/templates/summary?inspectionType=${encodeURIComponent(inspectionType)}&propertyType=${encodeURIComponent(propertyType)}`,

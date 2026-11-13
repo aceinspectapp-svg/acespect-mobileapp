@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 import { ZipArchive } from 'archiver';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
-import { ZIP_LINK_SECONDS, signSectionZipQuery, verifySectionZipSignature } from '../../lib/mediaLinks';
+import { ZIP_LINK_SECONDS, signOriginalPhotosQuery, signSectionZipQuery, verifyOriginalPhotosSignature, verifySectionZipSignature } from '../../lib/mediaLinks';
 import type { logSecurityEvent } from '../../lib/securityLog';
 
 type User = { id: string; role: string };
@@ -85,6 +85,124 @@ export function makeSectionPhotosZip(deps: ZipDeps) {
       if (!stored) continue;
       // fetchPhotoStream hands back the raw WHATWG stream fetch() returns -- archiver wants a Node Readable.
       archive.append(Readable.fromWeb(stored.body as import('stream/web').ReadableStream), { name: `photo-${i + 1}.jpg` });
+    }
+    await archive.finalize();
+  });
+
+  return { link, access, download };
+}
+
+/** What the "download all original photos" endpoints need from the outside (see makeOriginalPhotosZip). */
+export interface OriginalsZipDeps {
+  /** Throws unless the signed-in user may open the inspection. */
+  assertCanViewInspection: (inspectionId: string, user: User) => Promise<void>;
+  getInspectionPhotos: (inspectionId: string) => Promise<{ jobNo: string | null; sections: { name: string; photoIds: string[] }[] }>;
+  fetchOriginalPhoto: (id: string) => Promise<{ body: Readable; fileName: string; original: boolean } | null>;
+  audit: (e: Record<string, unknown>) => Promise<unknown>;
+  logSecurityEvent: typeof logSecurityEvent;
+  requireAuth: RequestHandler;
+}
+
+/** A folder or file name inside the zip: no slashes or odd characters, never empty. */
+const zipName = (raw: string, fallback: string): string => raw.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || fallback;
+
+/** Shown to someone who opens an expired or altered report link in a browser (they are not signed in, so JSON would mean nothing to them). */
+const EXPIRED_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Download link not available</title></head>
+<body style="font-family: Inter, system-ui, sans-serif; color: #1a2a4a; padding: 48px 24px; text-align: center;">
+<h1 style="font-size: 20px;">This download link is no longer available</h1>
+<p style="font-size: 15px; color: #475569;">The link to the original photographs has expired or is not valid. Please contact Houspect for a new link.</p>
+</body></html>`;
+
+/**
+ * "Download all original photos" for a whole inspection: one zip of every photo's full-quality original, one folder per section, in
+ * report order. The report prints a long-lived signed link to it (ORIGINAL_PHOTOS_LINK_DAYS), so the client can download without an
+ * account; a signed-in user who may open the inspection can also download it directly.
+ *
+ * The zip is streamed as each photo is read from storage, never held in memory, and the photos are stored, not compressed again
+ * (JPEG/HEIC are already compressed -- recompressing a gigabyte gains nothing and costs the server time).
+ */
+export function makeOriginalPhotosZip(deps: OriginalsZipDeps) {
+  /** The link to print in the report, after the same check as opening the inspection. `count` 0 means there is nothing to download. */
+  const link = asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const inspectionId = String(req.params.id ?? '');
+    if (!inspectionId) throw ApiError.badRequest('Inspection id is required');
+    await deps.assertCanViewInspection(inspectionId, req.user);
+    const { sections } = await deps.getInspectionPhotos(inspectionId);
+    const count = sections.reduce((n, s) => n + s.photoIds.length, 0);
+    const { query, expiresAt } = signOriginalPhotosQuery(inspectionId);
+    noStore(res);
+    res.status(200).json({ url: `/api/v1/inspections/${inspectionId}/original-photos.zip?${query}`, count, expiresAt: expiresAt.toISOString() });
+  });
+
+  /** A valid unexpired report link passes; otherwise the caller must be signed in (and is checked in `download`). */
+  const access: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
+    const inspectionId = String(req.params.id ?? '');
+    if (verifyOriginalPhotosSignature(inspectionId, req.query.e, req.query.s)) {
+      res.locals.zipViaLink = true;
+      return next();
+    }
+    if (!req.headers.authorization) {
+      void deps.logSecurityEvent({ type: 'MEDIA_DENIED', detail: { originals: inspectionId, hasSignature: req.query.s !== undefined }, ip: req.ip ?? null });
+      noStore(res);
+      res.status(401).type('html').send(EXPIRED_PAGE);
+      return;
+    }
+    deps.requireAuth(req, res, next);
+  };
+
+  const download = asyncHandler(async (req: Request, res: Response) => {
+    const inspectionId = String(req.params.id ?? '');
+    if (!inspectionId) throw ApiError.badRequest('Inspection id is required');
+    const viaLink = res.locals.zipViaLink === true;
+    if (!viaLink) {
+      if (!req.user) throw ApiError.unauthorized();
+      await deps.assertCanViewInspection(inspectionId, req.user);
+    }
+    const { jobNo, sections } = await deps.getInspectionPhotos(inspectionId);
+    const count = sections.reduce((n, s) => n + s.photoIds.length, 0);
+    if (count === 0) throw ApiError.notFound('This inspection has no photos');
+
+    await deps.audit({
+      category: 'web', action: 'photos.download_originals',
+      ...(req.user ? {} : { actor: { id: null, name: 'Report download link', type: 'user' } }),
+      target: { type: 'Inspection', id: inspectionId, label: jobNo ?? inspectionId },
+      message: `${count} original photo(s) downloaded as a zip`,
+      metadata: { count, authenticated: !!req.user, viaLink },
+    });
+    const job = (jobNo ?? '').replace(/[^a-z0-9.-]+/gi, '-').replace(/^-+|-+$/g, '') || 'inspection';
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${job}-original-photos.zip"`);
+    noStore(res);
+
+    const archive = new ZipArchive({ store: true });
+    archive.on('error', (err: Error) => res.destroy(err));
+    // A client that gives up half-way stops the work too.
+    res.on('close', () => { if (!res.writableFinished) archive.abort(); });
+    archive.pipe(res);
+    const missing: string[] = [];
+    const folders = new Set<string>();
+    for (const [i, section] of sections.entries()) {
+      let folder = `${String(i + 1).padStart(2, '0')} ${zipName(section.name, 'Section')}`;
+      while (folders.has(folder)) folder += '_';
+      folders.add(folder);
+      const names = new Set<string>();
+      for (const id of section.photoIds) {
+        if (res.destroyed) return;
+        const photo = await deps.fetchOriginalPhoto(id).catch(() => null);
+        if (!photo) { missing.push(id); continue; }
+        let name = zipName(photo.fileName, `${id}.jpg`);
+        if (names.has(name)) name = name.replace(/(\.[^.]*)?$/, `-${id.slice(0, 8)}$1`);
+        names.add(name);
+        // One photo at a time: the next is read only once this one has gone into the zip, so memory stays flat however big the inspection.
+        await new Promise<void>((resolve, reject) => {
+          photo.body.once('end', resolve).once('error', reject);
+          archive.append(photo.body, { name: `${folder}/${name}` });
+        }).catch(() => missing.push(id));
+      }
+    }
+    if (missing.length > 0) {
+      archive.append(`${missing.length} photo(s) could not be read from storage and are not in this download:\n${missing.join('\n')}\n`, { name: 'MISSING PHOTOS.txt' });
     }
     await archive.finalize();
   });

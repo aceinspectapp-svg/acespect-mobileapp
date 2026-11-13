@@ -2,6 +2,7 @@ import type { Inspection } from "../mockData";
 import { DESCRIPTION_PHOTO_PLACEHOLDER, PHOTOGRAPHS_NOTE } from "../report";
 import { Note, Para, Placeholder, PhotoGrid, reportTextStyle, SectionBand, usePhotoNumbering } from "./reportKit";
 import { reportProfileOf } from "../wording/profile";
+import { OriginalPhotosPending, useOriginalPhotosLink } from "./OriginalPhotosLink";
 import { wordingFor } from "../wording/registry";
 import { scopeOfInspectionSentences } from "../descriptionScope";
 import { DILAPIDATION_METHOD_NOV2026, printsAgreement } from "../reportAgreement";
@@ -72,6 +73,10 @@ export function ReportDescription({
   // when no generated link exists). With no photos there is nothing to link to.
   const generatedArchiveUrl = totalPhotos > 0 ? inspection.photoArchiveUrl ?? "" : "";
   const photoArchiveUrl = generatedArchiveUrl || str(f.photoArchiveUrl);
+  // "Click here" downloads every original photo of the inspection as one zip; the folder link above stays the fallback when that
+  // link cannot be made. The Download All note below still follows the folder link only, exactly as before.
+  const originals = useOriginalPhotosLink(inspection.id);
+  const fullDownloadUrl = originals.url || photoArchiveUrl;
   // A report type can word the works and scope sentences itself (Public Assets does); the others keep the standard ones (descriptionScope.ts).
   const surveyParts = (inspection.sections.find((s) => (s.key ?? s.id) === "elevations")?.answers as { parts?: unknown } | null | undefined)?.parts;
   const { works, scope } = scopeOfInspectionSentences(wordingFor(reportProfileOf(inspection.type, inspection.propertyType)), f, Array.isArray(surveyParts) ? surveyParts.length : 0);
@@ -92,11 +97,12 @@ export function ReportDescription({
       )}
 
       <SectionBand compact={compact}>Photographs</SectionBand>
-      {photoArchiveUrl ? (
+      <OriginalPhotosPending pending={originals.pending} />
+      {fullDownloadUrl ? (
         <Para>
           Selected photographs are included in the body of this report. For a full download
           {totalPhotos > 0 ? ` of ${totalPhotos} photographs` : ""} please{" "}
-          <a href={photoArchiveUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline" }}>
+          <a href={fullDownloadUrl} data-original-photos-link={originals.url ? "" : undefined} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline" }}>
             Click here
           </a>{" "}
           to access. We recommend that you download the digital photographs immediately and save in a secure
@@ -132,7 +138,7 @@ export function ReportDescription({
         </Placeholder>
       )}
       {printsAgreement(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "")) && <Para>{DILAPIDATION_METHOD_NOV2026}</Para>}
-      {photoArchiveUrl ? (
+      {fullDownloadUrl ? (
         <Para>
           Selected photographs are displayed in this report. For a full download
           {totalPhotos > 0 ? ` of ${totalPhotos} photographs` : ""} provided by the Houspect survey please go to the

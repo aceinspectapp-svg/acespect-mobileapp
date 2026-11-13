@@ -84,3 +84,18 @@ export function signSectionZipQuery(sectionId: string, seconds = ZIP_LINK_SECOND
 }
 
 export const verifySectionZipSignature = (sectionId: string, e: unknown, s: unknown): boolean => verifyMediaSignature(zipKey(sectionId), e, s);
+
+/**
+ * The "download all original photos" link printed in a report. It has to keep working long after the report is sent, so it lasts
+ * ORIGINAL_PHOTOS_LINK_DAYS (default a year) instead of minutes. The signature covers `originals:<inspectionId>`, so it opens only that
+ * inspection's originals -- never a single photo, a section zip or another inspection.
+ */
+const originalsKey = (inspectionId: string) => `originals:${inspectionId}`;
+
+export function signOriginalPhotosQuery(inspectionId: string, seconds = env.ORIGINAL_PHOTOS_LINK_DAYS * 24 * 3600): { query: string; expiresAt: Date } {
+  // Rounded down to the hour, so every report made in the same hour prints the same link.
+  const exp = Math.floor((Math.floor(Date.now() / 1000) + seconds) / 3600) * 3600;
+  return { query: `e=${exp}&s=${sign(originalsKey(inspectionId), exp)}`, expiresAt: new Date(exp * 1000) };
+}
+
+export const verifyOriginalPhotosSignature = (inspectionId: string, e: unknown, s: unknown): boolean => verifyMediaSignature(originalsKey(inspectionId), e, s);
