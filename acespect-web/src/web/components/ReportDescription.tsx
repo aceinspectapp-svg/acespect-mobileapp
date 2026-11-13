@@ -77,6 +77,8 @@ export function ReportDescription({
   // link cannot be made. The Download All note below still follows the folder link only, exactly as before.
   const originals = useOriginalPhotosLink(inspection.id);
   const fullDownloadUrl = originals.url || photoArchiveUrl;
+  // "For a full download of N photographs": with the zip link, N is what the zip holds (every photo of the inspection).
+  const fullDownloadCount = originals.url ? originals.count : totalPhotos;
   // A report type can word the works and scope sentences itself (Public Assets does); the others keep the standard ones (descriptionScope.ts).
   const surveyParts = (inspection.sections.find((s) => (s.key ?? s.id) === "elevations")?.answers as { parts?: unknown } | null | undefined)?.parts;
   const { works, scope } = scopeOfInspectionSentences(wordingFor(reportProfileOf(inspection.type, inspection.propertyType)), f, Array.isArray(surveyParts) ? surveyParts.length : 0);
@@ -101,7 +103,7 @@ export function ReportDescription({
       {fullDownloadUrl ? (
         <Para>
           Selected photographs are included in the body of this report. For a full download
-          {totalPhotos > 0 ? ` of ${totalPhotos} photographs` : ""} please{" "}
+          {fullDownloadCount > 0 ? ` of ${fullDownloadCount} photographs` : ""} please{" "}
           <a href={fullDownloadUrl} data-original-photos-link={originals.url ? "" : undefined} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline" }}>
             Click here
           </a>{" "}
@@ -141,7 +143,7 @@ export function ReportDescription({
       {fullDownloadUrl ? (
         <Para>
           Selected photographs are displayed in this report. For a full download
-          {totalPhotos > 0 ? ` of ${totalPhotos} photographs` : ""} provided by the Houspect survey please go to the
+          {fullDownloadCount > 0 ? ` of ${fullDownloadCount} photographs` : ""} provided by the Houspect survey please go to the
           link in the Photographs heading on page 2 of the report.
         </Para>
       ) : (

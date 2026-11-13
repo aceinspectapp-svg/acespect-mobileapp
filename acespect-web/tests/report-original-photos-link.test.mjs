@@ -27,6 +27,13 @@ describe("full download Click here -> original photos zip", () => {
     assert.equal(html(Probe, {}), "<i>true:null</i>");
   });
 
+  it("\"For a full download of N photographs\" counts what the zip holds (every photo of the inspection) when it links the zip", () => {
+    const src = read("src/web/components/ReportDescription.tsx");
+    assert.match(src, /const fullDownloadCount = originals\.url \? originals\.count : totalPhotos;/);
+    assert.equal((src.match(/For a full download\s*\{fullDownloadCount > 0 \? ` of \$\{fullDownloadCount\} photographs` : ""\}/g) ?? []).length, 2);
+    assert.doesNotMatch(src, /For a full download\s*\{totalPhotos/);
+  });
+
   it("no new sentence is printed any more", () => {
     for (const p of ["src/web/components/OriginalPhotosLink.tsx", "src/web/components/ReportDescription.tsx", "src/web/construction/ConstructionReport.tsx"]) {
       assert.doesNotMatch(read(p), /original photographs taken during this inspection|link available until/);
