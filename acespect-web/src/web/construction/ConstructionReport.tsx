@@ -7,6 +7,7 @@ import { PhotoGrid, PhotoNumberProvider, usePhotoNumbering } from "../components
 import { COVER_COLORS, CoverPage, DEFAULT_SIGNATURE } from "../components/CoverPage";
 import { constructionSectionText } from "./sectionText";
 import { ReportAgreement } from "../components/ReportAgreement";
+import { OriginalPhotosPending, useOriginalPhotosLink } from "../components/OriginalPhotosLink";
 import { CONSTRUCTION_AGREEMENT_BLOCKS, CONSTRUCTION_AGREEMENT_TITLE } from "./agreementText";
 import {
   ITEM_STATUSES, buildConstructionReport, type AttachedList, type ChecklistTable, type ConstructionReportModel, type DefectEntry, type ItemStatus, type SectionInput,
@@ -390,6 +391,9 @@ function TermsPages() {
 
 export function ConstructionReportBody({ inspection, model, header }: { inspection: Inspection; model: ConstructionReportModel; header: ReportHeader }) {
   const archive = inspection.photoArchiveUrl;
+  // The Photographs "Click here" downloads every original photo of the inspection as one zip (the folder link is the fallback).
+  const originals = useOriginalPhotosLink(inspection.id);
+  const fullDownloadUrl = originals.url || archive;
   const noDefectsPhotos = model.defectCount === 0 ? [...model.streetPhotos, ...model.otherPhotos].slice(0, 6) : [];
   const front = model.streetPhotos[0];
 
@@ -405,9 +409,10 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           )}
           <KeepTogether>
           <SubHeading>Photographs</SubHeading>
+          <OriginalPhotosPending pending={originals.pending} />
           <p style={{ margin: "0 0 8px" }}>
             Selected photographs are included in the body of this report. For a full download please{" "}
-            {archive ? <a href={archive} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>Click here</a> : "Click here"} to access. We recommend that you download the digital photographs immediately and save in a secure folder on your device, as the link will remain active for only a few months from the date of this report.
+            {fullDownloadUrl ? <a href={fullDownloadUrl} data-original-photos-link={originals.url ? "" : undefined} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>Click here</a> : "Click here"} to access. We recommend that you download the digital photographs immediately and save in a secure folder on your device, as the link will remain active for only a few months from the date of this report.
           </p>
           </KeepTogether>
           <p style={{ margin: 0, fontStyle: "italic", fontSize: "10.5px", color: C.grey, lineHeight: 1.7 }}>

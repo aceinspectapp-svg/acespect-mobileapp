@@ -6,9 +6,9 @@ import { inspectionsController } from './inspections.controller';
 import { validate } from '../../middleware/validate';
 import { requireAuth } from '../../middleware/auth';
 import { stripSignedMediaLinks } from '../../middleware/stripMediaSignatures';
-import { makeSectionPhotosZip } from './photosZip';
+import { makeOriginalPhotosZip, makeSectionPhotosZip } from './photosZip';
 import { webService } from '../web/web.service';
-import { fetchPhotoStream } from '../../lib/storage';
+import { fetchOriginalPhoto, fetchPhotoStream } from '../../lib/storage';
 import { audit } from '../../lib/auditTrail';
 import { logSecurityEvent } from '../../lib/securityLog';
 import { submitInspectionSchema, syncSectionSchema, updateInspectionSchema } from './inspections.schemas';
@@ -17,6 +17,15 @@ export const sectionPhotosZip = makeSectionPhotosZip({
   assertCanViewSection: webService.assertCanViewSection,
   getSectionPhotos: inspectionsService.getSectionPhotos,
   fetchPhotoStream,
+  audit: audit as never,
+  logSecurityEvent,
+  requireAuth,
+});
+
+export const originalPhotosZip = makeOriginalPhotosZip({
+  assertCanViewInspection: webService.assertCanViewInspection,
+  getInspectionPhotos: inspectionsService.getInspectionPhotos,
+  fetchOriginalPhoto,
   audit: audit as never,
   logSecurityEvent,
   requireAuth,
@@ -44,6 +53,10 @@ router.get('/:id/report.docx', requireAuth, inspectionsController.downloadReport
 // "Download all photos": signed-in and allowed to see the inspection, or a short-lived signed link from /photos-link. Never public.
 router.get('/sections/:sectionId/photos-link', requireAuth, sectionPhotosZip.link);
 router.get('/sections/:sectionId/photos.zip', sectionPhotosZip.access, sectionPhotosZip.download);
+// "Download all original photos" (the link printed under the report's description): the link is made for a signed-in user who may open
+// the inspection; the zip opens with that long-lived signed link, or for a signed-in user who may open it. Never public.
+router.get('/:id/original-photos-link', requireAuth, originalPhotosZip.link);
+router.get('/:id/original-photos.zip', originalPhotosZip.access, originalPhotosZip.download);
 router.get('/:id', requireAuth, inspectionsController.getById);
 
 export const inspectionsRouter = router;

@@ -106,6 +106,13 @@ async function assertCanViewSection(sectionId: string, user: { id: string; role:
   if (user.role === 'REVIEWER' && !canViewDetail(user, row)) throw new ApiError(403, 'This inspection is assigned to another reviewer.', 'ASSIGNED_TO_OTHER');
 }
 
+/** Throws unless `user` may open this inspection in the web app (the same rule as assertCanViewSection, one level up). */
+async function assertCanViewInspection(inspectionId: string, user: { id: string; role: string }) {
+  const row = await prisma.inspection.findFirst({ where: { AND: [{ id: inspectionId }, scopeFor(user)] }, select: { reviewerId: true, status: true } });
+  if (!row) throw ApiError.notFound('Inspection not found');
+  if (user.role === 'REVIEWER' && !canViewDetail(user, row)) throw new ApiError(403, 'This inspection is assigned to another reviewer.', 'ASSIGNED_TO_OTHER');
+}
+
 async function listUsers() {
   const rows = await prisma.user.findMany({
     where: { role: { in: ['ADMIN', 'REVIEWER', 'INSPECTOR'] } },
@@ -432,6 +439,7 @@ export const webService = {
   listInspections,
   getInspection,
   assertCanViewSection,
+  assertCanViewInspection,
   listUsers,
   updateUser,
   updateSection,

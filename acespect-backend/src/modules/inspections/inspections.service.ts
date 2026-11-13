@@ -428,6 +428,45 @@ async function getSectionPhotos(sectionId: string): Promise<{ name: string; phot
   return { name: section.name, photos: (section.photos as unknown as string[] | null) ?? [] };
 }
 
+/** The photo ids a value holds anywhere inside it (photo lists, answers, defect details): every `/api/v1/media/<id>` link, in order. */
+function mediaIdsIn(value: unknown, out: string[]): void {
+  if (typeof value === 'string') {
+    for (const m of value.matchAll(/\/media\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi)) out.push(m[1]!.toLowerCase());
+  } else if (Array.isArray(value)) {
+    for (const v of value) mediaIdsIn(v, out);
+  } else if (value && typeof value === 'object') {
+    for (const v of Object.values(value)) mediaIdsIn(v, out);
+  }
+}
+
+/**
+ * Every photo of one inspection, grouped by section in report order: the section's own photos, then the photos inside its answers
+ * (rows, defect details) and its damage records. A photo used in several places is listed once, under the first section it appears in.
+ * Photos a reviewer left out of the report are still included -- they are still the inspection's original photos.
+ */
+async function getInspectionPhotos(inspectionId: string): Promise<{ jobNo: string | null; sections: { name: string; photoIds: string[] }[] }> {
+  const inspection = await prisma.inspection.findUnique({
+    where: { id: inspectionId },
+    select: {
+      jobNo: true,
+      sections: { orderBy: { order: 'asc' }, select: { name: true, photos: true, answers: true, damages: { orderBy: { order: 'asc' }, select: { photos: true } } } },
+    },
+  });
+  if (!inspection) throw ApiError.notFound('Inspection not found');
+  const seen = new Set<string>();
+  const sections = inspection.sections
+    .map((s) => {
+      const ids: string[] = [];
+      mediaIdsIn(s.photos, ids);
+      mediaIdsIn(s.answers, ids);
+      for (const d of s.damages) mediaIdsIn(d.photos, ids);
+      const photoIds = ids.filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
+      return { name: s.name, photoIds };
+    })
+    .filter((s) => s.photoIds.length > 0);
+  return { jobNo: inspection.jobNo, sections };
+}
+
 export const inspectionsService = {
   syncSection,
   submit,
@@ -439,4 +478,5 @@ export const inspectionsService = {
   listAssigned,
   getBaselineSections,
   getSectionPhotos,
+  getInspectionPhotos,
 };
