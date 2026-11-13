@@ -12,7 +12,7 @@
  */
 import type { AnswerTree, TemplateField } from "../templateFields";
 import { asString } from "../templateFields";
-import { headingMap, photosIn } from "./words";
+import { headingMap, headingOf, photosIn } from "./words";
 import { GENERAL, PURPOSE, SECTION_ORDER, STAGES, coverTitleOf, kindOfKey, stageOfSectionKeys, type StageId } from "./stages";
 import { ITEM_STATUSES, TAGS, type ItemStatus } from "./compose";
 import library from "./codeLibrary.json";
@@ -80,6 +80,9 @@ export interface DefectEntry {
   heading: string;
   /** The template's numbered line: the defect's description (followed in print by "Please refer to Photographs X to Y."). */
   description: string;
+  /** The checklist item's name from the template when the defect was recorded against one ("Slab formwork dimensions"), else "" (a typed
+   *  "Other" name, a defects table row). The report prints that name in the template's capitals (printCase.ts). */
+  item: string;
   severity: string;
   category: string;
   /** What the inspector typed as the construction code ("2.04") and the library's name for it. */
@@ -249,7 +252,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
   let previous = noList();
   let clientConcerns = noList();
 
-  interface Raised { key: string; sub: string; text: string; photos: string[]; fromId?: string; heading: string; description: string }
+  interface Raised { key: string; sub: string; text: string; photos: string[]; fromId?: string; heading: string; description: string; item: string }
   const raised: Raised[] = [];
   /** Checklist rows that say "refer defects", per section, to be tied to their defects once those are numbered. */
   const pending: { item: ChecklistItem; raisedIndex: number }[] = [];
@@ -263,13 +266,16 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
 
     // The defects this section records, each paired with its own photos.
     const firstRaised = raised.length;
+    // The names of this section's checklist items, as the template's rows give them (not what an inspector typed for an "Other" row).
+    const rowNames = new Set<string>([...lines.flatMap((l) => (l.kind === "item" ? [l.heading] : [])), ...headingMap(s.fields).values(), ...s.fields.map((f) => headingOf(f.label))]);
     for (const l of lines) {
       if (l.kind !== "defect") continue;
       const dmg = s.damages[l.index];
       const where = (dmg?.location ?? "").trim();
+      const item = (dmg?.item ?? "").trim();
       raised.push({
         key: s.key, sub: dmg?.type || "General", text: l.text, photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)),
-        heading: where || (dmg?.item ?? "").trim(), description: (dmg?.description ?? "").trim() || splitDefect(l.text).sentence,
+        heading: where || item, description: (dmg?.description ?? "").trim() || splitDefect(l.text).sentence, item: rowNames.has(item) ? item : "",
       });
     }
 
@@ -351,7 +357,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       n += 1;
       numberOf.set(i, n);
       const parts = splitDefect(d.text);
-      group.defects.push({ no: n, text: parts.sentence, heading: d.heading, description: d.description, severity: parts.severity, category: parts.category, code: parts.code, codeTitle: parts.code ? codeTitle(parts.code) : "", photos: d.photos, sectionKey: d.key });
+      group.defects.push({ no: n, text: parts.sentence, heading: d.heading, description: d.description, item: d.item, severity: parts.severity, category: parts.category, code: parts.code, codeTitle: parts.code ? codeTitle(parts.code) : "", photos: d.photos, sectionKey: d.key });
     });
     defectGroups.push(group);
   }
