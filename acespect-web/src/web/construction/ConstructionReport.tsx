@@ -165,6 +165,9 @@ export function Cover({ r, model, inspection, compact = false }: { r: ReportHead
 
 // ───────────────────────── Checklist ─────────────────────────
 
+/** The key tiles above the checklist word a status differently from the row's right-hand column. */
+const TILE_LABEL: Partial<Record<ItemStatus, string>> = { notcomplete: "NOT YET" };
+
 function SummaryTiles({ model }: { model: ConstructionReportModel }) {
   const target: Partial<Record<ItemStatus, string>> = { defect: "#defects", note: "#notes" };
   return (
@@ -174,7 +177,7 @@ function SummaryTiles({ model }: { model: ConstructionReportModel }) {
         const inner = (
           <>
             <div style={{ fontSize: "26px", fontWeight: 800, color: s.fg, lineHeight: 1.1 }}>{model.totals[k]}</div>
-            <div style={{ fontSize: "8.5px", fontWeight: 800, letterSpacing: "0.03em", color: s.fg, margin: "3px 0 4px", whiteSpace: "nowrap", textDecoration: target[k] ? "underline" : "none" }}>{s.label}</div>
+            <div style={{ fontSize: "8.5px", fontWeight: 800, letterSpacing: "0.03em", color: s.fg, margin: "3px 0 4px", whiteSpace: "nowrap", textDecoration: target[k] ? "underline" : "none" }}>{TILE_LABEL[k] ?? s.label}</div>
             <div style={{ fontSize: "9.5px", color: "#4b5563", lineHeight: 1.3 }}>{s.sub}</div>
           </>
         );
@@ -228,8 +231,8 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
               <div key={it.id} id={it.id} style={{ display: "grid", gridTemplateColumns: compact ? "5px 1fr 88px" : "6px 1fr 146px", borderBottom: `1px solid ${C.rule}`, breakInside: "avoid" }}>
                 <div style={{ background: s.stripe }} />
                 <div style={{ padding: "6px 10px 7px" }}>
+                  {/* Only the item's name: its status already shows in the right-hand column. */}
                   <div>{href ? <a href={href} style={{ textDecoration: "none" }}>{name}</a> : name}</div>
-                  <div style={{ fontSize: "11.5px", color: C.grey, marginTop: "1px" }}>{it.text}</div>
                 </div>
                 <div style={{ background: s.bg, color: s.fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: compact ? "8.5px" : "10px", fontWeight: 800, letterSpacing: compact ? "0.04em" : "0.1em", textAlign: "center", padding: "0 4px" }}>
                   {href ? <a href={href} style={{ color: s.fg, textDecoration: "underline" }}>{s.label} ›</a> : s.label}
