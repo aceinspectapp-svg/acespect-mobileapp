@@ -9,6 +9,7 @@ import { constructionSectionText } from "./sectionText";
 import { ReportAgreement } from "../components/ReportAgreement";
 import { OriginalPhotosPending, useOriginalPhotosLink } from "../components/OriginalPhotosLink";
 import { CONSTRUCTION_AGREEMENT_BLOCKS, CONSTRUCTION_AGREEMENT_TITLE } from "./agreementText";
+import { itemName, optionText, withItemName } from "./printCase";
 import {
   ITEM_STATUSES, buildConstructionReport, type AttachedList, type ChecklistTable, type ConstructionReportModel, type DefectEntry, type ItemStatus, type SectionInput,
 } from "./reportModel";
@@ -149,7 +150,7 @@ export function Cover({ r, model, inspection, compact = false }: { r: ReportHead
       rows={[
         ["Property", r.property],
         ["Inspection Date", r.inspectionDate],
-        ["Weather Conditions", r.weather],
+        ["Weather Conditions", optionText("weather", r.weather)],
         // "Joe Briffa (Builder Registration No DBU 58070)", "Trevor Scott (Architect Registration No ARBV 13238)" -- as the template words it.
         ["Inspector", `${r.inspector}${r.inspectorRegistration ? ` ${registrationLabel(r.inspectorRegistration)}` : ""}`],
         ["Stage", model.stageLabel],
@@ -199,7 +200,7 @@ function countsLine(t: ChecklistTable): string {
 function RowPhotos({ heading, photos, compact }: { heading: string; photos: string[]; compact?: boolean }) {
   const numbering = usePhotoNumbering(photos, `row:${heading}`);
   // The caption is printed with the first row of photos (kept on one page together); the rest of the photos may run on to the next page.
-  const caption = <div style={{ fontSize: "11px", color: C.grey }}>Photographs — {heading}{numbering.start !== undefined ? ` (${photoRange(numbering.start, photos.length)})` : ""}</div>;
+  const caption = <div style={{ fontSize: "11px", color: C.grey }}>Photographs — {itemName(heading)}{numbering.start !== undefined ? ` (${photoRange(numbering.start, photos.length)})` : ""}</div>;
   return (
     <div style={{ margin: "6px 0 4px" }}>
       <PhotoGrid photos={photos} compact={!!compact} startNumber={numbering.start} caption={caption} />
@@ -223,7 +224,7 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
           {g.items.map((it, ii) => {
             const s = STATUS[it.status];
             const href = it.status === "defect" && it.defectNo ? `#defect-${it.defectNo}` : it.status === "note" ? "#notes" : undefined;
-            const name = <span style={{ fontWeight: 700, fontSize: "13px", color: href ? C.navy : C.ink, textDecoration: href ? "underline" : "none" }}>{it.heading}</span>;
+            const name = <span style={{ fontWeight: 700, fontSize: "13px", color: href ? C.navy : C.ink, textDecoration: href ? "underline" : "none" }}>{itemName(it.heading)}</span>;
             const rowEl = (
               <div key={it.id} id={it.id} style={{ display: "grid", gridTemplateColumns: compact ? "5px 1fr 88px" : "6px 1fr 146px", borderBottom: `1px solid ${C.rule}`, breakInside: "avoid" }}>
                 <div style={{ background: s.stripe }} />
@@ -270,11 +271,11 @@ function Defect({ d, lead, compact }: { d: DefectEntry; lead?: ReactNode; compac
       {lead}
       {/* The template's format: the location in bold (the checklist item when no location was recorded), then the numbered description
           ending with its own photographs: "Please refer to Photographs 397 to 418." */}
-      {d.heading && <div data-defect-heading="" style={{ fontWeight: 700, fontSize: "13.5px", color: C.ink, margin: "0 0 4px" }}>{d.heading}</div>}
+      {d.heading && <div data-defect-heading="" style={{ fontWeight: 700, fontSize: "13.5px", color: C.ink, margin: "0 0 4px" }}>{d.item && d.heading === d.item ? itemName(d.heading) : d.heading}</div>}
       <div style={{ display: "grid", gridTemplateColumns: "30px 1fr", background: "#fff1f1" }}>
         <div style={{ background: C.red, color: "white", fontWeight: 700, fontSize: "12px", padding: "6px 0 0", textAlign: "center" }}>{d.no}</div>
         <div style={{ padding: "6px 10px 7px" }}>
-          <div style={{ fontSize: "13.5px" }}>{[d.description, photoReference(numbering.start, d.photos.length)].filter(Boolean).join(" ")}</div>
+          <div style={{ fontSize: "13.5px" }}>{[withItemName(d.description, d.item), photoReference(numbering.start, d.photos.length)].filter(Boolean).join(" ")}</div>
           {(d.severity || d.category) && (
             <div style={small}>
               {d.severity && <><b style={{ color: C.ink }}>Severity:</b> {d.severity}</>}

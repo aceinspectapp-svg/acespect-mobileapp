@@ -81,7 +81,7 @@ describe("Pre-pour: page breaks follow the template", () => {
       assert.ok(depth > 0, `${heading} is kept on one page with ${first}`);
     };
     keepWith("Identified Defects Requiring Attention", ">Front left<");
-    keepWith(">Front left<", "Slab formwork dimensions. Please refer to Photograph");
+    keepWith(">Front left<", "Slab Formwork Dimensions. Please refer to Photograph");
     keepWith(">Notes<", "The finish and workmanship of the set out for the slab");
     keepWith(">Client Concerns<", "Concerns listed by the client");
     assert.doesNotMatch(html, /report-page-break"[^>]*id="defects"|id="defects"[^>]*report-page-break/);
