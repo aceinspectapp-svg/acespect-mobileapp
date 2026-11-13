@@ -14,6 +14,12 @@ const schema = z.object({
   // Encryption of the database connection. "auto" (default): Azure Database for PostgreSQL is always reached over TLS with its certificate
   // checked; other hosts (local, Railway's private network) are left as configured. "require": the same for any host. "off": leave the URL alone.
   DATABASE_TLS: z.enum(['auto', 'require', 'off']).default('auto'),
+  // Prisma's connection pool. Prisma's own default is 2 x CPUs + 1, which on a 1-CPU App Service is 3 -- far too few when a report's
+  // photographs are fetched. DATABASE_CONNECTION_LIMIT: connections Prisma may open; DATABASE_POOL_TIMEOUT: seconds a query waits for a free one
+  // before failing. pg-boss keeps its own, separate pool of 3 (lib/queue.ts), so the app opens at most DATABASE_CONNECTION_LIMIT + 3 in all
+  // (the standalone worker, if run, as many again). A connection_limit / pool_timeout already in DATABASE_URL wins.
+  DATABASE_CONNECTION_LIMIT: z.coerce.number().int().positive().max(100).default(10),
+  DATABASE_POOL_TIMEOUT: z.coerce.number().int().min(0).max(300).default(20),
 
   JWT_ACCESS_SECRET: z.string().min(16, 'JWT_ACCESS_SECRET must be at least 16 chars'),
   JWT_REFRESH_SECRET: z.string().min(16, 'JWT_REFRESH_SECRET must be at least 16 chars'),
@@ -146,6 +152,24 @@ export function withDatabaseTls(url: string, mode: 'auto' | 'require' | 'off'): 
   return u.toString();
 }
 
+/**
+ * The database URL with Prisma's pool size and pool wait set, the same way withDatabaseTls adds TLS: parameters already in the URL win, and a
+ * URL that cannot be read is left as it is. These two parameters mean something only to Prisma, so only Prisma's copy of the URL gets them.
+ */
+export function withPrismaPool(url: string, connectionLimit: number, poolTimeoutSec: number): string {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return url;
+  }
+  if (!u.searchParams.has('connection_limit')) u.searchParams.set('connection_limit', String(connectionLimit));
+  if (!u.searchParams.has('pool_timeout')) u.searchParams.set('pool_timeout', String(poolTimeoutSec));
+  return u.toString();
+}
+
 env.DATABASE_URL = withDatabaseTls(env.DATABASE_URL, env.DATABASE_TLS);
+/** Prisma's URL: TLS as above, plus its pool size. pg-boss (lib/queue.ts) is given env.DATABASE_URL, without the Prisma-only pool parameters. */
+export const prismaDatabaseUrl = withPrismaPool(env.DATABASE_URL, env.DATABASE_CONNECTION_LIMIT, env.DATABASE_POOL_TIMEOUT);
 // Prisma reads the URL from the environment when its client starts (lib/prisma.ts imports this module first).
-process.env.DATABASE_URL = env.DATABASE_URL;
+process.env.DATABASE_URL = prismaDatabaseUrl;

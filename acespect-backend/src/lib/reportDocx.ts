@@ -15,6 +15,8 @@ import {
   TableCell,
   TableRow,
   TextRun,
+  VerticalAlign,
+  HeightRule,
   WidthType,
   type IBorderOptions,
 } from 'docx';
@@ -22,6 +24,8 @@ import type { Page } from 'puppeteer';
 import { REPORT_EXTRACT_SOURCE } from './reportDocxExtract';
 import { BRAND_NAVY, BRAND_RED, COMPANY_ABN_ACN, COMPANY_NAME, withReportPage } from './reportPdf';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
+import { fetchReportPhoto, isMediaUrl, photosFailedMessage, ReportPhotoError, warnMissingPhoto } from './reportPhotos';
+import { ApiError } from '../utils/ApiError';
 
 /**
  * The inspection report as an editable Word file. It is made from the same page the PDF is printed from: the page is read as it prints
@@ -144,7 +148,25 @@ function kindOf(buf: Buffer): ImageKind | null {
   return null;
 }
 
-async function loadImage(src: string, token: string): Promise<{ data: Buffer; kind: ImageKind } | null> {
+/**
+ * A picture's bytes, or null when they are not a kind Word takes (the caller then has the browser draw it). A report photograph (a media
+ * link) goes through the same queue and retries as the page's own (reportPhotos.ts); one that still cannot be loaded stops the Word file
+ * (ReportPhotoError) instead of being left out -- except one that is not there at all (404): 'missing', printed as "Photograph unavailable" with a warning.
+ */
+async function loadImage(src: string, token: string, inspectionId = ''): Promise<{ data: Buffer; kind: ImageKind } | null | 'missing'> {
+  if (isMediaUrl(src)) {
+    const { body } = await fetchReportPhoto(src, { Authorization: `Bearer ${token}` }).catch((e: unknown) => {
+      // A photograph that is not there (404) prints as "Photograph unavailable", as in the PDF, with a warning; any other failure stops it.
+      if (e instanceof ReportPhotoError && e.missing) {
+        warnMissingPhoto(src, inspectionId);
+        return { body: null };
+      }
+      throw e;
+    });
+    if (!body) return 'missing';
+    const kind = kindOf(body);
+    return kind ? { data: body, kind } : null;
+  }
   try {
     let data: Buffer;
     if (src.startsWith('data:')) {
@@ -163,6 +185,35 @@ async function loadImage(src: string, token: string): Promise<{ data: Buffer; ki
 
 // ---- blocks to Word ---------------------------------------------------------------------------------------------------------
 type Loaded = { data: Buffer; kind: ImageKind } | null;
+/** A picture as loaded, or MISSING: a report photograph that is not there (404), printed as the PDF prints it, "Photograph unavailable". */
+const MISSING = 'missing' as const;
+type Picture = Loaded | typeof MISSING;
+
+/** The same box the report page (and so the PDF) shows for a photograph that is not there: its size, a thin border, a pale fill, the words. */
+const PLACEHOLDER = { text: 'Photograph unavailable', border: 'E2E6EC', fill: 'FBF3E3', ink: '7A5F26' };
+function photoUnavailable(widthPx: number, heightPx: number): Table {
+  const w = Math.round(widthPx * 15); // Word pixels (96 dpi) -> twips
+  const line = { style: BorderStyle.SINGLE, size: 4, color: PLACEHOLDER.border };
+  return new Table({
+    width: { size: w, type: WidthType.DXA },
+    columnWidths: [w],
+    rows: [
+      new TableRow({
+        height: { value: Math.round(heightPx * 15), rule: HeightRule.EXACT },
+        cantSplit: true,
+        children: [
+          new TableCell({
+            width: { size: w, type: WidthType.DXA },
+            verticalAlign: VerticalAlign.CENTER,
+            shading: { type: ShadingType.CLEAR, fill: PLACEHOLDER.fill, color: 'auto' },
+            borders: { top: line, right: line, bottom: line, left: line },
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 0 }, children: [new TextRun({ text: PLACEHOLDER.text, color: PLACEHOLDER.ink, size: 17, font: 'Arial' })] })],
+          }),
+        ],
+      }),
+    ],
+  });
+}
 
 /** The rotation note a phone puts in a JPEG ("EXIF orientation", 1 = as stored, 2-8 = to be turned or flipped when shown), or 1 when there is none. */
 function exifOrientation(data: Buffer): number {
@@ -196,11 +247,12 @@ function exifOrientation(data: Buffer): number {
 class Writer {
   constructor(
     private readonly scale: number, // report CSS pixels -> Word pixels
-    private readonly images: Map<string, Loaded>,
+    private readonly images: Map<string, Picture>,
   ) {}
 
   private image(src: string): Loaded {
-    return this.images.get(src) ?? null;
+    const got = this.images.get(src);
+    return got === MISSING ? null : got ?? null;
   }
 
   private runs(runs: Run[]): (TextRun | ExternalHyperlink)[] {
@@ -248,12 +300,15 @@ class Writer {
       } else if (b.k === 'img') {
         if (breakNext) out.push(new Paragraph({ pageBreakBefore: true, spacing: { before: 0, after: 0, line: 20 }, children: [] }));
         const loaded = this.image(b.src);
+        const missing = this.images.get(b.src) === MISSING;
         // never wider than the column it sits in (a picture wider than its cell makes Word stretch the column and push the row about)
         const fit = Math.min(1, maxWidthPx / Math.max(1, b.w * this.scale));
         const width = Math.max(8, Math.round(b.w * this.scale * fit));
         const height = Math.max(8, Math.round(b.h * this.scale * fit));
         out.push(
-          loaded
+          missing
+            ? photoUnavailable(width, height)
+            : loaded
             ? new Paragraph({
                 spacing: { before: 0, after: 0 },
                 children: [new ImageRun({ type: loaded.kind, data: loaded.data, transformation: { width, height }, altText: { name: 'Photograph', description: 'Photograph', title: 'Photograph' } })],
@@ -453,7 +508,7 @@ function buildFooter(clientName: string, jobNo: string, inspectionDate: string):
 }
 
 /** Every picture the report shows, as bytes Word can hold. A format Word does not take (SVG, WebP...) is drawn by the browser itself and kept as a PNG. */
-async function loadPictures(blocks: Block[], page: Page, token: string): Promise<Map<string, Loaded>> {
+async function loadPictures(blocks: Block[], page: Page, token: string, inspectionId = ''): Promise<Map<string, Picture>> {
   const srcs = new Set<string>();
   const collect = (list: Block[]): void => {
     for (const b of list) {
@@ -463,7 +518,7 @@ async function loadPictures(blocks: Block[], page: Page, token: string): Promise
     }
   };
   collect(blocks);
-  const out = new Map<string, Loaded>();
+  const out = new Map<string, Picture>();
   // A few workers, each with one scratch page of its own that it reuses: a report can hold hundreds of pictures, and a page per picture, all at once, overloads the browser.
   const items = [...srcs];
   let next = 0;
@@ -472,7 +527,12 @@ async function loadPictures(blocks: Block[], page: Page, token: string): Promise
     try {
       while (next < items.length) {
         const src = items[next++]!;
-        let loaded = await loadImage(src, token);
+        const got = await loadImage(src, token, inspectionId);
+        if (got === 'missing') {
+          out.set(src, MISSING); // not there: printed as "Photograph unavailable", as the PDF does (no second try through the browser)
+          continue;
+        }
+        let loaded = got;
         // Word may not honour a phone photo's rotation note (the PDF does: the browser turns it), so a photo that carries one is redrawn by the browser, upright.
         if (loaded?.kind === 'jpg' && exifOrientation(loaded.data) > 1) {
           scratch ??= await page.browser().newPage();
@@ -488,7 +548,13 @@ async function loadPictures(blocks: Block[], page: Page, token: string): Promise
       await scratch?.close().catch(() => undefined);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
+  try {
+    await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
+  } catch (e) {
+    // A photograph that could not be loaded stops the Word file with the same plain message as the PDF.
+    if (e instanceof ReportPhotoError) throw new ApiError(502, photosFailedMessage({ failed: [e], missing: [], pending: () => 0 })!, 'REPORT_PHOTOS_FAILED', { stage: 'photos' });
+    throw e;
+  }
   return out;
 }
 
@@ -518,7 +584,7 @@ export async function generateInspectionReportDocx(
     authToken,
     async (page) => {
       const read = (await page.evaluate(REPORT_EXTRACT_SOURCE)) as Extracted;
-      return { extracted: read, pictures: read.error ? new Map<string, Loaded>() : await loadPictures(read.blocks, page, authToken) };
+      return { extracted: read, pictures: read.error ? new Map<string, Picture>() : await loadPictures(read.blocks, page, authToken, inspectionId) };
     },
     // A4 (794px at 96 dpi) less the PDF's 22mm side margins: the width the PDF is laid out at.
     { print: true, width: Math.round((TEXT_WIDTH_TWIPS / 1440) * 96) },
@@ -550,3 +616,12 @@ export async function generateInspectionReportDocx(
   });
   return Packer.toBuffer(doc);
 }
+
+/** For tests only: loads a page's pictures and writes blocks, as the Word build does, without opening a report page. */
+export const __forTests = {
+  loadPictures: (blocks: unknown[], token: string, inspectionId: string) => loadPictures(blocks as Block[], {} as Page, token, inspectionId),
+  write: async (blocks: unknown[], pictures: Map<string, unknown>) => {
+    const body = await new Writer(1, pictures as Map<string, Picture>).blocks(blocks as Block[]);
+    return Packer.toBuffer(new Document({ sections: [{ children: body }] }));
+  },
+};

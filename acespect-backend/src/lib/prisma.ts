@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { isProd } from '../config/env';
+import { isProd, prismaDatabaseUrl } from '../config/env';
 
 /**
  * Single PrismaClient for the process. The globalThis cache prevents a new
@@ -11,6 +11,8 @@ export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: isProd ? ['error'] : ['warn', 'error'],
+    // The pool size and wait from DATABASE_CONNECTION_LIMIT / DATABASE_POOL_TIMEOUT (config/env.ts), also set in process.env for Prisma's CLI.
+    datasources: { db: { url: prismaDatabaseUrl } },
   });
 
 if (!isProd) globalForPrisma.prisma = prisma;
