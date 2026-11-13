@@ -9,6 +9,7 @@ import { constructionSectionText } from "./sectionText";
 import { ReportAgreement } from "../components/ReportAgreement";
 import { OriginalPhotosPending, useOriginalPhotosLink } from "../components/OriginalPhotosLink";
 import { CONSTRUCTION_AGREEMENT_BLOCKS, CONSTRUCTION_AGREEMENT_TITLE } from "./agreementText";
+import { STANDARDS_PAGE_STAGES, STANDARDS_PARAGRAPHS, STANDARDS_TITLE } from "./standardsText";
 import {
   ITEM_STATUSES, buildConstructionReport, type AttachedList, type ChecklistTable, type ConstructionReportModel, type DefectEntry, type ItemStatus, type SectionInput,
 } from "./reportModel";
@@ -378,6 +379,28 @@ function ListTable({ heads, intro, na, list, row, lead, compact }: { heads: stri
 
 // ───────────────────────── Terms ─────────────────────────
 
+/** The template's "References and Guide to Standards and Tolerances", on a page of its own (the same for every report: no answers, no photos). */
+function StandardsPage() {
+  return (
+    <div className="report-page-break" id="standards">
+      <Heading>{STANDARDS_TITLE}</Heading>
+      {STANDARDS_PARAGRAPHS.map((runs, i) => (
+        <p key={i} style={{ margin: "0 0 10px" }}>
+          {runs.map((r, j) =>
+            r.href ? (
+              <a key={j} href={r.href} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline", fontWeight: r.bold ? 700 : undefined }}>{r.text}</a>
+            ) : r.bold ? (
+              <strong key={j}>{r.text}</strong>
+            ) : (
+              <Fragment key={j}>{r.text}</Fragment>
+            ),
+          )}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 /** The template's "Conditions for the Provision of the Report and Scope", on a page of its own. */
 function TermsPages() {
   return (
@@ -467,6 +490,8 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
             row={(l) => ["1", "—", "Concerns as listed by the client (attached)", "Answered", l.text || "See the attached list."]}
           />
         </div>
+
+        {model.stage && STANDARDS_PAGE_STAGES.includes(model.stage) && <StandardsPage />}
 
         <TermsPages />
       </PhotoNumberProvider>
