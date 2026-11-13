@@ -10,7 +10,9 @@ import type { HTTPRequest, Page } from 'puppeteer';
  * So the report's headless browser does not fetch photographs itself: each /api/v1/media/ request is handed to this server process, which
  * fetches it at the very same URL (signed link and all -- the media route checks it exactly as before), at most REPORT_PHOTO_CONCURRENCY at a
  * time across every report being made, tries a failed one again, and gives the browser the answer. A photograph that still cannot be
- * loaded is remembered, and the report is stopped with a clear error instead of being printed without it.
+ * loaded is remembered, and the report is stopped with a clear error instead of being printed without it. A photograph that is truly not
+ * there (the media route answers 404) is the exception: the report prints "Photograph unavailable" for it, as before, and a warning naming
+ * the photo id is logged, so the report can still be downloaded.
  */
 
 /** Photographs fetched at once, across all reports being made on this server. */
@@ -60,9 +62,19 @@ export interface FetchedReportPhoto {
 
 /** A photograph that could not be loaded after every try. */
 export class ReportPhotoError extends Error {
-  constructor(readonly url: string, readonly reason: string) {
+  constructor(readonly url: string, readonly reason: string, readonly status = 0) {
     super(`photograph ${mediaIdOf(url)} could not be loaded: ${reason}`);
   }
+  /** The photograph is not there at all (404): printed as "Photograph unavailable"; the report is not stopped for it. */
+  get missing(): boolean {
+    return this.status === 404;
+  }
+}
+
+/** The warning logged for a photograph that is not there, so it can be found and fixed. */
+export function warnMissingPhoto(url: string, inspection = ''): void {
+  // eslint-disable-next-line no-console
+  console.warn(`[report] photograph ${mediaIdOf(url)} is missing (404)${inspection ? ` in inspection ${inspection}` : ''}; it prints as "Photograph unavailable".`);
 }
 
 /**
@@ -90,6 +102,7 @@ export async function fetchReportPhoto(
   { fetcher = fetch, delays = RETRY_DELAYS_MS }: { fetcher?: typeof fetch; delays?: number[] } = {},
 ): Promise<FetchedReportPhoto> {
   let reason = 'unknown';
+  let status = 0;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     if (attempt > 0) await wait(delays[Math.min(attempt - 1, delays.length - 1)] ?? 0);
     const result = await slot(async () => {
@@ -107,16 +120,19 @@ export async function fetchReportPhoto(
       }
     });
     if (result.ok) return { status: result.status, headers: result.headers, body: result.body };
+    status = result.status;
     reason = result.status ? `the server answered ${result.status}` : `no answer (${(result as { error?: string }).error ?? 'network error'})`;
     if (result.status && !transient(result.status, result.body)) break;
   }
-  throw new ReportPhotoError(url, reason);
+  throw new ReportPhotoError(url, reason, status);
 }
 
 /** What happened to the report page's photographs. */
 export interface ReportPhotoLog {
-  /** Photographs that could not be loaded, after every try. */
+  /** Photographs that could not be loaded, after every try (these stop the report). */
   failed: ReportPhotoError[];
+  /** Photographs that are not there (404): printed as "Photograph unavailable", the report goes on. */
+  missing: string[];
   /** Photograph requests not answered yet. */
   pending(): number;
 }
@@ -125,8 +141,9 @@ export interface ReportPhotoLog {
  * Routes the report page's photograph requests through fetchReportPhoto (everything else goes on untouched). Call before the page is opened.
  * A photograph that fails for good is answered with its error (so the page settles) and listed in `failed`.
  */
-export async function routeReportPhotos(page: Page): Promise<ReportPhotoLog> {
+export async function routeReportPhotos(page: Page, inspectionId = ''): Promise<ReportPhotoLog> {
   const failed: ReportPhotoError[] = [];
+  const missing: string[] = [];
   let open = 0;
   await page.setRequestInterception(true);
   page.on('request', (req: HTTPRequest) => {
@@ -143,14 +160,21 @@ export async function routeReportPhotos(page: Page): Promise<ReportPhotoLog> {
       .then(
         (p) => req.respond({ status: p.status, headers: p.headers, body: req.method() === 'HEAD' ? Buffer.alloc(0) : p.body }),
         (e: unknown) => {
-          failed.push(e instanceof ReportPhotoError ? e : new ReportPhotoError(url, e instanceof Error ? e.message : String(e)));
+          const err = e instanceof ReportPhotoError ? e : new ReportPhotoError(url, e instanceof Error ? e.message : String(e));
+          if (err.missing) {
+            // Not there at all: the page shows "Photograph unavailable" for it, as it always has, and the report goes on.
+            missing.push(mediaIdOf(url));
+            warnMissingPhoto(url, inspectionId);
+            return req.respond({ status: 404, headers: { 'content-type': 'text/plain', 'access-control-allow-origin': '*' }, body: 'Photograph not found' });
+          }
+          failed.push(err);
           return req.respond({ status: 502, headers: { 'content-type': 'text/plain', 'access-control-allow-origin': '*' }, body: 'Photograph unavailable' });
         },
       )
       .catch(() => undefined) // the page was closed meanwhile
       .finally(() => { open--; });
   });
-  return { failed, pending: () => open };
+  return { failed, missing, pending: () => open };
 }
 
 /** The plain message for a report whose photographs did not all load. */

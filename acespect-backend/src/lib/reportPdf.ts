@@ -190,7 +190,7 @@ async function withReportPageNow<T>(
       localStorage.setItem('acespect_token', token);
     }, authToken);
     // The photographs are fetched by this server, a few at a time and tried again on a failure (reportPhotos.ts).
-    const photos = await routeReportPhotos(page);
+    const photos = await routeReportPhotos(page, inspectionId);
 
     const url = `${reportPageOrigin()}/report/${inspectionId}`;
     try {

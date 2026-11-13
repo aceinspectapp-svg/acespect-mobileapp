@@ -22,7 +22,7 @@ import type { Page } from 'puppeteer';
 import { REPORT_EXTRACT_SOURCE } from './reportDocxExtract';
 import { BRAND_NAVY, BRAND_RED, COMPANY_ABN_ACN, COMPANY_NAME, withReportPage } from './reportPdf';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
-import { fetchReportPhoto, isMediaUrl, photosFailedMessage, ReportPhotoError } from './reportPhotos';
+import { fetchReportPhoto, isMediaUrl, photosFailedMessage, ReportPhotoError, warnMissingPhoto } from './reportPhotos';
 import { ApiError } from '../utils/ApiError';
 
 /**
@@ -149,11 +149,19 @@ function kindOf(buf: Buffer): ImageKind | null {
 /**
  * A picture's bytes, or null when they are not a kind Word takes (the caller then has the browser draw it). A report photograph (a media
  * link) goes through the same queue and retries as the page's own (reportPhotos.ts); one that still cannot be loaded stops the Word file
- * (ReportPhotoError) instead of being left out.
+ * (ReportPhotoError) instead of being left out -- except one that is not there at all (404): 'missing', left out with a warning.
  */
-async function loadImage(src: string, token: string): Promise<{ data: Buffer; kind: ImageKind } | null> {
+async function loadImage(src: string, token: string): Promise<{ data: Buffer; kind: ImageKind } | null | 'missing'> {
   if (isMediaUrl(src)) {
-    const { body } = await fetchReportPhoto(src, { Authorization: `Bearer ${token}` });
+    const { body } = await fetchReportPhoto(src, { Authorization: `Bearer ${token}` }).catch((e: unknown) => {
+      // A photograph that is not there (404) is left out of the Word file as before, with a warning; any other failure stops it.
+      if (e instanceof ReportPhotoError && e.missing) {
+        warnMissingPhoto(src);
+        return { body: null };
+      }
+      throw e;
+    });
+    if (!body) return 'missing';
     const kind = kindOf(body);
     return kind ? { data: body, kind } : null;
   }
@@ -484,7 +492,12 @@ async function loadPictures(blocks: Block[], page: Page, token: string): Promise
     try {
       while (next < items.length) {
         const src = items[next++]!;
-        let loaded = await loadImage(src, token);
+        const got = await loadImage(src, token);
+        if (got === 'missing') {
+          out.set(src, null); // not there: left out, as before (no second try through the browser)
+          continue;
+        }
+        let loaded = got;
         // Word may not honour a phone photo's rotation note (the PDF does: the browser turns it), so a photo that carries one is redrawn by the browser, upright.
         if (loaded?.kind === 'jpg' && exifOrientation(loaded.data) > 1) {
           scratch ??= await page.browser().newPage();
@@ -504,7 +517,7 @@ async function loadPictures(blocks: Block[], page: Page, token: string): Promise
     await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
   } catch (e) {
     // A photograph that could not be loaded stops the Word file with the same plain message as the PDF.
-    if (e instanceof ReportPhotoError) throw new ApiError(502, photosFailedMessage({ failed: [e], pending: () => 0 })!, 'REPORT_PHOTOS_FAILED', { stage: 'photos' });
+    if (e instanceof ReportPhotoError) throw new ApiError(502, photosFailedMessage({ failed: [e], missing: [], pending: () => 0 })!, 'REPORT_PHOTOS_FAILED', { stage: 'photos' });
     throw e;
   }
   return out;

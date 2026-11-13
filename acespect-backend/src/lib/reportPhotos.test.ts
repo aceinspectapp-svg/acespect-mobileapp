@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import type { AddressInfo } from 'node:net';
-import { fetchReportPhoto, photoQueueState, photosFailedMessage, REPORT_PHOTO_CONCURRENCY, ReportPhotoError, routeReportPhotos, isMediaUrl } from './reportPhotos';
+import { fetchReportPhoto, photoQueueState, photosFailedMessage, REPORT_PHOTO_CONCURRENCY, ReportPhotoError, routeReportPhotos, isMediaUrl, mediaIdOf } from './reportPhotos';
 
 const id = (n: number) => `${String(n).padStart(8, '0')}-2222-4333-8444-555555555555`;
 const media = (n: number) => `http://api.test/api/v1/media/${id(n)}?e=1&s=abc`;
@@ -45,19 +45,25 @@ test('a refused link (403) or a missing photograph (404) is not retried; one tha
   for (const status of [403, 404]) {
     let calls = 0;
     const fetcher = (async () => { calls++; return new Response('', { status }); }) as typeof fetch;
-    await assert.rejects(fetchReportPhoto(media(2), {}, { fetcher, ...noDelay }), (e: unknown) => e instanceof ReportPhotoError && e.reason === `the server answered ${status}`);
+    await assert.rejects(
+      fetchReportPhoto(media(2), {}, { fetcher, ...noDelay }),
+      (e: unknown) => e instanceof ReportPhotoError && e.reason === `the server answered ${status}` && e.status === status && e.missing === (status === 404),
+    );
     assert.equal(calls, 1);
   }
   let calls = 0;
   const always = (async () => { calls++; return new Response('', { status: 500 }); }) as typeof fetch;
-  const err = await fetchReportPhoto(media(3), {}, { fetcher: always, ...noDelay }).catch((e: unknown) => e as ReportPhotoError);
+  const err = (await fetchReportPhoto(media(3), {}, { fetcher: always, ...noDelay }).catch((e: unknown) => e)) as ReportPhotoError;
   assert.equal(calls, 4);
-  const msg = photosFailedMessage({ failed: [err], pending: () => 0 })!;
+  assert.equal(err.missing, false);
+  const msg = photosFailedMessage({ failed: [err], missing: [], pending: () => 0 })!;
   assert.match(msg, /1 photograph could not be loaded \(the server answered 500\), so the report was not made/);
   assert.ok(msg.includes(id(3)));
   assert.ok(!msg.includes('s=abc'), 'the signature is never shown');
-  assert.equal(photosFailedMessage({ failed: [], pending: () => 0 }), null);
-  assert.match(photosFailedMessage({ failed: [], pending: () => 2 })!, /2 photographs were still loading/);
+  assert.equal(photosFailedMessage({ failed: [], missing: [], pending: () => 0 }), null);
+  // A missing photograph alone never stops the report.
+  assert.equal(photosFailedMessage({ failed: [], missing: [id(2)], pending: () => 0 }), null);
+  assert.match(photosFailedMessage({ failed: [], missing: [], pending: () => 2 })!, /2 photographs were still loading/);
 });
 
 test('only media links go through the queue', () => {
@@ -68,7 +74,7 @@ test('only media links go through the queue', () => {
 });
 
 /** A real headless browser opening a page of photographs: some fail once, one never loads. Skipped where no browser can start. */
-test('in the report browser: photographs load through the queue, a passing failure is retried, and one that never loads is reported', async (t) => {
+test('in the report browser: photographs load through the queue, a passing failure is retried, a missing one prints as unavailable with a warning, and one that keeps failing stops the report', async (t) => {
   const puppeteer = (await import('puppeteer')).default;
   let browser: Awaited<ReturnType<typeof puppeteer.launch>>;
   try {
@@ -90,6 +96,7 @@ test('in the report browser: photographs load through the queue, a passing failu
     now--;
     if (req.query.s !== 'good') return res.status(403).end(); // the signed link is passed on as it was
     if (req.params.id === id(7)) return res.status(404).json({ error: { code: 'NOT_FOUND' } });
+    if (req.params.id === id(11)) return res.status(503).end(); // never recovers
     if (Number(req.params.id.slice(0, 8)) % 3 === 0 && n === 1) return res.status(400).json({ error: { code: 'DB_REQUEST_ERROR' } });
     res.type('image/png').send(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64'));
   });
@@ -98,17 +105,28 @@ test('in the report browser: photographs load through the queue, a passing failu
   const server = await new Promise<import('node:http').Server>((resolve) => { const s = app.listen(0, () => resolve(s)); });
   try {
     const page = await browser.newPage();
-    const log = await routeReportPhotos(page);
+    const warnings: string[] = [];
+    const warn = t.mock.method(console, 'warn', (m: string) => { warnings.push(String(m)); });
+    const log = await routeReportPhotos(page, 'insp-1');
     await page.goto(`http://127.0.0.1:${(server.address() as AddressInfo).port}/page`, { waitUntil: 'networkidle0', timeout: 60_000 });
     const loaded = (await page.evaluate("[...document.images].map((i) => i.naturalWidth > 0)")) as boolean[];
-    assert.equal(loaded.filter(Boolean).length, 39);
-    assert.equal(loaded[6], false);
+    warn.mock.restore();
+    assert.equal(loaded.filter(Boolean).length, 38);
+    assert.equal(loaded[6], false, 'the missing photograph shows as unavailable');
+    assert.equal(loaded[10], false);
     assert.ok(most <= REPORT_PHOTO_CONCURRENCY, `at most ${REPORT_PHOTO_CONCURRENCY} at once (saw ${most})`);
     assert.equal(seen.get(id(3)), 2, 'a DB_REQUEST_ERROR was tried again');
     assert.equal(seen.get(id(7)), 1, 'a 404 was not');
-    assert.deepEqual(log.failed.map((f) => f.reason), ['the server answered 404']);
+    assert.equal(seen.get(id(11)), 4, 'a 503 was tried 4 times');
+    // The missing one: listed, warned about with its id, and not a reason to stop the report.
+    assert.deepEqual(log.missing, [id(7)]);
+    assert.equal(warnings.filter((w) => w.includes(id(7)) && /missing \(404\)/.test(w) && w.includes('insp-1')).length, 1);
+    // The one that kept failing: the only failure, and it stops the report.
+    assert.deepEqual(log.failed.map((f) => [mediaIdOf(f.url), f.reason]), [[id(11), 'the server answered 503']]);
     assert.equal(log.pending(), 0);
-    assert.match(photosFailedMessage(log)!, new RegExp(`could not be loaded.*${id(7)}`));
+    const msg = photosFailedMessage(log)!;
+    assert.match(msg, new RegExp(`1 photograph could not be loaded \\(the server answered 503\\).*${id(11)}`));
+    assert.ok(!msg.includes(id(7)));
   } finally {
     server.close();
     await browser.close();
