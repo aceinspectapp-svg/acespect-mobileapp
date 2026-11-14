@@ -58,12 +58,13 @@ describe("Pre-pour: page breaks follow the template", () => {
   const defectAnswer = { slabDimensions: "defect", slabDimensions__defect: { location: "Front left", photos: ["/a.jpg"] } };
   const html = render(build({ pp_formwork: defectAnswer, pp_site_facilities: { securityFencing: "no_see_notes" } }));
 
-  it("starts only the General Description (after the cover), the checklist and the terms on a new page", () => {
+  it("starts only the General Description (after the cover), the checklist, the standards page and the terms on a new page", () => {
     const breaks = [...html.matchAll(/<div[^>]*class="report-page-break"[^>]*>([\s\S]{0,1500})/g)].map((m) => text(m[1]).trim().slice(0, 60));
-    assert.equal(breaks.length, 3, breaks.join(" | "));
+    assert.equal(breaks.length, 4, breaks.join(" | "));
     assert.match(breaks[0], /^General Description/i);
     assert.match(breaks[1], /^Inspection Checklist/i);
-    assert.match(breaks[2], /CONDITIONS FOR THE PROVISION OF THE REPORT AND SCOPE/);
+    assert.match(breaks[2], /^REFERENCES AND GUIDE TO STANDARDS AND TOLERANCES/);
+    assert.match(breaks[3], /CONDITIONS FOR THE PROVISION OF THE REPORT AND SCOPE/);
   });
 
   it("does not force a new page for Identified Defects or Notes, and keeps each heading with its first item", () => {
