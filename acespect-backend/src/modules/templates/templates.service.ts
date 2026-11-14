@@ -302,6 +302,7 @@ async function publish(id: string) {
 
 export const templatesService = {
   getActiveForInspector,
+  getLatestPublished,
   list,
   summary,
   getById,
