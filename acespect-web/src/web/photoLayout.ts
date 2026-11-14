@@ -27,6 +27,11 @@ export interface PackOptions {
   targetHeight: number;
   /** No photo is drawn taller than this (a spot like the cover photo passes a smaller value). */
   maxHeight: number;
+  /**
+   * The shape (width / height) of a portrait photo's box; PORTRAIT_BOX (3:4) when not given. A report page uses a slightly shorter box
+   * (PAGE_PORTRAIT_BOX) at the same width, so three rows of portraits fit on a page above the footer.
+   */
+  portraitBox?: number;
 }
 
 export interface PackedRow {
@@ -40,8 +45,15 @@ export interface PackedRow {
   full: boolean;
 }
 
+/**
+ * A portrait photo's box on a report page: as wide as before (three to a row), a little shorter than 3:4, so three rows of portraits --
+ * nine photos -- fit on one A4 page above the footer (three 3:4 rows ran about 3 cm too tall, so a page held only six). The photo is shown
+ * whole inside the box (object-fit: contain): a 3:4 phone photo loses nothing, it is drawn about 6% smaller with a thin white strip either side.
+ */
+export const PAGE_PORTRAIT_BOX = 4 / 5;
+
 /** A report page at A4 with the report's side margins: 21cm - 2 x 2.2cm of text width. */
-export const PAGE_PACK: PackOptions = { width: 16.4, gap: 0.25, maxPerRow: 3, landscapeMaxPerRow: 2, minHeight: 5, targetHeight: 6.5, maxHeight: 9 };
+export const PAGE_PACK: PackOptions = { width: 16.4, gap: 0.25, maxPerRow: 3, landscapeMaxPerRow: 2, minHeight: 5, targetHeight: 6.5, maxHeight: 9, portraitBox: PAGE_PORTRAIT_BOX };
 /** The narrow reviewer preview panel. */
 export const COMPACT_PACK: PackOptions = { width: 9, gap: 0.2, maxPerRow: 3, landscapeMaxPerRow: 2, minHeight: 3.5, targetHeight: 4.5, maxHeight: 6 };
 
@@ -82,7 +94,7 @@ export function packPhotoRows(aspects: number[], o: PackOptions): PackedRow[] {
     const height = Math.min(width / aspect, o.maxHeight);
     return { width: height * aspect, height };
   };
-  const portraitBox = box(portraitW, PORTRAIT_BOX);
+  const portraitBox = box(portraitW, o.portraitBox ?? PORTRAIT_BOX);
   const landscapeBox = box(landscapeW, LANDSCAPE_BOX);
   const fit = (a: number) => ({ ...(isLandscape(a) ? landscapeBox : portraitBox) });
 

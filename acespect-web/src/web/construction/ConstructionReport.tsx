@@ -190,6 +190,12 @@ function SummaryTiles({ model }: { model: ConstructionReportModel }) {
   );
 }
 
+/** A row's status as its right-hand column prints it: a defect row with how many defects it refers to, "REFER DEFECTS (2)"; any other row as before. */
+export function statusLabel(it: { status: ItemStatus; defectCount?: number }): string {
+  const label = STATUS[it.status].label;
+  return it.status === "defect" && it.defectCount ? `${label} (${it.defectCount})` : label;
+}
+
 function countsLine(t: ChecklistTable): string {
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const parts: string[] = [];
@@ -237,7 +243,7 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
                   <div>{href ? <a href={href} style={{ textDecoration: "none" }}>{name}</a> : name}</div>
                 </div>
                 <div style={{ background: s.bg, color: s.fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: compact ? "8.5px" : "10px", fontWeight: 800, letterSpacing: compact ? "0.04em" : "0.1em", textAlign: "center", padding: "0 4px" }}>
-                  {href ? <a href={href} style={{ color: s.fg, textDecoration: "underline" }}>{s.label} ›</a> : s.label}
+                  {href ? <a href={href} style={{ color: s.fg, textDecoration: "underline" }}>{statusLabel(it)} ›</a> : statusLabel(it)}
                 </div>
               </div>
             );

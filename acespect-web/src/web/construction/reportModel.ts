@@ -30,8 +30,10 @@ export interface ChecklistItem {
   heading: string;
   status: ItemStatus;
   text: string;
-  /** The defect number this row refers to, when it is a defect. */
+  /** The defect number this row refers to, when it is a defect (its first, when it raised more than one). */
   defectNo?: number;
+  /** How many of the report's numbered defects this row raised (a defect row only): printed as "REFER DEFECTS (2)". */
+  defectCount?: number;
 }
 export interface ChecklistGroup { heading?: string; items: ChecklistItem[] }
 export interface ChecklistTable {
@@ -218,6 +220,14 @@ function pciAppliances(status: string): string {
   return "";
 }
 
+/**
+ * How many defects a checklist row answered "Defect" raised. A row made from two checks (the Roof covering and Roof gutters rows) says
+ * "… is defective." once for each check found defective, and raised a defect for each; every other defect row raised one.
+ */
+export function rowDefects(text: string): number {
+  return Math.max(1, (text.match(/\bis defective\b/gi) ?? []).length);
+}
+
 const tableTitle = (name: string) => (name.split(":").pop() ?? name).trim().toUpperCase();
 
 /** A sub-heading as the report prints it: without the form's instructions to the inspector ("— use a digital level …", "— check with the office …?"). */
@@ -255,7 +265,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
   interface Raised { key: string; sub: string; text: string; photos: string[]; fromId?: string; heading: string; description: string; item: string }
   const raised: Raised[] = [];
   /** Checklist rows that say "refer defects", per section, to be tied to their defects once those are numbered. */
-  const pending: { item: ChecklistItem; raisedIndex: number }[] = [];
+  const pending: { item: ChecklistItem; raisedIndexes: number[] }[] = [];
   let itemSeq = 0;
 
   for (const s of approved) {
@@ -288,7 +298,11 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       const groups: ChecklistGroup[] = [];
       let current: ChecklistGroup | null = null;
       let inDefects = false;
-      let defectRowsSeen = 0;
+      let defectsTaken = 0;
+      const sectionRaised = raised.length - firstRaised;
+      // Defect rows still to come, so a row never takes a defect that belongs to a row after it.
+      let defectRowsLeft = 0;
+      { let inD = false; for (const l of lines) { if (l.kind === "room") inD = l.text === "Defects"; else if (!inD && l.kind === "item" && l.status === "defect") defectRowsLeft++; } }
       for (const l of lines) {
         if (l.kind === "room") {
           inDefects = l.text === "Defects";
@@ -300,7 +314,15 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
         if (!current) { current = { items: [] }; groups.push(current); }
         const item: ChecklistItem = { id: `item-${++itemSeq}`, heading: l.heading, status: l.status, text: l.text };
         current.items.push(item);
-        if (l.status === "defect") pending.push({ item, raisedIndex: firstRaised + defectRowsSeen++ });
+        if (l.status === "defect") {
+          // The section's defects are recorded in the order of its rows: each defect row raised one, except a row made from two checks
+          // (Roof covering, Roof gutters), which raised one for each check it found defective.
+          const want = rowDefects(l.text);
+          defectRowsLeft--;
+          const take = Math.max(0, Math.min(want, sectionRaised - defectsTaken - defectRowsLeft));
+          pending.push({ item, raisedIndexes: Array.from({ length: take }, (_, k) => firstRaised + defectsTaken + k) });
+          defectsTaken += take;
+        }
       }
       const title = tableTitle(s.name);
       const kept = groups.filter((g) => g.items.length > 0).map((g) => {
@@ -361,7 +383,11 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
     });
     defectGroups.push(group);
   }
-  for (const p of pending) p.item.defectNo = numberOf.get(p.raisedIndex);
+  for (const p of pending) {
+    const nos = p.raisedIndexes.map((i) => numberOf.get(i)).filter((x): x is number => x !== undefined);
+    p.item.defectNo = nos.length ? Math.min(...nos) : undefined;
+    p.item.defectCount = nos.length;
+  }
 
   const totals = emptyCounts();
   for (const t of tables) for (const k of ITEM_STATUSES) totals[k] += t.counts[k];

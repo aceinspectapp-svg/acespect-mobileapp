@@ -333,7 +333,8 @@ export function PhotoGrid({
   const urls = photos.map((p) => resolveMediaUrl(p));
   const { aspects, pending, failed } = useImageAspects(urls);
   const base = compact ? COMPACT_PACK : PAGE_PACK;
-  const options = maxHeight && maxHeight < base.maxHeight ? { ...base, maxHeight, targetHeight: Math.min(base.targetHeight, maxHeight), minHeight: Math.min(base.minHeight, maxHeight) } : base;
+  // A spot with its own height limit (the cover-page photo) keeps the 3:4 portrait box it always had; the grids use the page's.
+  const options = maxHeight && maxHeight < base.maxHeight ? { ...base, maxHeight, targetHeight: Math.min(base.targetHeight, maxHeight), minHeight: Math.min(base.minHeight, maxHeight), portraitBox: undefined } : base;
   const rows = useMemo(() => packPhotoRows(aspects, options), [aspects.join(","), compact, options.maxHeight]);
   if (photos.length === 0) return null;
   return (
