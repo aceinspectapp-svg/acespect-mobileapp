@@ -244,26 +244,33 @@ const commercialAnswers = {
   },
 };
 
-// An apartment: the unit and building checklist, with the grouped sections.
+// An apartment: the Multi Level Office Building template's form -- items with their own photos, rooms by floor.
 currentCase = "Apartment";
+/** A crack as the Apartment form records it: where it starts and runs to, and its size (no severity or direction). */
+const aptCrack = (location, start, end, extra = {}) => ({ location, damageType: "Cracking", crackStartLocation: start, crackEndLocation: end, widthMm: 2, lengthMm: 300, photos: defectPhotos([P1, P2]), ...extra });
+const itemPhotos = () => (COMBO_MODE ? comboPhotos("Apartment: item photos") : [P1, P2]);
 const apartmentAnswers = {
   "job-info": { jobNumber: "HV-26-CI04", inspectionDate: "2026-10-03", assignedInspector: "CI Inspector", clientName: "CI Apartment Client", inspectionAddress: "1 Smoke Test Road, Box Hill VIC 3128", weather: ["Dry"] },
   description: {
-    buildingType: "Apartment Block", constructedYear: "2010", storeys: "4", slope: "Flat", cladding: "Brick veneer", foundations: "Concrete slab", roofDesign: "Flat", roofCovering: "Membrane", windows: "Aluminium frame",
-    worksType: "Excavation", projectAddr: "3 Smoke Test Road", direction: "Left", scopeType: "External & Internal (full)", limitations: "no", safetyIssues: "yes", safetyIssuesNotes: "Loose balustrade on level 2",
+    buildingType: "Apartment Block", constructedYear: "2010", storeys: "4", signedAs: "Unit 7", facing: "North", slope: "Flat", design: "Contemporary",
+    cladding: "Brick veneer", foundations: "Concrete slab", roofDesign: "Flat", roofCovering: "Membrane", windows: "Aluminium frame", extension: "no",
+    overviewPhotos: [P1],
+    projectAddr: "3 Smoke Test Road", direction: "Left", directionCompass: "East", scopeType: "External & Internal (full)",
   },
-  driveway: { items: [{ location: "Front", material: "Concrete", condition: "Fair", obstructions: ["Parked Vehicle"], notableDamage: "yes", safetyHazard: "no", damages: [crack("near the ramp", { notes: "" })] }] },
+  driveway: { present: "Yes", location: "Front", material: "Concrete", condition: "Fair", obscuredBy: ["A parked vehicle"], damages: [aptCrack("the driveway", "the ramp", "the kerb")], photos: itemPhotos() },
   elevations: {
-    elev_overview_elevations: "All accessible faces", elev_overview_partyWall: "yes", elev_overview_claddingCond: "Fair", elev_overview_comments: "Access from balconies only",
-    ext_walls_material: "Brick", ext_walls_rendered: "yes", ext_walls_condition: "Fair", ext_walls_majorCracking: "no", ext_walls_damages: [crack("east wall", { notes: "" })],
-    front_door_material: "Timber", front_door_condition: "Satisfactory with typical wear and tear", front_door_requires: "Re-painting", front_door_deadlocks: "yes",
+    sides: {
+      front: { present: "yes", orientation: "North", condition: "Fair", damages: [aptCrack("the east wall", "the window sill", "the slab edge")], photos: itemPhotos() },
+      left: { present: "yes", orientation: "West", partyWall: "yes", partyWallNo: "12", partyWallMaterial: "brick", condition: "Fair", photos: itemPhotos() },
+    },
   },
   internal_areas: {
-    int_roof_applicable: "no", int_roof_naReason: "Roof cavity not accessible", int_roof_comments: "Roof space is common property",
-    ceilings_material: "Plasterboard", ceilings_cornices: "Cove", ceilings_condition: "Fair", ceilings_adequatelyFixed: "yes", ceilings_damages: [crack("ceiling above the kitchen", { notes: "" })],
-    plumbing_waterSupplyOn: "yes", plumbing_waterLeaks: "no",
+    rooms: {
+      living_room: { present: "yes", floorLevel: `${OTHER}Level 7`, condition: "Satisfactory with typical wear and tear", obscuredBy: ["Furniture"], damages: [aptCrack("the living room", "the top of the skirting board", "the ceiling line")], photos: itemPhotos() },
+      kitchen: { present: "yes", floorLevel: `${OTHER}Level 7`, condition: "Fair", photos: itemPhotos() },
+    },
   },
-  notes: { structural_structurallySound: "no", structural_describe: "Differential settlement at the north wall", post_project_describe: "No access to the plant room" },
+  notes: { noAccess: [{ area: "the plant room", reason: "it being locked" }], squeakyFloors: "no", unlevelFloors: "no", photosRestricted: "no" },
 };
 
 // Combo mode: pad each report with a few more defects so it has enough photo spots to show every mix.
@@ -274,7 +281,7 @@ publicAssetsAnswers.elevations.parts[0].footpaths_damages.push(...extraDefects(9
 currentCase = "Commercial Properties";
 commercialAnswers.driveway.damages.push(...extraDefects(12));
 currentCase = "Apartment";
-apartmentAnswers.elevations.ext_walls_damages.push(...extraDefects(9));
+apartmentAnswers.elevations.sides.front.damages.push(...extraDefects(9).map((d, i) => aptCrack(`extra defect ${i + 1}`, "the corner", "the sill", { photos: d.photos })));
 
 // One report type, end to end: submit, compose the wording, approve, download the PDF, read what the reader would see.
 async function runCase(c) {
@@ -416,14 +423,18 @@ pdfs.push(await runCase({
   answers: apartmentAnswers, photoSections: ["driveway", "elevations", "internal_areas"],
   // The Nov 2026 Multi Level Office Building template's wording only (the form's Pre-Purchase checklist answers print nothing).
   // Laid out under the template's headings, in its order (no Condition Summary page).
-  headings: ["Description and Overview", "Driveway", "Main structure", "Unit Areas", "Ceilings", "Apartment"],
+  headings: ["Description and Overview", "Driveway", "Main structure", "Front Elevation (north)", "Left Elevation (west)", "Level 7", "Living Room", "Kitchen", "Apartment"],
   phrases: [
-    "The property is a unit in a 4-storey apartment block, on a flat block of land and estimated to have been constructed around 2010.",
+    "The property is a unit in a 4-storey apartment block signed as Unit 7, facing north on a flat block of land.",
+    "It is of a contemporary design and estimated to have been constructed around the 2010s.",
+    "which is at the left - approximately east - of the site of this inspection.",
     "The scope for inspection is external and internal to all structures.",
-    "It is in fair condition. There is a party wall abutting the next property.",
-    "They are in fair condition.",
-    "The driveway is to the front of the block and is constructed of concrete. It is in fair condition.",
-    "No access to the plant room.",
+    "The driveway is to the front of the block and is constructed of concrete. It is in fair condition. Sections of the driveway were obscured by a parked vehicle.",
+    "At the driveway, there is a crack starting at the ramp and running to the kerb. The crack is 2 millimetres wide and 300 millimetres long.",
+    "The left elevation is a party wall abutting the next property at No. 12. It is constructed of brick which is in fair condition.",
+    "Satisfactory condition with typical wear and tear. Sections were obscured by furniture.",
+    "The crack is approximately 2 millimetres wide and approximately 300 millimetres long.",
+    "There was no access to the plant room due to it being locked.",
   ],
   minPages: 6, minImages: 4,
 }));
