@@ -20,6 +20,7 @@ import { wordingFor } from "../wording/registry";
 import type { ConditionSummaryRow } from "../templateFields";
 import { DILAPIDATION_BRAND, PhotoNumberProvider, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 import { ConstructionReportBody, constructionFileName, useConstructionReport } from "../construction/ConstructionReport";
+import { orderedPieces, type ReportPiece } from "../reportParts";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
 const slug = (s: Pick<FormSection, "id" | "key">): string => s.key ?? s.id;
@@ -117,20 +118,28 @@ export function ReportView() {
   // Group the approved categories under EXTERNAL / INTERNAL banners, keeping the
   // report order: description → EXTERNAL categories → INTERNAL → notes.
   const EXTERNAL_IDS = ["driveway", "paving", "fences", "elevations", "roof"];
-  type RenderItem = { type: "banner"; label: string } | { type: "section"; section: (typeof bodySections)[number] };
+  type RenderItem = { type: "banner"; label: string } | ({ type: "section"; section: (typeof bodySections)[number] } & Omit<ReportPiece, "section">);
   const renderList: RenderItem[] = [];
   let externalBanner = false;
   let internalBanner = false;
-  for (const s of bodySections) {
-    if (EXTERNAL_IDS.some((k) => slug(s).startsWith(k)) && !externalBanner) {
+  const bandOf = (s: (typeof bodySections)[number]) =>
+    EXTERNAL_IDS.some((k) => slug(s).startsWith(k)) ? "EXTERNAL" : slug(s).startsWith("internal") ? "INTERNAL" : undefined;
+  // A report type laid out as its template is (Apartment): each of the template's headings in the template's order, wherever the form asks about it.
+  const description = bodySections.find((s) => slug(s).startsWith("description"));
+  const pieces: ReportPiece[] =
+    orderedPieces(bodySections.filter((s) => s !== description), reportWording, slug) ?? bodySections.filter((s) => s !== description).map((s) => ({ section: s }));
+  if (description) renderList.push({ type: "section", section: description });
+  for (const piece of pieces) {
+    const band = piece.band ?? bandOf(piece.section);
+    if (band === "EXTERNAL" && !externalBanner) {
       renderList.push({ type: "banner", label: "EXTERNAL" });
       externalBanner = true;
     }
-    if (slug(s).startsWith("internal") && !internalBanner) {
+    if (band === "INTERNAL" && !internalBanner) {
       renderList.push({ type: "banner", label: "INTERNAL" });
       internalBanner = true;
     }
-    renderList.push({ type: "section", section: s });
+    renderList.push({ type: "section", ...piece });
   }
 
   // Page order after the cover: the Description block first (Description and
@@ -147,7 +156,7 @@ export function ReportView() {
   // needing their own filter here.
   const conditionSummaryCategories: ConditionSummaryCategory[] = bodySections
     .map((s) => ({
-      sectionName: s.name,
+      sectionName: reportWording.sectionTitle?.(slug(s)) ?? s.name,
       anchorId: sectionAnchorId(s.id),
       rows: (s.fields as unknown as { conditionSummary?: ConditionSummaryRow[] }).conditionSummary ?? [],
     }))
@@ -302,7 +311,7 @@ export function ReportView() {
               (including this wrapper) when there's nothing to summarise yet,
               so an inspection with no approved sections never prints a lone
               near-empty page. */}
-          {conditionSummaryCategories.length > 0 && (
+          {conditionSummaryCategories.length > 0 && reportWording.conditionSummary !== false && (
             <div className="report-page-break">
               <ReportConditionSummary categories={conditionSummaryCategories} nov2026={printsAgreement(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? ""))} />
             </div>
@@ -316,7 +325,7 @@ export function ReportView() {
                     {item.label}
                   </SectionBand>
                 ) : (
-                  renderSection(item.section, i)
+                  renderSection(item.section, i, item)
                 ),
               )}
             </div>
@@ -366,7 +375,7 @@ export function ReportView() {
     </div>
   );
 
-  function renderSection(s: (typeof bodySections)[number], i: number) {
+  function renderSection(s: (typeof bodySections)[number], i: number, piece?: Omit<ReportPiece, "section">) {
     return (
       <div key={s.id} id={sectionAnchorId(s.id)} style={{ marginTop: i === 0 ? 0 : "16px" }}>
         {slug(s).startsWith("description") ? (
@@ -405,17 +414,23 @@ export function ReportView() {
              Filtered first so any photo the reviewer excluded never reaches the printed report. */
           <>
             <ReportSection
-              section={withExcludedPhotosRemoved(s)}
+              // The heading the report type's template uses for this section, where it differs from the form's name (a part of a
+              // section laid out as the template is already carries its heading).
+              section={{ ...withExcludedPhotosRemoved(s), name: reportWording.reportParts ? s.name : reportWording.sectionTitle?.(slug(s)) ?? s.name }}
               hideDamageText={slug(s) in reportWording.composers}
+              // A part printed under its own heading: the photos and defects it does not mark itself print with the section's last part.
+              generalPhotos={piece?.generalPhotos?.filter((url) => withExcludedPhotosRemoved(s).photos.includes(url))}
+              untaggedDefects={piece?.untaggedDefects ?? true}
+              showHeading={piece?.showHeading ?? true}
               archiveUrl={
                 // Only for sections that have photos at all (judged on the unfiltered section, so a section whose
                 // photos were all left out of the report still points to its archive).
-                s.photos.length > 0 || s.damages.some((d) => d.photos.length > 0)
+                piece?.archiveLink !== false && (s.photos.length > 0 || s.damages.some((d) => d.photos.length > 0))
                   ? sectionPhotoArchiveUrl(inspection!.photoArchiveUrl, s.key)
                   : null
               }
             />
-            {slug(s).startsWith("pool") && <ReportPoolSpaDisclaimer nov2026={printsAgreement(reportProfileOf(inspection?.type ?? "", inspection?.propertyType ?? ""))} />}
+            {slug(s).startsWith("pool") && reportWording.poolSpaDisclaimer !== false && <ReportPoolSpaDisclaimer nov2026={printsAgreement(reportProfileOf(inspection?.type ?? "", inspection?.propertyType ?? ""))} />}
           </>
         )}
       </div>

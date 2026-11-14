@@ -94,9 +94,9 @@ describe("House example report: External", () => {
         granny_flat: { present: "yes", structureName: "Pergola", attachment: "Attached to house", position: "Rear", walls: [OTHER + "timber"], wallsCondition: SAT, roof: [OTHER + "laserlite roof covering"] },
       },
     }));
-    assert.ok(p.includes("There is a garage attached to the house at the front, constructed of brick with a tiled roof and concrete hardstand, and is generally in satisfactory state of repair. Sections of the walls and hardstand were obscured by shelving and stored goods."));
+    assert.ok(p.includes("There is a garage to the house at the front, constructed of brick with a tiled roof and concrete hardstand, and is generally in satisfactory state of repair. Sections of the walls and hardstand were obscured by shelving and stored goods."));
     assert.ok(p.includes("There is a shed located at the rear of the property, constructed of metal with a metal roof and concrete hardstand, and is generally in satisfactory state of repair. Sections of the walls and hardstand were obscured by shelving and stored goods."));
-    assert.ok(p.includes("There is a pergola attached to the house at the rear, constructed of timber with a laserlite roof covering, which is generally in satisfactory state of repair."));
+    assert.ok(p.includes("There is a pergola located at the rear of the property, constructed of timber with a laserlite roof covering, which is generally in satisfactory state of repair."));
   });
 
   it("elevations", () => {
@@ -188,7 +188,8 @@ describe("House form: the real inspector template's choices and fields", () => {
     const wall = paras(draft("retaining_walls", { present: "yes", items: [{ location: "Left", materials: ["Brick"], condition: SAT, conditionDetails: ["Decayed"] }] })).join(" ");
     assert.ok(wall.includes("There is some decay."));
     const roof = paras(draft("roof_chimneys", { sections: { upper: { generalCondition: ["Satisfactory to fair with typical weathering", "Some surface rust", "Cracked tiles", "Chimney appears unstable"] } } })).join(" ");
-    assert.ok(roof.includes("Some surface rust and cracked tiles noted. Chimney appears unstable."));
+    assert.ok(roof.includes("The roof covering appears to be in satisfactory to fair condition with typical weathering, some surface rust and cracked tiles."), roof);
+    assert.ok(roof.includes("The chimney appears to be unstable."), roof);
     const named = paras(draft("garage_carport_sheds", { structures: { shed: { present: "yes", structureName: "Greenhouse", attachment: "Separate to house", position: "Rear", wallsCondition: SAT } } })).join(" ");
     assert.ok(named.includes("There is a greenhouse located at the rear of the property"));
   });
@@ -280,5 +281,145 @@ describe("House form: the real inspector template's choices and fields", () => {
     assert.ok(p.includes("Movement was observed in the internal areas, at the hallway floor."));
     assert.ok(p.includes("No access granted to Bedroom 3."));
     assert.ok(p.includes("There are other general condition issues in the internal areas, which are in fair condition. Damp to the laundry wall."));
+  });
+
+  it("reads a typed answer that starts with 'The' in lower case mid-sentence", () => {
+    const p = paras(draft("internal_areas", { movementObserved: "yes", movementWhere: "The upstairs study floor", roomsNotAccessed: "The roof space (no manhole access)" }));
+    assert.ok(p.includes("Movement was observed in the internal areas, at the upstairs study floor."));
+    assert.ok(p.includes("No access granted to the roof space (no manhole access)."));
+  });
+
+  it("keeps the defects in the form's room order (the phone's), while printing the rooms ground floor first", () => {
+    // Bedroom 1 upstairs comes before Bedroom 2 on the form; the report prints Bedroom 2 (ground floor) first. The server pairs a
+    // re-composed defect list with the phone's by position, so the list must stay in form order or photos end up on the wrong defect.
+    const d = draft("internal_areas", { rooms: {
+      bedroom: { present: "yes", floorLevel: "1st floor", generalCondition: "Fair", damages: [{ location: "upstairs window", damageType: "Cracking", sub_cracking: "Fine", direction: "Vertical", widthMm: 1, lengthMm: 300, photos: ["up.jpg"] }] },
+      bedroom_2: { present: "yes", floorLevel: "Ground floor", generalCondition: "Fair", damages: [{ location: "downstairs window", damageType: "Cracking", sub_cracking: "Fine", direction: "Vertical", widthMm: 1, lengthMm: 300, photos: ["down.jpg"] }] },
+    } });
+    assert.deepEqual(d.damages.map((x) => x.photos), [["up.jpg"], ["down.jpg"]]);
+    const p = paras(d);
+    const down = p.findIndex((x) => x.startsWith("DEFECT::1::At the downstairs window"));
+    const up = p.findIndex((x) => x.startsWith("DEFECT::0::At the upstairs window"));
+    assert.ok(down >= 0 && up >= 0 && down < up, "ground floor printed first, each defect tagged with its own place in the list");
+  });
+
+  it("names a renamed slot in the Condition Summary by the inspector's name", () => {
+    const d = draft("garage_carport_sheds", { structures: {
+      carport: { structureName: "Garden shed", present: "yes", attachment: "Separate to house", walls: ["Metal"], wallsCondition: "Fair" },
+      granny_flat: { structureName: "cellar", present: "yes", attachment: "Basement", wallsCondition: "Poor" },
+    } });
+    assert.deepEqual(d.fields.conditionSummary.map((r) => r.subLabel), ["Garden shed", "Cellar"]);
+  });
+
+  it("says a decade as the template does: 'around the 1920s'", () => {
+    assert.ok(draft("description", { constructedYear: "1920s" }).reportText.includes("estimated to have been constructed around the 1920s"));
+    assert.ok(draft("description", { constructedYear: "2015" }).reportText.includes("estimated to have been constructed around 2015"));
+  });
+});
+
+// The Nov 2026 office template ("ACESPECT Dilapidation Residential Structure Generic_Office Template NOV 2026.dotm"), sentence by sentence.
+// Some sentences need a question the form does not ask yet (crack end point, pool fence condition, chimney, extension, ladder): those
+// are checked with the question added to a copy of the form, the way it will be once the template is updated.
+describe("House report: the Nov 2026 template's own sentences", () => {
+  const withFields = (key, extra, path = []) => {
+    const fields = structuredClone(fieldsOf(key));
+    let target = fields;
+    for (const k of path) target = target.find((f) => f.key === k).itemFields;
+    target.push(...extra);
+    return fields;
+  };
+  const opt = (...labels) => labels.map((l) => ({ label: l, value: l.toLowerCase().replace(/[^a-z0-9]+/g, "_") }));
+  const GRADES = opt("Satisfactory with typical wear and tear", "Fair", "Average", "Poor", "New");
+  const text = (key, fields, answers) => flattenSectionToDraft(fields, convert(fields, answers), key, HOUSE).reportText;
+
+  it("words a crack with where it starts and where it runs to", () => {
+    const fields = withFields("driveway", [{ key: "crackEndLocation", type: "text", label: "Running to location" }], ["damages"]);
+    const t = text("driveway", fields, { present: "yes", locatedAt: "Front left", material: "Concrete", condition: SAT, damages: [{ location: "driveway", damageType: "Cracking", crackStartLocation: "the gate", crackEndLocation: "kerb", widthMm: 2, lengthMm: 600 }] });
+    assert.ok(t.includes("At the driveway, there is a crack starting at the gate and running to the kerb. The crack is 2 millimetres wide and 600 millimetres long."), t);
+  });
+
+  it("words a fence defect as 'A {defect} at {location}.'", () => {
+    const t = paras(draft("fences", { items: { rear: { present: "yes", material: ["Brick"], condition: "Fair", damages: [{ location: "rear corner", element: "brick pier", damageType: "Surface Damage", sub_surface: "Chips" }, { location: "gate", element: "posts", damageType: "Material Deterioration", sub_material: "Decay" }] } } }));
+    assert.ok(t.includes("DEFECT::0::A chip to the brick pier at the rear corner."), t.join("\n"));
+    assert.ok(t.includes("DEFECT::1::Decay to the posts at the gate."), t.join("\n"));
+  });
+
+  it("words a carport hidden by a parked car as the template does", () => {
+    const p = paras(draft("garage_carport_sheds", { structures: { carport: { present: "yes", attachment: "Attached to house", position: "Left", walls: ["Metal"], wallsCondition: SAT, roof: ["Colorbond"], floor: ["Concrete hardstand"], obscuredBy: ["Parked car/s"] } } }));
+    assert.ok(p.includes("There is a carport to the house at the left, constructed of metal with a Colorbond roof and concrete hardstand, and is generally in satisfactory state of repair. A parked car obscured part of the hardstand."), p.join("\n"));
+  });
+
+  it("words the pool, then its fence and surrounds", () => {
+    const fields = withFields("pool_spa", [
+      { key: "poolKind", type: "pill-select", label: "Pool or spa", options: opt("Pool", "Spa", "Pool and spa") },
+      { key: "fenceCondition", type: "color-select", label: "Pool fence condition", options: GRADES },
+      { key: "pavingCondition", type: "color-select", label: "Surrounds condition", options: GRADES },
+    ]);
+    const p = paras({ reportText: text("pool_spa", fields, { present: "yes", poolKind: "Pool", position: "Rear", constructed: ["Concrete and tile"], condition: SAT, poolFence: ["Glass panels"], fenceCondition: SAT, paving: ["Tiles"], pavingCondition: SAT }) });
+    assert.ok(p.includes("There is a pool located at the rear of the property, constructed of concrete and tile, which is generally in satisfactory state of repair. Observations of the structure were obscured or limited by water in the pool."), p.join("\n"));
+    assert.ok(p.includes("The pool fence is constructed of glass panels and is in satisfactory condition with typical weathering. The pool surrounds are paved with tiles in satisfactory condition with typical wear and tear."), p.join("\n"));
+  });
+
+  it("words the roof, the lower roof, where they were seen from, and the chimney", () => {
+    const fields = withFields("roof_chimneys", [
+      { key: "chimneyMaterial", type: "chip-multiselect", label: "Chimney", options: opt("Brick", "Rendered brick", "Metal flue") },
+      { key: "chimneyCondition", type: "color-select", label: "Chimney condition", options: GRADES },
+    ], ["sections"]);
+    const p = paras({ reportText: text("roof_chimneys", fields, { sections: {
+      upper: { inspectionStatus: ["Limited observations from ground level using camera zoom"], condition: "Fair", generalCondition: ["Cracked tiles", "Gaps / cracking to chimney brickwork"], chimneyMaterial: ["Brick"], chimneyCondition: "Fair" },
+      lower: { inspectionStatus: ["Inspected partly from balcony"], condition: SAT },
+    } }) });
+    assert.ok(p.includes("The roof covering appears to be in fair condition with cracked tiles. Comments are based on limited observations from the ground only and using a camera zoom."), p.join("\n"));
+    assert.ok(p.includes("The chimney is constructed of brick and appears to be in fair condition with gaps and cracking to the brickwork. Comments are based on limited observations from the ground only and using a camera zoom."), p.join("\n"));
+    assert.ok(p.includes("The lower level roofing generally appears to be in satisfactory condition. Comments are based on limited observations from the upper balcony."), p.join("\n"));
+    const apartment = paras(draft("roof_chimneys", { sections: { upper: { inspectionStatus: ["Not applicable - apartment"] } } }));
+    assert.ok(apartment.includes("The roof could not be inspected as the building is a multi-level building complex. Roof coverings in a unit complex are common property and need to be maintained through the Owners Corporation."), apartment.join("\n"));
+  });
+
+  it("words an extension as the template does", () => {
+    const fields = withFields("description", [
+      { key: "extensionLocation", type: "pill-select", label: "Extension to the", options: opt("Front", "Left", "Rear", "Right") },
+      { key: "extensionYear", type: "text", label: "Extension built around" },
+      { key: "extensionWalls", type: "chip-multiselect", label: "Extension walls", options: opt("Brick veneer", "Weatherboards") },
+      { key: "extensionFoundations", type: "pill-select", label: "Extension foundations", options: opt("Concrete slab", "Stumps") },
+      { key: "extensionRoofDesign", type: "pill-select", label: "Extension roof", options: opt("Pitched", "Flat") },
+      { key: "extensionRoofCovering", type: "chip-multiselect", label: "Extension roof covering", options: opt("Tile", "Colorbond") },
+    ]);
+    const t = text("description", fields, { constructionIs: "Single storey house", extensionLocation: "Rear", extensionYear: "2010", extensionWalls: ["Weatherboards"], extensionFoundations: "Stumps", extensionRoofDesign: "Flat", extensionRoofCovering: ["Colorbond"] });
+    assert.ok(t.includes("There is an extension to the rear built around 2010. It is constructed of weatherboard walls on stumps with a flat roof and a covering of Colorbond."), t);
+  });
+});
+
+describe("House report: one pool or spa, one vehicle, the template's room names", () => {
+  it("says 'pool' or 'spa', never 'pool/spa'", () => {
+    const pool = paras(draft("pool_spa", { present: "yes", poolKind: "Spa", position: "Rear", constructed: ["Fibreglass"], condition: SAT })).join(" ");
+    assert.ok(pool.includes("There is a spa located at the rear of the property, constructed of fibreglass, which is generally in satisfactory state of repair. Observations of the structure were obscured or limited by water in the spa."), pool);
+    const unanswered = paras(draft("pool_spa", { present: "yes", position: "Rear", condition: SAT })).join(" ");
+    assert.ok(!/pool\/spa/.test(unanswered) && unanswered.includes("There is a pool located at the rear"), unanswered);
+  });
+
+  it("names the one vehicle that was in the way", () => {
+    const one = paras(draft("driveway", { present: "yes", locatedAt: "Front left", material: "Concrete", condition: SAT, obscuredBy: ["Trailer"] })).join(" ");
+    assert.ok(one.includes("Sections of the driveway were obscured by a trailer."), one);
+    const car = paras(draft("driveway", { present: "yes", locatedAt: "Front left", material: "Concrete", condition: SAT, obscuredBy: ["Parked car"] })).join(" ");
+    assert.ok(car.includes("Sections of the driveway were obscured by a parked car."), car);
+    // An answer given with the old combined choice does not say which one it was.
+    const fields = fieldsOf("driveway");
+    const old = flattenSectionToDraft(fields, { present: "yes", locatedAt: "front_left", material: "concrete", condition: "satisfactory_with_typical_wear_and_tear", obscuredBy: ["parked_cars_trailer_caravan"] }, "driveway", HOUSE).reportText;
+    assert.ok(old.includes("Sections of the driveway were obscured by a parked vehicle."), old);
+  });
+
+  it("heads the standard rooms with the template's names when no name was typed", () => {
+    const d = draft("internal_areas", { rooms: {
+      kitchen: { present: "yes", floorLevel: "Ground floor", generalCondition: SAT },
+      toilet: { present: "yes", floorLevel: "Ground floor", generalCondition: SAT },
+      stairwell: { present: "yes", floorLevel: "1st floor", generalCondition: SAT },
+      balcony_terrace: { present: "yes", floorLevel: "1st floor", generalCondition: SAT },
+      front_entry_hallway: { present: "yes", floorLevel: "Ground floor", generalCondition: SAT },
+    } });
+    const t = d.reportText;
+    for (const h of ["Entry and Hallway", "Kitchen, Living and Dining", "Toilet", "Stairwell", "Balcony"]) assert.ok(t.includes(`ROOMHEAD::${h}\n`), `${h}\n${t}`);
+    // The Condition Summary names them the same way.
+    assert.deepEqual(d.fields.conditionSummary.map((r) => r.subLabel).sort(), ["Balcony", "Entry and Hallway", "Kitchen, Living and Dining", "Stairwell", "Toilet"]);
   });
 });

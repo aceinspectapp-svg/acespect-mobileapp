@@ -44,3 +44,15 @@ describe("a typed place that already starts with an article", () => {
     assert.equal(withThe("a gate post"), "a gate post");
   });
 });
+
+describe("a section's general photographs", () => {
+  it("leave out the photos already printed under a defect (the phone lists every photo of the section, defect photos included)", async () => {
+    const { generalPhotosOf } = await server.ssrLoadModule("/src/web/components/ReportSection.tsx");
+    const section = {
+      photos: ["https://x/p1.jpg?sig=a", "https://x/p2.jpg?sig=a", "https://x/p3.jpg?sig=a", "https://x/p4.jpg?sig=a"],
+      damages: [{ photos: ["https://x/p2.jpg?sig=b"] }, { photos: ["https://x/p4.jpg?sig=a"] }],
+    };
+    assert.deepEqual(generalPhotosOf(section), ["https://x/p1.jpg?sig=a", "https://x/p3.jpg?sig=a"]);
+    assert.deepEqual(generalPhotosOf({ photos: ["a.jpg"], damages: [] }), ["a.jpg"]);
+  });
+});

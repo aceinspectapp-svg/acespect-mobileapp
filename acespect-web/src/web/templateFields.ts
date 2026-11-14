@@ -401,6 +401,9 @@ function niceInstanceLabel(itemFields: TemplateField[], inst: AnswerTree, fallba
   }
   const name = asString(inst.name).trim();
   if (name) return name;
+  // The inspector's own name for a fixed slot ("Garden shed" in the Carport slot, "Upstairs study" in Other internal area).
+  const typed = (asString(inst.structureName) || asString(inst.roomName)).trim();
+  if (typed) return typed.charAt(0).toUpperCase() + typed.slice(1);
   return fallbackLabel;
 }
 
@@ -596,6 +599,17 @@ function walk(
       // heading line whenever the floor changes as instances are walked.
       const floorLevelField = (field.itemFields ?? []).find((f) => f.key === "floorLevel");
       const floorGrouped = composed && wording.floorGrouped?.sectionKey === composed ? wording.floorGrouped : undefined;
+      // The section's defect list is built in the FORM's instance order -- the order the phone saves its defects in. The server pairs a
+      // re-composed list with the saved one by position (and merges each pair's photos), so the list must not follow the floor-sorted
+      // order the rooms are printed in below, or a first-floor Bedroom 1's defects would be paired with another room's and their photos mixed.
+      const walked = new Map<(typeof instances)[number], { sub: ReturnType<typeof walk>; damageBase: number }>();
+      for (const item of instances) {
+        const damageBase = damages.length; // where this instance's defects start in the section-wide list
+        const sub = walk(field.itemFields ?? [], item.scope, [...ancestorLabels, item.label], undefined, wording);
+        // Stale damage records on an instance the inspector later marked as not present shouldn't reach the report.
+        if (!(composed && isNotPresent(item.scope))) damages.push(...sub.damages);
+        walked.set(item, { sub, damageBase });
+      }
       if (floorGrouped && floorLevelField) {
         // Room order is fixed by the template (Front Entry, Living Room,
         // Dining, Kitchen, Bedroom, Bathroom, Laundry, Toilet, Stairwell,
@@ -626,12 +640,10 @@ function walk(
       // "There is no front fence." lines for sides marked not present -- kept only if some other side does have a fence.
       const absentLines: { at: number; text: string }[] = [];
       let lastFloorLevel: string | undefined;
-      for (const { label, scope: inst } of instances) {
-        const damageBase = damages.length; // where this instance's defects start in the section-wide list
-        const sub = walk(field.itemFields ?? [], inst, [...ancestorLabels, label], undefined, wording);
+      for (const item of instances) {
+        const { label, scope: inst } = item;
+        const { sub, damageBase } = walked.get(item)!;
         const notPresent = !!composed && isNotPresent(inst);
-        // Stale damage records on an instance the inspector later marked as not present shouldn't reach the report.
-        if (!notPresent) damages.push(...sub.damages);
         labels.push(label);
         // An instance marked not present (Is there a garage? No), or a fixed
         // slot the inspector never touched, contributes nothing -- no
@@ -649,7 +661,7 @@ function walk(
             const row = conditionSummaryRow(
               field.itemFields ?? [],
               inst,
-              instances.length > 1 ? niceInstanceLabel(field.itemFields ?? [], inst, label) : undefined,
+              instances.length > 1 ? niceInstanceLabel(field.itemFields ?? [], inst, wording.instanceLabel?.(composed, label) ?? label) : undefined,
             );
             if (row) conditionSummaryRows.push(row);
           }
@@ -687,7 +699,10 @@ function walk(
       // rather than reporting the fact that the feature doesn't exist. State
       // it properly instead, matching the reference report's own "There is no
       // driveway." convention.
-      if (composed && composedCount === 0) {
+      // An item the inspector could not see ("Is there a fence to this side? Not inspected") is neither there nor not there: the
+      // section's "there are none" sentence is said only when every item was answered.
+      const unseen = instances.some(({ scope: inst }) => isAnswered(inst.present) && !['yes', 'no'].includes(asString(inst.present)));
+      if (composed && composedCount === 0 && !unseen) {
         const absence = wording.absence[composed];
         // "Are there any retaining walls? Yes" with none entered yet is not "there are no retaining walls": it says there are some.
         if (asString(scope.present) === "yes") {

@@ -1,6 +1,9 @@
 import { createContext, useContext, useMemo, useRef, type ReactNode } from "react";
 import { resolveMediaUrl } from "../api";
-import { COMPACT_PACK, PAGE_PACK, packPhotoRows } from "../photoLayout";
+import { COMPACT_PACK, PAGE_PACK, packPhotoRows, type PackedRow } from "../photoLayout";
+
+/** How tall (cm) a photo sized "to fit the page" may be: the full text width for a landscape photo, shorter for a portrait one, so the description and the Photographs heading still share its page. */
+export const FIT_PAGE_MAX_HEIGHT = 12.3;
 import { useImageAspects } from "../useImageAspects";
 
 /**
@@ -320,9 +323,12 @@ export function PhotoGrid({
   startNumber,
   caption,
   maxHeight,
+  fitPage = false,
 }: {
   photos: string[];
   compact: boolean;
+  /** One photo sized to fit the page and centred (a template's "Size to fit the page and centre"): the full text width, no taller than FIT_PAGE_MAX_HEIGHT. */
+  fitPage?: boolean;
   /** Tallest a row may be, in cm (the page default is PAGE_PACK's) -- for a spot, like the cover-page photo, that has to share its page with a lot of text. */
   maxHeight?: number;
   /** Text that introduces the photos (a defect's sentence, a "Please refer to Photographs…" line). Printed above the first row and kept on the same page as it, so a caption is never left alone at the bottom of a page. */
@@ -334,7 +340,15 @@ export function PhotoGrid({
   const { aspects, pending, failed } = useImageAspects(urls);
   const base = compact ? COMPACT_PACK : PAGE_PACK;
   const options = maxHeight && maxHeight < base.maxHeight ? { ...base, maxHeight, targetHeight: Math.min(base.targetHeight, maxHeight), minHeight: Math.min(base.minHeight, maxHeight) } : base;
-  const rows = useMemo(() => packPhotoRows(aspects, options), [aspects.join(","), compact, options.maxHeight]);
+  const fit = fitPage && photos.length === 1;
+  const rows = useMemo((): PackedRow[] => {
+    if (!fit) return packPhotoRows(aspects, options);
+    // The page's whole text width, unless that would make the photo taller than fits with the text around it.
+    const aspect = aspects[0] ?? 4 / 3;
+    const maxH = compact ? options.maxHeight : FIT_PAGE_MAX_HEIGHT;
+    const width = Math.min(options.width, maxH * aspect);
+    return [{ indices: [0], sizes: [{ width, height: width / aspect }], height: width / aspect, full: true }];
+  }, [aspects.join(","), compact, options.maxHeight, fit]);
   if (photos.length === 0) return null;
   return (
     <div
@@ -346,7 +360,7 @@ export function PhotoGrid({
         <div key={ri} style={{ breakInside: "avoid" }}>
           {ri === 0 && caption}
           {/* Photos in a row share a bottom line (a landscape next to a portrait lines up with the portrait's bottom edge); rows start at the left margin. */}
-          <div style={{ display: "flex", gap: `${options.gap}cm`, alignItems: "flex-end", justifyContent: "flex-start" }}>
+          <div style={{ display: "flex", gap: `${options.gap}cm`, alignItems: "flex-end", justifyContent: fit ? "center" : "flex-start" }}>
           {row.indices.map((i, k) => (
             <div
               key={i}

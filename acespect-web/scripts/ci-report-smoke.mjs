@@ -414,18 +414,16 @@ pdfs.push(await runCase({
   name: "Dilapidation / Apartment",
   profile: APARTMENT, inspectionTitle: "Dilapidation", propertyTitle: "Apartment", jobNo: "HV-26-CI04", client: "CI Apartment Client",
   answers: apartmentAnswers, photoSections: ["driveway", "elevations", "internal_areas"],
-  headings: ["Description and Overview", "Condition Summary", "External walls", "Ceilings", "Front door", "Apartment"],
+  // The Nov 2026 Multi Level Office Building template's wording only (the form's Pre-Purchase checklist answers print nothing).
+  // Laid out under the template's headings, in its order (no Condition Summary page).
+  headings: ["Description and Overview", "Driveway", "Main structure", "Unit Areas", "Ceilings", "Apartment"],
   phrases: [
-    "The property is a 4-storey apartment in a multi-level complex, on a flat block of land",
-    "The proposed works are excavation.",
+    "The property is a unit in a 4-storey apartment block, on a flat block of land and estimated to have been constructed around 2010.",
     "The scope for inspection is external and internal to all structures.",
-    "This elevation is on the boundary and could not be inspected.",
-    "The external walls are constructed of brick.",
-    "The front door requires re-painting.",
-    "The roof space is not applicable",
-    "There is significant cracking. The most significant items are:",
-    "Notable damage was observed.",
-    "There were safety issues at the property. Loose balustrade on level 2.",
+    "It is in fair condition. There is a party wall abutting the next property.",
+    "They are in fair condition.",
+    "The driveway is to the front of the block and is constructed of concrete. It is in fair condition.",
+    "No access to the plant room.",
   ],
   minPages: 6, minImages: 4,
 }));

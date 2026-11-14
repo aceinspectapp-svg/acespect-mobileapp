@@ -206,6 +206,26 @@ function str(v: unknown, fallback = ""): string {
  * "u2", …) never match a real database UUID, so the inspector name/license
  * fallback silently never worked for any real inspection.
  */
+/**
+ * The weather as the templates write it ("Weather Conditions: Dry / Sunny / Intermittent showers / Rain / Overcast"). The phone saves
+ * its choices by their stored names ("overcast, intermittent_showers"): each is said as its word ("Overcast, Intermittent showers"); a
+ * typed "Other" is said as typed, and anything already in words (typed on the website) is left as it is.
+ */
+export function weatherWords(saved: string): string {
+  return saved
+    .split(/\s*,\s*/)
+    .map((w) => {
+      const typed = /^__other__:(.*)$/s.exec(w);
+      if (typed) return typed[1]!.trim();
+      if (w === "other") return ""; // "Other" with nothing typed says nothing
+      if (/[A-Z\s]/.test(w)) return w; // already in words
+      const word = w.replace(/_/g, " ");
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
 export function buildReportHeader(inspection: Inspection, inspector?: Pick<User, "name" | "licenseNumber">): ReportHeader {
   const jobInfo = inspection.sections.find((s) => (s.key ?? s.id).startsWith("job-info"));
   const f = jobInfo?.fields ?? {};
@@ -230,11 +250,12 @@ export function buildReportHeader(inspection: Inspection, inspector?: Pick<User,
     yourReference: str(f.yourReference, inspection.jobNo),
     // the job number a reviewer corrected in Job Information, else the inspection's own (the PDF and Word footers follow the same rule)
     ourReference: str(f.ourReference) || str(f.jobNo).trim() || inspection.jobNo,
-    property: str(f.address, `${inspection.address}, ${inspection.suburb}`),
+    // "Unit 706, Galle" -- no trailing comma when the job has no suburb of its own.
+    property: str(f.address, [inspection.address, inspection.suburb].map((s) => (s ?? "").trim()).filter(Boolean).join(", ")),
     propertyOwner: str(f.propertyOwner) || undefined,
     propertyOwnerEmail: str(f.propertyOwnerEmail) || undefined,
     inspectionDate: formatLongDate(str(f.date, inspection.date)),
-    weather: str(f.weather, "—"),
+    weather: weatherWords(str(f.weather)) || "—",
     inspector: str(f.inspector, inspector?.name ?? "—"),
     inspectorRegistration: str(f.inspectorRegistration) || inspector?.licenseNumber || undefined,
     purpose: str(f.purpose) || defaultPurposeFor(inspection, str(f.inspector, inspector?.name ?? ""), str(f.inspectorRegistration) || inspector?.licenseNumber || ""),
