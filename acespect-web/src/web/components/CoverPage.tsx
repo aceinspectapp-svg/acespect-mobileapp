@@ -24,11 +24,16 @@ export interface CoverPageProps {
   rows: [string, ReactNode][];
   signatureName?: string;
   signatureTitle?: string;
+  /** The signature drawn above the name (the office template's handwritten signature). */
+  signatureImage?: string;
   /** The smaller layout of the reviewer's narrow Report Text panel; the page itself is full size. */
   compact?: boolean;
   /** The logo, shown in the live browser view only (the PDF's own page header already carries it on every page). */
   logo?: ReactNode;
 }
+
+/** The signature every report's first page carries above the director's name (Dinuke De Coonghe), as in the office templates. */
+export const DEFAULT_SIGNATURE = "/houspect-signature.png";
 
 export function CoverPage(p: CoverPageProps) {
   const compact = !!p.compact;
@@ -82,6 +87,7 @@ export function CoverPage(p: CoverPageProps) {
       {(p.signatureName || p.signatureTitle) && (
         // One unbreakable block, so the name is never left on one page and the title on the next.
         <div data-cover="signature" style={{ marginTop: "28px", breakInside: "avoid" }}>
+          {p.signatureImage && <img data-cover="sig-image" src={p.signatureImage} alt="Signature" style={{ display: "block", width: compact ? "2cm" : "2.8cm", height: "auto", margin: "0 0 6px" }} />}
           {p.signatureName && <div data-cover="sig-name" style={{ color: C.navy, fontSize: compact ? "14px" : "17px" }}>{p.signatureName}</div>}
           {p.signatureTitle && <div data-cover="sig-title" style={{ color: C.navy, fontSize: compact ? "11px" : "13px", fontWeight: 700 }}>{p.signatureTitle}</div>}
         </div>

@@ -12,7 +12,7 @@
  */
 import type { AnswerTree, TemplateField } from "../templateFields";
 import { asString } from "../templateFields";
-import { headingMap, photosIn } from "./words";
+import { headingMap, headingOf, photosIn } from "./words";
 import { GENERAL, PURPOSE, SECTION_ORDER, STAGES, coverTitleOf, kindOfKey, stageOfSectionKeys, type StageId } from "./stages";
 import { ITEM_STATUSES, TAGS, type ItemStatus } from "./compose";
 import library from "./codeLibrary.json";
@@ -30,8 +30,10 @@ export interface ChecklistItem {
   heading: string;
   status: ItemStatus;
   text: string;
-  /** The defect number this row refers to, when it is a defect. */
+  /** The defect number this row refers to, when it is a defect (its first, when it raised more than one). */
   defectNo?: number;
+  /** How many of the report's numbered defects this row raised (a defect row only): printed as "REFER DEFECTS (2)". */
+  defectCount?: number;
 }
 export interface ChecklistGroup { heading?: string; items: ChecklistItem[] }
 export interface ChecklistTable {
@@ -42,12 +44,47 @@ export interface ChecklistTable {
   counts: Record<ItemStatus, number>;
   /** Photographs the inspector took against rows of this section (measurements, levels), with the row they belong to. */
   photos: { heading: string; photos: string[] }[];
+  /** The template's fixed sentence printed above the table (Pre-pour: "These items were checked for construction and workmanship."). */
+  intro?: string;
+  /** The template's fixed note printed after the table's rows, in italics (Pre-pour: the land surveying note after the setbacks). */
+  footnote?: string;
+}
+
+/** Pre-pour template: the sentence under the PRE POUR heading, before the first of its checks. */
+export const PRE_POUR_INTRO = "These items were checked for construction and workmanship.";
+/** Pre-pour template: the italic note after the four setback items (the template's wording, kept exactly). */
+export const SETBACK_NOTE =
+  "Houspect Building Inspector is not a providing a land surveying service therefore the comments are observations by the inspector only. Note; pegs on site may sometimes be knocked over or inadvertently moved during base/slab preparation and concrete pour and the inspector is providing estimates only from site markers available on the day of inspection.";
+
+/**
+ * Each note once. The same template note can be asked for from two places -- the security fence from the Site & Facilities answer and
+ * from the Statements & Notes tick, the ground falls from General Other and from the tick -- so notes are kept by what they are about:
+ * one security-fence note (the first, which is the one with the inspector's detail when given), and no sentence twice.
+ */
+export function uniqueNotes(notes: string[]): string[] {
+  // The security-fence note in either of its two wordings (the template's sentence, or the tick's with the inspector's detail).
+  const FENCE_NOTE = /^(sections of the security fence\b|security fencing is .+ needs to be reinstated)/i;
+  const topic = (t: string) => (FENCE_NOTE.test(t) ? "security-fence" : t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim());
+  const seen = new Set<string>();
+  return notes.filter((t) => {
+    const k = topic(t);
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 export interface DefectEntry {
   no: number;
   /** The sentence: the checklist row, where it is and the inspector's comments. */
   text: string;
+  /** The template's bold line above the defect: where it is (the room / area), or its checklist item when no location was recorded. */
+  heading: string;
+  /** The template's numbered line: the defect's description (followed in print by "Please refer to Photographs X to Y."). */
+  description: string;
+  /** The checklist item's name from the template when the defect was recorded against one ("Slab formwork dimensions"), else "" (a typed
+   *  "Other" name, a defects table row). The report prints that name in the template's capitals (printCase.ts). */
+  item: string;
   severity: string;
   category: string;
   /** What the inspector typed as the construction code ("2.04") and the library's name for it. */
@@ -96,7 +133,7 @@ export interface SectionInput {
   /** The section's report text (what the reviewer portal shows). */
   reportText: string;
   /** The section's defect records, in the order its DEFECT lines number them. */
-  damages: { type: string; location: string; direction: string; photos: string[] }[];
+  damages: { type: string; location: string; direction: string; photos: string[]; item?: string; description?: string }[];
   /** Used only for photos: the photograph fields sit beside the text. */
   answers: AnswerTree | null;
   fields: TemplateField[];
@@ -183,6 +220,14 @@ function pciAppliances(status: string): string {
   return "";
 }
 
+/**
+ * How many defects a checklist row answered "Defect" raised. A row made from two checks (the Roof covering and Roof gutters rows) says
+ * "… is defective." once for each check found defective, and raised a defect for each; every other defect row raised one.
+ */
+export function rowDefects(text: string): number {
+  return Math.max(1, (text.match(/\bis defective\b/gi) ?? []).length);
+}
+
 const tableTitle = (name: string) => (name.split(":").pop() ?? name).trim().toUpperCase();
 
 /** A sub-heading as the report prints it: without the form's instructions to the inspector ("— use a digital level …", "— check with the office …?"). */
@@ -217,10 +262,10 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
   let previous = noList();
   let clientConcerns = noList();
 
-  interface Raised { key: string; sub: string; text: string; photos: string[]; fromId?: string }
+  interface Raised { key: string; sub: string; text: string; photos: string[]; fromId?: string; heading: string; description: string; item: string }
   const raised: Raised[] = [];
   /** Checklist rows that say "refer defects", per section, to be tied to their defects once those are numbered. */
-  const pending: { item: ChecklistItem; raisedIndex: number }[] = [];
+  const pending: { item: ChecklistItem; raisedIndexes: number[] }[] = [];
   let itemSeq = 0;
 
   for (const s of approved) {
@@ -231,10 +276,17 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
 
     // The defects this section records, each paired with its own photos.
     const firstRaised = raised.length;
+    // The names of this section's checklist items, as the template's rows give them (not what an inspector typed for an "Other" row).
+    const rowNames = new Set<string>([...lines.flatMap((l) => (l.kind === "item" ? [l.heading] : [])), ...headingMap(s.fields).values(), ...s.fields.map((f) => headingOf(f.label))]);
     for (const l of lines) {
       if (l.kind !== "defect") continue;
       const dmg = s.damages[l.index];
-      raised.push({ key: s.key, sub: dmg?.type || "General", text: l.text, photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)) });
+      const where = (dmg?.location ?? "").trim();
+      const item = (dmg?.item ?? "").trim();
+      raised.push({
+        key: s.key, sub: dmg?.type || "General", text: l.text, photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)),
+        heading: where || item, description: (dmg?.description ?? "").trim() || splitDefect(l.text).sentence, item: rowNames.has(item) ? item : "",
+      });
     }
 
     if (kind === "description") {
@@ -246,7 +298,11 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       const groups: ChecklistGroup[] = [];
       let current: ChecklistGroup | null = null;
       let inDefects = false;
-      let defectRowsSeen = 0;
+      let defectsTaken = 0;
+      const sectionRaised = raised.length - firstRaised;
+      // Defect rows still to come, so a row never takes a defect that belongs to a row after it.
+      let defectRowsLeft = 0;
+      { let inD = false; for (const l of lines) { if (l.kind === "room") inD = l.text === "Defects"; else if (!inD && l.kind === "item" && l.status === "defect") defectRowsLeft++; } }
       for (const l of lines) {
         if (l.kind === "room") {
           inDefects = l.text === "Defects";
@@ -258,7 +314,15 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
         if (!current) { current = { items: [] }; groups.push(current); }
         const item: ChecklistItem = { id: `item-${++itemSeq}`, heading: l.heading, status: l.status, text: l.text };
         current.items.push(item);
-        if (l.status === "defect") pending.push({ item, raisedIndex: firstRaised + defectRowsSeen++ });
+        if (l.status === "defect") {
+          // The section's defects are recorded in the order of its rows: each defect row raised one, except a row made from two checks
+          // (Roof covering, Roof gutters), which raised one for each check it found defective.
+          const want = rowDefects(l.text);
+          defectRowsLeft--;
+          const take = Math.max(0, Math.min(want, sectionRaised - defectsTaken - defectRowsLeft));
+          pending.push({ item, raisedIndexes: Array.from({ length: take }, (_, k) => firstRaised + defectsTaken + k) });
+          defectsTaken += take;
+        }
       }
       const title = tableTitle(s.name);
       const kept = groups.filter((g) => g.items.length > 0).map((g) => {
@@ -281,7 +345,14 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       if (kept.length || photos.length) {
         const counts = emptyCounts();
         for (const g of kept) for (const it of g.items) counts[it.status] += 1;
-        tables.push({ sectionKey: s.key, title, groups: kept, counts, photos });
+        const table: ChecklistTable = { sectionKey: s.key, title, groups: kept, counts, photos };
+        if (stage === "pre_pour" && kind === "stage") {
+          // The template's PRE POUR heading opens with this sentence: printed above the first of the Pre-pour checks.
+          if (!tables.some((t) => t.intro === PRE_POUR_INTRO)) table.intro = PRE_POUR_INTRO;
+          // ... and closes its four setbacks with the land surveying note (not when the setbacks are not there or not applicable).
+          if (kept.some((g) => g.items.some((it) => /setback/i.test(it.heading) && it.status !== "na"))) table.footnote = SETBACK_NOTE;
+        }
+        tables.push(table);
       }
     } else if (kind === "summary") {
       summaryLines = paragraphs(lines);
@@ -308,11 +379,15 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       n += 1;
       numberOf.set(i, n);
       const parts = splitDefect(d.text);
-      group.defects.push({ no: n, text: parts.sentence, severity: parts.severity, category: parts.category, code: parts.code, codeTitle: parts.code ? codeTitle(parts.code) : "", photos: d.photos, sectionKey: d.key });
+      group.defects.push({ no: n, text: parts.sentence, heading: d.heading, description: d.description, item: d.item, severity: parts.severity, category: parts.category, code: parts.code, codeTitle: parts.code ? codeTitle(parts.code) : "", photos: d.photos, sectionKey: d.key });
     });
     defectGroups.push(group);
   }
-  for (const p of pending) p.item.defectNo = numberOf.get(p.raisedIndex);
+  for (const p of pending) {
+    const nos = p.raisedIndexes.map((i) => numberOf.get(i)).filter((x): x is number => x !== undefined);
+    p.item.defectNo = nos.length ? Math.min(...nos) : undefined;
+    p.item.defectCount = nos.length;
+  }
 
   const totals = emptyCounts();
   for (const t of tables) for (const k of ITEM_STATUSES) totals[k] += t.counts[k];
@@ -322,9 +397,10 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
   const appliances = stage === "pci" ? pciAppliances(status) : "";
   if (appliances) notes.splice(Math.min(1, notes.length), 0, appliances);
   notes.push(...siteNotes);
+  const printedNotes = uniqueNotes(notes);
 
   return {
     stage, stageLabel, coverTitle: coverTitleOf(stage), purpose: PURPOSE, general: GENERAL, description, streetPhotos, otherPhotos, tables, totals,
-    defectGroups, defectCount: n, notes, notesBySection, previous, clientConcerns, waitingSections, attachedKeys,
+    defectGroups, defectCount: n, notes: printedNotes, notesBySection, previous, clientConcerns, waitingSections, attachedKeys,
   };
 }

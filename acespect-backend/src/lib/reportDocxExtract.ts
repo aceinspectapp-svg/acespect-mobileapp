@@ -118,7 +118,19 @@ export const REPORT_EXTRACT_SOURCE = String.raw`
   function image(el) {
     const rect = el.getBoundingClientRect();
     if (rect.width < 2 || rect.height < 2) return null;
-    return { k: 'img', src: el.currentSrc || el.src, w: rect.width, h: rect.height, border: boxOf(getComputedStyle(el)) };
+    const cs = getComputedStyle(el);
+    // A report photo sits in its kind's box (3:4 or 4:3) and is shown whole inside it (object-fit: contain). Word has no such setting, so
+    // a photo of another shape (a screenshot) is given its own shape at the largest size that fits the box, instead of being stretched.
+    let w = rect.width;
+    let h = rect.height;
+    if (cs.objectFit === 'contain' && el.naturalWidth > 0 && el.naturalHeight > 0) {
+      const real = el.naturalWidth / el.naturalHeight;
+      if (Math.abs(real - w / h) / real > 0.01) {
+        if (real > w / h) h = w / real;
+        else w = h * real;
+      }
+    }
+    return { k: 'img', src: el.currentSrc || el.src, w, h, border: boxOf(cs) };
   }
 
   // The first page. It is drawn from CoverPage's own parts (marked data-cover) rather than from the generic walk below, which has no
@@ -135,6 +147,8 @@ export const REPORT_EXTRACT_SOURCE = String.raw`
     const kicker = one(banner, 'kicker');
     const rows = all(root, 'row');
     const rowCs = rows.length ? style(rows[0]) : null;
+    // the signature picture above the name: its address and the size it is drawn at
+    const sigImage = (sig) => { const img = sig.querySelector('[data-cover="sig-image"]'); if (!img) return null; const r = img.getBoundingClientRect(); return r.width > 1 ? { src: img.currentSrc || img.src, w: r.width, h: r.height, gap: px(getComputedStyle(img).marginBottom) } : null; };
     const sig = one(root, 'signature');
     return {
       k: 'cover',
@@ -161,7 +175,7 @@ export const REPORT_EXTRACT_SOURCE = String.raw`
       rule: rowCs && px(rowCs.borderBottomWidth) > 0 ? { w: px(rowCs.borderBottomWidth), color: rowCs.borderBottomColor } : null,
       // the label column and the gap after it (the grid's first column + its column-gap)
       labelColumn: rows.length ? one(rows[0], 'row-value').getBoundingClientRect().left - rows[0].getBoundingClientRect().left : 180,
-      signature: sig ? { gap: px(style(sig).marginTop), name: para(one(sig, 'sig-name')), title: para(one(sig, 'sig-title')) } : null,
+      signature: sig ? { gap: px(style(sig).marginTop), image: sigImage(sig), name: para(one(sig, 'sig-name')), title: para(one(sig, 'sig-title')) } : null,
     };
   }
 

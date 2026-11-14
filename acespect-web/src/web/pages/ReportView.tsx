@@ -4,7 +4,7 @@ import { ArrowLeft, Printer, Download, FileText } from "lucide-react";
 import type { FormSection } from "../mockData";
 import { buildReportHeader, withExcludedPhotosRemoved } from "../report";
 import { useAppData, useInspectionDetail } from "../data";
-import { API_BASE, fetchWithRefresh, getToken } from "../api";
+import { openReportFile, reportFileName } from "../reportFile";
 import { ReportCover } from "../components/ReportCover";
 import { sectionPhotoArchiveUrl } from "../photoArchive";
 import { ReportDescription } from "../components/ReportDescription";
@@ -19,7 +19,7 @@ import { reportProfileOf } from "../wording/profile";
 import { wordingFor } from "../wording/registry";
 import type { ConditionSummaryRow } from "../templateFields";
 import { DILAPIDATION_BRAND, PhotoNumberProvider, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
-import { ConstructionReportBody, constructionFileName, useConstructionReport } from "../construction/ConstructionReport";
+import { ConstructionReportBody, useConstructionReport } from "../construction/ConstructionReport";
 import { orderedPieces, type ReportPiece } from "../reportParts";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
@@ -50,51 +50,15 @@ export function ReportView() {
   // Opens in a new tab. The tab is opened straight away (inside the click, so the browser does not block it as a pop-up) and shows a
   // short "Preparing" note while the server builds the file; then a PDF shows in the browser's own viewer, and a Word file (which a
   // browser cannot show) is saved from that tab under its proper name. If the browser blocks new tabs, the file downloads here as before.
+  // (the body is openReportFile in reportFile.ts -- the reviewer page's Report button uses the same one)
   async function handleDownload(format: "pdf" | "docx") {
     if (!id) return;
-    const label = format === "pdf" ? "PDF" : "Word document";
-    const pdfName = construction ? constructionFileName(inspection?.jobNo || id) : `${(inspection?.jobNo || id).replace(/[^a-z0-9.-]+/gi, "-")}-dilapidation-report.pdf`;
-    const fileName = format === "pdf" ? pdfName : pdfName.replace(/\.pdf$/, ".docx");
-    const win = window.open("", "_blank");
-    const note = (title: string, text: string) => {
-      if (!win || win.closed) return;
-      win.document.title = title;
-      win.document.body.style.cssText = "font-family: Inter, system-ui, sans-serif; color: #1a2a4a; padding: 48px; text-align: center;";
-      win.document.body.textContent = text;
-    };
-    note(fileName, `Preparing the ${label}… this can take a few seconds.`);
     setDownloading(true);
     setDownloadError(null);
     try {
-      const token = getToken();
-      const res = await fetchWithRefresh(`${API_BASE}/inspections/${id}/report.${format}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      if (!res.ok) {
-        // The server says why (for example the report page could not be opened); show that instead of a bare status code.
-        const why = (await res.json().catch(() => null))?.error?.message;
-        throw new Error(`Failed to generate ${format === "pdf" ? "PDF" : "Word document"}${why ? `: ${why}` : ` (HTTP ${res.status})`}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      // Kept for a while so the new tab can finish loading (and the viewer can save) the file; freed with this page at the latest.
-      setTimeout(() => URL.revokeObjectURL(url), 10 * 60_000);
-      if (win && !win.closed && format === "pdf") {
-        win.location.href = url;
-        return;
-      }
-      const doc = win && !win.closed ? win.document : document;
-      const a = doc.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      doc.body.appendChild(a);
-      a.click();
-      a.remove();
-      note(fileName, `${fileName} has been downloaded. You can close this tab.`);
+      await openReportFile(id, format, reportFileName({ id, jobNo: inspection?.jobNo }, !!construction, format));
     } catch (e) {
-      const message = e instanceof Error ? e.message : `Failed to download the ${label}`;
-      setDownloadError(message);
-      note("Report not available", message);
+      setDownloadError(e instanceof Error ? e.message : "Failed to download the report");
     } finally {
       setDownloading(false);
     }

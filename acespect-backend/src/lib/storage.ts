@@ -689,3 +689,31 @@ export async function fetchPhotoStream(
   if (photo.kind === 'stream') return { body: photo.body, contentType: photo.contentType };
   return { body: new Response(photo.bytes).body as unknown as ReadableStream, contentType: photo.contentType };
 }
+
+/**
+ * The full-quality original of a photo, for the "download all original photos" zip: the untouched file kept beside the report copy as
+ * `{name}-original.{ext}` (see storePhoto). Streamed, never cached -- originals are large and each is read once per download.
+ *
+ * When there is no original to give -- photos kept in the database (local development), the Egnyte provider (whose originals are not
+ * listed here), or an upload whose original failed to save -- the report copy is given instead, marked `original: false`, so the
+ * download is still complete. Null only when the photo itself is missing.
+ */
+export async function fetchOriginalPhoto(id: string): Promise<{ body: Readable; fileName: string; original: boolean } | null> {
+  const indexed = await prisma.photo.findUnique({ where: { id }, select: { storageKey: true } });
+  const key = indexed?.storageKey ?? '';
+  const base = key.replace(/\.jpg$/i, '');
+  const shortName = (base.split('/').pop() || id).replace(/[^a-zA-Z0-9_-]/g, '_');
+  if (!useDbStorage() && isStorageEnabled() && !usesEgnyte() && key && !key.startsWith('db:')) {
+    const [original] = (await listBlobNames(`${base}-original.`)).sort();
+    if (original) {
+      const blob = await getBlob(original);
+      if (blob) {
+        const ext = (original.slice(original.lastIndexOf('.') + 1) || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return { body: blob.stream as Readable, fileName: `${shortName}.${ext}`, original: true };
+      }
+    }
+  }
+  const copy = await fetchPhotoStream(id);
+  if (!copy) return null;
+  return { body: Readable.fromWeb(copy.body as import('stream/web').ReadableStream), fileName: `${shortName}.jpg`, original: false };
+}

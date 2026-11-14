@@ -520,7 +520,8 @@ async function main() {
   const pdf = await fetch(BASE.replace('/api/v1', '') + link.body.url);
   const head = Buffer.from(await pdf.arrayBuffer()).subarray(0, 4).toString('latin1');
   ok(pdf.status === 200 && head === '%PDF', 'the signed link serves the PDF');
-  const tampered = await fetch(BASE.replace('/api/v1', '') + link.body.url.replace(/s=./, 's=x'));
+  // Change the signature's first character to a different one (a fixed 'x' left the link unchanged whenever it already began with 'x').
+  const tampered = await fetch(BASE.replace('/api/v1', '') + link.body.url.replace(/s=(.)/, (_m: string, c: string) => `s=${c === 'x' ? 'y' : 'x'}`));
   ok(tampered.status === 403, 'an edited link is refused', tampered.status);
   const expired = await fetch(BASE.replace('/api/v1', '') + link.body.url.replace(/e=\d+/, 'e=1'));
   ok(expired.status === 403, 'an expired link is refused', expired.status);

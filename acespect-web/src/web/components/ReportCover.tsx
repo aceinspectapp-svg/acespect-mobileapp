@@ -1,5 +1,5 @@
 import { registrationLabel, type ReportHeader } from "../report";
-import { COVER_COLORS, CoverPage } from "./CoverPage";
+import { COVER_COLORS, CoverPage, DEFAULT_SIGNATURE } from "./CoverPage";
 
 // Acespect Pty Ltd trades AS Houspect Victoria -- this report carries that
 // real trading identity, not the internal ACESPECT app's own logo. The image
@@ -46,6 +46,7 @@ export function ReportCover({ header: r, compact = false }: { header: ReportHead
       ]}
       signatureName={r.signatureName}
       signatureTitle={r.signatureTitle}
+      signatureImage={r.signatureUrl || DEFAULT_SIGNATURE}
     />
   );
 }

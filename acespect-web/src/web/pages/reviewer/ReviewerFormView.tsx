@@ -28,10 +28,13 @@ import { buildReportHeader, defaultPurposeFor, withExcludedPhotosRemoved } from 
 import { SectionFieldEditor, PhotoUploadContext } from "../../components/SectionFieldEditor";
 import { constructionSectionText, isConstructionKey } from "../../construction/sectionText";
 import { Cover as ConstructionCover, ConstructionSectionPreview, useConstructionReport } from "../../construction/ConstructionReport";
+import { constructionPhotoGroups, withPhotoAdded, type PhotoGroup } from "../../construction/photoGroups";
+import { ConstructionPhotoPicker } from "../../components/ConstructionPhotoPicker";
 import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSectionToDraft, fetchActiveTemplate, listMissingItems } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { reportProfileOf } from "../../wording/profile";
 import { api, resolveMediaUrl } from "../../api";
+import { openReportFile, reportFileName } from "../../reportFile";
 
 /* ─── helpers ─────────────────────────────────────────────────────── */
 function formatFieldKey(key: string): string {
@@ -561,7 +564,11 @@ function PhotoViewer({ photos, index, onIndex, onClose }: { photos: string[]; in
   );
 }
 
-function PhotosGrid({ photos }: { photos: string[] }) {
+/**
+ * The section's photos as thumbnails; click one to enlarge it. When `onToggle` is given, each also has the same small remove button as
+ * the Report Content panel's photos: the photo is left out of the report, not deleted, and "Add back" undoes it.
+ */
+function PhotosGrid({ photos, excluded = [], onToggle }: { photos: string[]; excluded?: string[]; onToggle?: (url: string) => void }) {
   const [open, setOpen] = useState<number | null>(null);
   if (photos.length === 0) return null;
   return (
@@ -571,28 +578,48 @@ function PhotosGrid({ photos }: { photos: string[] }) {
         Photos ({photos.length})
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: "6px" }}>
-        {photos.map((url, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => setOpen(i)}
-            title="Click to enlarge"
-            style={{ padding: 0, border: "none", background: "none", cursor: "zoom-in", borderRadius: "10px", overflow: "hidden", display: "block", width: "100%" }}
-          >
-            <img
-              src={resolveMediaUrl(url)}
-              alt={`Photo ${i + 1}`}
-              style={{
-                width: "100%",
-                aspectRatio: "4/3",
-                objectFit: "cover",
-                borderRadius: "10px",
-                border: "1px solid #e5e7eb",
-                display: "block",
-              }}
-            />
-          </button>
-        ))}
+        {photos.map((url, i) => {
+          const out = !!onToggle && excluded.includes(url);
+          return (
+            <div key={i} data-photo-thumb={onToggle ? (out ? "removed" : "included") : undefined} style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => setOpen(i)}
+                title="Click to enlarge"
+                style={{ padding: 0, border: "none", background: "none", cursor: "zoom-in", borderRadius: "10px", overflow: "hidden", display: "block", width: "100%" }}
+              >
+                <img
+                  src={resolveMediaUrl(url)}
+                  alt={`Photo ${i + 1}`}
+                  style={{
+                    width: "100%",
+                    aspectRatio: "4/3",
+                    objectFit: "cover",
+                    borderRadius: "10px",
+                    border: `1px solid ${out ? "#fca5a5" : "#e5e7eb"}`,
+                    display: "block",
+                    opacity: out ? 0.35 : 1,
+                  }}
+                />
+              </button>
+              {onToggle && (out ? (
+                <button type="button" onClick={() => onToggle(url)} title="Put this photo back in the report" style={{ position: "absolute", inset: "auto 4px 4px 4px", fontSize: "10.5px", fontWeight: 700, color: "#1d4ed8", background: "rgba(255,255,255,0.92)", border: "1px solid #93c5fd", borderRadius: "6px", padding: "2px 0", cursor: "pointer" }}>
+                  Add back
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onToggle(url)}
+                  title="Remove from the report"
+                  aria-label="Remove from the report"
+                  style={{ position: "absolute", top: "3px", right: "3px", width: "18px", height: "18px", borderRadius: "50%", background: "rgba(15,23,42,0.7)", color: "white", border: "none", cursor: "pointer", fontSize: "11px", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+                >
+                  ×
+                </button>
+              ))}
+            </div>
+          );
+        })}
       </div>
       {open !== null && open < photos.length && <PhotoViewer photos={photos} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />}
     </div>
@@ -805,6 +832,8 @@ export function ReviewerFormView() {
   const [, setBusy] = useState(false);
   /** id of the section/damage a photo upload is currently in flight for -- disables just that one "Add Photo" button. */
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  // The Report button while the PDF is being made for its new tab.
+  const [openingReport, setOpeningReport] = useState(false);
   // sectionKey -> its current published template (or null once we know none
   // exists for that key, e.g. a legacy/custom section).
   const [templates, setTemplates] = useState<Record<string, ActiveTemplate | null>>({});
@@ -1023,8 +1052,41 @@ export function ReviewerFormView() {
     return listMissingItems(template.fields, answers);
   }
 
-  async function saveSectionAnswers(section: FormSection) {
-    const answers = answerEdits[section.id];
+  /**
+   * Saves a section's answers straight away (with any Field Data edits not yet saved), the same way Save Changes does -- used by the
+   * Construction "Photos For Report" panel, whose "+ Add" puts a photo into one exact spot of the answers (a defect's or a row's photos).
+   */
+  async function writeSectionAnswers(section: FormSection, update: (answers: AnswerTree) => AnswerTree) {
+    const template = templates[section.key ?? section.id];
+    if (!template) return;
+    const base = answerEdits[section.id] ?? ((section.answers as AnswerTree | null | undefined) ?? {});
+    setAnswerEdits((prev) => ({ ...prev, [section.id]: update(base) }));
+    await saveSectionAnswers(section, update(base));
+  }
+
+  async function addGroupPhoto(section: FormSection, group: PhotoGroup, file: File) {
+    setUploadingFor(group.id);
+    try {
+      const { url } = await api.uploadInspectionPhoto(file, inspection!.id, section.key ?? section.id);
+      await writeSectionAnswers(section, (a) => withPhotoAdded(a, group.path, url));
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Could not add the photo.");
+    } finally {
+      setUploadingFor(null);
+    }
+  }
+
+  async function useAdditionalPhoto(section: FormSection, group: PhotoGroup, url: string) {
+    setUploadingFor("additional");
+    try {
+      await writeSectionAnswers(section, (a) => withPhotoAdded(a, group.path, url));
+    } finally {
+      setUploadingFor(null);
+    }
+  }
+
+  async function saveSectionAnswers(section: FormSection, given?: AnswerTree) {
+    const answers = given ?? answerEdits[section.id];
     const template = templates[section.key ?? section.id];
     if (!answers || !template) return;
     const derived = flattenSectionToDraft(template.fields, answers, section.key ?? section.id, reportProfileOf(inspection!.type, inspection!.propertyType));
@@ -1134,7 +1196,15 @@ export function ReviewerFormView() {
         <AuditHistoryButton inspectionId={inspection.id} jobNo={inspection.jobNo} />
 
         <button
-          onClick={() => navigate(`/report/${inspection.id}`)}
+          onClick={() => {
+            // Straight to the report PDF in a new tab, exactly like the report page's Download PDF.
+            if (openingReport) return;
+            setOpeningReport(true);
+            openReportFile(inspection.id, "pdf", reportFileName(inspection, isConstructionInspection(inspection), "pdf"))
+              .catch((e) => window.alert(e instanceof Error ? e.message : "Could not open the report."))
+              .finally(() => setOpeningReport(false));
+          }}
+          disabled={openingReport}
           style={{
             height: "32px",
             padding: "0 12px",
@@ -1153,7 +1223,7 @@ export function ReviewerFormView() {
           title={isConstructionInspection(inspection) ? "Generate Construction Report" : "Generate Dilapidation Report"}
         >
           <FileText size={14} />
-          Report
+          {openingReport ? "Opening…" : "Report"}
         </button>
 
         <div style={{ fontSize: "12px", color: "#94a3b8", flexShrink: 0 }}>
@@ -1472,7 +1542,7 @@ export function ReviewerFormView() {
                           Download all
                         </button>
                       </div>
-                      <PhotosGrid photos={selectedSection.photos} />
+                      <PhotosGrid photos={selectedSection.photos} excluded={selectedSection.excludedPhotoUrls ?? []} onToggle={(url) => toggleSectionPhoto(selectedSection, url)} />
                     </div>
                   )}
 
@@ -1679,6 +1749,26 @@ export function ReviewerFormView() {
                         section generally or onto one specific crack/defect
                         below -- it then prints in that exact spot. */}
                     <div style={{ marginTop: "14px" }}>
+                      {constructionView && templates[selectedKey] ? (
+                        // A Construction section: its photos where they print -- each defect, each row with its own photos -- each with its own "+ Add".
+                        <>
+                          <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "8px" }}>
+                            Photos For Report
+                          </label>
+                          <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "4px 16px 14px" }}>
+                            <ConstructionPhotoPicker
+                              groups={constructionPhotoGroups(templates[selectedKey]!.fields, answerEdits[selectedSection.id] ?? (selectedSection.answers as AnswerTree | null | undefined))}
+                              additional={selectedSection.photos}
+                              excluded={selectedSection.excludedPhotoUrls ?? []}
+                              busyId={uploadingFor}
+                              onToggle={(url) => toggleSectionPhoto(selectedSection, url)}
+                              onAdd={(group, file) => addGroupPhoto(selectedSection, group, file)}
+                              onUse={(group, url) => useAdditionalPhoto(selectedSection, group, url)}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                      <>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
                         <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                           Select Photos For Report
@@ -1718,6 +1808,8 @@ export function ReviewerFormView() {
                           </div>
                         ))}
                       </div>
+                      </>
+                      )}
                     </div>
                   </div>
                 )}

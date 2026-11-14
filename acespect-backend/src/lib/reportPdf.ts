@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import { ApiError } from '../utils/ApiError';
 import { reportBrowserPath } from './reportBrowserSetup';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
+import { photosFailedMessage, routeReportPhotos } from './reportPhotos';
 
 /**
  * Renders the inspection report to a real PDF by pointing a headless browser
@@ -75,7 +76,7 @@ function buildFooterTemplate(clientName: string, jobNo: string, inspectionDate: 
  * How long the report page may take to load (and then settle its photo layout). The photographs come from Egnyte, which allows about
  * two requests a second (see egnyteFetch in storage.ts), so a report with a hundred photographs needs close to a minute on a cold
  * cache -- the old 30 / 15 seconds cut those reports short and left their photographs out. A photograph that fails settles at once
- * (the page shows "Photograph unavailable" for it), so this is a ceiling, not a delay.
+ * after its retries (and then stops the report -- see reportPhotos.ts), so this is a ceiling, not a delay.
  */
 const PHOTO_LOAD_TIMEOUT_MS = 240_000;
 
@@ -188,6 +189,8 @@ async function withReportPageNow<T>(
     await page.evaluateOnNewDocument((token: string) => {
       localStorage.setItem('acespect_token', token);
     }, authToken);
+    // The photographs are fetched by this server, a few at a time and tried again on a failure (reportPhotos.ts).
+    const photos = await routeReportPhotos(page, inspectionId);
 
     const url = `${reportPageOrigin()}/report/${inspectionId}`;
     try {
@@ -209,11 +212,17 @@ async function withReportPageNow<T>(
     }
     // The photo grids lay themselves out from each photo's real shape, which is
     // only known once the images have loaded -- print after that has settled
-    // (a grid marks itself data-photo-grid-pending until then). Bounded, so one
-    // photo that never loads can't stop the report from being produced.
+    // (a grid marks itself data-photo-grid-pending until then). Bounded; a photo
+    // still loading at the end fails the report below rather than being left out.
     await page
       .waitForFunction("!document.querySelector('[data-photo-grid-pending]')", { timeout: PHOTO_LOAD_TIMEOUT_MS })
       .catch(() => undefined);
+    // A photograph that could not be loaded (after its retries) stops the report: it is never printed without it.
+    const photoProblem = photosFailedMessage(photos);
+    if (photoProblem) {
+      console.error(`[report] photos failed for inspection ${inspectionId}:`, photos.failed.map((f) => f.message).slice(0, 20), `(${photos.pending()} still loading)`);
+      throw new ApiError(502, photoProblem, 'REPORT_PHOTOS_FAILED', { stage: 'photos' });
+    }
     try {
       return await use(page);
     } catch (e) {

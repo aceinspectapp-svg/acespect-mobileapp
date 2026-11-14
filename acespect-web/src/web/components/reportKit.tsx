@@ -339,7 +339,8 @@ export function PhotoGrid({
   const urls = photos.map((p) => resolveMediaUrl(p));
   const { aspects, pending, failed } = useImageAspects(urls);
   const base = compact ? COMPACT_PACK : PAGE_PACK;
-  const options = maxHeight && maxHeight < base.maxHeight ? { ...base, maxHeight, targetHeight: Math.min(base.targetHeight, maxHeight), minHeight: Math.min(base.minHeight, maxHeight) } : base;
+  // A spot with its own height limit (the cover-page photo) keeps the 3:4 portrait box it always had; the grids use the page's.
+  const options = maxHeight && maxHeight < base.maxHeight ? { ...base, maxHeight, targetHeight: Math.min(base.targetHeight, maxHeight), minHeight: Math.min(base.minHeight, maxHeight), portraitBox: undefined } : base;
   const fit = fitPage && photos.length === 1;
   const rows = useMemo((): PackedRow[] => {
     if (!fit) return packPhotoRows(aspects, options);
@@ -365,7 +366,7 @@ export function PhotoGrid({
             <div
               key={i}
               style={
-                // Every photo at its kind's fixed size (photoLayout.ts), as a share of the row so it scales with the page as drawn.
+                // Every photo in its kind's one box size (photoLayout.ts), as a share of the row so it scales with the page as drawn.
                 { flex: "0 0 auto", width: `${(row.sizes[k]!.width / options.width) * 100}%`, maxWidth: "100%" }
               }
             >
@@ -375,7 +376,7 @@ export function PhotoGrid({
                   data-photo-missing=""
                   style={{
                     width: "100%",
-                    aspectRatio: `${aspects[i]}`,
+                    aspectRatio: `${row.sizes[k]!.width / row.sizes[k]!.height}`,
                     boxSizing: "border-box",
                     border: `1px solid ${reportTokens.border}`,
                     background: reportTokens.placeholderBg,
@@ -395,9 +396,11 @@ export function PhotoGrid({
                   alt=""
                   style={{
                     width: "100%",
-                    aspectRatio: `${aspects[i]}`,
-                    // The box is exactly the photo's own shape, so nothing is cropped; `contain` also guarantees it if the shape were ever off by a pixel.
+                    aspectRatio: `${row.sizes[k]!.width / row.sizes[k]!.height}`,
+                    // Every photo of a kind has the same box (photoLayout.ts); `contain` shows a photo of an unusual shape whole inside it, never cropped.
                     objectFit: "contain",
+                    boxSizing: "border-box",
+                    background: "#ffffff",
                     border: `1px solid ${reportTokens.border}`,
                     display: "block",
                   }}

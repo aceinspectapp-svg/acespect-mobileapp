@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // The report audit: builds reports in many scenarios for every report type, then checks each one from several sides --
 //
-//   photos     every photo is drawn at its own shape (never cropped, never stretched), inside the page, in rows of equal height,
+//   photos     every portrait in the same 3:4 box and every landscape in the same 4:3 box (the whole photo shown, never cropped or
+//              stretched), inside the page, the photos of a row on one bottom line,
 //              through the one shared photo grid, numbered in order -- in the web page, in the PDF and in the Word file
 //   colours    one navy and one red throughout (no stray old brand colours), every piece of text readable (WCAG contrast)
 //   layout     the cover (banner, rows, sign-off), a footer with "Page N of M" on every page, no blank pages, no heading left at a page bottom
@@ -218,23 +219,24 @@ const DOM_AUDIT = String.raw`
     const p = { src: img.currentSrc || img.src, w: r.width, h: r.height, natW: img.naturalWidth, natH: img.naturalHeight, fit, broken, left: r.left, right: r.right };
     out.photos.push(p);
     if (broken) continue;
-    const drawn = (r.width - 2) / (r.height - 2), real = img.naturalWidth / img.naturalHeight;
-    if (Math.abs(drawn - real) / real > 0.02 && Math.abs((r.width - 2) - (r.height - 2) * real) > 1.5) notice('a picture is not at its own shape: drawn ' + drawn.toFixed(3) + ':1, the photo is ' + real.toFixed(3) + ':1 (' + p.src.slice(-50) + ')');
-    if (fit === 'cover') notice('a picture is set to crop (object-fit: cover): ' + p.src.slice(-50));
+    // every photo sits in its kind's box -- 3:4 for a portrait, 4:3 for a landscape (photoLayout.ts) -- and is shown whole inside it
+    const drawn = (r.width - 2) / (r.height - 2), real = img.naturalWidth / img.naturalHeight, box = real >= 1 ? 4 / 3 : 3 / 4;
+    if (Math.abs(drawn - box) / box > 0.02 && Math.abs((r.width - 2) - (r.height - 2) * box) > 1.5) notice('a picture is not in its ' + (real >= 1 ? 'landscape (4:3)' : 'portrait (3:4)') + ' box: drawn ' + drawn.toFixed(3) + ':1 (' + p.src.slice(-50) + ')');
+    if (fit !== 'contain') notice('a picture is not shown whole (object-fit: ' + fit + '): ' + p.src.slice(-50));
     if (r.left < left - 1 || r.right > right + 1) notice('a picture runs outside the text column: ' + p.src.slice(-50));
     if (r.width < 20 || r.height < 20) notice('a picture is tiny (' + Math.round(r.width) + 'x' + Math.round(r.height) + 'px): ' + p.src.slice(-50));
   }
-  // rows of the grid: every picture in a row has the same height; a full row fills the width
+  // rows of the grid: the pictures of a row share a bottom line; in one grid every portrait is one size, and so is every landscape
   for (const grid of root.querySelectorAll('[data-photo-grid]')) {
+    const widths = { portrait: [], landscape: [] };
     for (const row of grid.children) {
-      const flex = row.querySelector(':scope > div');
       const rowImgs = [...row.querySelectorAll('img')].filter((i) => i.naturalWidth > 0);
+      for (const i of rowImgs) widths[i.naturalWidth >= i.naturalHeight ? 'landscape' : 'portrait'].push(i.getBoundingClientRect().width);
       if (rowImgs.length < 2) continue;
-      const hs = rowImgs.map((i) => i.getBoundingClientRect().height);
-      if (Math.max(...hs) - Math.min(...hs) > 1.5) notice('pictures in one row have different heights: ' + hs.map((h) => Math.round(h)).join(', '));
-      const tops = rowImgs.map((i) => i.getBoundingClientRect().top);
-      if (Math.max(...tops) - Math.min(...tops) > 1.5) notice('pictures in one row do not line up at the top');
+      const bottoms = rowImgs.map((i) => i.getBoundingClientRect().bottom);
+      if (Math.max(...bottoms) - Math.min(...bottoms) > 1.5) notice('pictures in one row do not line up at the bottom');
     }
+    for (const [kind, ws] of Object.entries(widths)) if (ws.length > 1 && Math.max(...ws) - Math.min(...ws) > 1.5) notice('the ' + kind + ' photos of one group are not all one size: ' + ws.map((w) => Math.round(w)).join(', '));
   }
   // numbering: "Photo 1", "Photo 2", ... in order, one per picture of the grids that number their pictures
   for (const s of root.querySelectorAll('[data-photo-grid] span')) { const m = /^Photo (\d+)$/.exec(s.textContent.trim()); if (m) out.captions.push(+m[1]); }
