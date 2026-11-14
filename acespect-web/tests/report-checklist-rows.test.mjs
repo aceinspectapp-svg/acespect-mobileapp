@@ -14,7 +14,7 @@ const table = src.slice(src.indexOf("function Table("), src.indexOf("// ──�
 describe("construction checklist rows and key", () => {
   it("rows no longer print the item's sentence under its name", () => {
     assert.doesNotMatch(table, /\{it\.text\}/);
-    assert.match(table, /\{s\.label\} ›<\/a> : s\.label\}/, "the right-hand status column is unchanged");
+    assert.match(table, /\{statusLabel\(it\)\} ›<\/a> : statusLabel\(it\)\}/, "the right-hand status column: the status (with a defect row's count)");
   });
   it("the not-complete key tile reads NOT YET; the row's right-hand column keeps NOT COMPLETE", () => {
     assert.match(src, /const TILE_LABEL: Partial<Record<ItemStatus, string>> = \{ notcomplete: "NOT YET" \};/);

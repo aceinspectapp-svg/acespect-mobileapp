@@ -51,7 +51,7 @@ describe("photo grid row packing", () => {
     const all = rows([P, P, P, P, P, L, L, L, P, L]).flatMap((r) => r.indices.map((i, k) => [i, r.sizes[k]]));
     const portraits = all.filter(([i]) => [0, 1, 2, 3, 4, 8].includes(i)).map(([, z]) => z);
     const landscapes = all.filter(([i]) => [5, 6, 7, 9].includes(i)).map(([, z]) => z);
-    for (const z of portraits) { near(z.width, portraitW, "portrait width"); near(z.height, portraitW * 4 / 3, "portrait height"); }
+    for (const z of portraits) { near(z.width, portraitW, "portrait width"); near(z.height, portraitW * 5 / 4, "portrait height (the page's 4:5 box, so nine portraits fit on a page)"); }
     for (const z of landscapes) { near(z.width, (W - G) / 2, "landscape width"); near(z.height, ((W - G) / 2) * 3 / 4, "landscape height"); }
     near(rows([L])[0].sizes[0].width, (W - G) / 2, "a lone landscape");
     near(rows([P])[0].sizes[0].width, portraitW, "a lone portrait");
@@ -68,7 +68,7 @@ describe("photo grid row packing", () => {
     for (const row of rows([0.5, 0.5, 0.5, 0.4, L])) for (const z of row.sizes) assert.ok(z.height <= PAGE_PACK.maxHeight + 1e-9);
     const small = packPhotoRows([P, L], { ...PAGE_PACK, maxHeight: 3 });
     for (const z of small[0].sizes) assert.ok(z.height <= 3 + 1e-9);
-    near(small[0].sizes[0].width / small[0].sizes[0].height, 3 / 4, "a shrunk portrait box keeps its shape");
+    near(small[0].sizes[0].width / small[0].sizes[0].height, 4 / 5, "a shrunk portrait box keeps its shape");
     near(small[0].sizes[1].width / small[0].sizes[1].height, 4 / 3, "a shrunk landscape box keeps its shape");
   });
 
