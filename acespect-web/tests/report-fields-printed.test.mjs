@@ -86,7 +86,19 @@ const NOT_PRINTED_BY_DESIGN = {
   "construction_stage/apartment": CONSTRUCTION_NOT_PRINTED,
   "dilapidation/residential_house": ["description: proposedWorksTypeOther"],
   "dilapidation/commercial_properties": ["description: proposedWorksTypeOther"],
-  "dilapidation/apartment": ["description: proposedWorksTypeOther"],
+  // The Multi Level Office template words a crack without its severity, and says where it runs with "starting at ... and running to ..."
+  // instead of a direction word: recorded, not printed. (The Pre-Purchase checklist's questions: see apartmentLeavesOut below.)
+  // "Is there visible significant damage?" is asked of the shed only (the template's line 69), which this test's fill (the first two
+  // structures) does not reach; report-apartment.test.mjs prints it.
+  "dilapidation/apartment": [".sub_cracking", ".direction", "garage_carport_sheds: structures.significantDamage"],
+};
+// The Apartment form's Pre-Purchase checklist questions, which the Multi Level Office template has no sentence for.
+const { apartmentLeavesOut } = await server.ssrLoadModule("/src/web/wording/dilapidation.apartment.ts");
+const LEFT_OUT_BY_DESIGN = {
+  "dilapidation/apartment": (entry) => {
+    const m = /^([^:]+): (\S+)/.exec(entry);
+    return !!m && apartmentLeavesOut(m[1], m[2]);
+  },
 };
 
 function unprintedFields(w) {
@@ -140,7 +152,8 @@ describe("every answer on the website form is printed", () => {
   for (const w of Object.values(WORDING_BY_PROFILE).filter((x) => x.status === "final")) {
     it(`${w.profile.inspectionType} / ${w.profile.propertyType}`, () => {
       const skip = NOT_PRINTED_BY_DESIGN[`${w.profile.inspectionType}/${w.profile.propertyType}`] ?? [];
-      assert.deepEqual(unprintedFields(w).filter((x) => !skip.some((s) => x.startsWith(s) || (s.startsWith("_") && x.includes(s)))), []);
+      const leftOut = LEFT_OUT_BY_DESIGN[`${w.profile.inspectionType}/${w.profile.propertyType}`] ?? (() => false);
+      assert.deepEqual(unprintedFields(w).filter((x) => !leftOut(x) && !skip.some((s) => x.startsWith(s) || (/^[_.]/.test(s) && x.includes(s)))), []);
     });
   }
 });

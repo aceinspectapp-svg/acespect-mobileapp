@@ -25,7 +25,13 @@ function requireProfile(req: Request): { inspectionType: string; propertyType: s
 export const templatesController = {
   getActive: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
-    const template = await templatesService.getActiveForInspector(req.user.id, requireLineage(req));
+    // Anyone who fills forms stays on the version they accepted on the phone. A reviewer or admin never accepts updates, so they
+    // always get the latest published form: the website words the report from it, and an older copy would not know the
+    // choices an inspector answered on a newer form (it printed the stored value, e.g. "parked_car").
+    const template =
+      req.user.role === 'REVIEWER' || req.user.role === 'ADMIN'
+        ? await templatesService.getLatestPublished(requireLineage(req))
+        : await templatesService.getActiveForInspector(req.user.id, requireLineage(req));
     res.status(200).json({ template: serializeTemplate(template) });
   }),
 

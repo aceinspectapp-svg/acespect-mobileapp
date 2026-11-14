@@ -129,9 +129,25 @@ function defectLead(location: string, plural: boolean, comma = false): string {
 export interface DefectStyle {
   nov2026?: boolean;
   approx?: boolean;
+  /** The template's fence form for anything that is not a crack: "A {defect} at {location}." */
+  fence?: boolean;
+  /** No severity word before "crack" ("there is a crack", not "there is a fine crack") -- the Multi Level Office template's form. */
+  noSeverity?: boolean;
+  /**
+   * The Multi Level Office template's "There is damage to the {element} at {location}." for anything that is not a crack, with the kind
+   * of damage named ("There is weathering to the sheet joints at the stairwell cladding.").
+   */
+  damageForm?: boolean;
+  /** No direction word ("a vertical crack") when the crack's start or end is recorded: the template's "starting at ... and running to ..." says where it runs. */
+  noDirection?: boolean;
+  /** No "to the {element}" in a crack's sentence when its start or end is recorded -- the template's "At the ..., there is a crack starting at ... and running to the ...." has no place for it. */
+  noCrackElement?: boolean;
+  /** The defect's typed notes are not printed: the template's defect line ends with its measurements. */
+  noNotes?: boolean;
 }
 export const NOV2026: DefectStyle = { nov2026: true };
 export const NOV2026_INTERNAL: DefectStyle = { nov2026: true, approx: true };
+export const NOV2026_FENCE: DefectStyle = { nov2026: true, fence: true };
 
 const num = (n: number): string => String(Number(n.toFixed(2)));
 
@@ -175,6 +191,8 @@ export function houseDamageSentences(
       const runTyped = directionTyped ? lower(typedCase(directionTyped)) : "";
       const startRaw = asString(d.crackStartLocation).trim();
       const start = nov ? lower(typedCase(startRaw)) : startRaw;
+      // "... starting at the gate and running to the kerb." -- the template's end point, when the form records one.
+      const end = lower(typedCase(asString(d.crackEndLocation).trim()));
 
       let np: string; // the noun phrase after "there is"
       let plural = false;
@@ -182,7 +200,7 @@ export function houseDamageSentences(
       if (isCrack) {
         // A typed severity that already says "crack" ("stress crack") must not become "a stress crack crack".
         const named = /\bcrack(s|ing)?$/i.test(sub);
-        const adjectives = [run, sub].filter(Boolean).join(" ");
+        const adjectives = [options.style?.noDirection && (start || end) ? "" : run, options.style?.noSeverity ? "" : sub].filter(Boolean).join(" ");
         np = `${article(adjectives || "crack")} ${adjectives ? `${adjectives}${named ? "" : " "}` : ""}${named ? "" : "crack"}`.replace(/\s+$/, "");
       } else if (rawType === "leaning") {
         np = "a leaning defect"; // the original seed's types
@@ -202,17 +220,31 @@ export function houseDamageSentences(
       if (nov) {
         const about = options.style?.approx ? "approximately " : "";
         const size = [width > 0 ? `${about}${num(width)} millimetres wide` : "", length > 0 ? `${about}${num(length)} millimetres long` : ""].filter(Boolean).join(" and ");
-        const startAt = start ? ` starting at ${LOCATION_STARTS_WITH_PREPOSITION_RE.test(start) ? start : withThe(start)}` : "";
-        sentence = `${defectLead(location, plural, true)} ${np}${element ? ` to ${withThe(element)}` : ""}${startAt}${
-          !isCrack && run ? `, running ${DIRECTION_ADVERBS[directionRaw] ?? run}` : ""
-        }${runTyped ? `, running ${runTyped}` : ""}.${size ? ` ${isCrack ? "The crack is" : plural ? "They are" : "It is"} ${size}.` : ""}`;
+        const place = (p: string): string => (LOCATION_STARTS_WITH_PREPOSITION_RE.test(p) ? p : withThe(p));
+        const startAt = start ? ` starting at ${place(start)}` : "";
+        const endAt = end ? `${start ? " and" : ""} running to ${place(end)}` : "";
+        const sizeSentence = size ? ` ${isCrack ? "The crack is" : plural ? "They are" : "It is"} ${size}.` : "";
+        if (options.style?.fence && !isCrack) {
+          // The template's fence form: "A {defect} at {location}." -- "A chip to the brick pier at the front corner.", "Decay to the posts at the rear corner."
+          const at = location ? ` ${LOCATION_STARTS_WITH_PREPOSITION_RE.test(location) ? location : `at ${withThe(location)}`}` : "";
+          sentence = `${capitalize(np)}${element ? ` to ${withThe(element)}` : ""}${at}${run ? `, running ${DIRECTION_ADVERBS[directionRaw] ?? run}` : ""}${runTyped ? `, running ${runTyped}` : ""}.${sizeSentence}`;
+        } else if (options.style?.damageForm && !isCrack) {
+          // The Multi Level Office template's "There is damage to the {element} at {location}.", naming the kind of damage.
+          const at = location ? ` ${LOCATION_STARTS_WITH_PREPOSITION_RE.test(location) ? location : `at ${withThe(location)}`}` : "";
+          sentence = `${plural ? "There are" : "There is"} ${np}${element ? ` to ${withThe(element)}` : ""}${at}${run ? `, running ${DIRECTION_ADVERBS[directionRaw] ?? run}` : ""}${runTyped ? `, running ${runTyped}` : ""}.${sizeSentence}`;
+        } else {
+          const part = element && !(isCrack && options.style?.noCrackElement && (start || end)) ? ` to ${withThe(element)}` : "";
+          sentence = `${defectLead(location, plural, true)} ${np}${part}${startAt}${endAt}${
+            !isCrack && run ? `, running ${DIRECTION_ADVERBS[directionRaw] ?? run}` : ""
+          }${runTyped ? `, running ${runTyped}` : ""}.${sizeSentence}`;
+        }
       } else {
         const measure = [width > 0 ? `approximately ${num(width)} millimetres wide` : "", length > 0 ? `approximately ${num(length)} millimetres long` : ""].filter(Boolean).join(" and ");
         sentence = `${defectLead(location, plural)} ${np}${element ? ` to ${withThe(element)}` : ""}${start ? ` starting from ${start}` : ""}${
           !isCrack && run ? `, running ${DIRECTION_ADVERBS[directionRaw] ?? run}` : ""
         }${runTyped ? `, running ${runTyped}` : ""}${measure ? ` ${measure}` : ""}.`;
       }
-      const notes = asString(d.notes).replace(/\s*\n+\s*/g, " ").trim();
+      const notes = options.style?.noNotes ? "" : asString(d.notes).replace(/\s*\n+\s*/g, " ").trim();
       return `DEFECT::${(options.indexOffset ?? 0) + i}::${notes ? `${sentence} ${withPeriod(notes)}` : sentence}`;
     })
     .join("\n\n");
@@ -272,7 +304,7 @@ export function typically(word: string, what: string, someGaps = false): string 
   return `${typical ? " " : ""}${typical}${gaps}`;
 }
 
-const make_driveway = (nov: boolean): Composer => (inst, itemFields, label) => {
+const make_driveway = (nov: boolean, extra: DefectStyle = {}): Composer => (inst, itemFields, label) => {
   // A driveway divided into parts (Front left / Front right / Rear / Side) is called with the part's name as `label` and
   // has no "Located at" question of its own; the older single-item form is called with no label.
   const part = label && itemFields.some((f) => f.key === "present") ? label : "";
@@ -301,7 +333,7 @@ const make_driveway = (nov: boolean): Composer => (inst, itemFields, label) => {
     : "";
   const cracking = overviewIfIssue(itemFields, inst, ["crackingSummary"]);
   parts.push(`${[first, second, cracking].filter(Boolean).join(" ")}${obstructionsSentence(itemFields, inst, "driveway")}`);
-  return houseTail(parts, itemFields, inst, nov ? NOV2026 : undefined);
+  return houseTail(parts, itemFields, inst, nov ? { ...NOV2026, ...extra } : undefined);
 };
 
 const make_pavingPaths = (nov: boolean): Composer => (inst, itemFields, label) => {
@@ -348,6 +380,7 @@ function conditionDetailWords(itemFields: TemplateField[], inst: AnswerTree, sub
       const l = lower(d);
       if (l === "decayed") return "There is some decay.";
       if (l === "leaning") return `The ${subject} is leaning.`;
+      if (l === "bowed") return `The ${subject} is bowed.`;
       if (l === "loose or missing palings") return "There are loose or missing palings.";
       return `${capitalize(l)} noted.`;
     });
@@ -374,7 +407,7 @@ const make_fences = (nov: boolean): Composer => (inst, itemFields, label) => {
   parts.push(
     `${predicates.length ? `${subject} ${predicates.join(" and ")}.` : `${subject} was inspected.`}${details.noted}${obstructionsSentence(itemFields, inst, "fence")}`,
   );
-  return houseTail(parts, itemFields, inst, nov ? NOV2026 : undefined);
+  return houseTail(parts, itemFields, inst, nov ? NOV2026_FENCE : undefined);
 };
 
 const make_retainingWalls = (nov: boolean): Composer => (inst, itemFields) => {
@@ -395,11 +428,14 @@ const make_retainingWalls = (nov: boolean): Composer => (inst, itemFields) => {
   return houseTail(parts, itemFields, inst, nov ? NOV2026 : undefined);
 };
 
+/** A typed answer read mid-sentence: "The roof space" -> "the roof space" ("No access granted to the roof space"); a room name keeps its capital ("Bedroom 3"). */
+const midSentence = (typed: string): string => typed.replace(/^(The|A|An|All|Some|This|That|These|Those|Both)\b/, (w) => w.toLowerCase());
+
 /** "tiles" -> "tiled": the roof is described by its covering ("with a tiled roof"). */
 const ROOF_WORDS: Record<string, string> = { tile: "tiled", tiles: "tiled" };
 
 /** "generally in fair state of repair" -- but a new structure is just "new" ("generally in new state of repair" reads wrong). */
-function repairState(word: string): string {
+export function repairState(word: string): string {
   return word === "new" ? "new" : `generally in ${word} state of repair`;
 }
 
@@ -419,8 +455,14 @@ const make_garageCarportSheds = (nov: boolean): Composer => (inst, itemFields, l
   const attachment = one(itemFields, inst, ["attachment"]);
   const position = one(itemFields, inst, ["position"]);
   const at = position ? lower(position) : "";
+  const openStructure = /pergola|verandah|veranda|deck|gazebo/i.test(name);
   // Attached: "attached to the house at the front". Separate: "located at the rear of the property". Basement: "in the basement".
-  const where = /basement/i.test(attachment)
+  // The Nov 2026 template: a garage or carport "to the house at the front"; a shed, pergola, verandah or deck "located at the rear of the property".
+  const where = nov && /^attached/i.test(attachment) && !openStructure
+    ? ` to the house${at ? ` at the ${at}` : ""}`
+    : nov && openStructure && at
+      ? ` located at the ${at} of the property`
+      : /basement/i.test(attachment)
     ? " in the basement"
     : /^separate/i.test(attachment)
       ? ` located${at ? ` at the ${at} of` : " at"} the property`
@@ -464,8 +506,16 @@ const make_garageCarportSheds = (nov: boolean): Composer => (inst, itemFields, l
         : floor.some((f) => /hardstand/.test(f))
           ? "walls and hardstand"
           : "walls and floor";
+  // The Nov 2026 template's carport: "A parked car obscured part of the hardstand." -- anything else that was in the way keeps "Sections of the hardstand were obscured by ...".
+  let obscured = obstructionsSentence(itemFields, inst, obscuredOf);
+  if (nov && /carport/i.test(name)) {
+    const all = many(itemFields, inst, ["obscuredBy"]);
+    const car = all.some((o) => /parked car/i.test(o));
+    const rest = all.filter((o) => !/parked car/i.test(o)).map(lower);
+    if (car) obscured = ` A parked car obscured part of the hardstand.${rest.length ? ` Sections of the hardstand were obscured by ${joinList(rest)}.` : ""}`;
+  }
   parts.push(
-    `There is ${article(lowerName)} ${lowerName}${where}${constructionText}${cond.word ? `${linker} ${repairState(cond.word)}.` : "."}${obstructionsSentence(itemFields, inst, obscuredOf)}${observationLine(
+    `There is ${article(lowerName)} ${lowerName}${where}${constructionText}${cond.word ? `${linker} ${repairState(cond.word)}.` : "."}${obscured}${observationLine(
       itemFields,
       inst,
       ["cladding"],
@@ -475,11 +525,15 @@ const make_garageCarportSheds = (nov: boolean): Composer => (inst, itemFields, l
   return houseTail(parts, itemFields, inst, nov ? NOV2026 : undefined);
 };
 
-const make_poolSpa = (nov: boolean): Composer => (inst, itemFields, label) => {
+const make_poolSpa = (nov: boolean, extra: DefectStyle = {}): Composer => (inst, itemFields, label) => {
   // A pool / spa divided into parts (Pool, Spa) is called with the part's name as `label`; the older single-item form is called with no label.
   const part = label && itemFields.some((f) => f.key === "present") ? label : "";
   if (isNotPresent(inst)) return part ? "" : "There is no pool or spa to the property.";
-  const name = typedCase(asString(inst.name)) || part || "pool/spa";
+  // "pool", "spa" or "pool and spa" -- from the form's pool-or-spa choice when it has one.
+  const kind = lower(one(itemFields, inst, ["poolKind"]));
+  // The Nov 2026 report says "pool" or "spa", never "pool/spa": the inspector's answer, or "pool" when the form did not ask.
+  if (nov) return novPool(inst, itemFields, typedCase(asString(inst.name)) || part || kind || "pool", part);
+  const name = typedCase(asString(inst.name)) || part || kind || "pool/spa";
   const poolType = one(itemFields, inst, ["poolType"]);
   const position = one(itemFields, inst, ["position"]);
   const construction = many(itemFields, inst, ["construction", "constructed"]).map(lower);
@@ -515,8 +569,46 @@ const make_poolSpa = (nov: boolean): Composer => (inst, itemFields, label) => {
     if (fenceType.length) parts.push(`${fenceName} is constructed of ${joinList(fenceType)}${safetyPhrase ? ` and ${safetyPhrase}` : ""}.`);
     else if (safetyPhrase) parts.push(`${fenceName} ${safetyPhrase}.`);
   }
-  return houseTail(parts, itemFields, inst, nov ? NOV2026 : undefined);
+  return houseTail(parts, itemFields, inst, nov ? { ...NOV2026, ...extra } : undefined);
 };
+
+/**
+ * The Nov 2026 template's pool:
+ * "There is a pool located at the rear of the property, constructed of concrete and tile, which is generally in satisfactory state of
+ * repair. Observations of the structure were obscured or limited by water in the pool."
+ * "The pool fence is constructed of glass panels and is in satisfactory condition with typical weathering. The pool surrounds are paved
+ * with tiles in satisfactory condition."
+ */
+function novPool(inst: AnswerTree, itemFields: TemplateField[], name: string, part: string): string {
+  const position = one(itemFields, inst, ["position"]);
+  // An apartment complex's form asks the pool type ("in-ground pool"): it is printed after where the pool is.
+  const poolType = lower(one(itemFields, inst, ["poolType"]));
+  const construction = many(itemFields, inst, ["construction", "constructed"]).map(lower);
+  const paving = many(itemFields, inst, ["paving"]).map(lower);
+  const cond = conditionOf(itemFields, inst);
+  const fenceType = many(itemFields, inst, ["fenceType", "poolFence"]).map(lower);
+  const fenceSafety = lower(one(itemFields, inst, ["fenceSafety"]));
+  const fenceCond = conditionOf(itemFields, inst, ["fenceCondition"]);
+  const pavingCond = conditionOf(itemFields, inst, ["pavingCondition"]);
+  const n = lower(name);
+  const parts: string[] = [];
+  if (cond.tag) parts.push(cond.tag);
+  parts.push(
+    `There is ${article(n)} ${n} located at the ${position ? `${lower(position)} of the ` : ""}property${poolType ? `, ${article(poolType)} ${poolType}` : ""}${construction.length ? `, constructed of ${joinList(construction)}` : ""}${
+      cond.word ? `, which is ${repairState(cond.word)}` : ""
+    }.${/pool|spa/i.test(n) ? ` Observations of the structure were obscured or limited by water in the ${n}.` : ""}${obstructionsSentence(itemFields, inst, `${n} area`)}`,
+  );
+  const fenceName = `The ${part ? lower(part) : "pool"} fence`;
+  // The fence's condition when the form asks for it; otherwise what the inspector said about its safety ("appears to be okay").
+  const safetyPhrase = /^appears/.test(fenceSafety) ? fenceSafety : /^no, /.test(fenceSafety) ? fenceSafety.slice(4) : fenceSafety ? `appears to be ${fenceSafety}` : "";
+  // The fence's condition (the template's wording) and, when answered, whether it appears safe -- a safety answer is never dropped.
+  const fenceState = fenceCond.word ? `is in ${fenceCond.word} condition${typically(fenceCond.word, "weathering")}${safetyPhrase ? ` and ${safetyPhrase}` : ""}` : safetyPhrase;
+  const fence = fenceType.length ? `${fenceName} is constructed of ${joinList(fenceType)}${fenceState ? ` and ${fenceState}` : ""}.` : fenceState ? `${fenceName} ${fenceState}.` : "";
+  const surrounds = paving.length ? `The ${n} surrounds are paved with ${joinList(paving)}${pavingCond.word ? ` in ${pavingCond.word} condition${typically(pavingCond.word, "wear and tear")}` : ""}.` : "";
+  const second = [fence, surrounds].filter(Boolean).join(" ");
+  if (second) parts.push(second);
+  return houseTail(parts, itemFields, inst, NOV2026);
+}
 
 /** North/South/East/West read fine lower-cased mid-sentence ("facing north"); the 4 intercardinal abbreviations don't ("facing ne" reads like a typo) -- this spells them out instead. */
 const COMPASS_EXPANSIONS: Record<string, string> = {
@@ -597,6 +689,7 @@ const make_roofChimneys = (nov: boolean): Composer => (inst, itemFields, label) 
   const status = many(itemFields, inst, ["inspectionStatus"]);
   // The roof of a single-storey house has no upper / lower: the first roof is simply "the roof covering".
   const lowerRoof = /lower/i.test(label);
+  if (nov) return novRoof(inst, itemFields, status, lowerRoof);
   // Everything on this roof is "not applicable" (single storey, apartment): nothing to say.
   if (status.length > 0 && status.every((x) => /^not applicable/i.test(x)) && !asString(inst.notes) && !many(itemFields, inst, ["generalCondition"]).length) return "";
   const covering = materialWords(many(itemFields, inst, ["coveringType"]).map(lower));
@@ -626,6 +719,86 @@ const make_roofChimneys = (nov: boolean): Composer => (inst, itemFields, label) 
   return parts.join("\n\n");
 };
 
+/** Where the roof was seen from, as the Nov 2026 template words it after "Comments are based on limited observations". */
+function roofViewpoint(status: string, lowerRoof: boolean): string {
+  const s = status.toLowerCase();
+  if (/camera zoom/.test(s) && /ground/.test(s)) return "from the ground only and using a camera zoom";
+  if (/ladder/.test(s)) return "standing on a ladder to the lower roof and from the ground using a camera zoom";
+  if (/balcony/.test(s)) return lowerRoof ? "from the upper balcony" : "from balcony over sections of roofing";
+  if (/upstairs windows/.test(s)) return "from the upstairs windows";
+  return "";
+}
+
+/**
+ * The Nov 2026 template's roof:
+ * "The roof covering appears to be in fair condition with cracked tiles. Comments are based on limited observations from the ground only
+ * and using a camera zoom." / "The lower level roofing generally appears to be in satisfactory condition." / "There are no chimneys
+ * visible." / "The chimney is constructed of brick and appears to be in fair condition with gaps and cracking to the brickwork." /
+ * an apartment: "The roof could not be inspected as the building is a multi-level building complex. ..."
+ */
+function novRoof(inst: AnswerTree, itemFields: TemplateField[], status: string[], lowerRoof: boolean): string {
+  const apartment = status.some((x) => /^not applicable\s*-\s*apartment/i.test(x));
+  const covering = materialWords(many(itemFields, inst, ["coveringType"]).map(lower));
+  const noted = many(itemFields, inst, ["generalCondition", "generalObservations"]);
+  const satisfactoryToFair = noted.some((n) => /^satisfactory to fair with typical weathering$/i.test(n));
+  const chimneyNoted = noted.filter((n) => /chimney/i.test(n));
+  const roofNoted = noted.filter((n) => !/chimney/i.test(n) && !/^satisfactory to fair with typical weathering$/i.test(n)).map(lower);
+  const cond = conditionOf(itemFields, inst);
+  const notes = asString(inst.notes);
+  const damages = houseDamageSentences(inst, itemFields, { style: NOV2026 });
+  const nothingRecorded = !covering.length && !noted.length && !cond.word && !notes && !damages;
+  // Every status "not applicable": an apartment's roof gets the template's complex sentence (once, on the main roof); a single-storey house's "lower roof" says nothing.
+  if (status.length > 0 && status.every((x) => /^not applicable/i.test(x)) && nothingRecorded) {
+    return apartment && !lowerRoof
+      ? "The roof could not be inspected as the building is a multi-level building complex. Roof coverings in a unit complex are common property and need to be maintained through the Owners Corporation."
+      : "";
+  }
+  const parts: string[] = [];
+  if (cond.tag) parts.push(cond.tag);
+  const subject = `${lowerRoof ? "The lower level roofing" : "The roof covering"}${covering.length ? ` of ${joinList(covering)}` : ""}`;
+  const appears = lowerRoof ? "generally appears" : "appears";
+  const grade = satisfactoryToFair ? "satisfactory to fair" : cond.word;
+  // The main roof: "in {grade} condition with {what was noted}" ("typical weathering" for a satisfactory roof). The template's lower roof
+  // is just "in {grade} condition", so "with" there only carries what was noted.
+  const withWhat = [!lowerRoof && (satisfactoryToFair || cond.word === "satisfactory") ? "typical weathering" : "", ...roofNoted].filter(Boolean);
+  const main = grade
+    ? `${subject} ${appears} to be in ${grade} condition${withWhat.length ? ` with ${joinList(withWhat)}` : ""}.`
+    : covering.length
+      ? `${subject} was observed.${roofNoted.length ? ` ${capitalize(joinList(roofNoted))} noted.` : ""}`
+      : roofNoted.length
+        ? `${capitalize(joinList(roofNoted))} noted.`
+        : "";
+  const viewpoints = status.map((x) => roofViewpoint(x, lowerRoof)).filter(Boolean);
+  const comments = viewpoints.length ? `Comments are based on limited observations ${joinList(viewpoints)}.` : "";
+  const otherStatus = status
+    .filter((x) => !roofViewpoint(x, lowerRoof))
+    .map((x) => (/^not applicable/i.test(x) ? "" : roofStatusSentence(x)))
+    .filter(Boolean);
+  // The chimney: "The chimney is constructed of {material} and appears to be in {grade} condition with {what was noted}."
+  const chimneyMaterial = materialWords(many(itemFields, inst, ["chimneyMaterial"]).map(lower));
+  const chimneyCond = conditionOf(itemFields, inst, ["chimneyCondition"]);
+  const gaps = chimneyNoted.some((n) => /gaps|cracking/i.test(n));
+  const unstable = chimneyNoted.some((n) => /unstable/i.test(n));
+  let chimney = "";
+  if (chimneyCond.word) {
+    const chWith = [gaps ? "gaps and cracking to the brickwork" : chimneyCond.word === "satisfactory" ? "typical weathering" : ""].filter(Boolean);
+    chimney = `The chimney ${chimneyMaterial.length ? `is constructed of ${joinList(chimneyMaterial)} and ` : ""}appears to be in ${chimneyCond.word} condition${chWith.length ? ` with ${chWith[0]}` : ""}.${unstable ? " The chimney appears to be unstable." : ""}`;
+  } else if (chimneyMaterial.length || gaps || unstable) {
+    chimney = [
+      chimneyMaterial.length ? `The chimney is constructed of ${joinList(chimneyMaterial)}.` : "",
+      gaps ? "There are gaps and cracking to the chimney brickwork." : "",
+      unstable ? "The chimney appears to be unstable." : "",
+    ].filter(Boolean).join(" ");
+  }
+  const text = [main, comments, ...otherStatus].filter(Boolean).join(" ");
+  if (text) parts.push(text);
+  // The template's chimney is its own paragraph, ending with the same "Comments are based on ..." as the roof.
+  if (chimney) parts.push([chimney, comments].filter(Boolean).join(" "));
+  if (damages) parts.push(damages);
+  if (notes) parts.push(withPeriod(notes));
+  return parts.join("\n\n");
+}
+
 /** "1st floor" -> "FIRST FLOOR" etc. -- the band ReportSection.tsx draws above each floor's rooms. */
 function floorHeading(label: string): string {
   if (/^1st\b/i.test(label)) return "FIRST FLOOR";
@@ -633,6 +806,22 @@ function floorHeading(label: string): string {
   if (/^3rd\b/i.test(label)) return "THIRD FLOOR";
   return label.toUpperCase();
 }
+
+/**
+ * The Nov 2026 template's room headings for the form's standard rooms, used when the inspector leaves the room name blank
+ * ("Entry and Hallway", "Kitchen, Living and Dining", "Toilet", "Stairwell", "Balcony", "Other room"). A typed name always wins.
+ */
+const TEMPLATE_ROOM_NAMES: Record<string, string> = {
+  "front entry and hallway": "Entry and Hallway",
+  "kitchen / family / living": "Kitchen, Living and Dining",
+  "lounge (separate, if any)": "Lounge",
+  "dining (separate, if any)": "Dining",
+  "bedroom 4 / study": "Bedroom 4",
+  "wc / powder room": "Toilet",
+  "stairs / stairwell / landing / hallway": "Stairwell",
+  "balcony / terrace": "Balcony",
+  "other internal area": "Other room",
+};
 
 /** What a room is called inside a sentence: "The entry and hallway are ...", "The bedroom and ensuite are ...", "The bathroom is ...". */
 export function roomSubject(label: string): { subject: string; plural: boolean } {
@@ -656,7 +845,8 @@ const make_internalAreas = (nov: boolean): Composer => (inst, itemFields, rawLab
   if (isNotPresent(inst)) return "";
   // An inspector-added extra room with no name typed is labelled "Rooms 11" by the list -- that isn't a heading.
   const typedName = asString(inst.roomName).trim();
-  const baseLabel = typedName || (/^rooms?\b.*\s\d+$/i.test(rawLabel) ? "Other room" : rawLabel);
+  const standardLabel = /^rooms?\b.*\s\d+$/i.test(rawLabel) ? "Other room" : rawLabel;
+  const baseLabel = typedName || (nov ? TEMPLATE_ROOM_NAMES[standardLabel.toLowerCase()] ?? standardLabel : standardLabel);
   // "Bedroom 1 [x] with Ensuite" is headed and worded "Bedroom 1 and ensuite" / "The bedroom and ensuite are ...".
   const label = yesNo(inst, "withEnsuite") && !/ensuite/i.test(baseLabel) ? `${baseLabel} and ensuite` : baseLabel;
   const cond = conditionOf(itemFields, inst);
@@ -710,7 +900,7 @@ function composeInternalAreasLeadIn(scope: AnswerTree, templateFields: TemplateF
     );
   }
   const notAccessed = asString(scope.roomsNotAccessed).trim();
-  if (notAccessed) parts.push(`No access granted to ${withPeriod(notAccessed)}`);
+  if (notAccessed) parts.push(`No access granted to ${withPeriod(midSentence(notAccessed))}`);
   // "Other general condition issues -- note the areas affected": a grade, and the inspector's own note of what and where.
   const generalCond = conditionOf(templateFields, scope, ["generalConditionComments"]);
   const generalNote = asString(scope.generalConditionCommentsOther).trim();
@@ -721,7 +911,7 @@ function composeInternalAreasLeadIn(scope: AnswerTree, templateFields: TemplateF
   }
   if (yesNo(scope, "movementObserved")) {
     const where = asString(scope.movementWhere).trim();
-    parts.push(`Movement was observed in the internal areas${where ? `, at ${where.replace(/[.\s]+$/, "")}` : ""}.`);
+    parts.push(`Movement was observed in the internal areas${where ? `, at ${midSentence(where).replace(/[.\s]+$/, "")}` : ""}.`);
   }
   return parts.join("\n\n");
 }
@@ -762,8 +952,10 @@ const description: Composer = (inst, itemFields) => {
   const frontageBlockBits: string[] = [];
   if (streetFrontage) frontageBlockBits.push(`facing ${compassPhrase(streetFrontage)}`);
   if (blockSlope) frontageBlockBits.push(`on a ${lower(blockSlope)} block of land`);
+  // The template's "around the 1990s" for a decade; a year stays "around 1995".
+  const decade = /^(\d{3}0)'?s$/i.exec(constructedYear);
   const ageBit = constructedYear
-    ? `estimated to have been constructed around ${constructedYear}`
+    ? `estimated to have been constructed around ${decade ? `the ${decade[1]}s` : constructedYear}`
     : underConstructionStage
       ? // If the inspector's own typed stage already says "stage" ("Frame Stage"), appending it again used to produce "frame stage stage".
         `currently under construction at ${lower(typedCase(underConstructionStage))}${/\bstage\b/i.test(underConstructionStage) ? "" : " stage"}`
@@ -795,8 +987,28 @@ const description: Composer = (inst, itemFields) => {
 
   if (windows.length) parts.push(`Windows are constructed of ${joinList(windows)}.`);
 
+  // The template's extension: "There is an extension to the rear built around 2010. It is constructed of weatherboard walls on concrete
+  // slab with a pitched roof and a covering of Colorbond." -- once the form asks about an extension.
+  const extWhere = one(itemFields, inst, ["extensionLocation"]);
+  const extYear = asString(inst.extensionYear).trim();
+  const extWalls = materialWords(many(itemFields, inst, ["extensionWalls"]).map(lower));
+  const extFoundations = one(itemFields, inst, ["extensionFoundations"]);
+  const extRoof = one(itemFields, inst, ["extensionRoofDesign"]);
+  const extCovering = materialWords(many(itemFields, inst, ["extensionRoofCovering"]).map(lower));
+  let extension = "";
+  if (asString(inst.extensionPresent) !== "no" && (extWhere || extYear || extWalls.length)) {
+    const ext: string[] = [`There is an extension${extWhere ? ` to the ${lower(extWhere)}` : ""}${extYear ? ` built around ${extYear}` : ""}.`];
+    const c: string[] = [];
+    if (extWalls.length) c.push(`constructed of ${wallsOf(extWalls)}`);
+    if (extFoundations) c.push(`on ${lower(extFoundations)}`);
+    if (extRoof) c.push(`with a ${lower(extRoof)} roof`);
+    if (extCovering.length) c.push(`a covering of ${joinList(extCovering)}`);
+    if (c.length) ext.push(`It is ${joinClauses(c)}.`);
+    extension = ext.join(" ");
+  }
+
   // The scope and safety answers follow the property description, each as its own paragraph.
-  return [parts.join(" "), ...scopeAndSafetyParagraphs(inst)].filter(Boolean).join("\n\n");
+  return [parts.join(" "), extension, ...scopeAndSafetyParagraphs(inst)].filter(Boolean).join("\n\n");
 };
 
 /**
@@ -846,7 +1058,7 @@ const notes: Composer = (inst, itemFields, label) => {
  * An extra structure the inspector added ("Water tank"): "There is a water tank, constructed of metal, which is generally in
  * satisfactory state of repair." then its defects and notes.
  */
-const make_customStructure = (nov: boolean): Composer => (inst, itemFields) => {
+const make_customStructure = (nov: boolean, extra: DefectStyle = {}): Composer => (inst, itemFields) => {
   const description = lower(typedCase(asString(inst.description).trim()));
   const materials = materialWords(many(itemFields, inst, ["material"]).map(lower).map(amp));
   const cond = conditionOf(itemFields, inst);
@@ -854,7 +1066,7 @@ const make_customStructure = (nov: boolean): Composer => (inst, itemFields) => {
   if (cond.tag) parts.push(cond.tag);
   const subject = description ? `There is ${article(description)} ${description}` : "There is an additional structure";
   parts.push(`${subject}${materials.length ? `, constructed of ${joinList(materials)}` : ""}${cond.word ? `, which is ${repairState(cond.word)}` : ""}.`);
-  return houseTail(parts, itemFields, inst, nov ? NOV2026 : undefined);
+  return houseTail(parts, itemFields, inst, nov ? { ...NOV2026, ...extra } : undefined);
 };
 
 function composerSet(nov: boolean): Record<string, Composer> {
@@ -882,6 +1094,18 @@ export const residentialHouseComposers: Record<string, Composer> = composerSet(f
 
 /** The sentences for Dilapidation / Residential House, worded as Houspect's Nov 2026 office template words them. */
 export const residentialHouseComposersNov2026: Record<string, Composer> = composerSet(true);
+
+/**
+ * The Multi Level Office template's (Apartment's) defects: "At the hallway wall, there is a crack starting at the door head and running to
+ * the cornice." -- no severity word, no direction word when the start or end says where it runs -- and anything else as its "There is
+ * damage to the ... at ...", naming the damage ("There is weathering to the sheet joints at the stairwell cladding.").
+ */
+export const MULTI_LEVEL: DefectStyle = { noSeverity: true, damageForm: true, noDirection: true, noCrackElement: true, noNotes: true };
+/** The Nov 2026 house sentences the Apartment reuses, with its template's defects (MULTI_LEVEL). */
+export const apartmentHouseComposersNov2026: Record<"driveway" | "custom_structure", Composer> = {
+  driveway: make_driveway(true, MULTI_LEVEL),
+  custom_structure: make_customStructure(true, MULTI_LEVEL),
+};
 
 /**
  * Defect sentences for Dilapidation / Residential House in the Nov 2026 form, for a defect list recorded at section level (Notes'
@@ -958,6 +1182,8 @@ export const dilapidationResidentialHouse: ReportWording = {
   noSummarySections: ["description"],
   absentSlotSections: ["fences"],
   damageSentences: houseDamageSentencesNov2026,
+  // The Condition Summary names a room as its heading does: the template's name for a standard room ("Entry and Hallway", "Toilet").
+  instanceLabel: (sectionKey, label) => (sectionKey === "internal_areas" ? TEMPLATE_ROOM_NAMES[label.toLowerCase()] ?? label : label),
   descriptionBlocks: descriptionBlocksNov2026,
   derivedFields,
 };

@@ -7,11 +7,13 @@ import { scopeOfInspectionSentences } from "../descriptionScope";
 import { DILAPIDATION_METHOD_NOV2026, printsAgreement } from "../reportAgreement";
 
 /** Every photo that actually appears in the printed report -- general section photos plus each damage/crack's own -- matching what the reader can actually count, for the "full download of N photographs" disclosure. */
-function countReportPhotos(inspection: Inspection): number {
-  return inspection.sections.reduce(
-    (total, s) => total + s.photos.length + s.damages.reduce((dt, d) => dt + d.photos.length, 0),
-    0,
-  );
+/** How many distinct photos the inspection has. A defect's photos are also in its section's photo list, so each photo is counted once (by its address, ignoring any signing query). */
+export function countReportPhotos(inspection: Inspection): number {
+  const seen = new Set<string>();
+  for (const s of inspection.sections) {
+    for (const url of [...s.photos, ...s.damages.flatMap((d) => d.photos)]) seen.add(String(url).split("?")[0]);
+  }
+  return seen.size;
 }
 
 function str(v: unknown): string {
@@ -43,8 +45,11 @@ export function ReportDescription({
   // reference report never puts one on -- see ReportCover). Read straight
   // off this same section's own "front_elevation" answer field.
   const description = inspection.sections.find((s) => (s.key ?? s.id).startsWith("description"));
-  const frontElevation = (description?.answers as Record<string, unknown> | null | undefined)?.front_elevation;
-  const photoUrl = Array.isArray(frontElevation) && typeof frontElevation[0] === "string" ? frontElevation[0] : undefined;
+  const wording = wordingFor(reportProfileOf(inspection.type, inspection.propertyType));
+  // The Residential form's "front_elevation" photo; the Apartment form's is its "Building & street overview pics" (the first of them).
+  const answers = (description?.answers as Record<string, unknown> | null | undefined) ?? {};
+  const frontPhotos = [answers.front_elevation, answers.overviewPhotos].find((v) => Array.isArray(v) && typeof v[0] === "string") as string[] | undefined;
+  const photoUrl = frontPhotos?.[0];
   const frontPhotoNumbering = usePhotoNumbering(photoUrl ? [photoUrl] : [], "front");
   const totalPhotos = countReportPhotos(inspection);
 
@@ -74,7 +79,7 @@ export function ReportDescription({
   const photoArchiveUrl = generatedArchiveUrl || str(f.photoArchiveUrl);
   // A report type can word the works and scope sentences itself (Public Assets does); the others keep the standard ones (descriptionScope.ts).
   const surveyParts = (inspection.sections.find((s) => (s.key ?? s.id) === "elevations")?.answers as { parts?: unknown } | null | undefined)?.parts;
-  const { works, scope } = scopeOfInspectionSentences(wordingFor(reportProfileOf(inspection.type, inspection.propertyType)), f, Array.isArray(surveyParts) ? surveyParts.length : 0);
+  const { works, scope } = scopeOfInspectionSentences(wording, f, Array.isArray(surveyParts) ? surveyParts.length : 0);
 
   return (
     <div style={reportTextStyle(compact)}>
@@ -86,9 +91,10 @@ export function ReportDescription({
       )}
       {photoUrl ? (
         // The front-of-property photo: the same photo grid as every other photo in the report.
-        <PhotoGrid photos={[photoUrl]} compact={compact} startNumber={frontPhotoNumbering.start} />
+        // ("Size to fit the page and centre" where the report type's template says so -- Apartment.)
+        <PhotoGrid photos={[photoUrl]} compact={compact} startNumber={frontPhotoNumbering.start} fitPage={wording.frontPhoto?.fit === "page"} />
       ) : (
-        <Placeholder>{DESCRIPTION_PHOTO_PLACEHOLDER}</Placeholder>
+        <Placeholder>{wording.frontPhoto?.placeholder ?? DESCRIPTION_PHOTO_PLACEHOLDER}</Placeholder>
       )}
 
       <SectionBand compact={compact}>Photographs</SectionBand>
@@ -104,12 +110,9 @@ export function ReportDescription({
         </Para>
       ) : (
         // No archive link on file -- no "Click here" at all (a dead link
-        // that goes nowhere is worse than no link), and the sentence
-        // reworded so it still reads as a complete, meaningful statement.
-        <Para>
-          Selected photographs are included in the body of this report
-          {totalPhotos > 0 ? `, totalling ${totalPhotos} photographs` : ""}.
-        </Para>
+        // that goes nowhere is worse than no link): the template's first
+        // sentence on its own, with nothing added to it.
+        <Para>Selected photographs are included in the body of this report.</Para>
       )}
       {photoArchiveUrl && <Note>{PHOTOGRAPHS_NOTE}</Note>}
 

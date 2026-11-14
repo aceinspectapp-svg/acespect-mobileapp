@@ -40,6 +40,8 @@ export interface ReportWording {
   damageSentences?(inst: AnswerTree, itemFields: TemplateField[], options?: { key?: string; indexOffset?: number }): string;
   /** Condition Summary rows for one item of a section, when a report type grades several categories per item. Undefined: the standard single row. */
   summaryRows?(sectionKey: string, inst: AnswerTree, itemFields: TemplateField[], label: string): ConditionSummaryRow[] | undefined;
+  /** What an item is called in the Condition Summary when the inspector gave it no name of its own (e.g. the template's room names). */
+  instanceLabel?(sectionKey: string, label: string): string;
   /** Extra values worked out from a section's answers and stored with its fields (e.g. the list of labels a sentence needs). */
   derivedFields?(sectionKey: string, scope: AnswerTree, templateFields: TemplateField[]): Record<string, unknown>;
   /** The defect records a flat-composed section raises from its answers (Construction Stage: each checklist row answered "Defect", the Defects table, the ticked typical defects), with their photos. */
@@ -49,6 +51,21 @@ export interface ReportWording {
    * A report type that leaves this out keeps the standard sentences.
    */
   descriptionBlocks?(input: { fields: Record<string, unknown>; areaCount: number }): { works?: string; scope?: string };
+  /** The heading a section prints under, where this report type's template names it differently from the form ("External" -> "Main structure"). Undefined: the form's name. */
+  sectionTitle?(sectionKey: string): string | undefined;
+  /** False for a report type whose template has no Pool and Spa Safety Disclaimer (Apartment). Default: printed after the pool section. */
+  poolSpaDisclaimer?: boolean;
+  /** The template's own placeholder for the front-of-property photo when none was taken, and how wide that photo prints ("page": to fit the page, centred). */
+  frontPhoto?: { placeholder: string; fit: "page" };
+  /**
+   * The template's headings, in the order the report prints them, for a report type whose composers mark where each heading starts in
+   * a section's text ("PART::Driveway"; see reportParts.ts). The report then prints every part under its heading in this order -- even
+   * when the form asks about it in another section -- with its EXTERNAL / INTERNAL band. `structures`: inspector-added structures print
+   * after this heading.
+   */
+  reportParts?: { title: string; band: "EXTERNAL" | "INTERNAL"; structures?: boolean; heading?: false }[];
+  /** False for a report type whose template has no Condition Summary page. */
+  conditionSummary?: boolean;
 }
 
 /** No wording: every section falls back to the generic "Label: value." lines. */

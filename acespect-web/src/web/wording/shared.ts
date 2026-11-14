@@ -13,7 +13,11 @@ export type Composer = (inst: AnswerTree, itemFields: TemplateField[], label: st
 
 export function optionLabel(itemFields: TemplateField[], key: string, raw: string): string {
   const field = itemFields.find((f) => f.key === key);
-  return field?.options?.find((o) => o.value === raw)?.label ?? raw;
+  const label = field?.options?.find((o) => o.value === raw)?.label;
+  if (label !== undefined) return label;
+  // A choice this copy of the form does not have (answered on a newer or older version): its stored value as words
+  // ("parked_car" -> "parked car"), never the raw value.
+  return field?.options && /^[a-z0-9]+(_[a-z0-9]+)+$/.test(raw) ? raw.replace(/_/g, " ") : raw;
 }
 
 export function hasAnswer(v: AnswerValue): boolean {
@@ -332,7 +336,10 @@ export function damageSentences(
 export function obstructionsSentence(itemFields: TemplateField[], inst: AnswerTree, noun: string): string {
   const labels = many(itemFields, inst, ["obstructions", "obscuredBy", "obstruction"])
     .map(lower)
-    .map((l) => l.replace(/\bcar\/s\b/g, "cars"))
+    // The old combined choice ("Parked cars / trailer / caravan") does not say which one it was: "a parked vehicle", as the template words it.
+    .map((l) => (/^parked cars \/ trailer \/ caravan$|^parked[_ ]cars[_ ]trailer[_ ]caravan$/.test(l) ? "a parked vehicle" : l))
+    // "Parked car/s" is one parked car in the report's words ("A parked car obscured part of the hardstand").
+    .map((l) => (/^parked car(\/s)?$/.test(l) ? "a parked car" : /^parked vehicle$/.test(l) ? "a parked vehicle" : l))
     // "obscured by a trailer", not "by trailer"
     .map((l) => (/^(trailer|caravan|bench|boat)$/.test(l) ? `a ${l}` : l));
   if (labels.length === 0) return "";

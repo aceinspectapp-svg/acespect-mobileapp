@@ -37,7 +37,13 @@ function Block({ b }: { b: AgreementBlock }) {
     case "definition":
       return <p style={{ ...para, margin: "0 0 6px", paddingLeft: `${ITEM_INDENT}px` }}>{b.text}</p>;
     case "grade":
-      return <p style={{ ...para, margin: "0 0 3px", paddingLeft: `${ITEM_INDENT + ITEM_W + 6}px` }}>{b.text}</p>;
+      // The template sets the gradings of clause 5.7(e) as a bulleted list.
+      return (
+        <div style={{ display: "flex", gap: "8px", margin: "0 0 3px", paddingLeft: `${ITEM_INDENT + ITEM_W + 6}px` }}>
+          <span aria-hidden style={{ flexShrink: 0, color: reportTokens.ink }}>•</span>
+          <p style={{ ...para, margin: 0 }}>{b.text}</p>
+        </div>
+      );
     case "para":
       return <p style={{ ...para, margin: "0 0 8px" }}>{b.text}</p>;
   }

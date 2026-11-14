@@ -13,7 +13,6 @@ const server = await createServer({ root: webRoot, server: { middlewareMode: tru
 after(() => server.close());
 const { flattenSectionToDraft } = await server.ssrLoadModule("/src/web/templateFields.ts");
 const { scopePhrase } = await server.ssrLoadModule("/src/web/descriptionScope.ts");
-const { apartmentObservation } = await server.ssrLoadModule("/src/web/wording/dilapidation.apartment.ts");
 const { typedCase, lower, stripKeepMarks } = await server.ssrLoadModule("/src/web/wording/shared.ts");
 const snapshot = JSON.parse(readFileSync(resolve(webRoot, "../acespect-backend/prisma/templates-snapshot.json"), "utf8"));
 
@@ -78,8 +77,8 @@ describe("wording review: sentences that read wrongly", () => {
   });
 
   it("says a trailer or caravan with its article", () => {
-    const t = draft("residential_house", "driveway", { present: "yes", locatedAt: "Front left", obscuredBy: ["Vegetation", "Parked cars / trailer / caravan"] });
-    assert.ok(/obscured by vegetation and parked cars/.test(t), t);
+    const t = draft("residential_house", "driveway", { present: "yes", locatedAt: "Front left", obscuredBy: ["Vegetation", "Parked car"] });
+    assert.ok(/obscured by vegetation and a parked car\./.test(t), t);
     const e = draft("residential_house", "elevations", { sides: { front: { obscuredBy: ["Trailer", "Caravan"] } } });
     assert.ok(e.includes("obscured by a trailer and a caravan."), e);
   });
@@ -106,9 +105,7 @@ describe("wording review: sentences that read wrongly", () => {
     assert.ok(t.includes("Water stains and items of damage observed throughout."), t);
   });
 
-  it("Apartment: a door closer that is not applicable is not 'not working'; windows and the flywire read as sentences", () => {
-    const ext = draft("apartment", "elevations", { front_door_doorCloser: "Not applicable" });
-    assert.ok(!/closer is not working/.test(ext), ext);
+  it("Apartment: windows read as the template's 'Windows are constructed of ...'", () => {
     const win = draft("apartment", "description", { windows: "Double glazed" });
     assert.ok(win.includes("Windows are double glazed."), win);
     const alu = draft("apartment", "description", { windows: "Aluminium frame", cladding: "Concrete panels" });
@@ -121,21 +118,11 @@ describe("wording review: sentences that read wrongly", () => {
     assert.ok(/There is a nature strip of a mix of materials/.test(t) && !/an a mix/.test(t), t);
   });
 
-  it("Apartment: every ticked observation is a full sentence (a capital, a verb, a full stop)", () => {
-    const VERB = /\b(is|are|was|were|has|have|had|do|does|did|may|should|must|need|needs|require|requires|required|recommended|appears?|shows?|pass|passes|extends?|installed|added|attended|consulted|engaged|refer|consider|visible|ponds?)\b/i;
-    let checked = 0;
-    for (const t of snapshot.filter((x) => x.inspectionType === "dilapidation" && x.propertyType === "apartment")) {
-      for (const f of t.fields) {
-        if (f.type !== "chip-multiselect" || !/_checks\d*$|_checks1$/.test(f.key)) continue;
-        for (const o of f.options) {
-          if (o.value === "other") continue;
-          const sentence = apartmentObservation(t.sectionKey, f.key, o.label);
-          checked += 1;
-          assert.ok(/^[A-Z]/.test(sentence) && /[.]$/.test(sentence) && VERB.test(sentence), `${t.sectionKey}/${f.key}: "${o.label}" -> "${sentence}"`);
-        }
-      }
-    }
-    assert.ok(checked > 100, `only ${checked} observations checked`);
+  it("Apartment: the rebuilt form asks no Pre-Purchase observation ticks (the Multi Level Office template has no line for them)", () => {
+    const ticks = snapshot
+      .filter((x) => x.inspectionType === "dilapidation" && x.propertyType === "apartment")
+      .flatMap((t) => t.fields.filter((f) => /_checks\d*$/.test(f.key)).map((f) => `${t.sectionKey}/${f.key}`));
+    assert.deepEqual(ticks, []);
   });
 
   it("keeps the capitals of typed names and places, and lower-cases the rest", () => {

@@ -233,6 +233,20 @@ const LAYOUTS: Record<string, PropertyLayout> = {
       pool_spa: "Offices & Staff Facilities",
     },
   },
+  // The Multi Level Office Building template's parts, in its order (the same list as the mobile app's 'dilapidation:apartment').
+  "dilapidation:apartment": {
+    order: ["job-info", "description", "driveway", "paving_paths", "fences", "retaining_walls", "garage_carport_sheds", "elevations", "roof_chimneys", "internal_areas", "notes"],
+    names: {
+      paving_paths: "Paving / Parking areas / Basement car parks",
+      fences: "Fences",
+      retaining_walls: "Retaining Walls",
+      garage_carport_sheds: "Garage / Carport / Loading Bay / Shed",
+      elevations: "Main structure (Elevations)",
+      roof_chimneys: "Roof Covering and Chimney",
+      internal_areas: "Internal (rooms by floor)",
+      notes: "Notes",
+    },
+  },
   apartment: {
     order: ["job-info", "description", "elevations", "roof_chimneys", "internal_areas", "paving_paths", "notes"],
     names: {

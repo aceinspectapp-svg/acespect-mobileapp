@@ -2,6 +2,7 @@ import type { DamageRecord, FormSection } from "../mockData";
 import { conditionTagColors } from "../conditionGrades";
 import { useContext } from "react";
 import { Heading, Para, PhotoGrid, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand, usePhotoNumbering } from "./reportKit";
+import { markedKeys, markedPhotos, PART_RE, photoKey, PHOTOS_RE } from "../reportParts";
 
 // Internal Areas' floor headings (see the report type's wording (src/web/wording/) internal_areas
 // composer) are injected as plain uppercase lines within the section's flat
@@ -9,6 +10,8 @@ import { Heading, Para, PhotoGrid, ReportWordingStyleContext, reportTextStyle, r
 // fixed, known text so they can render as the reference's own tan/khaki
 // bar instead of an ordinary paragraph.
 const FLOOR_HEADINGS = ["GROUND FLOOR", "FIRST FLOOR", "SECOND FLOOR", "BASEMENT"];
+// A floor the inspector named (an apartment's "LEVEL 7", a "THIRD FLOOR"), written the same way.
+const FLOOR_LINE_RE = /^(?:LEVEL \d+|[A-Z]+ FLOOR|LOWER GROUND|MEZZANINE)$/;
 
 // Matches the report type's wording (src/web/wording/) `conditionTag()` -- a composer-emitted
 // "COND::#hex::Label" paragraph standing in for a structured condition tag,
@@ -59,6 +62,7 @@ type ParsedItem =
   | { kind: "cond"; color: string; label: string }
   | { kind: "defect"; index: number; text: string }
   | { kind: "item"; heading: string; text: string }
+  | { kind: "photos"; keys: string[] }
   | { kind: "para"; text: string };
 
 // Matches the report type's wording (src/web/wording/) damageSentences -- one tagged paragraph per recorded defect, where `index` is that defect's position in the section's damage list, so its own photos can be printed right under its sentence.
@@ -67,8 +71,11 @@ const DEFECT_RE = /^DEFECT::(\d+)::([\s\S]*)$/;
 const ITEM_RE = /^ITEM::(.+?)::(?:(?:ok|progress|defect|note|notcomplete|na)::)?([\s\S]*)$/;
 const NOTE_RE = /^NOTE::([\s\S]*)$/;
 
-function renderParsedItem(item: ParsedItem, compact: boolean, key: number | string, damages: DamageRecord[]) {
+function renderParsedItem(item: ParsedItem, compact: boolean, key: number | string, section: Pick<FormSection, "photos" | "damages" | "answers">) {
+  const damages = section.damages;
   switch (item.kind) {
+    case "photos":
+      return <ItemPhotos key={key} photos={markedPhotos(section, item.keys)} compact={compact} at={String(key)} />;
     case "heading":
       return (
         <Heading key={key} compact={compact}>
@@ -129,6 +136,36 @@ function DefectBlock({ text, damage, compact }: { text: string; damage?: DamageR
       />
     </div>
   );
+}
+
+/** One item's photos, printed where the report text marks them ("PHOTOS::..."): the template's "Please refer to Photographs 9 to 12." under the item. */
+function ItemPhotos({ photos, compact, at }: { photos: string[]; compact: boolean; at: string }) {
+  const numbering = usePhotoNumbering(photos, `item:${at}`);
+  if (photos.length === 0) return null;
+  return (
+    <div style={{ margin: "0 0 10px" }}>
+      <PhotoGrid
+        photos={photos}
+        compact={compact}
+        startNumber={numbering.start}
+        caption={<Para style={{ margin: "0 0 4px", fontSize: "0.92em", color: reportTokens.inkMuted }}>{numbering.label}</Para>}
+      />
+    </div>
+  );
+}
+
+/** The section's photos that are not a defect's own -- the ones its general photo grid prints. */
+export function generalPhotosOf(section: Pick<FormSection, "photos" | "damages">): string[] {
+  const withDefects = new Set(section.damages.flatMap((d) => d.photos.map(photoKey)));
+  return section.photos.filter((url) => !withDefects.has(photoKey(url)));
+}
+
+/** `photos` without those the section's text prints under an item (its PHOTOS marks). */
+function withoutMarked(photos: string[], section: FormSection): string[] {
+  const keys = markedKeys(section.reportText);
+  if (keys.length === 0) return photos;
+  const marked = new Set(markedPhotos(section, keys).map(photoKey));
+  return photos.filter((url) => !marked.has(photoKey(url)));
 }
 
 /** The section's own general photos (not tied to a defect) -- printed after the defects, with their own photo numbers. */
@@ -268,8 +305,14 @@ export function ReportSection({
   compact = false,
   hideDamageText = false,
   archiveUrl,
+  generalPhotos,
+  untaggedDefects = true,
 }: {
   section: FormSection;
+  /** The photos printed last. Default: the section's photos that no defect and no PHOTOS mark in its text prints. */
+  generalPhotos?: string[];
+  /** False: the defects no sentence names are printed with another piece of this section (see reportParts.ts). */
+  untaggedDefects?: boolean;
   /** Link to this section's full photo archive (its own sub-folder in the job's photo folder) -- printed under the section title so the client can reach every photo the inspector uploaded, not just the ones the reviewer selected for the report. */
   archiveUrl?: string | null;
   showHeading?: boolean;
@@ -290,6 +333,11 @@ export function ReportSection({
     ...paras.map((p): ParsedItem => {
       const condMatch = p.match(CONDITION_TAG_RE);
       if (condMatch) return { kind: "cond", color: condMatch[1], label: condMatch[2] };
+      // One of the template's headings inside a section's text (a report that does not reorder its parts prints it where it is).
+      const partMatch = p.match(PART_RE);
+      if (partMatch) return { kind: "heading", text: partMatch[1].trim() };
+      const photosMatch = p.match(PHOTOS_RE);
+      if (photosMatch) return { kind: "photos", keys: photosMatch[1].split(",").map((k) => k.trim()).filter(Boolean) };
       const roomMatch = p.match(ROOM_HEADING_RE);
       if (roomMatch) return { kind: "roomhead", text: roomMatch[1] };
       const defectMatch = p.match(DEFECT_RE);
@@ -298,7 +346,7 @@ export function ReportSection({
       if (itemMatch) return { kind: "item", heading: itemMatch[1], text: itemMatch[2].trim() };
       const noteMatch = p.match(NOTE_RE);
       if (noteMatch) return { kind: "para", text: noteMatch[1].trim() };
-      if (FLOOR_HEADINGS.includes(p)) return { kind: "floorband", text: p };
+      if (FLOOR_HEADINGS.includes(p) || FLOOR_LINE_RE.test(p)) return { kind: "floorband", text: p };
       return { kind: "para", text: p };
     }),
   ];
@@ -310,7 +358,7 @@ export function ReportSection({
     <div style={reportTextStyle(compact)}>
       {/* Description -- with each defect's sentence followed by its own photos */}
       {groups.map((group, gi) => {
-        const rendered = group.map((item, ii) => renderParsedItem(item, compact, `${section.id}-${gi}-${ii}`, section.damages));
+        const rendered = group.map((item, ii) => renderParsedItem(item, compact, `${section.id}-${gi}-${ii}`, section));
         // The photo-archive link belongs directly under the heading, which is
         // the first item of the first group -- splice it in right after it
         // instead of hoisting the whole group out of its breakInside wrapper.
@@ -326,12 +374,15 @@ export function ReportSection({
       })}
 
       {/* Defects without a tagged sentence (older saved text): photos after the text, as before */}
-      {section.damages.map((d, i) =>
-        taggedDefects.has(i) ? null : <DamageBlock key={d.id} damage={d} compact={compact} hideDamageText={hideDamageText} />,
-      )}
+      {untaggedDefects &&
+        section.damages.map((d, i) =>
+          taggedDefects.has(i) ? null : <DamageBlock key={d.id} damage={d} compact={compact} hideDamageText={hideDamageText} />,
+        )}
 
-      {/* The section's general photographs come last, after every defect */}
-      <GeneralPhotos photos={section.photos} compact={compact} />
+      {/* The section's general photographs come last, after every defect -- without the defects' own photos, already printed under each defect.
+          (The phone lists every photo taken in the section, defect photos included, so the report would otherwise print those twice.)
+          Photos already printed under their item (a PHOTOS mark) are not printed again. */}
+      <GeneralPhotos photos={generalPhotos ?? withoutMarked(generalPhotosOf(section), section)} compact={compact} />
 
       {section.photos.length === 0 && section.damages.length === 0 && paras.length === 0 && (
         <p style={{ color: reportTokens.inkFaint, fontStyle: "italic" }}>No content recorded for this category.</p>

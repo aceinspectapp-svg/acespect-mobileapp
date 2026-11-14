@@ -193,8 +193,8 @@ describe("published templates: Retaining Walls and Pool / Spa", () => {
       fenceSafety: "no_does_not_appear_to_be_safe",
       condition: "fair",
     });
-    assert.ok(out.includes("There is a pool/spa located at the rear of the property, constructed of fibreglass, which is generally in fair state of repair."));
-    assert.ok(out.includes("The pool/spa surrounds are paved with tiles."));
+    assert.ok(out.includes("There is a pool located at the rear of the property, constructed of fibreglass, which is generally in fair state of repair."));
+    assert.ok(out.includes("The pool surrounds are paved with tiles."));
     assert.ok(out.includes("The pool fence is constructed of glass panels and does not appear to be safe."));
   });
 
@@ -228,7 +228,7 @@ describe("published templates: Elevations, Roof, Internal Areas, Notes", () => {
     const out = reportText("roof_chimneys", {
       sections: { upper: { condition: "fair", coveringType: ["tile"], inspectionStatus: ["no_chimney_s"] } },
     });
-    assert.ok(out.includes("The roof covering appears to be in fair condition, constructed of tile. There are no chimneys visible."));
+    assert.ok(out.includes("The roof covering of tile appears to be in fair condition. There are no chimneys visible."), out);
   });
 
   it("groups rooms under one floor banner each and composes the section-level answers", () => {
