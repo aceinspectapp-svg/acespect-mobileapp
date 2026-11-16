@@ -28,6 +28,14 @@ export interface ToolGroup {
 
 export const SECTION_GROUP_ID = "section";
 
+/** The option a field is gated on, when the gate is a ticked item of a multi-select ("What is present: Footpaths and Crossovers"): the category's own name. */
+function gateLabel(f: TemplateField, siblings: TemplateField[]): string | undefined {
+  if (!f.gate?.equals) return undefined;
+  const gating = siblings.find((x) => x.key === f.gate!.fieldKey);
+  if (!gating || (gating.type !== "chip-multiselect" && gating.type !== "tile-multiselect")) return undefined;
+  return gating.options?.find((o) => o.value === f.gate!.equals)?.label;
+}
+
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const clean = (label: string) => label.replace(/\s*\*$/, "").replace(/\s*\((?:start|end|min \d+)[^)]*\)/gi, "").trim();
 
@@ -38,9 +46,11 @@ export function toolGroups(fields: TemplateField[], answers: AnswerTree | null |
   const walk = (list: TemplateField[], scope: AnswerTree, prefix: AnswerPath, crumbs: string[], detail?: string, defect = false): void => {
     const visible = [...list].filter((f) => isGateSatisfied(f, scope)).sort((a, b) => a.order - b.order);
     for (const f of visible) {
+      const category = gateLabel(f, list);
+      const trail = category && !crumbs.includes(category) ? [...crumbs, category] : crumbs;
       if (f.type === "photos") {
         const path = [...prefix, f.key];
-        groups.push({ id: path.join("."), title: [...crumbs, clean(f.label)].filter(Boolean).join(" › "), detail, defect, photos: asStringArray(scope[f.key]), path });
+        groups.push({ id: path.join("."), title: [...trail, clean(f.label)].filter(Boolean).join(" › "), detail, defect, photos: asStringArray(scope[f.key]), path });
         continue;
       }
       if (f.type !== "repeating-group" && f.type !== "damage-list") continue;
@@ -51,14 +61,14 @@ export function toolGroups(fields: TemplateField[], answers: AnswerTree | null |
         (value as AnswerTree[]).forEach((item, i) => {
           const inst = asAnswerTree(item as AnswerValue);
           const named = (f.repeat?.titleFieldKey ? asString(inst[f.repeat.titleFieldKey]).trim() : "") || asString(inst.location).trim() || asString(inst.partName).trim();
-          walk(f.itemFields ?? [], inst, [...prefix, f.key, i], [...crumbs, isDefectList ? `${noun} ${i + 1}` : named || `${noun} ${i + 1}`], isDefectList ? named || undefined : undefined, isDefectList);
+          walk(f.itemFields ?? [], inst, [...prefix, f.key, i], [...trail, isDefectList ? `${noun} ${i + 1}` : named || `${noun} ${i + 1}`], isDefectList ? named || undefined : undefined, isDefectList);
         });
       } else if (value && typeof value === "object") {
         const fixed = f.repeat?.fixedInstances ?? [];
         for (const [key, item] of Object.entries(value as Record<string, AnswerTree>)) {
           const inst = asAnswerTree(item as AnswerValue);
           const label = asString(inst.roomName).trim() || fixed.find((x) => x.key === key)?.label || key;
-          walk(f.itemFields ?? [], inst, [...prefix, f.key, key], [...crumbs, label]);
+          walk(f.itemFields ?? [], inst, [...prefix, f.key, key], [...trail, label]);
         }
       }
     }
@@ -145,5 +155,26 @@ export function withPhotoReplaced(answers: AnswerTree | null | undefined, groups
     const list = photosAt(out, g.path);
     if (list.some((u) => photoKey(u) === key)) out = withPhotos(out, g.path, list.map((u) => (photoKey(u) === key ? next : u)));
   }
+  return out;
+}
+
+/**
+ * The section's flat photo list put in the order the groups arrange them: every group's photos in turn (form order), then whatever the groups do not
+ * hold. Some reports print a part's photos from this flat list, so this is what makes the printed order follow the reviewer's arrangement. Each photo
+ * keeps the link form (signature) the section already lists it by.
+ */
+export function flatOrder(groups: ToolGroup[], sectionPhotos: string[]): string[] {
+  const listed = new Map(sectionPhotos.map((u) => [photoKey(u), u] as const));
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const g of groups) {
+    for (const u of g.photos) {
+      const k = photoKey(u);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(listed.get(k) ?? u);
+    }
+  }
+  for (const u of sectionPhotos) if (!seen.has(photoKey(u))) out.push(u);
   return out;
 }

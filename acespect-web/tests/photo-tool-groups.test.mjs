@@ -39,6 +39,13 @@ describe("photo groups of a Public Assets survey", () => {
     assert.deepEqual(byPath("parts.0.footpaths_widePhotos").photos, [p(4), p(5)]);
   });
 
+  it("names the category a group belongs to, so 'Defect 1' under Footpaths is told from 'Defect 1' under Kerbs", () => {
+    const fp = groups.find((g) => g.path?.join(".") === "parts.0.footpaths_widePhotos");
+    assert.ok(fp.title.includes("Footpaths and Crossovers"), fp.title);
+    const defect = groups.find((g) => g.defect && g.photos[0] === p(6));
+    assert.ok(defect.title.includes("Footpaths and Crossovers") && defect.title.includes("Defect 1"), defect.title);
+  });
+
   it("lists each defect's own photos as a defect group, named by where it is", () => {
     const defects = groups.filter((g) => g.defect);
     assert.deepEqual(defects.map((g) => g.photos), [[p(6), p(7)], [p(8)]]);
@@ -122,5 +129,15 @@ describe("changing photo lists in the answers", () => {
     assert.deepEqual(G.moved([1, 2, 3], 0, 99), [2, 3, 1]);
     assert.deepEqual(G.moved([1, 2, 3], 2, -5), [3, 1, 2]);
     assert.deepEqual(G.moved([1, 2, 3], 7, 0), [1, 2, 3]);
+  });
+});
+
+describe("the flat photo list follows the arrangement", () => {
+  const g = (photos) => ({ id: String(photos), title: "", defect: false, path: ["x"], photos });
+  it("lists every group's photos in turn, then the ones no group holds", () => {
+    assert.deepEqual(G.flatOrder([g([p(3), p(1)]), g([p(2)])], [p(1), p(2), p(3), p(9)]), [p(3), p(1), p(2), p(9)]);
+  });
+  it("keeps the section's own link form for each photo, and lists each once", () => {
+    assert.deepEqual(G.flatOrder([g([p(2)]), g([p(2), p(1)])], [p(1, "?e=1&s=a"), p(2, "?e=1&s=b")]), [p(2, "?e=1&s=b"), p(1, "?e=1&s=a")]);
   });
 });

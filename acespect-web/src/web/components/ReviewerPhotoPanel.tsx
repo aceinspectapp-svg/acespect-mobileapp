@@ -20,7 +20,7 @@ import type { ActiveTemplate, AnswerTree } from "../templateFields";
 import { flattenSectionToDraft } from "../templateFields";
 import { reportProfileOf } from "../wording/profile";
 import { photoKey } from "../reportParts";
-import { moved, photosAt, SECTION_GROUP_ID, toolGroups, withPhotoAdded, withPhotoMoved, withPhotoRemoved, withPhotoReplaced, type ToolGroup } from "../photoToolGroups";
+import { flatOrder, moved, photosAt, SECTION_GROUP_ID, toolGroups, withPhotoAdded, withPhotoMoved, withPhotoRemoved, withPhotoReplaced, type ToolGroup } from "../photoToolGroups";
 import { PhotoEditorModal } from "./PhotoEditorModal";
 
 type Info = PhotoInfo & { originalUrl?: string | null };
@@ -94,10 +94,12 @@ export function ReviewerPhotoPanel({
     try { await work(); } catch (e) { setError(e instanceof Error ? e.message : "That did not work."); } finally { setBusy(false); }
   }
   /** Saves changed answers (and the flat photo list), after a warning when it would replace text the reviewer wrote. */
+  /** The section's flat photo list in the order `next` arranges them (reports that print a part's photos from it then follow). */
+  const arranged = (next: AnswerTree, flat: string[] = section.photos) => flatOrder(toolGroups(template.fields, next, flat), flat);
   const saveAnswers = (next: AnswerTree, photos?: string[]) =>
     run(async () => {
       if (handEdited && !window.confirm("This section's report text was edited by hand. Changing where photos sit writes the text again from the answers, which replaces those edits. Continue?")) return;
-      await onSaveAnswers(next, photos ? { photos } : {});
+      await onSaveAnswers(next, { photos: photos ?? arranged(next) });
     });
 
   const toggleExcluded = (url: string) =>
@@ -164,7 +166,7 @@ export function ReviewerPhotoPanel({
         let next = answers;
         urls.forEach((u, k) => { if (group.path) next = withPhotoAdded(next, group.path, u, index === undefined ? undefined : index + k); });
         const flat = [...section.photos, ...urls.filter((u) => !section.photos.some((p) => photoKey(p) === photoKey(u)))];
-        if (group.path) await onSaveAnswers(next, { photos: flat });
+        if (group.path) await onSaveAnswers(next, { photos: arranged(next, flat) });
         else await patchSection(inspection.id, section.id, { photos: flat });
       } finally {
         setUploading((u) => { const n = { ...u }; delete n[group.id]; return n; });
@@ -179,7 +181,7 @@ export function ReviewerPhotoPanel({
       const { url: fresh } = await api.uploadInspectionPhoto(file, inspection.id, sectionKey);
       const next = withPhotoReplaced(answers, groups, url, fresh);
       const flat = section.photos.map((u) => (photoKey(u) === photoKey(url) ? fresh : u));
-      await onSaveAnswers(next, { photos: flat });
+      await onSaveAnswers(next, { photos: arranged(next, flat) });
     });
   }
 
