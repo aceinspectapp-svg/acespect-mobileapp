@@ -11,7 +11,7 @@ import type { ConditionSummaryRow } from "../templateFields";
 import { asString, buildDefectNote, isGateSatisfied, otherAnswerText, withPeriod } from "../templateFields";
 import { gradeOf } from "../conditionGrades";
 import type { Composer } from "./shared";
-import { LOCATION_STARTS_WITH_PREPOSITION_RE, article, capitalize, conditionOf, defectOffsets, joinList, lower, many, observedSentence, one, scopeAndSafetyParagraphs, withThe } from "./shared";
+import { LOCATION_STARTS_WITH_PREPOSITION_RE, article, capitalize, conditionOf, defectOffsets, joinList, lower, many, observedSentence, one, scopeAndSafetyParagraphs, stripKeepMarks, typedCase, withThe } from "./shared";
 import { residentialHouseComposers as house } from "./dilapidation.residential_house";
 import { templateDamageSentences } from "./templateDamage";
 import type { ReportWording } from "./types";
@@ -41,21 +41,28 @@ function derivedFields(sectionKey: string, scope: AnswerTree, templateFields: Te
 const DEFAULT_SCOPE_ITEMS = "paths, nature strip, kerbs, lane surface, posts, signs, trees";
 
 /** The two sentences the Description page words for this report type. */
-function descriptionBlocks({ fields, areaCount }: { fields: Record<string, unknown>; areaCount: number }): { works?: string; scope?: string } {
+function descriptionBlocks({ fields, areaCount, areaNames = [] }: { fields: Record<string, unknown>; areaCount: number; areaNames?: string[] }): { works?: string; scope?: string; areas?: string[] } {
   const address = typeof fields.projectSiteAddress === "string" ? fields.projectSiteAddress.trim() : "";
   const text = (v: unknown): string => (typeof v === "string" ? clean(v) : "");
+  // "Other" with its own "If Other, please define" box says what the inspector typed there ("which is at the opposite side of Gwynne Street").
+  // Typed words keep the capitals of the names in them ("Gwynne Street"); the form's own choices are lower-cased as before.
+  const orOther = (choice: unknown, typed: unknown): string =>
+    typeof choice === "string" && /^other$/i.test(choice.trim()) ? stripKeepMarks(lower(typedCase(text(typed)))) : lower(text(choice));
   // The document's sentence is "The project works are to the property at {address}"; works to anything else say what they are ("to the road at ...").
   const kind = text(fields.worksTypeLabel);
   const what = !kind || /^residential property$/i.test(kind) ? "property" : lower(kind);
-  const side = text(fields.siteSide);
-  const direction = text(fields.siteDirection);
+  const side = orOther(fields.siteSide, fields.siteSideOther);
+  const direction = orOther(fields.siteDirection, fields.siteDirectionOther);
   const items = Array.isArray(fields.scopeItems) ? (fields.scopeItems as string[]) : [];
   const areas = areaCount > 0 ? ` to the following ${numberWord(areaCount)} area${areaCount === 1 ? "" : "s"}:` : "";
+  // The areas that sentence introduces: each survey part by its name, with the road or lane when the name does not already say it.
+  const named = areaNames.map((n) => n.trim()).filter(Boolean);
   return {
+    ...(areas && named.length ? { areas: named } : {}),
     // Where the project works are in relation to the site, when the inspector gave a side and a direction.
     works: address
       ? side && direction
-        ? `The project works are to the ${what} at ${address}, which is at the ${lower(side)} - approximately ${COMPASS[direction] ?? lower(direction)} - of the site of this inspection.`
+        ? `The project works are to the ${what} at ${address}, which is at the ${side} - approximately ${COMPASS[direction.toUpperCase()] ?? direction} - of the site of this inspection.`
         : `The project works are to the ${what} at ${address}.`
       : undefined,
     // "The scope for inspection is public assets including paths, nature strip, kerbs, lane surface, posts, signs, trees to the following two areas:" --
@@ -306,6 +313,14 @@ const surveyPart: Composer = (inst, itemFields, label) => {
       if (other) blocks.push(withPeriod(other));
     }
   }
+
+  // What else the inspector ticked as present and typed in under "Other" (it has no category of its own to describe it under).
+  const presentRaw = inst.itemsPresent;
+  const typedPresent = (Array.isArray(presentRaw) ? presentRaw : [presentRaw])
+    .map((v) => otherAnswerText(asString(v)))
+    .filter((t): t is string => !!t && !!t.trim())
+    .map((t) => stripKeepMarks(lower(typedCase(t.trim()))));
+  if (typedPresent.length) blocks.push(`There ${typedPresent.length === 1 && !/s$/.test(typedPresent[0]!) ? "is also" : "are also"} ${joinList(typedPresent)} along this part.`);
 
   const otherDescription = asString(inst.otherDescription).trim();
   if (otherDescription) blocks.push(withPeriod(otherDescription));

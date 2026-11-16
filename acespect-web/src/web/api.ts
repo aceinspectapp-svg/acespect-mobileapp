@@ -14,6 +14,21 @@ import type {
 } from "./qcTypes";
 import type { QcSpecPayload } from "./qcSpec";
 
+/** How a photo prints: the standard grid, or alone on its own row at the page's width. */
+export type PhotoPrintSize = "standard" | "large";
+/** What the review portal did to a photo: rotated by `rotate` degrees, then cropped to `crop` (fractions of the rotated photo). */
+export interface PhotoEditSpec {
+  rotate: 0 | 90 | 180 | 270;
+  crop?: { x: number; y: number; w: number; h: number };
+}
+export interface PhotoInfo {
+  editedFromId: string | null;
+  /** A signed link to the original photo, when this one is an edited copy. */
+  originalUrl?: string | null;
+  edit: PhotoEditSpec | null;
+  addedByReviewer: boolean;
+}
+
 export interface AssignmentOverview {
   reviewers: { id: string; name: string; assigned: number; open: number }[];
   unassigned: number;
@@ -381,11 +396,28 @@ export const api = {
       fields?: Record<string, unknown>;
       excludedPhotoUrls?: string[];
       photos?: string[];
+      // How each photo of the section prints ({ "<photo id>": { size: "large" } }); photos with no entry print at the standard size.
+      photoMeta?: Record<string, { size: PhotoPrintSize }>;
+      // True when `damages[].photos` is the complete list (the photo panel moved or removed a photo): replace, don't merge.
+      replaceDamagePhotos?: boolean;
       // The reviewer's Field Data edit -- see web.schemas.ts's sectionUpdateSchema.
       answers?: Record<string, unknown>;
       damages?: { type: string; location: string; direction: string; widthMm: number; lengthMm: number; notes: string; photos?: string[] }[];
     },
   ) => req<{ section: unknown }>(`/web/sections/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+
+  /** Rotate / crop one photo of a section into a new copy; the server points the section at the copy everywhere. `edit` is relative to the ORIGINAL photo. */
+  editSectionPhoto: (sectionId: string, body: { url: string; edit: PhotoEditSpec }) =>
+    req<{ url: string }>(`/web/sections/${sectionId}/photos/edit`, { method: "POST", body: JSON.stringify(body) }),
+  /** Put an edited photo back to its original. */
+  revertSectionPhoto: (sectionId: string, url: string) =>
+    req<{ url: string }>(`/web/sections/${sectionId}/photos/revert`, { method: "POST", body: JSON.stringify({ url }) }),
+  /** Delete a photo a reviewer added (an inspector's own photo can only be left out of the report). */
+  deleteSectionPhoto: (sectionId: string, url: string) =>
+    req<unknown>(`/web/sections/${sectionId}/photos/delete`, { method: "POST", body: JSON.stringify({ url }) }),
+  /** Which of these photos are edited copies (of which original) and which a reviewer added. */
+  photoInfo: (ids: string[]) =>
+    req<{ photos: Record<string, PhotoInfo> }>(`/web/photos/info`, { method: "POST", body: JSON.stringify({ ids }) }).then((d) => d.photos),
 
   /** A damage record's own photo-exclusion list -- see updateSection above for the same idea, one level down. */
   updateDamage: (id: string, patch: { excludedPhotoUrls?: string[]; photos?: string[] }) =>

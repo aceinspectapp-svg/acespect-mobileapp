@@ -18,8 +18,13 @@ export function scopePhrase(choice: string, detail: string): string {
  * of the inspection -- from the Description section's saved fields. A report type can word them itself (its `descriptionBlocks`);
  * otherwise the standard sentences below. `undefined` means the page shows its fill-in placeholder instead.
  */
-export function scopeOfInspectionSentences(wording: ReportWording, fields: Record<string, unknown>, areaCount: number): { works?: string; scope?: string } {
-  const own = wording.descriptionBlocks?.({ fields, areaCount });
+export function scopeOfInspectionSentences(
+  wording: ReportWording,
+  fields: Record<string, unknown>,
+  areaCount: number,
+  areaNames: string[] = [],
+): { works?: string; scope?: string; areas?: string[] } {
+  const own = wording.descriptionBlocks?.({ fields, areaCount, areaNames });
   const address = str(fields.projectSiteAddress);
   const side = str(fields.siteSide);
   const direction = str(fields.siteDirection);
@@ -31,5 +36,5 @@ export function scopeOfInspectionSentences(wording: ReportWording, fields: Recor
       ? `The project works are to the property at ${address}, which is at the ${side.toLowerCase()} - approximately ${direction.toLowerCase()} - of the site of this inspection.`
       : undefined);
   const scope = own?.scope || (scopeForInspection ? `The scope for inspection is ${scopePhrase(scopeForInspection, scopeDetail)}.` : undefined);
-  return { works, scope };
+  return { works, scope, ...(own?.areas?.length ? { areas: own.areas } : {}) };
 }

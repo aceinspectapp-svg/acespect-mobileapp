@@ -240,7 +240,7 @@ async function updateSectionCore(id: string, input: SectionUpdateInput) {
       // a photo the other one added; `undefined` (field editor never
       // touched photos this save) leaves the column alone entirely.
       const existingPhotos = (existingDamages[i]!.photos as string[] | null) ?? [];
-      const mergedPhotos = d.photos !== undefined ? Array.from(new Set([...existingPhotos, ...d.photos])) : undefined;
+      const mergedPhotos = d.photos !== undefined ? (input.replaceDamagePhotos ? d.photos : Array.from(new Set([...existingPhotos, ...d.photos]))) : undefined;
       await tx.damage.update({
         where: { id: existingDamages[i]!.id },
         data: {

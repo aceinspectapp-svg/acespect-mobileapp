@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { api, clearSession, getStoredUser, getToken, type AuthUser } from "./api";
+import { api, clearSession, getStoredUser, getToken, type AuthUser, type PhotoEditSpec, type PhotoPrintSize } from "./api";
 import type { Inspection, SectionReviewStatus, User } from "./mockData";
 import { composePhoneSections, saveComposedSections } from "./recomposeText";
 
@@ -40,10 +40,16 @@ interface AppData {
       fields?: Record<string, unknown>;
       excludedPhotoUrls?: string[];
       photos?: string[];
+      photoMeta?: Record<string, { size: PhotoPrintSize }>;
+      replaceDamagePhotos?: boolean;
       answers?: Record<string, unknown>;
       damages?: { type: string; location: string; direction: string; widthMm: number; lengthMm: number; notes: string; photos?: string[] }[];
     },
   ) => Promise<void>;
+  /** The review portal's photo tools: each changes the server's copy of the section, then reloads the inspection. `edit` / `revert` return the photo's new link. */
+  editSectionPhoto: (inspectionId: string, sectionId: string, url: string, edit: PhotoEditSpec) => Promise<string>;
+  revertSectionPhoto: (inspectionId: string, sectionId: string, url: string) => Promise<string>;
+  deleteSectionPhoto: (inspectionId: string, sectionId: string, url: string) => Promise<void>;
   /** Same idea as patchSection, one level down -- a damage record's own photo-exclusion list. */
   patchDamage: (
     inspectionId: string,
@@ -320,6 +326,30 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [replaceInspection],
   );
 
+  const editSectionPhoto = useCallback<AppData["editSectionPhoto"]>(
+    async (inspectionId, sectionId, url, edit) => {
+      const { url: next } = await api.editSectionPhoto(sectionId, { url, edit });
+      await replaceInspection(inspectionId);
+      return next;
+    },
+    [replaceInspection],
+  );
+  const revertSectionPhoto = useCallback<AppData["revertSectionPhoto"]>(
+    async (inspectionId, sectionId, url) => {
+      const { url: next } = await api.revertSectionPhoto(sectionId, url);
+      await replaceInspection(inspectionId);
+      return next;
+    },
+    [replaceInspection],
+  );
+  const deleteSectionPhoto = useCallback<AppData["deleteSectionPhoto"]>(
+    async (inspectionId, sectionId, url) => {
+      await api.deleteSectionPhoto(sectionId, url);
+      await replaceInspection(inspectionId);
+    },
+    [replaceInspection],
+  );
+
   const patchDamage = useCallback<AppData["patchDamage"]>(
     async (inspectionId, damageId, patch) => {
       await api.updateDamage(damageId, patch);
@@ -397,6 +427,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     logout,
     refresh,
     patchSection,
+    editSectionPhoto,
+    revertSectionPhoto,
+    deleteSectionPhoto,
     patchDamage,
     patchInspection,
     createInspection,

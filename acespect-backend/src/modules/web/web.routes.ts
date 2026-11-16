@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { webController } from './web.controller';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
-import { assignSchema, changeRoleSchema, createUserSchema, deactivateUserSchema, damageUpdateSchema, photoEditSchema, photoUrlSchema, transferRespondSchema, inspectionUpdateSchema, sectionUpdateSchema, userUpdateSchema } from './web.schemas';
+import { assignSchema, changeRoleSchema, createUserSchema, deactivateUserSchema, damageUpdateSchema, photoEditSchema, photoInfoSchema, photoUrlSchema, transferRespondSchema, inspectionUpdateSchema, sectionUpdateSchema, userUpdateSchema } from './web.schemas';
 import { stripSignedMediaLinks } from '../../middleware/stripMediaSignatures';
 
 const router = Router();
@@ -42,6 +42,7 @@ router.patch(
   validate(sectionUpdateSchema),
   webController.updateSection,
 );
+router.post('/photos/info', requireAuth, reviewers, validate(photoInfoSchema), webController.photoInfo);
 router.post('/sections/:id/photos/edit', requireAuth, reviewers, validate(photoEditSchema), webController.editPhoto);
 router.post('/sections/:id/photos/revert', requireAuth, reviewers, validate(photoUrlSchema), webController.revertPhoto);
 router.post('/sections/:id/photos/delete', requireAuth, reviewers, validate(photoUrlSchema), webController.deletePhoto);

@@ -1,0 +1,126 @@
+// The reviewer's photo panel finds every photo list of a section and moves, reorders and adds photos in the answers.
+//
+// Run with: npm test
+import { after, describe, it } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createServer } from "vite";
+
+const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const server = await createServer({ root: webRoot, server: { middlewareMode: true }, logLevel: "error" });
+after(() => server.close());
+const G = await server.ssrLoadModule("/src/web/photoToolGroups.ts");
+const snapshot = JSON.parse(readFileSync(resolve(webRoot, "../acespect-backend/prisma/templates-snapshot.json"), "utf8"));
+const fieldsOf = (type, key) => snapshot.find((t) => t.inspectionType === "dilapidation" && t.propertyType === type && t.sectionKey === key).fields;
+
+const p = (n, q = "") => `/api/v1/media/00000000-0000-4000-8000-${String(n).padStart(12, "0")}${q}`;
+
+describe("photo groups of a Public Assets survey", () => {
+  const fields = fieldsOf("public_assets", "elevations");
+  const answers = {
+    parts: [
+      {
+        partName: "Part A", startEndPhotos: [p(1), p(2)], endPhotos: [p(3)],
+        itemsPresent: ["item0"], footpaths_widePhotos: [p(4), p(5)],
+        footpaths_damages: [{ location: "outside no. 7", damageType: "cracking", photos: [p(6), p(7)] }, { location: "kerb", damageType: "surface_damage", photos: [p(8)] }],
+        footpaths_assets: [{ assetType: "item1", photos: [p(9)] }],
+      },
+    ],
+  };
+  const groups = G.toolGroups(fields, answers, [p(1), p(2), p(3), p(4), p(5), p(6), p(7), p(8), p(9), p(10)]);
+
+  it("finds a group for every photo field of the part, with the part's name", () => {
+    const byPath = (path) => groups.find((g) => g.path && g.path.join(".") === path);
+    assert.deepEqual(byPath("parts.0.startEndPhotos").photos, [p(1), p(2)]);
+    assert.ok(byPath("parts.0.startEndPhotos").title.startsWith("Part A"), byPath("parts.0.startEndPhotos").title);
+    assert.deepEqual(byPath("parts.0.endPhotos").photos, [p(3)]);
+    assert.deepEqual(byPath("parts.0.footpaths_widePhotos").photos, [p(4), p(5)]);
+  });
+
+  it("lists each defect's own photos as a defect group, named by where it is", () => {
+    const defects = groups.filter((g) => g.defect);
+    assert.deepEqual(defects.map((g) => g.photos), [[p(6), p(7)], [p(8)]]);
+    assert.deepEqual(defects.map((g) => g.detail), ["outside no. 7", "kerb"]);
+    assert.ok(defects[0].title.includes("Defect 1"), defects[0].title);
+  });
+
+  it("puts the photos no group holds (the section's own list) last", () => {
+    const last = groups[groups.length - 1];
+    assert.equal(last.id, G.SECTION_GROUP_ID);
+    assert.equal(last.path, null);
+    assert.deepEqual(last.photos, [p(10)]);
+  });
+
+  it("shows nothing for a category the part does not cover", () => {
+    assert.ok(!groups.some((g) => g.path && g.path.join(".").includes("naturestrip_")));
+  });
+});
+
+describe("photo groups of an Apartment's rooms (fixed instances)", () => {
+  const fields = fieldsOf("apartment", "internal_areas");
+  const answers = { rooms: { living_room: { present: "yes", photos: [p(1), p(2)] }, kitchen: { present: "yes", roomName: "Kitchen and pantry", photos: [p(3)] } } };
+  const groups = G.toolGroups(fields, answers, []);
+
+  it("finds a room's photos by its key, named by the room", () => {
+    const living = groups.find((g) => g.path?.join(".") === "rooms.living_room.photos");
+    assert.deepEqual(living.photos, [p(1), p(2)]);
+    assert.ok(/Living/i.test(living.title), living.title);
+    const kitchen = groups.find((g) => g.path?.join(".") === "rooms.kitchen.photos");
+    assert.ok(kitchen.title.includes("Kitchen and pantry"), kitchen.title);
+  });
+});
+
+describe("changing photo lists in the answers", () => {
+  const base = { a: { photos: [p(1), p(2), p(3)] }, b: [{ photos: [p(4)] }, { photos: [] }] };
+
+  it("reorders within one list", () => {
+    const out = G.withPhotoMoved(base, ["a", "photos"], ["a", "photos"], p(3), 0);
+    assert.deepEqual(out.a.photos, [p(3), p(1), p(2)]);
+    assert.deepEqual(G.withPhotoMoved(base, ["a", "photos"], ["a", "photos"], p(1)).a.photos, [p(2), p(3), p(1)]);
+  });
+
+  it("moves a photo to another list at a position, leaving the rest in order", () => {
+    const out = G.withPhotoMoved(base, ["a", "photos"], ["b", 0, "photos"], p(2), 0);
+    assert.deepEqual(out.a.photos, [p(1), p(3)]);
+    assert.deepEqual(out.b[0].photos, [p(2), p(4)]);
+    assert.deepEqual(out.b[1].photos, []);
+  });
+
+  it("moves into an empty list, and never puts a photo in a list twice", () => {
+    const out = G.withPhotoMoved(base, ["a", "photos"], ["b", 1, "photos"], p(1));
+    assert.deepEqual(out.b[1].photos, [p(1)]);
+    const again = G.withPhotoMoved(out, ["a", "photos"], ["b", 1, "photos"], p(1));
+    assert.deepEqual(again.b[1].photos, [p(1)], "the photo is no longer in the source, so nothing changes");
+  });
+
+  it("matches a photo by its address, not the signed-link query", () => {
+    const out = G.withPhotoMoved(base, ["a", "photos"], ["b", 0, "photos"], p(3, "?e=1&s=abc"), 1);
+    assert.deepEqual(out.b[0].photos, [p(4), p(3)]);
+  });
+
+  it("adds a photo at a position or at the end, once", () => {
+    assert.deepEqual(G.withPhotoAdded(base, ["a", "photos"], p(9), 1).a.photos, [p(1), p(9), p(2), p(3)]);
+    assert.deepEqual(G.withPhotoAdded(base, ["b", 1, "photos"], p(9)).b[1].photos, [p(9)]);
+    assert.deepEqual(G.withPhotoAdded(base, ["a", "photos"], p(2)).a.photos, [p(1), p(3), p(2)]);
+  });
+
+  it("replaces a photo with a new one in the same place", () => {
+    const groups = [{ id: "a.photos", path: ["a", "photos"], photos: base.a.photos, title: "", defect: false }];
+    assert.deepEqual(G.withPhotoReplaced(base, groups, p(2), p(7)).a.photos, [p(1), p(7), p(3)]);
+  });
+
+  it("never changes the answers it was given", () => {
+    const copy = JSON.stringify(base);
+    G.withPhotoMoved(base, ["a", "photos"], ["b", 0, "photos"], p(2), 0);
+    G.withPhotoAdded(base, ["a", "photos"], p(9));
+    assert.equal(JSON.stringify(base), copy);
+  });
+
+  it("moved(): clamps and ignores a position that is not in the list", () => {
+    assert.deepEqual(G.moved([1, 2, 3], 0, 99), [2, 3, 1]);
+    assert.deepEqual(G.moved([1, 2, 3], 2, -5), [3, 1, 2]);
+    assert.deepEqual(G.moved([1, 2, 3], 7, 0), [1, 2, 3]);
+  });
+});

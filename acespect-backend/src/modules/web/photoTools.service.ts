@@ -129,4 +129,10 @@ async function deletePhoto(sectionId: string, input: { url: string }, actor: Act
   return { section: saved };
 }
 
-export const photoToolsService = { editPhoto, revertPhoto, deletePhoto };
+/** What the review panel needs to know about each photo: is it an edited copy (and of which original), did a reviewer add it. */
+async function photoInfo(ids: string[]) {
+  const rows = await prisma.photo.findMany({ where: { id: { in: ids } }, select: { id: true, editedFromId: true, edit: true, addedById: true } });
+  return Object.fromEntries(rows.map((r) => [r.id, { editedFromId: r.editedFromId, originalUrl: r.editedFromId ? `/api/v1/media/${r.editedFromId}` : null, edit: r.edit, addedByReviewer: !!r.addedById }]));
+}
+
+export const photoToolsService = { editPhoto, revertPhoto, deletePhoto, photoInfo };

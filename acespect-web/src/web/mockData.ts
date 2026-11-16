@@ -65,6 +65,8 @@ export interface FormSection {
   photos: string[];
   /** Photo URLs from `photos` the reviewer has excluded from the generated report. */
   excludedPhotoUrls?: string[];
+  /** How each photo prints, by photo id: { "<id>": { size: "large" } }. A photo with no entry prints at the standard size. */
+  photoMeta?: Record<string, { size: "standard" | "large" }>;
 }
 
 export interface Inspection {

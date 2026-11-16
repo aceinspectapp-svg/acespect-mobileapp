@@ -40,14 +40,19 @@ export function markedPhotos(section: Pick<FormSection, "photos" | "damages" | "
   const answers = (section.answers ?? {}) as Record<string, unknown>;
   // A mark names an answer ("driveway_common_photos") or, for an item inside a list (a room, a side), the photos themselves.
   const isPhoto = (k: string) => /^(https?:|\/)/.test(k);
-  const wanted = new Set(
-    keys
-      .flatMap((k) => (isPhoto(k) ? [k] : Array.isArray(answers[k]) ? (answers[k] as unknown[]) : []))
-      .filter((x): x is string => typeof x === "string")
-      .map(photoKey),
+  // In the order the answers list them (so a reviewer's reordering is what prints), each once.
+  const wanted = Array.from(
+    new Set(
+      keys
+        .flatMap((k) => (isPhoto(k) ? [k] : Array.isArray(answers[k]) ? (answers[k] as unknown[]) : []))
+        .filter((x): x is string => typeof x === "string")
+        .map(photoKey),
+    ),
   );
   const ofDefects = new Set(section.damages.flatMap((d) => d.photos.map(photoKey)));
-  return section.photos.filter((url) => wanted.has(photoKey(url)) && !ofDefects.has(photoKey(url)));
+  // Only photos the section still lists (one the reviewer left out of the report is not in this list), in their current link form.
+  const listed = new Map(section.photos.map((url) => [photoKey(url), url] as const));
+  return wanted.filter((k) => listed.has(k) && !ofDefects.has(k)).map((k) => listed.get(k)!);
 }
 
 /** The answer keys named by every PHOTOS mark in some report text. */

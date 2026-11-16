@@ -30,6 +30,7 @@ import { constructionSectionText, isConstructionKey } from "../../construction/s
 import { Cover as ConstructionCover, ConstructionSectionPreview, useConstructionReport } from "../../construction/ConstructionReport";
 import { constructionPhotoGroups, withPhotoAdded, type PhotoGroup } from "../../construction/photoGroups";
 import { ConstructionPhotoPicker } from "../../components/ConstructionPhotoPicker";
+import { ReviewerPhotoPanel } from "../../components/ReviewerPhotoPanel";
 import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSectionToDraft, fetchActiveTemplate, listMissingItems } from "../../templateFields";
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { reportProfileOf } from "../../wording/profile";
@@ -1085,7 +1086,7 @@ export function ReviewerFormView() {
     }
   }
 
-  async function saveSectionAnswers(section: FormSection, given?: AnswerTree) {
+  async function saveSectionAnswers(section: FormSection, given?: AnswerTree, extra?: { photos?: string[]; replaceDamagePhotos?: boolean }) {
     const answers = given ?? answerEdits[section.id];
     const template = templates[section.key ?? section.id];
     if (!answers || !template) return;
@@ -1105,6 +1106,7 @@ export function ReviewerFormView() {
           notes: d.notes,
           photos: d.photos,
         })),
+        ...(extra ?? {}),
       });
       setAnswerEdits((prev) => {
         const next = { ...prev };
@@ -1764,6 +1766,23 @@ export function ReviewerFormView() {
                               onToggle={(url) => toggleSectionPhoto(selectedSection, url)}
                               onAdd={(group, file) => addGroupPhoto(selectedSection, group, file)}
                               onUse={(group, url) => useAdditionalPhoto(selectedSection, group, url)}
+                            />
+                          </div>
+                        </>
+                      ) : templates[selectedKey] ? (
+                        // Every other report type: the photo tools -- photos grouped where they print, with edit, resize, reorder, move, add, replace and delete.
+                        <>
+                          <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "8px" }}>
+                            Select Photos For Report
+                          </label>
+                          <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "10px 16px 14px" }}>
+                            <ReviewerPhotoPanel
+                              inspection={inspection!}
+                              section={selectedSection}
+                              template={templates[selectedKey]!}
+                              answers={answerEdits[selectedSection.id] ?? ((selectedSection.answers as AnswerTree | null | undefined) ?? {})}
+                              locked={selectedSection.reviewStatus === "approved"}
+                              onSaveAnswers={(next, extra) => saveSectionAnswers(selectedSection, next, { ...extra, replaceDamagePhotos: true })}
                             />
                           </div>
                         </>

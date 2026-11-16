@@ -1,6 +1,6 @@
 import type { Inspection } from "../mockData";
 import { DESCRIPTION_PHOTO_PLACEHOLDER, PHOTOGRAPHS_NOTE } from "../report";
-import { Note, Para, Placeholder, PhotoGrid, reportTextStyle, SectionBand, usePhotoNumbering } from "./reportKit";
+import { Note, Para, Placeholder, PhotoGrid, PhotoMetaContext, reportTextStyle, SectionBand, usePhotoNumbering } from "./reportKit";
 import { reportProfileOf } from "../wording/profile";
 import { OriginalPhotosPending, useOriginalPhotosLink } from "./OriginalPhotosLink";
 import { wordingFor } from "../wording/registry";
@@ -47,9 +47,10 @@ export function ReportDescription({
   // off this same section's own "front_elevation" answer field.
   const description = inspection.sections.find((s) => (s.key ?? s.id).startsWith("description"));
   const wording = wordingFor(reportProfileOf(inspection.type, inspection.propertyType));
-  // The Residential form's "front_elevation" photo; the Apartment form's is its "Building & street overview pics" (the first of them).
+  // The Residential form's "front_elevation" photo; the Apartment form's is its "Building & street overview pics" (the first of them);
+  // Public Assets' is the first of its "Site & Assets Overview" photo sequence.
   const answers = (description?.answers as Record<string, unknown> | null | undefined) ?? {};
-  const frontPhotos = [answers.front_elevation, answers.overviewPhotos].find((v) => Array.isArray(v) && typeof v[0] === "string") as string[] | undefined;
+  const frontPhotos = [answers.front_elevation, answers.overviewPhotos, answers.siteAssetsOverview].find((v) => Array.isArray(v) && typeof v[0] === "string") as string[] | undefined;
   const photoUrl = frontPhotos?.[0];
   const frontPhotoNumbering = usePhotoNumbering(photoUrl ? [photoUrl] : [], "front");
   const totalPhotos = countReportPhotos(inspection);
@@ -86,7 +87,13 @@ export function ReportDescription({
   const fullDownloadCount = originals.url ? originals.count : totalPhotos;
   // A report type can word the works and scope sentences itself (Public Assets does); the others keep the standard ones (descriptionScope.ts).
   const surveyParts = (inspection.sections.find((s) => (s.key ?? s.id) === "elevations")?.answers as { parts?: unknown } | null | undefined)?.parts;
-  const { works, scope } = scopeOfInspectionSentences(wording, f, Array.isArray(surveyParts) ? surveyParts.length : 0);
+  // Each survey part by its name, with its road or lane when the name does not already say it ("Part B - Laneway beside no. 24 (Gwynne Lane)").
+  const areaNames = (Array.isArray(surveyParts) ? (surveyParts as Record<string, unknown>[]) : []).map((p, i) => {
+    const name = str(p?.partName) || `Part ${String.fromCharCode(65 + i)}`;
+    const road = str(p?.roadName);
+    return road && !name.toLowerCase().includes(road.toLowerCase()) ? `${name} (${road})` : name;
+  });
+  const { works, scope, areas } = scopeOfInspectionSentences(wording, f, Array.isArray(surveyParts) ? surveyParts.length : 0, areaNames);
 
   return (
     <div style={reportTextStyle(compact)}>
@@ -99,7 +106,9 @@ export function ReportDescription({
       {photoUrl ? (
         // The front-of-property photo: the same photo grid as every other photo in the report.
         // ("Size to fit the page and centre" where the report type's template says so -- Apartment.)
-        <PhotoGrid photos={[photoUrl]} compact={compact} startNumber={frontPhotoNumbering.start} fitPage={wording.frontPhoto?.fit === "page"} />
+        <PhotoMetaContext.Provider value={description?.photoMeta ?? {}}>
+          <PhotoGrid photos={[photoUrl]} compact={compact} startNumber={frontPhotoNumbering.start} fitPage={wording.frontPhoto?.fit === "page"} />
+        </PhotoMetaContext.Provider>
       ) : (
         <Placeholder>{wording.frontPhoto?.placeholder ?? DESCRIPTION_PHOTO_PLACEHOLDER}</Placeholder>
       )}
@@ -134,7 +143,12 @@ export function ReportDescription({
         </Placeholder>
       )}
       {scope ? (
-        <Para>{scope}</Para>
+        <>
+          <Para>{scope}</Para>
+          {areas?.map((a, i) => (
+            <Para key={`area-${i}`}>{`${i + 1}. ${a}`}</Para>
+          ))}
+        </>
       ) : (
         <Placeholder>
           The scope for inspection is external and internal to all structures / external and internal to part of

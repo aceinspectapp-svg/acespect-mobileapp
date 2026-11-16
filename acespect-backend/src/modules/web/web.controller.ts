@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
 import { webService } from './web.service';
+import { signMediaLinks } from '../../lib/mediaLinks';
 import { photoToolsService } from './photoTools.service';
 import { audit, firstWithin } from '../../lib/auditTrail';
 import { usersService } from './users.service';
@@ -84,6 +85,11 @@ export const webController = {
     if (!id) throw ApiError.badRequest('Section id is required');
     const section = await webService.updateSection(id, req.body, req.user);
     res.status(200).json({ section });
+  }),
+
+  photoInfo: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    res.status(200).json(signMediaLinks({ photos: await photoToolsService.photoInfo(req.body.ids) }));
   }),
 
   editPhoto: asyncHandler(async (req: Request, res: Response) => {
