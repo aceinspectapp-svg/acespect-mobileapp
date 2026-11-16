@@ -22,7 +22,7 @@ const row = (key, label, order, extra = {}) => ({
   ...extra,
 });
 const photos = (n) => Array.from({ length: n }, (_, i) => `/p${i}.jpg`);
-const defect = (over = {}) => ({ location: "Front left roof", category: ["workmanship_outside_tolerance"], severity: ["major", "safety"], photos: photos(2), comments: "Needs repair.", constructionCode: "2.04", ...over });
+const defect = (over = {}) => ({ location: "Front left roof", category: ["workmanship_outside_tolerance"], severity: ["major", "structural"], photos: photos(2), comments: "Needs repair.", constructionCode: "2.04", ...over });
 
 /** A section as the reviewer portal shows it: the report text and defects the Construction Stage wording writes from its answers. */
 const section = (key, name, fields, answers, approved = true) => {
@@ -98,7 +98,7 @@ describe("construction report", () => {
     const d1 = defects[0];
     assert.match(d1.text, /Gutters/);
     assert.match(d1.text, /Front left roof/);
-    assert.equal(d1.severity, "Major, Safety");
+    assert.equal(d1.severity, "Major, Structural");
     assert.equal(d1.category, "Workmanship outside tolerance");
     assert.equal(d1.code, "2.04");
     assert.match(d1.codeTitle, /^2\.04 External building dimensions/);
