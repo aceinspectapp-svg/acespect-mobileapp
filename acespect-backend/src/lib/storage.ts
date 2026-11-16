@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'crypto';
 import sharp from 'sharp';
+import { optimizePhoto } from '../modules/web/photoEdit';
 import { Readable } from 'stream';
 import { env, isProd } from '../config/env';
 import { ApiError } from '../utils/ApiError';
@@ -441,12 +442,8 @@ async function uploadToEgnyte(path: string, buffer: Buffer, contentType: string)
  * permanent "no", so the phone stops retrying it) rather than a 500 (a temporary "try again").
  */
 async function toReportJpeg(buffer: Buffer): Promise<Buffer> {
-  const shrink = (input: Buffer) =>
-    sharp(input)
-      .rotate()
-      .resize({ width: REPORT_MAX_WIDTH, height: REPORT_MAX_HEIGHT, fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: REPORT_JPEG_QUALITY })
-      .toBuffer();
+  // Every report copy fits 1024 x 768 and is under 200 KB, at the highest JPEG quality that allows it (see optimizePhoto).
+  const shrink = async (input: Buffer) => (await optimizePhoto(input)).bytes;
   try {
     return await shrink(buffer);
   } catch (err) {

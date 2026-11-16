@@ -1,3 +1,4 @@
+import { prisma } from '../../lib/prisma';
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/ApiError';
@@ -286,6 +287,10 @@ export const inspectionsController = {
       { inspectorId: req.user.id, inspectionId },
       { sectionKey, bytes: file.buffer.length, photoId: result.id, ...(jobNo ? { jobNo } : {}) },
     );
+    // A photo a reviewer adds from the review portal is marked as theirs: only those can be deleted outright later (an inspector's photo can only be left out of the report).
+    if (req.user.role === 'REVIEWER' || req.user.role === 'ADMIN') {
+      await prisma.photo.update({ where: { id: result.id }, data: { addedById: req.user.id } }).catch(() => undefined);
+    }
     if (inspectionId) notePhotoUpload({ req, inspectionId, jobNo, photoId: result.id, photoNumber, sectionKey, bytes: file.buffer.length });
     // `url` is the plain link to store; `signedUrl` is the same photo as an expiring link to show straight away.
     res.status(201).json({ ...result, signedUrl: signMediaLinks(result.url) });

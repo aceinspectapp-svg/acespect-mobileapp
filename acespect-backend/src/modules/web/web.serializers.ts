@@ -94,6 +94,7 @@ export function serializeSection(s: Section & { damages: Damage[] }) {
     damages: s.damages.map(serializeDamage),
     photos: s.photos ?? [],
     excludedPhotoUrls: s.excludedPhotoUrls ?? [],
+    photoMeta: s.photoMeta ?? {},
   });
 }
 
@@ -118,6 +119,7 @@ export function serializeSectionSummary(s: SectionSummaryRow) {
     damages: [],
     photos: [],
     excludedPhotoUrls: [],
+    photoMeta: {},
   };
 }
 

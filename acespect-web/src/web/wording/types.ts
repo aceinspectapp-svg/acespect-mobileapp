@@ -50,7 +50,7 @@ export interface ReportWording {
    * The two Description-page sentences this report type words itself -- where the project works are and what the scope is.
    * A report type that leaves this out keeps the standard sentences.
    */
-  descriptionBlocks?(input: { fields: Record<string, unknown>; areaCount: number }): { works?: string; scope?: string };
+  descriptionBlocks?(input: { fields: Record<string, unknown>; areaCount: number; areaNames?: string[] }): { works?: string; scope?: string; areas?: string[] };
   /** The heading a section prints under, where this report type's template names it differently from the form ("External" -> "Main structure"). Undefined: the form's name. */
   sectionTitle?(sectionKey: string): string | undefined;
   /** False for a report type whose template has no Pool and Spa Safety Disclaimer (Apartment). Default: printed after the pool section. */

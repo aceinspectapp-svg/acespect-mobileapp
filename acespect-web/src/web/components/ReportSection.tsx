@@ -1,7 +1,7 @@
 import type { DamageRecord, FormSection } from "../mockData";
 import { conditionTagColors } from "../conditionGrades";
 import { useContext } from "react";
-import { Heading, Para, PhotoGrid, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand, usePhotoNumbering } from "./reportKit";
+import { Heading, Para, PhotoGrid, PhotoMetaContext, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand, usePhotoNumbering } from "./reportKit";
 import { markedKeys, markedPhotos, PART_RE, photoKey, PHOTOS_RE } from "../reportParts";
 
 // Internal Areas' floor headings (see the report type's wording (src/web/wording/) internal_areas
@@ -355,6 +355,7 @@ export function ReportSection({
   const taggedDefects = new Set(items.flatMap((it) => (it.kind === "defect" ? [it.index] : [])));
 
   return (
+    <PhotoMetaContext.Provider value={section.photoMeta ?? {}}>
     <div style={reportTextStyle(compact)}>
       {/* Description -- with each defect's sentence followed by its own photos */}
       {groups.map((group, gi) => {
@@ -388,5 +389,6 @@ export function ReportSection({
         <p style={{ color: reportTokens.inkFaint, fontStyle: "italic" }}>No content recorded for this category.</p>
       )}
     </div>
+    </PhotoMetaContext.Provider>
   );
 }

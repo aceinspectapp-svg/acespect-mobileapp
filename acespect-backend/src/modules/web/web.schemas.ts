@@ -13,6 +13,10 @@ export const sectionUpdateSchema = z.object({
   // reviewer attach an extra photo (uploaded via POST /inspections/photos)
   // onto this section, same as excludedPhotoUrls above.
   photos: z.array(z.string()).optional(),
+  // How each photo of this section prints, keyed by photo id ({ "<id>": { size: "large" } }); replaced wholesale.
+  // True when `damages[].photos` is the complete, authoritative list (the photo panel moved or removed a photo): replace each defect's photos instead of merging them.
+  replaceDamagePhotos: z.boolean().optional(),
+  photoMeta: z.record(z.string(), z.object({ size: z.enum(['standard', 'large']) })).optional(),
   // The inspector's raw answer tree, as edited by the reviewer in the
   // Field Data editor -- same shape mobile/the inspector's own web editor
   // write. Sent together with `fields`/`reportText` above (re-derived from
@@ -51,6 +55,19 @@ export const damageUpdateSchema = z.object({
   // reviewer attach a photo directly to this specific crack/defect.
   photos: z.array(z.string()).optional(),
 });
+
+// Rotate / crop one photo of a section. `edit` is relative to the ORIGINAL photo (so editing twice never compounds); `crop` is a box
+// inside the rotated photo, as fractions of its width and height.
+export const photoEditSchema = z.object({
+  url: z.string().min(1).max(2000),
+  edit: z.object({
+    rotate: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
+    crop: z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().min(0.01).max(1), h: z.number().min(0.01).max(1) }).optional(),
+  }),
+});
+export const photoInfoSchema = z.object({ ids: z.array(z.string().uuid()).max(2000) });
+export const photoOptimizeSchema = z.object({ sectionId: z.string().uuid().optional() });
+export const photoUrlSchema = z.object({ url: z.string().min(1).max(2000) });
 
 export const inspectionUpdateSchema = z.object({
   status: z.enum(['draft', 'submitted', 'in-review', 'approved', 'rejected']).optional(),

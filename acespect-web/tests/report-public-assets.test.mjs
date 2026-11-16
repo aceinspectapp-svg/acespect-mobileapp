@@ -92,10 +92,34 @@ describe("Public Assets: Description and Overview", () => {
     assert.equal(wordingFor(PA).descriptionBlocks({ fields: bare, areaCount: 3 }).scope, "The scope for inspection is public assets including paths, nature strip, kerbs, lane surface, posts, signs, trees to the following three areas:");
   });
 
+  it("says a typed Other side and direction (keeping the names' capitals), and lists the areas the scope sentence introduces", () => {
+    const fields = draft("description", { ...desc, siteSide: "Other", siteSideOther: "opposite side of Gwynne Street", siteDirection: "SE" }).fields;
+    const blocks = wordingFor(PA).descriptionBlocks({ fields, areaCount: 2, areaNames: ["Part A - Gwynne Street frontage", "Part B - Laneway beside no. 24 (Gwynne Lane)"] });
+    assert.equal(blocks.works, "The project works are to the development site at 123 Test Street, which is at the opposite side of Gwynne Street - approximately south-east - of the site of this inspection.");
+    assert.deepEqual(blocks.areas, ["Part A - Gwynne Street frontage", "Part B - Laneway beside no. 24 (Gwynne Lane)"]);
+    const typedDirection = draft("description", { ...desc, siteSide: "Rear", siteDirection: "Other", siteDirectionOther: "north-north-west" }).fields;
+    assert.ok(wordingFor(PA).descriptionBlocks({ fields: typedDirection, areaCount: 0 }).works.includes("which is at the rear - approximately north-north-west - of the site"));
+  });
+
+  it("puts the typed Other weather on the cover", async () => {
+    const { weatherWords } = await server.ssrLoadModule("/src/web/report.ts");
+    assert.equal(weatherWords("overcast, intermittent_showers, other", "Gusty southerly wind"), "Overcast, Intermittent showers, Gusty southerly wind");
+    assert.equal(weatherWords("overcast, other"), "Overcast", "Other with nothing typed says nothing");
+  });
+
   it("words those two sentences itself, as the House and Commercial reports do", () => {
     assert.equal(typeof wordingFor(PA).descriptionBlocks, "function");
     assert.equal(typeof wordingFor({ inspectionType: "dilapidation", propertyType: "residential_house" }).descriptionBlocks, "function");
     assert.equal(typeof wordingFor({ inspectionType: "dilapidation", propertyType: "commercial_properties" }).descriptionBlocks, "function");
+  });
+});
+
+describe("Public Assets: what else is present", () => {
+  it("says a typed Other item under 'What is present', keeping the names' capitals", () => {
+    const t = draft("elevations", { parts: [{ ...partB, itemsPresent: [...partB.itemsPresent, `${OTHER}Overhead power lines and Telstra pits`] }] }).reportText;
+    assert.ok(t.includes("There are also overhead power lines and Telstra pits along this part."), t);
+    const none = draft("elevations", { parts: [partB] }).reportText;
+    assert.ok(!/There (is|are) also/.test(none), none);
   });
 });
 

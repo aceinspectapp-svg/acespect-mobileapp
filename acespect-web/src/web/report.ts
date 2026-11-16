@@ -211,13 +211,14 @@ function str(v: unknown, fallback = ""): string {
  * its choices by their stored names ("overcast, intermittent_showers"): each is said as its word ("Overcast, Intermittent showers"); a
  * typed "Other" is said as typed, and anything already in words (typed on the website) is left as it is.
  */
-export function weatherWords(saved: string): string {
+export function weatherWords(saved: string, otherText = ""): string {
   return saved
     .split(/\s*,\s*/)
     .map((w) => {
       const typed = /^__other__:(.*)$/s.exec(w);
       if (typed) return typed[1]!.trim();
-      if (w === "other") return ""; // "Other" with nothing typed says nothing
+      // "Other" with its own "If Other — please specify" box (Public Assets' Job Information) says what was typed there; with nothing typed it says nothing
+      if (w === "other") return otherText.trim();
       if (/[A-Z\s]/.test(w)) return w; // already in words
       const word = w.replace(/_/g, " ");
       return word.charAt(0).toUpperCase() + word.slice(1);
@@ -255,7 +256,7 @@ export function buildReportHeader(inspection: Inspection, inspector?: Pick<User,
     propertyOwner: str(f.propertyOwner) || undefined,
     propertyOwnerEmail: str(f.propertyOwnerEmail) || undefined,
     inspectionDate: formatLongDate(str(f.date, inspection.date)),
-    weather: weatherWords(str(f.weather)) || "—",
+    weather: weatherWords(str(f.weather), str(f.weatherOther)) || "—",
     inspector: str(f.inspector, inspector?.name ?? "—"),
     inspectorRegistration: str(f.inspectorRegistration) || inspector?.licenseNumber || undefined,
     purpose: str(f.purpose) || defaultPurposeFor(inspection, str(f.inspector, inspector?.name ?? ""), str(f.inspectorRegistration) || inspector?.licenseNumber || ""),

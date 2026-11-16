@@ -64,7 +64,14 @@ export const isLandscape = (aspect: number): boolean => aspect >= 1;
 export const PORTRAIT_BOX = 3 / 4;
 export const LANDSCAPE_BOX = 4 / 3;
 
-export function packPhotoRows(aspects: number[], o: PackOptions): PackedRow[] {
+/** How much taller than the usual limit a "large" photo may be (it also gets the page's whole width). */
+export const LARGE_HEIGHT_FACTOR = 1.4;
+
+/**
+ * `large[i]` true: photo i prints alone on its own row at the page's width, up to LARGE_HEIGHT_FACTOR times the usual height limit (a
+ * reviewer's choice for a photo that needs to be seen closely). Every other photo is packed as before around it, keeping the order.
+ */
+export function packPhotoRows(aspects: number[], o: PackOptions, large: boolean[] = []): PackedRow[] {
   const n = aspects.length;
   if (n === 0) return [];
 
@@ -74,6 +81,11 @@ export function packPhotoRows(aspects: number[], o: PackOptions): PackedRow[] {
   const groups: number[][] = [];
   let row: number[] = [];
   for (let i = 0; i < n; i++) {
+    if (large[i]) {
+      if (row.length > 0) { groups.push(row); row = []; }
+      groups.push([i]);
+      continue;
+    }
     if (row.length > 0 && row.length + 1 > capacity([...row, i])) {
       groups.push(row);
       row = [];
@@ -98,9 +110,13 @@ export function packPhotoRows(aspects: number[], o: PackOptions): PackedRow[] {
   const landscapeBox = box(landscapeW, LANDSCAPE_BOX);
   const fit = (a: number) => ({ ...(isLandscape(a) ? landscapeBox : portraitBox) });
 
+  const largeBox = (aspect: number) => {
+    const height = Math.min(o.width / aspect, o.maxHeight * LARGE_HEIGHT_FACTOR);
+    return { width: height * aspect, height };
+  };
   const rows: PackedRow[] = groups.map((idx) => {
-    const sizes = idx.map((j) => fit(aspects[j]!));
-    return { indices: idx, sizes, height: Math.max(...sizes.map((z) => z.height)), full: idx.length >= capacity(idx) };
+    const sizes = idx.map((j) => (large[j] ? largeBox(aspects[j]!) : fit(aspects[j]!)));
+    return { indices: idx, sizes, height: Math.max(...sizes.map((z) => z.height)), full: idx.length >= capacity(idx) || idx.some((j) => large[j]) };
   });
   return rows;
 }

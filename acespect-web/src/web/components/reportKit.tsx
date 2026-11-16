@@ -317,6 +317,10 @@ export function MetaRow({
  * moment after load; while it hasn't, the grid carries `data-photo-grid-pending`
  * and the PDF generator waits for that to clear before printing.
  */
+/** How each photo of the section being printed prints (the reviewer's choice, by photo id): a "large" photo gets a row of its own. */
+export const PhotoMetaContext = createContext<Record<string, { size?: string }>>({});
+const mediaIdOf = (url: string): string => /\/media\/([0-9a-f-]{36})/i.exec(url)?.[1]?.toLowerCase() ?? "";
+
 export function PhotoGrid({
   photos,
   compact,
@@ -342,14 +346,16 @@ export function PhotoGrid({
   // A spot with its own height limit (the cover-page photo) keeps the 3:4 portrait box it always had; the grids use the page's.
   const options = maxHeight && maxHeight < base.maxHeight ? { ...base, maxHeight, targetHeight: Math.min(base.targetHeight, maxHeight), minHeight: Math.min(base.minHeight, maxHeight), portraitBox: undefined } : base;
   const fit = fitPage && photos.length === 1;
+  const meta = useContext(PhotoMetaContext);
+  const large = photos.map((p) => meta[mediaIdOf(p)]?.size === "large");
   const rows = useMemo((): PackedRow[] => {
-    if (!fit) return packPhotoRows(aspects, options);
+    if (!fit) return packPhotoRows(aspects, options, large);
     // The page's whole text width, unless that would make the photo taller than fits with the text around it.
     const aspect = aspects[0] ?? 4 / 3;
     const maxH = compact ? options.maxHeight : FIT_PAGE_MAX_HEIGHT;
     const width = Math.min(options.width, maxH * aspect);
     return [{ indices: [0], sizes: [{ width, height: width / aspect }], height: width / aspect, full: true }];
-  }, [aspects.join(","), compact, options.maxHeight, fit]);
+  }, [aspects.join(","), compact, options.maxHeight, fit, large.join(",")]);
   if (photos.length === 0) return null;
   return (
     <div
