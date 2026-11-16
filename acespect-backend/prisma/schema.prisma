@@ -285,6 +285,8 @@ model Section {
   /// report -- everything defaults to included, so existing inspections are
   /// unaffected until a reviewer actually excludes something.
   excludedPhotoUrls Json                @default("[]")
+  /// How each photo of this section prints, keyed by photo id: { "<id>": { "size": "large" } }. No entry: the standard size.
+  photoMeta         Json                @default("{}")
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
@@ -472,6 +474,12 @@ model Photo {
   data        Bytes?
   contentType String
   createdAt   DateTime @default(now())
+  /// Set on a copy a reviewer made by rotating / cropping a photo: the ORIGINAL photo it came from (never itself an edit), so a revert can put it back.
+  editedFromId String?
+  /// What was done to make this copy: { rotate: 0|90|180|270, crop?: { x, y, w, h } } (fractions of the rotated photo).
+  edit         Json?
+  /// The reviewer who added this photo from the review portal; null for the inspector's own. Only these can be deleted outright.
+  addedById    String?
 
   /// Looked up by exact path on every numbered upload (is this file name taken?).
   @@index([storageKey])

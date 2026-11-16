@@ -148,12 +148,17 @@ async function updateSection(id: string, input: SectionUpdateInput, actor: Actor
   if (!owner) throw ApiError.notFound('Section not found');
   await requireCanEdit(owner.inspectionId, actor);
   const before = await prisma.section.findUnique({ where: { id }, include: { inspection: { select: { id: true, jobNo: true } } } });
+  // The photo tools are locked once a section is approved: its photos, which of them are left out, and how they print only change
+  // after the section is reopened (a request that itself reopens it, or approves it for the first time, is fine).
+  if (before?.reviewStatus === 'APPROVED' && (input.photos !== undefined || input.excludedPhotoUrls !== undefined || input.photoMeta !== undefined) && !(input.reviewStatus && input.reviewStatus !== 'approved')) {
+    throw new ApiError(409, 'This section is approved. Reopen it before changing its photos.', 'SECTION_APPROVED');
+  }
   const result = await updateSectionCore(id, input);
   if (before) {
     const after = await prisma.section.findUnique({ where: { id } });
     const touched = [
       input.reviewStatus ? 'reviewStatus' : null, input.reviewComment !== undefined ? 'reviewComment' : null, input.reportText !== undefined ? 'reportText' : null,
-      input.fields ? 'fields' : null, input.excludedPhotoUrls !== undefined ? 'excludedPhotoUrls' : null, input.photos !== undefined ? 'photos' : null, input.answers !== undefined ? 'answers' : null,
+      input.fields ? 'fields' : null, input.excludedPhotoUrls !== undefined ? 'excludedPhotoUrls' : null, input.photos !== undefined ? 'photos' : null, input.photoMeta !== undefined ? 'photoMeta' : null, input.answers !== undefined ? 'answers' : null,
     ].filter((k): k is string => !!k);
     const diff = after ? diffFields(before as unknown as Record<string, unknown>, after as unknown as Record<string, unknown>, touched) : null;
     const newStatus = diff?.after.reviewStatus as string | undefined;
@@ -202,6 +207,8 @@ async function updateSectionCore(id: string, input: SectionUpdateInput) {
         // Same replace-wholesale idea -- the reviewer's UI sends the full
         // current photo list (existing + any it just uploaded and appended).
         ...(input.photos !== undefined ? { photos: input.photos as Prisma.InputJsonValue } : {}),
+        // How each photo prints (standard / large), replaced wholesale like the lists above.
+        ...(input.photoMeta !== undefined ? { photoMeta: input.photoMeta as Prisma.InputJsonValue } : {}),
         // Replaced wholesale -- the reviewer's Field Data editor always sends
         // the section's complete, current answer tree.
         ...(input.answers !== undefined ? { answers: input.answers as Prisma.InputJsonValue } : {}),
@@ -282,8 +289,9 @@ async function updateDamage(id: string, input: DamageUpdateInput, actor: Actor) 
   const owner = await prisma.damage.findUnique({ where: { id }, select: { section: { select: { inspectionId: true } } } });
   if (!owner) throw ApiError.notFound('Damage not found');
   await requireCanEdit(owner.section.inspectionId, actor);
-  const exists = await prisma.damage.findUnique({ where: { id }, include: { section: { select: { key: true, name: true, inspection: { select: { id: true, jobNo: true } } } } } });
+  const exists = await prisma.damage.findUnique({ where: { id }, include: { section: { select: { key: true, name: true, reviewStatus: true, inspection: { select: { id: true, jobNo: true } } } } } });
   if (!exists) throw ApiError.notFound('Damage not found');
+  if (exists.section.reviewStatus === 'APPROVED') throw new ApiError(409, 'This section is approved. Reopen it before changing its photos.', 'SECTION_APPROVED');
 
   const saved = await prisma.damage.update({
     where: { id },
