@@ -75,12 +75,16 @@ export function joinList(parts: string[]): string {
 
 export const asList = (v: AnswerValue): string[] => (Array.isArray(v) ? asStringArray(v) : typeof v === "string" && v ? [v] : []);
 
+/**
+ * The defect form's Category and Severity choices: the one list behind the web form (construction/defectDetail.ts) and the report
+ * wording (compose.ts), for every Construction stage. A defect saved with a choice no longer listed still opens and prints; that
+ * choice is printed as it was stored.
+ */
 export const CATEGORY_LABELS: Record<string, string> = {
   non_compliant_plans_specs: "Non-compliant with approved plans/specs", non_compliant_ncc_as: "Non-compliant with NCC/AS", workmanship_outside_tolerance: "Workmanship outside tolerance",
-  material_product_defect: "Material/product defect", damage: "Damage", incomplete_work: "Incomplete work", design_documentation_conflict: "Design/documentation conflict", unable_to_inspect_concealed: "Unable to inspect/concealed",
 };
 export const SEVERITY_LABELS: Record<string, string> = {
-  major: "Major", minor: "Minor", cosmetic: "Cosmetic", structural: "Structural", safety: "Safety", weatherproofing: "Weatherproofing", durability: "Durability", serviceability: "Serviceability", amenity: "Amenity",
+  major: "Major", minor: "Minor", cosmetic: "Cosmetic", structural: "Structural",
 };
 /** The ticked answers as their labels, in the form's own order (not the order they were tapped in). */
 export const mapLabels = (v: AnswerValue, table: Record<string, string>) => {
