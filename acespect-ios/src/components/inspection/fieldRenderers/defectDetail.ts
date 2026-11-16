@@ -12,27 +12,21 @@ import type { AnswerTree, AnswerValue } from './types';
 export const DEFECT_SUFFIX = '__defect';
 export const defectKey = (fieldKey: string) => `${fieldKey}${DEFECT_SUFFIX}`;
 
-/** Category and severity wording is fixed by the Houspect defect form; both can have several ticks. */
+/**
+ * Category and severity wording is fixed by the Houspect defect form; both can have several ticks. This is the one list every
+ * template-driven section uses (each Construction stage), so the choices here are the only ones the phone offers. A defect saved
+ * with a choice no longer listed still works: it keeps its stored value and the report prints that value as it is.
+ */
 export const CATEGORY_OPTIONS = [
   { value: 'non_compliant_plans_specs', label: 'Non-compliant with approved plans/specs' },
   { value: 'non_compliant_ncc_as', label: 'Non-compliant with NCC/AS' },
   { value: 'workmanship_outside_tolerance', label: 'Workmanship outside tolerance' },
-  { value: 'material_product_defect', label: 'Material/product defect' },
-  { value: 'damage', label: 'Damage' },
-  { value: 'incomplete_work', label: 'Incomplete work' },
-  { value: 'design_documentation_conflict', label: 'Design/documentation conflict' },
-  { value: 'unable_to_inspect_concealed', label: 'Unable to inspect/concealed' },
 ];
 export const SEVERITY_OPTIONS = [
   { value: 'major', label: 'Major' },
   { value: 'minor', label: 'Minor' },
   { value: 'cosmetic', label: 'Cosmetic' },
   { value: 'structural', label: 'Structural' },
-  { value: 'safety', label: 'Safety' },
-  { value: 'weatherproofing', label: 'Weatherproofing' },
-  { value: 'durability', label: 'Durability' },
-  { value: 'serviceability', label: 'Serviceability' },
-  { value: 'amenity', label: 'Amenity' },
 ];
 
 /** Location, category, severity and photographs are required; comments and the construction code are optional. */
