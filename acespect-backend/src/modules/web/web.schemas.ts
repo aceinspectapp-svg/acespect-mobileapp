@@ -66,6 +66,7 @@ export const photoEditSchema = z.object({
   }),
 });
 export const photoInfoSchema = z.object({ ids: z.array(z.string().uuid()).max(2000) });
+export const photoOptimizeSchema = z.object({ sectionId: z.string().uuid().optional() });
 export const photoUrlSchema = z.object({ url: z.string().min(1).max(2000) });
 
 export const inspectionUpdateSchema = z.object({

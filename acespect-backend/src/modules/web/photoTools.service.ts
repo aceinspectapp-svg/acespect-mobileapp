@@ -14,7 +14,8 @@ import { fetchPhotoStream } from '../../lib/storage';
 import { inspectionsService } from '../inspections/inspections.service';
 import { canEdit, type Actor } from './assignment.rules';
 import { serializeSection } from './web.serializers';
-import { applyPhotoEdit, mediaIdOf, removeMediaId, swapMediaId, type PhotoEdit } from './photoEdit';
+import sharp from 'sharp';
+import { applyPhotoEdit, mediaIdOf, needsOptimizing, optimizePhoto, removeMediaId, swapMediaId, type PhotoEdit } from './photoEdit';
 
 const json = (v: unknown) => v as Prisma.InputJsonValue;
 
@@ -135,4 +136,78 @@ async function photoInfo(ids: string[]) {
   return Object.fromEntries(rows.map((r) => [r.id, { editedFromId: r.editedFromId, originalUrl: r.editedFromId ? `/api/v1/media/${r.editedFromId}` : null, edit: r.edit, addedByReviewer: !!r.addedById }]));
 }
 
-export const photoToolsService = { editPhoto, revertPhoto, deletePhoto, photoInfo };
+/** Every photo id a value links to, in order, once each. */
+function photoIdsIn(value: unknown, out: Set<string>): void {
+  if (typeof value === 'string') for (const m of value.matchAll(/\/media\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi)) out.add(m[1]!.toLowerCase());
+  else if (Array.isArray(value)) value.forEach((v) => photoIdsIn(v, out));
+  else if (value && typeof value === 'object') Object.values(value).forEach((v) => photoIdsIn(v, out));
+}
+
+export interface OptimizeResult {
+  checked: number;
+  optimized: number;
+  alreadyFine: number;
+  failed: number;
+  bytesBefore: number;
+  bytesAfter: number;
+  /** Sections skipped because they are approved. */
+  lockedSections: string[];
+}
+
+/**
+ * Brings the photos of an inspection (or one section) to 1024 x 768 and under 200 KB, as new copies linked to their originals -- the
+ * originals stay, Revert still works, and the section is pointed at the copies exactly like a rotate / crop. A photo already within the
+ * limits is left alone; an approved section is skipped.
+ */
+async function optimizePhotos(inspectionId: string, input: { sectionId?: string }, actor: Actor): Promise<OptimizeResult> {
+  const sections = await prisma.section.findMany({ where: { inspectionId, ...(input.sectionId ? { id: input.sectionId } : {}) }, select: { id: true, name: true, reviewStatus: true } });
+  if (input.sectionId && !sections.length) throw ApiError.notFound('Section not found');
+  const result: OptimizeResult = { checked: 0, optimized: 0, alreadyFine: 0, failed: 0, bytesBefore: 0, bytesAfter: 0, lockedSections: [] };
+  const done = new Map<string, { id: string; before: number; after: number } | null>(); // photo id -> its copy (null: nothing to do / failed)
+  for (const head of sections) {
+    if (head.reviewStatus === 'APPROVED') { result.lockedSections.push(head.name); continue; }
+    let section = await loadSection(head.id, actor);
+    const ids = new Set<string>();
+    photoIdsIn([section.photos, section.answers, section.damages.map((d) => d.photos)], ids);
+    let meta = metaOf(section);
+    for (const id of ids) {
+      result.checked++;
+      let copy = done.get(id);
+      if (copy === undefined) {
+        try {
+          const bytes = await readPhotoBytes(id);
+          const m = await sharp(bytes).metadata();
+          if (!needsOptimizing(bytes.length, m.width ?? 0, m.height ?? 0)) { done.set(id, null); copy = null; result.alreadyFine++; continue; }
+          const out = await optimizePhoto(bytes);
+          const stored = await inspectionsService.uploadPhoto(out.bytes, 'image/jpeg', 'optimized.jpg', section.inspection.id, section.key, section.inspection.jobNo ?? undefined);
+          const newId = mediaIdOf(stored.url);
+          if (!newId) throw new Error('not saved');
+          const { rootId, row } = await rootOf(id);
+          await prisma.photo.update({ where: { id: newId }, data: { editedFromId: rootId, edit: json({ rotate: 0, optimize: true }), addedById: row.addedById ?? null } });
+          copy = { id: newId, before: bytes.length, after: out.bytes.length };
+          done.set(id, copy);
+        } catch {
+          done.set(id, null);
+          result.failed++;
+          continue;
+        }
+      } else if (copy === null) { result.alreadyFine++; continue; }
+      result.optimized++;
+      result.bytesBefore += copy.before;
+      result.bytesAfter += copy.after;
+      if (id in meta) { meta = { ...meta, [copy.id]: meta[id] }; delete meta[id]; }
+      const swap = copy;
+      await saveWith(section, (v) => swapMediaId(v, id, swap.id), meta);
+      section = await loadSection(head.id, actor);
+      meta = metaOf(section);
+    }
+  }
+  await audit({
+    category: 'web', action: 'photo.optimize', inspectionId,
+    message: `Photos brought to 1024 x 768 and under 200 KB: ${result.optimized} resized, ${result.alreadyFine} already fine${result.failed ? `, ${result.failed} failed` : ''}`,
+    metadata: { ...result, sectionId: input.sectionId },
+  });
+  return result;
+}
+
+export const photoToolsService = { editPhoto, revertPhoto, deletePhoto, photoInfo, optimizePhotos };

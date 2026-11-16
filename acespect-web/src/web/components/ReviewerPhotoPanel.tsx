@@ -54,7 +54,7 @@ export function ReviewerPhotoPanel({
   /** Saves new answers (the report text is composed again from them) together with `extra` -- the section's flat photo list. */
   onSaveAnswers: (answers: AnswerTree, extra: { photos?: string[] }) => Promise<void>;
 }) {
-  const { patchSection, editSectionPhoto, revertSectionPhoto, deleteSectionPhoto } = useAppData();
+  const { patchSection, patchInspection, editSectionPhoto, revertSectionPhoto, deleteSectionPhoto } = useAppData();
   const sectionKey = section.key ?? section.id;
   const groups = useMemo(() => toolGroups(template.fields, answers, section.photos), [template.fields, answers, section.photos]);
   const excluded = section.excludedPhotoUrls ?? [];
@@ -65,6 +65,7 @@ export function ReviewerPhotoPanel({
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState<Record<string, string[]>>({});
   const [error, setError] = useState<string | null>(null);
+  const [optimizeNote, setOptimizeNote] = useState<string | null>(null);
   const [dragging, setDragging] = useState<{ url: string; group: string } | null>(null);
 
   // Which photos are edited copies / reviewer-added: asked once per set of photos.
@@ -187,6 +188,20 @@ export function ReviewerPhotoPanel({
     void run(() => deleteSectionPhoto(inspection.id, section.id, url));
   };
 
+  /** Every photo of this section to 1024 x 768 and under 200 KB, as copies (the originals are kept). */
+  const optimizeAll = () =>
+    run(async () => {
+      setOptimizeNote(null);
+      const r = await api.optimizePhotos(inspection.id, section.id);
+      await patchInspection(inspection.id, {});
+      const mb = (n: number) => (n / 1048576).toFixed(1);
+      setOptimizeNote(
+        r.optimized
+          ? `${r.optimized} photo${r.optimized === 1 ? "" : "s"} resized to fit 1024 × 768 and under 200 KB (${mb(r.bytesBefore)} MB → ${mb(r.bytesAfter)} MB); ${r.alreadyFine} already fine${r.failed ? `; ${r.failed} could not be read` : ""}.`
+          : `All ${r.alreadyFine} photos are already within 1024 × 768 and 200 KB.`,
+      );
+    });
+
   const editingInfo = editing ? info[mediaId(editing)] ?? NO_INFO : NO_INFO;
 
   return (
@@ -195,6 +210,14 @@ export function ReviewerPhotoPanel({
         <p data-photo-locked="" style={{ margin: 0, fontSize: "12px", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "8px 10px" }}>
           This section is approved, so its photos are locked. Reopen it to rotate, crop, resize, move or delete photos.
         </p>
+      )}
+      {!locked && (
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <button type="button" data-action="optimize-photos" onClick={optimizeAll} disabled={busy} title="New copies at the highest quality that fits; the originals are kept" style={{ fontSize: "11.5px", fontWeight: 700, color: "#1d4ed8", background: "#eff6ff", border: "1px solid #93c5fd", borderRadius: "8px", padding: "5px 10px", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}>
+            {busy ? "Working…" : "Resize all to 1024 × 768 · under 200 KB"}
+          </button>
+          {optimizeNote && <span data-optimize-note="" style={{ fontSize: "11.5px", color: "#475569" }}>{optimizeNote}</span>}
+        </div>
       )}
       {error && <p role="alert" style={{ margin: 0, fontSize: "12px", color: "#b91c1c" }}>{error}</p>}
       <DndContext sensors={locked ? [] : sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>

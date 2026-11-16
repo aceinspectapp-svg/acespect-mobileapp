@@ -79,6 +79,28 @@ r = await call("PATCH", `/web/sections/${sec.id}`, { reviewStatus: "pending", ex
 ok(r.status === 200, "reopening the section (in the same request) unlocks it");
 await call("PATCH", `/web/sections/${sec.id}`, { excludedPhotoUrls: [], photoMeta: {} });
 await call("PATCH", `/web/sections/${sec.id}`, { reviewStatus: "approved" });
+// optimise: 1024 x 768, under 200 KB
+await call("PATCH", `/web/sections/${sec.id}`, { reviewStatus: "pending" });
+r = await call("POST", `/web/inspections/${ID}/photos/optimize`, { sectionId: sec.id });
+ok(r.status === 200 && r.body.checked > 0, "optimise runs on a section (" + r.status + ", checked " + r.body?.checked + ")");
+console.log("   ", JSON.stringify(r.body));
+sec = (await get()).sections.find((s) => s.key === "description");
+const mediaLinks = [...new Set(JSON.stringify([sec.answers, sec.photos]).match(/\/api\/v1\/media\/[0-9a-f-]{36}[^"]*/g))];
+let tooBig = 0, tooWide = 0;
+const sharp = (await import("sharp")).default;
+for (const m of mediaLinks) {
+  const f = await fetch("http://127.0.0.1:4000" + m, { headers: H });
+  const b = Buffer.from(await f.arrayBuffer());
+  const meta = await sharp(b).metadata();
+  if (b.length > 200 * 1024) tooBig++;
+  if (meta.width > 1024 || meta.height > 768) tooWide++;
+}
+ok(mediaLinks.length > 0 && tooBig === 0 && tooWide === 0, `every photo of the section is within 1024 x 768 and 200 KB (${mediaLinks.length} photos, ${tooBig} too big, ${tooWide} too large)`);
+r = await call("POST", `/web/inspections/${ID}/photos/optimize`, { sectionId: sec.id });
+ok(r.status === 200 && r.body.optimized === 0, "running it again changes nothing");
+await call("PATCH", `/web/sections/${sec.id}`, { reviewStatus: "approved" });
+r = await call("POST", `/web/inspections/${ID}/photos/optimize`, { sectionId: sec.id });
+ok(r.status === 200 && r.body.optimized === 0 && r.body.lockedSections.length === 1, "an approved section is skipped");
 console.log(`\n${pass} passed, ${fail} failed`);
 await prisma.$disconnect();
 process.exit(fail ? 1 : 0);

@@ -92,3 +92,36 @@ export async function applyPhotoEdit(input: Buffer, edit: PhotoEdit): Promise<{ 
 /** The sizes a photo can print at: the standard grid (default), or alone on its own row at the page's width. */
 export const PHOTO_SIZES = ['standard', 'large'] as const;
 export type PhotoSize = (typeof PHOTO_SIZES)[number];
+
+/** The report copy every photo is brought to: fits inside 1024 x 768 (a portrait photo becomes 576 x 768), never enlarged, and no more than 200 KB. */
+export const OPTIMIZE_MAX_WIDTH = 1024;
+export const OPTIMIZE_MAX_HEIGHT = 768;
+export const OPTIMIZE_MAX_BYTES = 200 * 1024;
+const QUALITIES = [92, 90, 88, 86, 84, 82, 80, 78, 76, 74, 72, 70, 66, 62, 58, 54, 50];
+
+/**
+ * Shrinks a photo to fit 1024 x 768 and saves it as a JPEG of the HIGHEST quality that still fits in 200 KB -- it starts at 92 and only
+ * steps down as far as it must. (Under 200 KB at this size is normally quality 80-90, which is visually the same picture.) A photo so
+ * detailed that even quality 50 is too big is made a little smaller instead. The orientation the phone recorded is applied; the shape is never
+ * changed, and a photo already smaller than the box is not enlarged.
+ */
+export async function optimizePhoto(input: Buffer): Promise<{ bytes: Buffer; width: number; height: number; quality: number }> {
+  let box = { w: OPTIMIZE_MAX_WIDTH, h: OPTIMIZE_MAX_HEIGHT };
+  for (let shrink = 0; shrink < 12; shrink++) {
+    const pipeline = () => sharp(input).rotate().resize({ width: box.w, height: box.h, fit: 'inside', withoutEnlargement: true });
+    for (const quality of QUALITIES) {
+      const bytes = await pipeline().jpeg({ quality, mozjpeg: true }).toBuffer();
+      if (bytes.length <= OPTIMIZE_MAX_BYTES) {
+        const m = await sharp(bytes).metadata();
+        return { bytes, width: m.width ?? 0, height: m.height ?? 0, quality };
+      }
+    }
+    box = { w: Math.round(box.w * 0.9), h: Math.round(box.h * 0.9) };
+  }
+  throw new Error('The photo could not be brought under 200 KB');
+}
+
+/** True when a stored report copy is not yet 1024 x 768 / 200 KB. */
+export function needsOptimizing(bytes: number, width: number, height: number): boolean {
+  return bytes > OPTIMIZE_MAX_BYTES || width > OPTIMIZE_MAX_WIDTH || height > OPTIMIZE_MAX_HEIGHT;
+}

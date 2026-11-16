@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
-import { applyPhotoEdit, mediaIdOf, removeMediaId, swapMediaId } from './photoEdit';
+import { applyPhotoEdit, mediaIdOf, needsOptimizing, optimizePhoto, removeMediaId, swapMediaId, OPTIMIZE_MAX_BYTES } from './photoEdit';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
@@ -80,5 +80,49 @@ describe('rotating and cropping the picture', () => {
   it('produces a JPEG', async () => {
     const out = await applyPhotoEdit(await picture(100, 80), { rotate: 270 });
     assert.equal((await sharp(out.bytes).metadata()).format, 'jpeg');
+  });
+});
+
+/** A noisy, detailed picture (hard to compress), like a real photo of brickwork. */
+async function noisy(width: number, height: number): Promise<Buffer> {
+  const raw = Buffer.alloc(width * height * 3);
+  for (let i = 0; i < raw.length; i++) raw[i] = (i * 2654435761) >>> 24;
+  return sharp(raw, { raw: { width, height, channels: 3 } }).jpeg({ quality: 95 }).toBuffer();
+}
+
+describe('bringing a photo to 1024 x 768 and under 200 KB', () => {
+  it('fits a big landscape photo inside the box and under the size limit', async () => {
+    const out = await optimizePhoto(await noisy(4032, 3024));
+    assert.deepEqual([out.width, out.height], [1024, 768]);
+    assert.ok(out.bytes.length <= OPTIMIZE_MAX_BYTES, `${out.bytes.length} bytes`);
+  });
+
+  it('keeps a portrait photo shape: it fits the 768 height, so 576 x 768', async () => {
+    const out = await optimizePhoto(await noisy(3024, 4032));
+    assert.deepEqual([out.width, out.height], [576, 768]);
+    assert.ok(out.bytes.length <= OPTIMIZE_MAX_BYTES);
+  });
+
+  it('never enlarges a small photo', async () => {
+    const out = await optimizePhoto(await picture(400, 300));
+    assert.deepEqual([out.width, out.height], [400, 300]);
+  });
+
+  it('uses the highest quality that fits: a simple picture keeps quality 92', async () => {
+    const out = await optimizePhoto(await picture(2000, 1500));
+    assert.equal(out.quality, 92);
+  });
+
+  it('steps the quality down only as far as it must for a detailed picture', async () => {
+    const out = await optimizePhoto(await noisy(1024, 768));
+    assert.ok(out.quality < 92 && out.quality >= 50, `quality ${out.quality}`);
+    assert.ok(out.bytes.length <= OPTIMIZE_MAX_BYTES);
+  });
+
+  it('knows which copies still need it', () => {
+    assert.equal(needsOptimizing(150_000, 1024, 768), false);
+    assert.equal(needsOptimizing(250_000, 800, 600), true);
+    assert.equal(needsOptimizing(100_000, 1366, 768), true);
+    assert.equal(needsOptimizing(100_000, 768, 1024), true);
   });
 });

@@ -87,6 +87,13 @@ export const webController = {
     res.status(200).json({ section });
   }),
 
+  optimizePhotos: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    res.status(200).json(await photoToolsService.optimizePhotos(id, req.body, req.user));
+  }),
+
   photoInfo: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
     res.status(200).json(signMediaLinks({ photos: await photoToolsService.photoInfo(req.body.ids) }));

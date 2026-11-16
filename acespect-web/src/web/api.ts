@@ -21,6 +21,15 @@ export interface PhotoEditSpec {
   rotate: 0 | 90 | 180 | 270;
   crop?: { x: number; y: number; w: number; h: number };
 }
+export interface PhotoOptimizeResult {
+  checked: number;
+  optimized: number;
+  alreadyFine: number;
+  failed: number;
+  bytesBefore: number;
+  bytesAfter: number;
+  lockedSections: string[];
+}
 export interface PhotoInfo {
   editedFromId: string | null;
   /** A signed link to the original photo, when this one is an edited copy. */
@@ -415,6 +424,9 @@ export const api = {
   /** Delete a photo a reviewer added (an inspector's own photo can only be left out of the report). */
   deleteSectionPhoto: (sectionId: string, url: string) =>
     req<unknown>(`/web/sections/${sectionId}/photos/delete`, { method: "POST", body: JSON.stringify({ url }) }),
+  /** Bring the photos of an inspection (or one section) to 1024 x 768 and under 200 KB, as new copies; the originals are kept. */
+  optimizePhotos: (inspectionId: string, sectionId?: string) =>
+    req<PhotoOptimizeResult>(`/web/inspections/${inspectionId}/photos/optimize`, { method: "POST", body: JSON.stringify(sectionId ? { sectionId } : {}) }),
   /** Which of these photos are edited copies (of which original) and which a reviewer added. */
   photoInfo: (ids: string[]) =>
     req<{ photos: Record<string, PhotoInfo> }>(`/web/photos/info`, { method: "POST", body: JSON.stringify({ ids }) }).then((d) => d.photos),
