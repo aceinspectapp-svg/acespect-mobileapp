@@ -216,6 +216,49 @@ function pciStatus(jobInfo: AnswerTree | null): string {
   return raw.startsWith("__other__:") ? raw.slice(10) : raw.replace(/_/g, " ");
 }
 
+/**
+ * The PCI template's progress line, "Progress of the works to date is approaching practical completion / handover / defects liability.",
+ * with the phrase for the Stage chosen on Job Information; after handover (Defects Liability) the works are within that period. Any other
+ * answer keeps the template's line as it is.
+ */
+export function pciProgress(status: string): string {
+  if (/^defects liability/i.test(status)) return "The works are within the defects liability period.";
+  const phrase = /^practical completion/i.test(status) ? "practical completion" : /^(off the plan )?handover/i.test(status) ? "handover" : "";
+  return phrase ? `Progress of the works to date is approaching ${phrase}.` : STAGES.pci.progress;
+}
+
+/**
+ * The order of the PCI report's defect headings: the checklist's order, with the template's places that have no checklist heading of
+ * their own where they belong in it (Porch after Windows and Doors, Driveway & Paving after Garage, the rooms after Internal in the order
+ * of the Rooms checklist, Manhole … after Other). General is always last. A heading not listed stays after the one printed before it.
+ */
+const PCI_TOPIC_ORDER = [
+  "site and facilities", "roof", "walls", "windows and doors", "flyscreens and car bay", "porch", "garage", "driveway and paving", "balconies", "site", "common areas",
+  "internal", "front door", "hallway and entry", "kitchen and pantry", "living family", "lounge", "theatre room", "bedroom 1 and ensuite", "bedroom 2", "bedroom 3",
+  "bedroom 4", "study", "stairs and stairwell", "bathroom", "powder room", "laundry", "finishes", "utilities services", "other", "manhole roof cavity insulation",
+];
+export function pciTopicOrder(topics: string[]): string[] {
+  let last = -1;
+  const ranked = topics.map((t, i) => {
+    const k = placeKey(t);
+    if (k === "general") return { t, i, rank: Infinity };
+    const at = PCI_TOPIC_ORDER.indexOf(k);
+    last = at === -1 ? last + 0.001 : at;
+    return { t, i, rank: last };
+  });
+  return ranked.sort((x, y) => x.rank - y.rank || x.i - y.i).map((x) => x.t);
+}
+
+/**
+ * The defect topics that are one place on the report: the checklist's own heading and the PCI template's name for the same place
+ * ("Garage" and "Garage / Carport", "Balconies" and "Alfresco / Balcony"). Defects of one place print under one heading -- the first
+ * one used, which is the checklist's.
+ */
+const PLACE_ALIASES: Record<string, string> = {
+  "garage carport": "garage", "alfresco balcony": "balconies", "balconies private terrace": "balconies", "windows and doors": "windows and doors",
+};
+const placeKey = (topic: string) => { const k = norm(topic); return PLACE_ALIASES[k] ?? k; };
+
 function pciAppliances(status: string): string {
   if (/^practical completion/i.test(status)) return "Appliances such as the oven, cook top, rangehood, dishwasher and hot water service are not yet installed due to concerns about theft of appliances.";
   if (/^handover/i.test(status)) return "Appliances are installed, except for oven, cook top, rangehood, dishwasher and hot water service.";
@@ -294,7 +337,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
 
     if (kind === "description") {
       description = paragraphs(lines);
-      if (stage === "pci" && status) description = description.map((p) => (p === meta.progress ? `Progress of the works to date is ${status.split(" — ")[0]!.toLowerCase()}.` : p));
+      if (stage === "pci" && status) description = description.map((p) => (p === meta.progress ? pciProgress(status) : p));
       streetPhotos = a ? photosIn(a.streetPhotos, excluded) : [];
       otherPhotos = a ? [...photosIn(a.elevationPhotos, excluded), ...photosIn(a.neighbourPhotos, excluded)] : [];
     } else if (kind === "site" || kind === "stage") {
@@ -371,7 +414,15 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
 
   // Defects: numbered in the order of the checklist, grouped under the topic they came from.
   const topicOrder: string[] = [];
-  for (const d of raised) { d.sub = cleanGroup(d.sub); if (!topicOrder.includes(d.sub)) topicOrder.push(d.sub); }
+  const shownAs = new Map<string, string>();
+  for (const d of raised) {
+    const sub = cleanGroup(d.sub);
+    const k = placeKey(sub);
+    if (!shownAs.has(k)) shownAs.set(k, sub);
+    d.sub = shownAs.get(k)!;
+    if (!topicOrder.includes(d.sub)) topicOrder.push(d.sub);
+  }
+  if (stage === "pci") topicOrder.splice(0, topicOrder.length, ...pciTopicOrder(topicOrder));
   const defectGroups: DefectGroup[] = [];
   const numberOf = new Map<number, number>();
   let n = 0;

@@ -73,9 +73,11 @@ describe("construction report", () => {
 
   it("writes the General Description sentences", () => {
     assert.ok(model.description.includes("The property is being constructed by Metricon."));
-    assert.ok(model.description.includes("The construction is a single storey on a concrete slab."));
+    // PCI house, as its template words it: "The construction is a sing/double storey residential house." then "Foundations are …".
+    assert.ok(model.description.includes("The construction is a single storey residential house."));
+    assert.ok(model.description.includes("Foundations are concrete slab."));
     assert.ok(model.description.includes("The owner was not onsite at the time of inspection."));
-    assert.ok(model.description.some((l) => /approaching|handover/i.test(l)));
+    assert.ok(model.description.includes("Progress of the works to date is approaching handover."));
     assert.equal(model.stageLabel, "Handover");
   });
 
@@ -149,7 +151,7 @@ describe("construction report", () => {
   });
 
   it("describes the construction the way the design sample words it", () => {
-    assert.ok(model.description.includes("The construction is a single storey on a concrete slab."));
+    assert.ok(model.description.includes("The construction is a single storey residential house."));
     assert.ok(model.description.includes("The owner was not onsite at the time of inspection."));
   });
 
