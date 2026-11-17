@@ -179,3 +179,38 @@ export function flatOrder(groups: ToolGroup[], sectionPhotos: string[]): string[
   for (const u of sectionPhotos) if (!seen.has(photoKey(u))) out.push(u);
   return out;
 }
+
+// ---- one-click rotate and moving several photos at once ----------------------------------------------------------------------------
+
+export interface PhotoEdit {
+  rotate: 0 | 90 | 180 | 270;
+  crop?: { x: number; y: number; w: number; h: number };
+}
+
+/**
+ * The edit that turns a photo a further quarter turn (`dir` 1: right / clockwise, -1: left), given the edit it already has (relative to its
+ * original). A crop box -- fractions of the rotated picture -- turns with the picture, so the same part of the photo stays cropped.
+ */
+export function rotateEdit(current: { rotate?: number; crop?: PhotoEdit["crop"] } | null | undefined, dir: 1 | -1): PhotoEdit {
+  const rotate = ((((current?.rotate ?? 0) + dir * 90) % 360) + 360) % 360 as PhotoEdit["rotate"];
+  const c = current?.crop;
+  if (!c) return { rotate };
+  const crop = dir === 1 ? { x: 1 - (c.y + c.h), y: c.x, w: c.h, h: c.w } : { x: c.y, y: 1 - (c.x + c.w), w: c.h, h: c.w };
+  const r = (v: number) => Math.min(1, Math.max(0, Math.round(v * 1e6) / 1e6));
+  return { rotate, crop: { x: r(crop.x), y: r(crop.y), w: r(crop.w), h: r(crop.h) } };
+}
+
+/**
+ * The answers with each photo moved from its group into `to` (at the end, in the given order). Into the section's own list (`to.path`
+ * null) a photo is only taken out of its item -- it stays in the section's flat list, so it shows there. Photos already in `to` are skipped.
+ */
+export function withPhotosMovedTo(answers: AnswerTree | null | undefined, items: { url: string; from: ToolGroup }[], to: ToolGroup): AnswerTree {
+  let next = (answers ?? {}) as AnswerTree;
+  for (const { url, from } of items) {
+    if (from.id === to.id) continue;
+    if (from.path && to.path) next = withPhotoMoved(next, from.path, to.path, url);
+    else if (from.path) next = withPhotoRemoved(next, from.path, url);
+    else if (to.path) next = withPhotoAdded(next, to.path, url);
+  }
+  return next;
+}
