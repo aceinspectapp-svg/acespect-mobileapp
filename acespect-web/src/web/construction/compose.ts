@@ -70,7 +70,7 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartm
   const roofCover = one("roofCoveringIs");
   if (roofDesign || roofCover) out.push(`The roof design is ${roofDesign || "—"}${roofCover ? ` and the covering is constructed of ${roofCover}` : ""}.`);
   const frontage = one("frontage");
-  if (frontage) out.push(`Street frontage is to the ${frontage}.`);
+  if (frontage) out.push(`The street frontage is to the ${frontage}.`); // template: "The street frontage is to the north / south / east / west."
   const block = one("blockSlope");
   if (block) out.push(`The block is ${block}.`);
   if (a.supervisorOnSite === "yes" || a.supervisorOnSite === "no") out.push(`The site supervisor was${a.supervisorOnSite === "no" ? " not" : ""} onsite at the time of inspection.`);
@@ -175,7 +175,7 @@ function textFor(status: ItemStatus, c: Chosen, hasRedOption: boolean, plainYesN
 const SEVERITY_ORDER: ItemStatus[] = ["defect", "note", "notcomplete", "progress", "ok", "na"];
 const worst = (list: ItemStatus[]): ItemStatus => SEVERITY_ORDER.find((s) => list.includes(s)) ?? "ok";
 
-interface Row { group?: string; heading: string; status: ItemStatus; text: string; key?: string; answer?: string }
+interface Row { group?: string; heading: string; status: ItemStatus; text: string; key?: string; answer?: string; /** What the inspector typed, exactly (the row's text is it as a sentence). */ typed?: string }
 
 /** One checklist section -> its rows (heading, status and sentence) and the defects raised in it. */
 function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind: "site" | "stage"): { rows: Row[]; defects: Defect[] } {
@@ -262,6 +262,7 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
 const observed = (c: Chosen): string => {
   if (c.tone === "bad" || /defect/i.test(c.label)) return "defective";
   if (/note/i.test(c.label)) return "noted for attention (refer notes)";
+  if (/^ok$/i.test(c.label)) return "satisfactory";
   return lower(c.label);
 };
 
@@ -341,16 +342,18 @@ const observed = (c: Chosen): string => {
       // The Pre-pour template's fixed wording for two rows: the power supply's "Meter & Pole at Slab", and the note above the kitchen bench penetrations.
       if (prePour && f.key === "powerSupply" && status === "ok") text = POWER_SUPPLY_OK;
       if (prePour && f.key === "kitchenBenchPenetrations" && status !== "na") text = `${KITCHEN_BENCH_FIXED} ${text}`;
+      let typedText = "";
       if (isOtherRow) {
         // "Other": printed only when the inspector said what it was (or it is a defect).
         const note = asString(a[`${f.key}_note`]).trim();
         if (!note && !isDefect) continue;
         if (note) {
           text = isDefect ? `${text} ${sentence(note)}` : sentence(note);
+          if (!isDefect) typedText = note;
           if (status === "ok" || status === "na") status = "note";
         }
       }
-      const row: Row = { group: f.sectionLetter ? groupOf(f.sectionLetter) : undefined, heading, status, text, key: f.key, answer: c.label };
+      const row: Row = { group: f.sectionLetter ? groupOf(f.sectionLetter) : undefined, heading, status, text, key: f.key, answer: c.label, typed: typedText || undefined };
       rows.push(row);
       rowByKey.set(f.key, row);
       if (isDefect) captureDefect(f, heading);
@@ -372,7 +375,7 @@ const observed = (c: Chosen): string => {
     if (f.type === "numeric") { add(f, heading, "ok", `${asString(v) || String(v)}${f.unit ? ` ${f.unit}` : ""}.`); continue; }
     if (f.type === "text" || f.type === "textarea" || f.type === "date") {
       const t = asString(v).trim();
-      if (t) add(f, heading, "note", sentence(t));
+      if (t) { add(f, heading, "note", sentence(t)); rows[rows.length - 1]!.typed = t; }
     }
   }
   return { rows, defects };
@@ -401,18 +404,85 @@ function siteNotes(stage: StageId, fields: TemplateField[], a: AnswerTree): stri
 
 // ───────────────────────── Statement and notes ─────────────────────────
 
-/** The Pre-pour template's ground-falls note (Notes section). */
+/** The office templates' ground-falls note (Notes section), as the Pre-pour and Frame templates word it, every stage. */
 export const GROUND_FALLS =
-  "Due to ground falls towards the slab stormwater may pond and affect the footings. Stormwater needs to be controlled on site by the construction company to protect the foundations and surface to be graded to fall away from the building/s – refer to Codes 2. Footings and to Site Drainage requirements.";
+  "Due to ground falls towards the slab stormwater may pond and affect the footings. Stormwater needs to be controlled on site by the construction company to protect the foundations and surface to be graded to fall away from the building/s – refer to Codes 2. Footings and to Site Drainage requirements. Soil may erode and potentially block stormwater pipes – some protection may be advisable until landscaping/retaining works are done.";
 /** The Pre-pour template's text under "Power supply to site" when the supply is in place. */
 export const POWER_SUPPLY_OK = "Meter & Pole at Slab";
 /** The Pre-pour template's fixed sentence under "Kitchen Bench Supply Penetrations Correctly Positioned", above the inspector's comment. */
 export const KITCHEN_BENCH_FIXED = "Positions are estimates only from formwork. The positions will need to be measured after Slab Down.";
 
+/** The office templates' sentence for retaining walls (the checklist's "Advise retaining wall/s would be prudent?" and the Summary tick). */
+export const RETAINING_WALLS = "Retaining walls are advised.";
+
+/** "Front setback" -> "The front setback is", "Slab dimensions — length" -> "The slab length is", "Alfresco slab — step down" -> "The alfresco slab step down is". */
+function theSubject(heading: string): string {
+  const h = lower(heading).replace(/^slab dimensions — (length|width)$/i, "slab $1").replace(/\s+[—–-]\s+/g, " ");
+  return `The ${h} ${/dimensions$/i.test(h) ? "are" : "is"}`;
+}
+
+/**
+ * The note each "see notes" answer leads to, by form field, as a sentence of its own (the office templates' wording where they have one,
+ * e.g. Frame: "Sisalation has not yet been installed to frame."). Each field has one answer that leads to a note; the pattern checks it is
+ * that answer, so no other answer can print the sentence. Shared by every stage that has the field.
+ */
+const NOTE_SENTENCES: Record<string, { answer: RegExp; note: string }> = {
+  powerSupply: { answer: /^no\b/i, note: "There is no power supply to the site." },
+  waterSupply: { answer: /^no\b/i, note: "There is no water supply to the site." },
+  siteToilet: { answer: /^no\b/i, note: "There is no site toilet in position." },
+  ceilingInsulation: { answer: /^no\b/i, note: "Ceiling insulation has not yet been installed." },
+  manhole: { answer: /^not yet\b/i, note: "The manhole has not yet been installed." },
+  garageSlab: { answer: /^infill later\b/i, note: "The garage slab is to be infilled later." },
+  porchSlab: { answer: /^infill later\b/i, note: "The porch slab is to be infilled later." },
+  alfrescoSlab: { answer: /^infill later\b/i, note: "The alfresco slab is to be infilled later." },
+  poolFormed: { answer: /^refer notes$/i, note: "The inground pool is noted for attention." },
+  inGroundPool: { answer: /^refer notes$/i, note: "The inground pool is noted for attention." },
+  footingDepths: { answer: /^could not see$/i, note: "The footing depths could not be seen at the time of inspection." },
+  excessWater: { answer: /^could not see$/i, note: "The footings could not be seen to check for excess water at the time of inspection." },
+  polythene: { answer: /^covered in backfill$/i, note: "The polyethylene could not be checked as it is covered in backfill." },
+  adviseRetaining: { answer: /^yes\b/i, note: RETAINING_WALLS },
+};
+
+/**
+ * The row an "Other" box belongs to, as the report names it: its group on the form ("Hebel", "Slab quality", "Roof"), else the row's own
+ * name without "other" ("Stairwell/s — other" -> "Stairwell/s"). The PCI "Services & Other" group's own "Other" reads "Services and other".
+ */
+function otherRowName(r: Row): string {
+  const own = r.heading.replace(/\s*[—–-]\s*other\??$/i, "").replace(/^other\??$/i, "").trim();
+  const name = r.group && !/^other$/i.test(r.group) ? r.group : own || (r.group ? "Services and other" : "Other");
+  return cap(name);
+}
+
+/** One "Refer notes" row as its note: a full sentence, never the row's name and the answer ("Ceiling insulation installed — no."). */
+function noteOf(r: Row): string {
+  // What the inspector typed (an "Other" box, "Part done to …") is the note, in their words.
+  if (r.typed) {
+    const typed = r.typed.trim();
+    if (r.key === "plasterworkPartDone") return sentence(`Plasterwork is part done to ${lower(typed).replace(/[.]$/, "")}`);
+    // An "Other" box: the row it belongs to, then the inspector's words exactly as typed, with a full stop if they left none ("Hebel: Some sheets cracked.").
+    return sentence(`${otherRowName(r)}: ${typed}`);
+  }
+  const own = r.key ? NOTE_SENTENCES[r.key] : undefined;
+  if (own && own.answer.test(r.answer ?? "")) return own.note;
+  // A measurement the builder is to re-check: "The front setback is to be re-checked by the builder. As estimated from pegs, setbacks on plan are …"
+  if (/\bbuilder to re-check\.?$/i.test(r.text)) {
+    const detail = r.text.replace(/\s*\bbuilder to re-check\.?$/i, "").trim()
+      .replace(/^(As [^.]+)\.\s+(\S)/, (_m, as: string, c: string) => `${as}, ${c.toLowerCase()}`)
+      .replace(/^On plan is (.+) and on site is /, "On plan it is $1 and on site it is ");
+    return [`${theSubject(r.heading)} to be re-checked by the builder.`, detail ? sentence(cap(detail)) : ""].filter(Boolean).join(" ");
+  }
+  // The roof and gutter rows are already sentences ("The upper roof covering is noted for attention (refer notes).").
+  if (r.key === "upperRoofFrom" || r.key === "safeAccessGuttering") return cap(r.text.replace(/\s*\((refer|see) (to )?notes\)/gi, "").trim());
+  // Any other row (none in today's forms): its name and what is left of the answer, as one sentence.
+  const strip = (t: string) => t.replace(/[\s,—–-]*\(?\s*\b(refer|see)\s+(to\s+)?notes\b\s*\)?\.?/gi, "").trim().replace(/^[—–-]\s*/, "").replace(/[\s,—–-]+$/, "");
+  const detail = strip(r.text) || strip(r.answer ?? "");
+  return detail ? sentence(`${cap(r.heading)}: ${lower(detail)}`) : sentence(cap(r.heading));
+}
+
 /**
  * The notes a section's "Refer notes" rows lead to. Rows that already have one of the template's own notes are left to it -- security
- * fencing, site clean-up and kerb damage (Site & Facilities, siteNotes) and the ground falls (site drainage / agi drains, below); any other
- * row gets a note made of its name and the inspector's answer: "Excess water to footings — could not see."
+ * fencing, site clean-up and kerb damage (Site & Facilities, siteNotes) and the ground falls (site drainage / agi drains, below); every
+ * other row's note is a sentence of its own (noteOf).
  */
 const OWN_NOTE = new Set(["securityFencing", "rubbishDangerous", "siteManaged", "finalSiteClean", "kerbDamage", "siteDrainage", "agiDrain"]);
 function referredNotes(rows: Row[]): string[] {
@@ -421,10 +491,7 @@ function referredNotes(rows: Row[]): string[] {
   if (drainage) notes.push(GROUND_FALLS);
   for (const r of rows) {
     if (r.status !== "note" || (r.key && OWN_NOTE.has(r.key))) continue;
-    // "Refer notes." / "Infill later — refer notes" / "… noted for attention (refer notes)." -> what is left of the inspector's answer
-    const strip = (t: string) => t.replace(/[\s,—–-]*\(?\s*\b(refer|see)\s+(to\s+)?notes\b\s*\)?\.?/gi, "").trim().replace(/^[—–-]\s*/, "").replace(/[\s,—–-]+$/, "");
-    const detail = strip(r.text) || strip(r.answer ?? "");
-    notes.push(detail ? sentence(`${r.heading} — ${lower(detail)}`) : sentence(r.heading));
+    notes.push(noteOf(r));
   }
   return notes;
 }
@@ -449,11 +516,13 @@ function summaryLines(stage: StageId, fields: TemplateField[], a: AnswerTree): s
   const g = asString(a.groundFallsDetail).trim();
   if (g) lines.push(sentence(g));
   const r = asString(a.retainingWallsDetail).trim();
-  if (ticks.includes("retaining_walls")) lines.push(r ? sentence(`Retaining walls are advised — ${r}`) : "Retaining walls are advised.");
+  // The tick's sentence, then what the inspector typed, in their words: "Retaining walls are advised. Timber sleeper retaining wall …"
+  const withDetail = (lead: string, detail: string) => (detail ? `${lead} ${sentence(cap(detail))}` : lead);
+  if (ticks.includes("retaining_walls")) lines.push(withDetail(RETAINING_WALLS, r));
   const agi = asString(a.agiDrainsDetail).trim();
-  if (ticks.includes("agi_drains")) lines.push(agi ? sentence(`Agi drains are advised — ${agi}`) : "Agi drains are advised.");
+  if (ticks.includes("agi_drains")) lines.push(withDetail("Agi drains are advised.", agi));
   const roof = asString(a.roofAccessDetail).trim();
-  if (ticks.includes("roof_access")) lines.push(roof ? sentence(`Roof access was limited — ${roof}`) : "Roof access was limited.");
+  if (ticks.includes("roof_access")) lines.push(withDetail("Roof access was limited.", roof));
   const other = asString(a.otherConcerns).trim();
   if (other) lines.push(sentence(other));
   return lines;

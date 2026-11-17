@@ -59,19 +59,22 @@ export const SETBACK_NOTE =
 /**
  * Each note once. The same template note can be asked for from two places -- the security fence from the Site & Facilities answer and
  * from the Statements & Notes tick, the ground falls from General Other and from the tick -- so notes are kept by what they are about:
- * one security-fence note (the first, which is the one with the inspector's detail when given), and no sentence twice.
+ * one security-fence note (the first, which is the one with the inspector's detail when given), and no sentence twice -- not even as the
+ * opening of a longer note (the checklist's "Retaining walls are advised." beside the Summary's "Retaining walls are advised. <detail>").
  */
 export function uniqueNotes(notes: string[]): string[] {
   // The security-fence note in either of its two wordings (the template's sentence, or the tick's with the inspector's detail).
   const FENCE_NOTE = /^(sections of the security fence\b|security fencing is .+ needs to be reinstated)/i;
   const topic = (t: string) => (FENCE_NOTE.test(t) ? "security-fence" : t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim());
   const seen = new Set<string>();
-  return notes.filter((t) => {
+  const once = notes.filter((t) => {
     const k = topic(t);
     if (!k || seen.has(k)) return false;
     seen.add(k);
     return true;
   });
+  // A short note that another note already opens with ("Retaining walls are advised." and "Retaining walls are advised. Timber sleeper …"): the longer one only.
+  return once.filter((t) => !once.some((o) => o !== t && o.startsWith(`${t.trim()} `)));
 }
 
 export interface DefectEntry {
