@@ -159,6 +159,7 @@ describe("Pre-pour: the template's fixed sentences", () => {
 });
 
 describe("Pre-pour: every 'Refer notes' row leads to a note", () => {
+  const baseNotes = build().notes;
   const TEMPLATE_NOTE = {
     "Security fencing in place": /^Sections of the security fence are not in position/,
     "Is the site well managed": /^Site needs a clean-up of rubbish/,
@@ -173,7 +174,8 @@ describe("Pre-pour: every 'Refer notes' row leads to a note", () => {
           const model = build({ [key]: { [f.key]: o.value } });
           for (const it of items(model).filter((i) => i.status === "note")) {
             const expected = TEMPLATE_NOTE[it.heading];
-            const found = expected ? model.notes.some((n) => expected.test(n)) : model.notes.some((n) => n.startsWith(`${it.heading}`));
+            // A note of its own, as a full sentence (not "<row> — <answer>"): one the all-OK report does not have.
+            const found = expected ? model.notes.some((n) => expected.test(n)) : model.notes.some((n) => !baseNotes.includes(n) && !/ — /.test(n));
             assert.ok(found, `"${it.heading}" says Refer notes but no note leads from it: ${model.notes.join(" | ")}`);
           }
         });
@@ -187,10 +189,10 @@ describe("Pre-pour: every 'Refer notes' row leads to a note", () => {
     assert.ok(!build().notes.includes(GROUND_FALLS), "not when the site drains and no agi drain is recommended");
   });
 
-  it("words the other notes with the row's name and the inspector's answer", () => {
-    assert.ok(build({ pp_formwork: { excessWater: "could_not_see" } }).notes.includes("Excess water to footings — could not see."));
-    assert.ok(build({ pp_formwork: { garageSlab: "infill_later_refer_notes" } }).notes.includes("Garage slab formed — infill later."));
-    assert.ok(build({ pp_measurements: { frontResult: "builder_to_recheck", frontPlan: "1500", frontSite: "1680", frontDatum: "footpath" } }).notes.some((n) => /^Front setback — as estimated using the footpath\..*Builder to re-check\.$/.test(n)));
+  it("words the other notes as full sentences, never the row's name and the answer (every stage: report-construction-notes.test.mjs)", () => {
+    assert.ok(build({ pp_formwork: { excessWater: "could_not_see" } }).notes.includes("The footings could not be seen to check for excess water at the time of inspection."));
+    assert.ok(build({ pp_formwork: { garageSlab: "infill_later_refer_notes" } }).notes.includes("The garage slab is to be infilled later."));
+    assert.ok(build({ pp_measurements: { frontResult: "builder_to_recheck", frontPlan: "1500", frontSite: "1680", frontDatum: "footpath" } }).notes.some((n) => /^The front setback is to be re-checked by the builder\. As estimated using the footpath, setbacks on plan are .*\.$/.test(n)));
   });
 });
 
