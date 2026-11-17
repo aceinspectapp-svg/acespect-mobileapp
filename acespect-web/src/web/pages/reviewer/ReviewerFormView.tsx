@@ -36,7 +36,8 @@ import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/insp
 import { reportProfileOf } from "../../wording/profile";
 import { api, resolveMediaUrl } from "../../api";
 import { openReportFile, reportFileName } from "../../reportFile";
-import { applyEdits, hasEdits, type TextEdits } from "../../textEdits";
+import { anatomy, applyEdits, diffEdits, hasEdits, joinLines, splitLines, type TextEdits } from "../../textEdits";
+import { EditableText, ReportEditContext, type ReportEditApi } from "../../components/EditableText";
 import { ReportTextEditor } from "../../components/ReportTextEditor";
 import { InlineText } from "../../components/InlineText";
 import { useDescriptionContent } from "../../components/ReportDescription";
@@ -1197,6 +1198,41 @@ export function ReviewerFormView() {
     });
   }
 
+  /** Click-to-edit in the preview: one paragraph of the section's text, saved in place (an empty one is removed). */
+  async function saveLineOf(section: FormSection, index: number, text: string) {
+    const lines = splitLines(section.reportText);
+    if (index < 0 || index >= lines.length) return;
+    const anat = anatomy(lines[index]!);
+    if (!anat.editable) return;
+    lines[index] = text.trim() ? `${anat.prefix}${text.trim()}` : "";
+    const next = joinLines(lines);
+    const generated = generatedTextFor(section);
+    const keep: TextEdits = {
+      ...(section.textEdits?.blocks && Object.keys(section.textEdits.blocks).length ? { blocks: section.textEdits.blocks } : {}),
+      ...(section.textEdits?.stale?.length ? { stale: section.textEdits.stale } : {}),
+    };
+    await saveReportText(section, next, generated !== null ? diffEdits(generated, next, keep) : undefined);
+  }
+
+  /** Click-to-edit in the preview: one of the Description page's own sentences (its standard wording again = no override). */
+  async function saveBlockOf(section: FormSection, key: string, text: string, standard: string) {
+    const blocks = { ...(section.textEdits?.blocks ?? {}) };
+    if (text.trim() === standard.trim() && standard.trim()) delete blocks[key];
+    else blocks[key] = text.trim();
+    const textEdits: TextEdits = { ...(section.textEdits ?? {}) };
+    if (Object.keys(blocks).length) textEdits.blocks = blocks; else delete textEdits.blocks;
+    await patchSection(inspection!.id, section.id, { textEdits });
+  }
+
+  /** What the preview of a section offers for click-to-edit. */
+  function editApiFor(section: FormSection): ReportEditApi {
+    return {
+      editable: section.reviewStatus !== "approved" && !isConstructionKey(section.key ?? section.id),
+      saveLine: (index, text) => saveLineOf(section, index, text),
+      saveBlock: (key, text, standard) => saveBlockOf(section, key, text, standard),
+    };
+  }
+
   /** The editor for the selected section (the Description section gets its page's own sentences too). */
   function textEditorFor(section: FormSection, shown: FormSection) {
     const props = {
@@ -1776,7 +1812,7 @@ export function ReviewerFormView() {
                     }}>
                       {textEditingFor === selectedSection.id
                         ? textEditorFor(selectedSection, selectedSection)
-                        : <ReportDescription inspection={inspection} reportText={selectedSection.reportText} compact />}
+                        : <ReportEditContext.Provider value={editApiFor(selectedSection)}><ReportDescription inspection={inspection} reportText={selectedSection.reportText} compact /></ReportEditContext.Provider>}
                       <div style={{ display: "flex", gap: "16px", alignItems: "center", marginTop: "12px" }}>
                         {textEditingFor !== selectedSection.id && editTextButton(selectedSection)}
                         <button
@@ -1814,7 +1850,9 @@ export function ReviewerFormView() {
                             .filter(Boolean)
                             .map((p, j) => (
                               <p key={j} style={{ fontSize: "13px", lineHeight: 1.7, color: "#374151", margin: "0 0 10px", textAlign: "justify" }}>
-                                <InlineText text={p} />
+                                <ReportEditContext.Provider value={editApiFor(selectedSection)}>
+                                  <EditableText text={p} onSave={(next) => saveLineOf(selectedSection, j, next)} />
+                                </ReportEditContext.Provider>
                               </p>
                             ))}
                           {editTextButton(selectedSection)}
@@ -1843,6 +1881,9 @@ export function ReviewerFormView() {
                     <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "8px" }}>
                       Report Content
                     </label>
+                    {selectedSection.reviewStatus !== "approved" && !isConstructionKey(selectedKey) && (
+                      <p data-click-edit-hint="" style={{ margin: "-4px 0 8px", fontSize: "11px", color: "#64748b" }}>Click any sentence to edit it in place, or use ✏ Edit text for the whole section.</p>
+                    )}
                     <div style={{
                       background: "white",
                       border: "1px solid #e5e7eb",
@@ -1854,7 +1895,7 @@ export function ReviewerFormView() {
                         <>
                           {constructionView && constructionModel
                             ? <ConstructionSectionPreview model={constructionModel} sectionKey={selectedKey} />
-                            : <ReportSection section={withExcludedPhotosRemoved(shownSection)} compact />}
+                            : <ReportEditContext.Provider value={editApiFor(selectedSection)}><ReportSection section={withExcludedPhotosRemoved(shownSection)} compact /></ReportEditContext.Provider>}
                           {editTextButton(selectedSection)}
                         </>
                       )}

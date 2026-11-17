@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useContext, type ReactNode } from "react";
 import type { Inspection } from "../mockData";
 import type { TextEdits } from "../textEdits";
 import { DESCRIPTION_PHOTO_PLACEHOLDER, PHOTOGRAPHS_NOTE } from "../report";
@@ -9,6 +9,7 @@ import { wordingFor } from "../wording/registry";
 import { scopeOfInspectionSentences } from "../descriptionScope";
 import { DILAPIDATION_METHOD_NOV2026, printsAgreement } from "../reportAgreement";
 import { InlineText } from "./InlineText";
+import { EditableText, ReportEditContext } from "./EditableText";
 
 /** How many distinct photos the inspection has. A defect's photos are also in its section's photo list, so each photo is counted once (by its address, ignoring any signing query). */
 export function countReportPhotos(inspection: Inspection): number {
@@ -141,10 +142,17 @@ export function ReportDescription({
     "Click here"
   );
   const byKey = (k: DescriptionBlock["key"]) => blocks.find((b) => b.key === k);
+  // In the reviewer's preview every sentence here can be clicked and typed into (EditableText); in the report it is plain.
+  const edit = useContext(ReportEditContext);
   /** One of the page's own sentences: the reviewer's wording, else the standard one, else the template's placeholder. */
   const sentence = (b: DescriptionBlock | undefined) => {
     if (!b || b.override === "") return null;
     const text = b.override ?? b.standard;
+    if (edit?.saveBlock) {
+      const save = (next: string) => edit.saveBlock!(b.key, next, b.standard);
+      if (!text && b.placeholder) return <Para><EditableText text="" emptyHint={`${b.placeholder} (click to write it)`} onSave={save} /></Para>;
+      if (text) return <Para><EditableText text={text} link={link} onSave={save} /></Para>;
+    }
     if (!text) return b.placeholder ? <Placeholder>{b.placeholder}</Placeholder> : null;
     return <Para><InlineText text={text} link={link} /></Para>;
   };
@@ -154,7 +162,7 @@ export function ReportDescription({
     <div style={reportTextStyle(compact)}>
       <SectionBand compact={compact}>Description and Overview</SectionBand>
       {paras.length > 0 ? (
-        paras.map((p, i) => <Para key={i}><InlineText text={p} /></Para>)
+        paras.map((p, i) => <Para key={i}>{edit?.saveLine ? <EditableText text={p} onSave={(next) => edit.saveLine!(i, next)} /> : <InlineText text={p} />}</Para>)
       ) : (
         <Placeholder>Insert property description (storeys, orientation, construction, roof, windows).</Placeholder>
       )}

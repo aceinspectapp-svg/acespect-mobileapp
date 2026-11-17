@@ -3,6 +3,7 @@ import { conditionTagColors } from "../conditionGrades";
 import { useContext } from "react";
 import { Heading, Para, PhotoGrid, PhotoMetaContext, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand, usePhotoNumbering } from "./reportKit";
 import { InlineText } from "./InlineText";
+import { EditableText, ReportEditContext } from "./EditableText";
 import { markedKeys, markedPhotos, PART_RE, photoKey, PHOTOS_RE } from "../reportParts";
 
 // Internal Areas' floor headings (see the report type's wording (src/web/wording/) internal_areas
@@ -61,10 +62,10 @@ type ParsedItem =
   | { kind: "roomhead"; text: string }
   | { kind: "floorband"; text: string }
   | { kind: "cond"; color: string; label: string }
-  | { kind: "defect"; index: number; text: string }
-  | { kind: "item"; heading: string; text: string }
+  | { kind: "defect"; index: number; text: string; line?: number }
+  | { kind: "item"; heading: string; text: string; line?: number }
   | { kind: "photos"; keys: string[] }
-  | { kind: "para"; text: string };
+  | { kind: "para"; text: string; line?: number };
 
 // Matches the report type's wording (src/web/wording/) damageSentences -- one tagged paragraph per recorded defect, where `index` is that defect's position in the section's damage list, so its own photos can be printed right under its sentence.
 const DEFECT_RE = /^DEFECT::(\d+)::([\s\S]*)$/;
@@ -98,16 +99,16 @@ function renderParsedItem(item: ParsedItem, compact: boolean, key: number | stri
     case "cond":
       return <ConditionTag key={key} color={item.color} label={item.label} />;
     case "defect":
-      return <DefectBlock key={key} text={item.text} damage={damages[item.index]} compact={compact} />;
+      return <DefectBlock key={key} text={item.text} line={item.line} damage={damages[item.index]} compact={compact} />;
     case "item":
       return (
         <div key={key} style={{ margin: "0 0 6px" }}>
           <p style={{ margin: "0 0 1px", fontWeight: 700, breakAfter: "avoid" }}>{item.heading}</p>
-          <Para style={{ margin: "0 0 2px" }}><InlineText text={item.text} /></Para>
+          <Para style={{ margin: "0 0 2px" }}><LineText text={item.text} line={item.line} /></Para>
         </div>
       );
     case "para":
-      return <Para key={key}><InlineText text={item.text} /></Para>;
+      return <Para key={key}><LineText text={item.text} line={item.line} /></Para>;
   }
 }
 
@@ -117,10 +118,10 @@ function renderParsedItem(item: ParsedItem, compact: boolean, key: number | stri
  * photo grid. Sentence, caption and photos are kept together across a page
  * break. A defect with no photos is just the sentence.
  */
-function DefectBlock({ text, damage, compact }: { text: string; damage?: DamageRecord; compact: boolean }) {
+function DefectBlock({ text, line, damage, compact }: { text: string; line?: number; damage?: DamageRecord; compact: boolean }) {
   const photos = damage?.photos ?? [];
   const numbering = usePhotoNumbering(photos, `defect:${damage?.id ?? text}`);
-  const sentence = <Para style={{ margin: "0 0 6px" }}><InlineText text={text} /></Para>;
+  const sentence = <Para style={{ margin: "0 0 6px" }}><LineText text={text} line={line} /></Para>;
   if (photos.length === 0) return <div style={{ margin: "0 0 10px" }}>{sentence}</div>;
   return (
     <div style={{ margin: "0 0 10px" }}>
@@ -331,7 +332,7 @@ export function ReportSection({
   // stranded alone at the bottom of a page.
   const items: ParsedItem[] = [
     ...(showHeading ? [{ kind: "heading", text: section.name } as const] : []),
-    ...paras.map((p): ParsedItem => {
+    ...paras.map((p, line): ParsedItem => {
       const condMatch = p.match(CONDITION_TAG_RE);
       if (condMatch) return { kind: "cond", color: condMatch[1], label: condMatch[2] };
       // One of the template's headings inside a section's text (a report that does not reorder its parts prints it where it is).
@@ -342,13 +343,13 @@ export function ReportSection({
       const roomMatch = p.match(ROOM_HEADING_RE);
       if (roomMatch) return { kind: "roomhead", text: roomMatch[1] };
       const defectMatch = p.match(DEFECT_RE);
-      if (defectMatch) return { kind: "defect", index: Number(defectMatch[1]), text: defectMatch[2].trim() };
+      if (defectMatch) return { kind: "defect", index: Number(defectMatch[1]), text: defectMatch[2].trim(), line };
       const itemMatch = p.match(ITEM_RE);
-      if (itemMatch) return { kind: "item", heading: itemMatch[1], text: itemMatch[2].trim() };
+      if (itemMatch) return { kind: "item", heading: itemMatch[1], text: itemMatch[2].trim(), line };
       const noteMatch = p.match(NOTE_RE);
-      if (noteMatch) return { kind: "para", text: noteMatch[1].trim() };
+      if (noteMatch) return { kind: "para", text: noteMatch[1].trim(), line };
       if (FLOOR_HEADINGS.includes(p) || FLOOR_LINE_RE.test(p)) return { kind: "floorband", text: p };
-      return { kind: "para", text: p };
+      return { kind: "para", text: p, line };
     }),
   ];
   const groups = groupForPagination(items);
@@ -392,4 +393,11 @@ export function ReportSection({
     </div>
     </PhotoMetaContext.Provider>
   );
+}
+
+/** One sentence of the section's text: plain in the report, click-to-edit in the reviewer's preview (saved back to its own line). */
+function LineText({ text, line }: { text: string; line?: number }) {
+  const edit = useContext(ReportEditContext);
+  if (!edit?.saveLine || line === undefined) return <InlineText text={text} />;
+  return <EditableText text={text} onSave={(next) => edit.saveLine!(line, next)} />;
 }
