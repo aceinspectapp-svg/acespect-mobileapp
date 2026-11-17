@@ -178,9 +178,10 @@ export const TYPICAL_DEFECTS: Record<string, { place: string; text?: string }> =
   kitchen_cabinet_doors: { place: "Kitchen & Pantry" }, cabinets_chipped: { place: "Kitchen & Pantry" }, kitchen_family_marks: { place: "Kitchen & Pantry" }, kitchen_caulking: { place: "Kitchen & Pantry" },
   bed1_marks: { place: "Bedroom 1 & Ensuite" }, ensuite1_caulking: { place: "Bedroom 1 & Ensuite" },
   bed2_marks: { place: "Bedroom 2" }, ensuite2_caulking: { place: "Bedroom 2" }, bed3_marks: { place: "Bedroom 3" },
-  grouting_poor: { place: "General" }, floor_coverings_marked: { place: "General" },
+  grouting_poor: { place: "Finishes" }, floor_coverings_marked: { place: "Finishes" },
   windows_doors_cleaned: { place: "General", text: "All windows and doors to be cleaned and detailed." },
-  windows_floor_cleaned: { place: "General", text: "All tiles and floor coverings to be cleaned and detailed." },
+  // The form's "All windows and floor tile and coverings to be cleaned": the template's line, keeping the windows.
+  windows_floor_cleaned: { place: "General", text: "All windows, tiles and floor coverings to be cleaned and detailed." },
   benchtops_cleaned: { place: "General", text: "All benchtops and vanities to be cleaned and detailed." },
 };
 

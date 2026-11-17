@@ -218,11 +218,35 @@ function pciStatus(jobInfo: AnswerTree | null): string {
 
 /**
  * The PCI template's progress line, "Progress of the works to date is approaching practical completion / handover / defects liability.",
- * with the phrase for the Stage chosen on Job Information. Any other answer keeps the template's line as it is.
+ * with the phrase for the Stage chosen on Job Information; after handover (Defects Liability) the works are within that period. Any other
+ * answer keeps the template's line as it is.
  */
 export function pciProgress(status: string): string {
-  const phrase = /^practical completion/i.test(status) ? "practical completion" : /^(off the plan )?handover/i.test(status) ? "handover" : /^defects liability/i.test(status) ? "defects liability" : "";
+  if (/^defects liability/i.test(status)) return "The works are within the defects liability period.";
+  const phrase = /^practical completion/i.test(status) ? "practical completion" : /^(off the plan )?handover/i.test(status) ? "handover" : "";
   return phrase ? `Progress of the works to date is approaching ${phrase}.` : STAGES.pci.progress;
+}
+
+/**
+ * The order of the PCI report's defect headings: the checklist's order, with the template's places that have no checklist heading of
+ * their own where they belong in it (Porch after Windows and Doors, Driveway & Paving after Garage, the rooms after Internal in the order
+ * of the Rooms checklist, Manhole … after Other). General is always last. A heading not listed stays after the one printed before it.
+ */
+const PCI_TOPIC_ORDER = [
+  "site and facilities", "roof", "walls", "windows and doors", "flyscreens and car bay", "porch", "garage", "driveway and paving", "balconies", "site", "common areas",
+  "internal", "front door", "hallway and entry", "kitchen and pantry", "living family", "lounge", "theatre room", "bedroom 1 and ensuite", "bedroom 2", "bedroom 3",
+  "bedroom 4", "study", "stairs and stairwell", "bathroom", "powder room", "laundry", "finishes", "utilities services", "other", "manhole roof cavity insulation",
+];
+export function pciTopicOrder(topics: string[]): string[] {
+  let last = -1;
+  const ranked = topics.map((t, i) => {
+    const k = placeKey(t);
+    if (k === "general") return { t, i, rank: Infinity };
+    const at = PCI_TOPIC_ORDER.indexOf(k);
+    last = at === -1 ? last + 0.001 : at;
+    return { t, i, rank: last };
+  });
+  return ranked.sort((x, y) => x.rank - y.rank || x.i - y.i).map((x) => x.t);
 }
 
 /**
@@ -398,6 +422,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
     d.sub = shownAs.get(k)!;
     if (!topicOrder.includes(d.sub)) topicOrder.push(d.sub);
   }
+  if (stage === "pci") topicOrder.splice(0, topicOrder.length, ...pciTopicOrder(topicOrder));
   const defectGroups: DefectGroup[] = [];
   const numberOf = new Map<number, number>();
   let n = 0;

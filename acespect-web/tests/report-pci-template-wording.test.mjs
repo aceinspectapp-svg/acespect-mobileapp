@@ -16,7 +16,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const server = await createServer({ root: webRoot, server: { middlewareMode: true }, logLevel: "error" });
 after(() => server.close());
-const { buildConstructionReport, pciProgress } = await server.ssrLoadModule("/src/web/construction/reportModel.ts");
+const { buildConstructionReport, pciProgress, pciTopicOrder } = await server.ssrLoadModule("/src/web/construction/reportModel.ts");
 const { ConstructionReportBody } = await server.ssrLoadModule("/src/web/construction/ConstructionReport.tsx");
 const { KERB, KERB_PCI, TYPICAL_DEFECTS, placeOf } = await server.ssrLoadModule("/src/web/construction/compose.ts");
 const { headingMap, headingOf, inline } = await server.ssrLoadModule("/src/web/construction/words.ts");
@@ -164,7 +164,7 @@ describe("5. the progress line, as the PCI template words it, for each Stage cho
     ["practical_completion_appliances_not_yet_installed", "Progress of the works to date is approaching practical completion."],
     ["handover_appliances_installed_or_some_installed", "Progress of the works to date is approaching handover."],
     ["off_the_plan_handover_appliances_are_installed", "Progress of the works to date is approaching handover."],
-    ["defects_liability_after_handover_and_now_occupied", "Progress of the works to date is approaching defects liability."],
+    ["defects_liability_after_handover_and_now_occupied", "The works are within the defects liability period."],
   ];
   for (const [choice, line] of cases) it(choice, () => assert.ok(build({ jobInfo: { stageOptionPci: choice } }).description.includes(line)));
   it("no choice: the template's line as it is", () => {
@@ -200,7 +200,7 @@ describe("7. the Part 2 ticks and the Defects list print under their place, with
     assert.equal(ds.length, Object.values(ticks).flat().length);
     for (const d of ds) {
       assert.equal(d.heading, "", d.description);
-      assert.ok(!/^General$/.test(d.group) || /^(All |Grouting|Floor coverings)/.test(d.description), `${d.description} -> ${d.group}`);
+      assert.ok(!/^General$/.test(d.group) || /^All /.test(d.description), `${d.description} -> ${d.group}`);
     }
     const under = (start) => ds.find((d) => d.description.startsWith(start))?.group;
     assert.equal(under("Building debris to be cleaned from gutter"), "Roof");
@@ -213,6 +213,8 @@ describe("7. the Part 2 ticks and the Defects list print under their place, with
     assert.equal(under("Sliding doors tracks"), "Windows and Doors");
     assert.equal(under("Scrape and clean garage hardstand."), "Garage / Carport");
     assert.equal(under("Clean porch slab."), "Porch");
+    assert.equal(under("Grouting is poorly finished"), "Finishes");
+    assert.equal(under("Floor coverings are marked"), "Finishes");
     // The rendered report: no tick's name printed above its own sentence.
     const h = text(html(m));
     assert.doesNotMatch(h, /Bed 2 marks and blemishes need clean and paint touch ups \d+ Bed 2 marks/);
@@ -235,6 +237,22 @@ describe("7. the Part 2 ticks and the Defects list print under their place, with
     assert.deepEqual(withGarage.defectGroups.map((g) => g.heading), ["Garage"]);
     assert.equal(placeOf("Level 1, Bed 2 robe"), "Bedroom 2");
     assert.equal(placeOf("Roof space above Bed 3"), "Manhole, Roof Cavity, Insulation");
+  });
+  it("the headings print in the checklist's order (rooms after Internal, in the Rooms order), General last", () => {
+    const ticks = Object.fromEntries(house.fields.filter((f) => f.type === "chip-multiselect").map((f) => [f.key, f.options.map((o) => o.value)]));
+    const m = build({ patch: {
+      pci_roof: defect("roof_gutters"), pci_walls_doors: defect("walls_mortar_perps_beds_too_wide_narrow_crac"), pci_garage_site: defect("site_landscaping"),
+      pci_internal: defect("internal_laundry"), pci_finishes: defect("finishes_carpets_stretched_and_fitted"), pci_services: { ...defect("services_water_supply_on"), ...defect("other_party_walls") },
+      pci_typical_defects: ticks, pci_defects: { defects: [{ location: "Study desk nook", description: "Shelf loose", photos: [] }, { location: "Somewhere", description: "Something", photos: [] }] },
+    } });
+    assert.deepEqual(m.defectGroups.map((g) => g.heading), [
+      "Roof", "Walls", "Windows and Doors", "Porch", "Garage / Carport", "Alfresco / Balcony", "Site", "Internal", "Front door", "Hallway & Entry", "Kitchen & Pantry",
+      "Bedroom 1 & Ensuite", "Bedroom 2", "Bedroom 3", "Study", "Finishes", "Utilities - Services", "Other", "General",
+    ]);
+    // Numbered in the order they print.
+    assert.deepEqual(m.defectGroups.flatMap((g) => g.defects.map((d) => d.no)), Array.from({ length: m.defectCount }, (_, i) => i + 1));
+    // A heading the order does not know stays after the one printed before it; General is last.
+    assert.deepEqual(pciTopicOrder(["General", "Roof", "Something new", "Bedroom 2", "Internal"]), ["Roof", "Something new", "Internal", "Bedroom 2", "General"]);
   });
   it("other stages keep their Defects list under General", () => {
     const m = build({ prefix: "fr_", jobInfo: null, patch: { fr_defects: { defects: [{ location: "Garage", description: "Plate cut", photos: [] }] } } });
@@ -276,7 +294,7 @@ describe("10. the template's standard lines, word for word", () => {
     garage_slab: "Scrape and clean garage hardstand.",
     porch_slab: "Clean porch slab.",
     windows_doors_cleaned: "All windows and doors to be cleaned and detailed.",
-    windows_floor_cleaned: "All tiles and floor coverings to be cleaned and detailed.",
+    windows_floor_cleaned: "All windows, tiles and floor coverings to be cleaned and detailed.",
     benchtops_cleaned: "All benchtops and vanities to be cleaned and detailed.",
   };
   const t = templateOf("pci_typical_defects", "residential_house");
