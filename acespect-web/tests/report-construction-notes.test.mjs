@@ -3,7 +3,9 @@
 //   1. the ground-falls note ends with the template's "Soil may erode and potentially block stormwater pipes – …" sentence;
 //   2. a "see notes" answer prints a full sentence of its own, never "<row name> — <answer>" ("Ceiling insulation installed — no."):
 //      every field and every answer is tried, and only the answer that asks for a note prints it; what the inspector typed is kept;
-//   3. "The street frontage is to the north." for every direction.
+//   3. "The street frontage is to the north." for every direction;
+//   4. the Report Purpose's "a licensed builder / a building consultant / a building practitioner" from the inspector's registration,
+//      agreeing with the cover's registration line.
 // Built from the real templates (templates-snapshot.json) through the shared report code (compose.ts, reportModel.ts).
 //
 // Run with: npm test
@@ -160,6 +162,14 @@ const EXPECTED = [
   { field: "roofAccessDetail", answer: /^\(typed\)$/, note: `Roof access was limited. ${TYPED}.` },
   { field: "plasterworkPartDone", answer: /^\(typed\)$/, note: `Plasterwork is part done to ${TYPED.charAt(0).toLowerCase()}${TYPED.slice(1)}.` },
 ];
+/** The row each "Other" box belongs to, printed before the inspector's words ("Hebel: Some sheets cracked."). */
+const OTHER_ROW = {
+  generalOther: "General", qualityOther: "Slab quality", fitOutOther: "Painting", kerbOther: "Site and facilities", hebelOther: "Hebel",
+  boardOther: "Blueboard, weatherboard, styrene foam, timber", stairwellOther: "Stairwell/s", finishes_other_note: "Finishes",
+  internal_other_note: "Internal", walls_other_note: "Walls", doors_other_note: "Doors, etc", garage_other_note: "Garage",
+  balconies_other_note: "Balconies", site_other_note: "Site", common_other_note: "Common areas", roof_other_note: "Roof",
+  other_other_note: "Services and other",
+};
 /** The inspector's own words: an "Other" box (and its "Other" row's note), "Any other concerns", the ground falls detail. */
 const TYPED_AS_IS = /(^|_)other(_note)?$|Other$|^otherConcerns$|^groundFallsDetail$|^kerbOther$/;
 
@@ -212,10 +222,23 @@ describe("each field prints the right sentence for each answer, and none for the
       }
     }
   });
-  it("prints what the inspector typed in an 'Other' box, in their words", () => {
+  it("prints what the inspector typed in an 'Other' box after the row it belongs to, in their words exactly", () => {
     const typed = ALL.filter((r) => TYPED_AS_IS.test(r.field.key) && r.option.label === "(typed)" && !/^(groundFallsDetail|otherConcerns)$/.test(r.field.key));
     assert.ok(typed.length > 10);
-    for (const r of typed) assert.deepEqual(r.added, [`${TYPED}.`], where(r));
+    for (const r of typed) {
+      const name = OTHER_ROW[r.field.key];
+      assert.ok(name, `a row name is expected for ${where(r)}`);
+      assert.deepEqual(r.added, [`${name}: ${TYPED}.`], where(r));
+    }
+  });
+  it("keeps the inspector's capitals and punctuation ('Hebel: some sheets cracked at the NE corner!')", () => {
+    const s = SECTIONS.find((x) => x.key === "lf_external_walls" && !x.apt);
+    const f = s.fields.find((x) => x.key === "hebelOther");
+    const a = okAnswers(s.fields, opened(f, s.fields));
+    const before = notesOf(s.key, s.fields, a, false);
+    for (const [typed, note] of [["some sheets cracked at the NE corner!", "Hebel: some sheets cracked at the NE corner!"], ["Some sheets cracked", "Hebel: Some sheets cracked."]]) {
+      assert.deepEqual(notesOf(s.key, s.fields, { ...a, hebelOther: typed }, false).filter((n) => !before.includes(n)), [note]);
+    }
   });
   it("prints the Summary's 'Retaining walls are advised.' once, with the inspector's detail when they gave one", () => {
     assert.deepEqual(uniqueNotes(["Retaining walls are advised.", `Retaining walls are advised. ${TYPED}.`]), [`Retaining walls are advised. ${TYPED}.`]);
@@ -246,16 +269,17 @@ describe("General Description: 'The street frontage is to the …'", () => {
 const HEADER = { reportDate: "16 Nov 2026", clientName: "C", yourReference: "", ourReference: "TEST", property: "P", inspectionDate: "16 Nov 2026", weather: "Dry", inspector: "I", inspectorRegistration: "", purpose: "" };
 const INSPECTION = { id: "i", jobNo: "TEST", address: "", suburb: "", client: "C", inspectorId: "u", reviewerId: null, date: "", submittedAt: null, type: "Construction Stage", propertyType: "Residential House", status: "submitted", overallProgress: 0, sections: [], notes: "", photoArchiveUrl: null };
 const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&#x27;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/\s+/g, " ");
-function renderFrame(patch = {}) {
+const renderFrame = (patch = {}) => renderStage("fr_", HEADER, patch);
+function renderStage(prefix, header, patch = {}) {
   const profile = { inspectionType: "construction_stage", propertyType: "residential_house" };
-  const sections = SECTION_ORDER.filter((k) => k.startsWith("fr_") && latest.has(`residential_house|${k}`)).map((key) => {
+  const sections = SECTION_ORDER.filter((k) => k.startsWith(prefix) && latest.has(`residential_house|${k}`)).map((key) => {
     const t = latest.get(`residential_house|${key}`);
     const answers = okAnswers(t.fields, patch[key] ?? {});
     const d = flattenSectionToDraft(t.fields, answers, key, profile);
     return { key, name: t.name, fields: t.fields, answers, approved: true, reportText: d.reportText, damages: d.damages };
   });
   const model = buildConstructionReport(sections, null);
-  return renderToStaticMarkup(createElement(ConstructionReportBody, { inspection: INSPECTION, model, header: HEADER }));
+  return renderToStaticMarkup(createElement(ConstructionReportBody, { inspection: INSPECTION, model, header }));
 }
 
 describe("the Frame report (as TEST-YK-FR-1116C) prints its notes as sentences", () => {
@@ -273,4 +297,47 @@ describe("the Frame report (as TEST-YK-FR-1116C) prints its notes as sentences",
     assert.ok(notes.includes("Ceiling insulation has not yet been installed."));
     assert.ok(!/Ceiling insulation installed — no|Retaining walls are advised —/.test(t));
   });
+});
+
+// ───────────────────────── Report Purpose ─────────────────────────
+
+const { constructionPurpose, PURPOSE } = await server.ssrLoadModule("/src/web/construction/stages.ts");
+const { buildReportHeader, registrationLabel } = await server.ssrLoadModule("/src/web/report.ts");
+const purposeWho = (p) => /insofar as (.+) can reasonably identify/.exec(p)?.[1];
+
+describe("Report Purpose: builder / building consultant / building practitioner, from the inspector's registration", () => {
+  it("reads the registration's prefix as the other reports do", () => {
+    assert.equal(purposeWho(constructionPurpose("DBU 58070")), "a licensed builder");
+    assert.equal(purposeWho(constructionPurpose("CDB-U 12345")), "a licensed builder", "any other builder registration");
+    assert.equal(purposeWho(constructionPurpose("ARBV 13238")), "a building consultant");
+    assert.equal(purposeWho(constructionPurpose("INL 41888")), "a building practitioner");
+    assert.equal(purposeWho(constructionPurpose("")), "a licensed builder", "no registration on file");
+    assert.equal(purposeWho(constructionPurpose(undefined)), "a licensed builder");
+    assert.equal(constructionPurpose("DBU 1"), PURPOSE, "the rest of the paragraph unchanged");
+  });
+
+  const job = (registration) => ({ ...INSPECTION, sections: [{ id: "job-info", key: "job-info", fields: registration === undefined ? {} : { inspectorRegistration: registration } }] });
+  it("takes the job's Inspector DBU License first, then the inspector's profile", () => {
+    assert.equal(buildReportHeader(job("ARBV 13238"), { name: "I", licenseNumber: "DBU 58070" }).inspectorRegistration, "ARBV 13238");
+    assert.equal(buildReportHeader(job(undefined), { name: "I", licenseNumber: "INL 41888" }).inspectorRegistration, "INL 41888");
+    assert.equal(buildReportHeader(job(undefined), { name: "I", licenseNumber: null }).inspectorRegistration, undefined);
+  });
+
+  for (const [prefix, stageName] of STAGES) {
+    for (const [registration, who, label] of [
+      ["DBU 58070", "a licensed builder", "(Builder Registration No DBU 58070)"],
+      ["ARBV 13238", "a building consultant", "(Architect Registration No ARBV 13238)"],
+      ["INL 41888", "a building practitioner", "(Inspection Registration No. INL 41888)"],
+      ["", "a licensed builder", ""],
+    ]) {
+      it(`${stageName}: the cover's purpose agrees with its registration line (${registration || "none"})`, () => {
+        const html = renderStage(prefix, { ...HEADER, inspector: "Joe Briffa", inspectorRegistration: registration });
+        const t = text(html);
+        assert.ok(t.includes(`insofar as ${who} can reasonably identify those defects or faults.`), t.slice(0, 600));
+        assert.equal(registrationLabel(registration), label);
+        if (label) assert.ok(t.includes(`Joe Briffa ${label}`));
+        assert.equal((t.match(/insofar as/g) ?? []).length, 1);
+      });
+    }
+  }
 });

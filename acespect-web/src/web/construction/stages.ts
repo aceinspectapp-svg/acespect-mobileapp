@@ -3,6 +3,7 @@
  * references it always includes, the order its sections print in, and which part of the building a section belongs to.
  */
 import { headingOf } from "./words";
+import { registrationKind } from "../report";
 
 export type StageId = "pre_pour" | "slab" | "framework" | "lock_up" | "fixing" | "pci" | "slab_frame" | "lock_fix";
 
@@ -40,6 +41,18 @@ export interface StageMeta {
 
 export const PURPOSE =
   "The purpose of the inspection is to check on the progress of works and quality of workmanship at the specified construction stage, and to identify defects or faults in the new construction, insofar as a licensed builder can reasonably identify those defects or faults.";
+/**
+ * The Report Purpose for the inspector's registration, as the office templates offer it ("insofar as a licensed builder / building
+ * consultant / building practitioner can reasonably identify ..."), read from the number's prefix the same way the other reports and the
+ * cover's registration line do (report.ts, registrationKind): DBU or any other builder registration -> "a licensed builder", ARBV -> "a
+ * building consultant", INL -> "a building practitioner"; no registration on file -> "a licensed builder". The number is the job's
+ * "Inspector DBU License", else the inspector's profile (the report header's inspectorRegistration), so the cover and the purpose agree.
+ */
+export function constructionPurpose(registration = ""): string {
+  const kind = registrationKind(registration);
+  const who = kind === "architect" ? "a building consultant" : kind === "inspection" ? "a building practitioner" : "a licensed builder";
+  return PURPOSE.replace("a licensed builder", who);
+}
 export const GENERAL =
   "This report is the result of a visual inspection only and is intended to provide a reasonable confirmation of the progress of works and to note items that may need attention by the construction builder to ensure satisfactory quality of workmanship.";
 

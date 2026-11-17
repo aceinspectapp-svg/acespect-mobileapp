@@ -175,7 +175,7 @@ function textFor(status: ItemStatus, c: Chosen, hasRedOption: boolean, plainYesN
 const SEVERITY_ORDER: ItemStatus[] = ["defect", "note", "notcomplete", "progress", "ok", "na"];
 const worst = (list: ItemStatus[]): ItemStatus => SEVERITY_ORDER.find((s) => list.includes(s)) ?? "ok";
 
-interface Row { group?: string; heading: string; status: ItemStatus; text: string; key?: string; answer?: string; /** The text is what the inspector typed. */ typed?: boolean }
+interface Row { group?: string; heading: string; status: ItemStatus; text: string; key?: string; answer?: string; /** What the inspector typed, exactly (the row's text is it as a sentence). */ typed?: string }
 
 /** One checklist section -> its rows (heading, status and sentence) and the defects raised in it. */
 function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind: "site" | "stage"): { rows: Row[]; defects: Defect[] } {
@@ -342,18 +342,18 @@ const observed = (c: Chosen): string => {
       // The Pre-pour template's fixed wording for two rows: the power supply's "Meter & Pole at Slab", and the note above the kitchen bench penetrations.
       if (prePour && f.key === "powerSupply" && status === "ok") text = POWER_SUPPLY_OK;
       if (prePour && f.key === "kitchenBenchPenetrations" && status !== "na") text = `${KITCHEN_BENCH_FIXED} ${text}`;
-      let typedRow = false;
+      let typedText = "";
       if (isOtherRow) {
         // "Other": printed only when the inspector said what it was (or it is a defect).
         const note = asString(a[`${f.key}_note`]).trim();
         if (!note && !isDefect) continue;
         if (note) {
           text = isDefect ? `${text} ${sentence(note)}` : sentence(note);
-          typedRow = !isDefect;
+          if (!isDefect) typedText = note;
           if (status === "ok" || status === "na") status = "note";
         }
       }
-      const row: Row = { group: f.sectionLetter ? groupOf(f.sectionLetter) : undefined, heading, status, text, key: f.key, answer: c.label, typed: typedRow || undefined };
+      const row: Row = { group: f.sectionLetter ? groupOf(f.sectionLetter) : undefined, heading, status, text, key: f.key, answer: c.label, typed: typedText || undefined };
       rows.push(row);
       rowByKey.set(f.key, row);
       if (isDefect) captureDefect(f, heading);
@@ -375,7 +375,7 @@ const observed = (c: Chosen): string => {
     if (f.type === "numeric") { add(f, heading, "ok", `${asString(v) || String(v)}${f.unit ? ` ${f.unit}` : ""}.`); continue; }
     if (f.type === "text" || f.type === "textarea" || f.type === "date") {
       const t = asString(v).trim();
-      if (t) { add(f, heading, "note", sentence(t)); rows[rows.length - 1]!.typed = true; }
+      if (t) { add(f, heading, "note", sentence(t)); rows[rows.length - 1]!.typed = t; }
     }
   }
   return { rows, defects };
@@ -443,12 +443,24 @@ const NOTE_SENTENCES: Record<string, { answer: RegExp; note: string }> = {
   adviseRetaining: { answer: /^yes\b/i, note: RETAINING_WALLS },
 };
 
+/**
+ * The row an "Other" box belongs to, as the report names it: its group on the form ("Hebel", "Slab quality", "Roof"), else the row's own
+ * name without "other" ("Stairwell/s — other" -> "Stairwell/s"). The PCI "Services & Other" group's own "Other" reads "Services and other".
+ */
+function otherRowName(r: Row): string {
+  const own = r.heading.replace(/\s*[—–-]\s*other\??$/i, "").replace(/^other\??$/i, "").trim();
+  const name = r.group && !/^other$/i.test(r.group) ? r.group : own || (r.group ? "Services and other" : "Other");
+  return cap(name);
+}
+
 /** One "Refer notes" row as its note: a full sentence, never the row's name and the answer ("Ceiling insulation installed — no."). */
 function noteOf(r: Row): string {
   // What the inspector typed (an "Other" box, "Part done to …") is the note, in their words.
   if (r.typed) {
-    const typed = r.text.trim();
-    return r.key === "plasterworkPartDone" ? sentence(`Plasterwork is part done to ${lower(typed).replace(/[.]$/, "")}`) : sentence(cap(typed));
+    const typed = r.typed.trim();
+    if (r.key === "plasterworkPartDone") return sentence(`Plasterwork is part done to ${lower(typed).replace(/[.]$/, "")}`);
+    // An "Other" box: the row it belongs to, then the inspector's words exactly as typed, with a full stop if they left none ("Hebel: Some sheets cracked.").
+    return sentence(`${otherRowName(r)}: ${typed}`);
   }
   const own = r.key ? NOTE_SENTENCES[r.key] : undefined;
   if (own && own.answer.test(r.answer ?? "")) return own.note;

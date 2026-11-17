@@ -11,6 +11,7 @@ import { OriginalPhotosPending, useOriginalPhotosLink } from "../components/Orig
 import { CONSTRUCTION_AGREEMENT_BLOCKS, CONSTRUCTION_AGREEMENT_TITLE } from "./agreementText";
 import { itemName, optionText, withItemName } from "./printCase";
 import { STANDARDS_PARAGRAPHS, STANDARDS_TITLE } from "./standardsText";
+import { constructionPurpose } from "./stages";
 import {
   ITEM_STATUSES, buildConstructionReport, type AttachedList, type ChecklistTable, type ConstructionReportModel, type DefectEntry, type ItemStatus, type SectionInput,
 } from "./reportModel";
@@ -155,7 +156,8 @@ export function Cover({ r, model, inspection, compact = false }: { r: ReportHead
         // "Joe Briffa (Builder Registration No DBU 58070)", "Trevor Scott (Architect Registration No ARBV 13238)" -- as the template words it.
         ["Inspector", `${r.inspector}${r.inspectorRegistration ? ` ${registrationLabel(r.inspectorRegistration)}` : ""}`],
         ["Stage", model.stageLabel],
-        ["Report Purpose", model.purpose],
+        // "a licensed builder / building consultant / building practitioner": from the same registration as the Inspector row above.
+        ["Report Purpose", constructionPurpose(r.inspectorRegistration)],
         ["General", model.general],
       ]}
       signatureName="Dinuke De Coonghe"
