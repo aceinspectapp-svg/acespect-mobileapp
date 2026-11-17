@@ -157,7 +157,7 @@ async function updateSection(id: string, input: SectionUpdateInput, actor: Actor
   if (before) {
     const after = await prisma.section.findUnique({ where: { id } });
     const touched = [
-      input.reviewStatus ? 'reviewStatus' : null, input.reviewComment !== undefined ? 'reviewComment' : null, input.reportText !== undefined ? 'reportText' : null,
+      input.reviewStatus ? 'reviewStatus' : null, input.reviewComment !== undefined ? 'reviewComment' : null, input.reportText !== undefined ? 'reportText' : null, input.textEdits !== undefined ? 'textEdits' : null,
       input.fields ? 'fields' : null, input.excludedPhotoUrls !== undefined ? 'excludedPhotoUrls' : null, input.photos !== undefined ? 'photos' : null, input.photoMeta !== undefined ? 'photoMeta' : null, input.answers !== undefined ? 'answers' : null,
     ].filter((k): k is string => !!k);
     const diff = after ? diffFields(before as unknown as Record<string, unknown>, after as unknown as Record<string, unknown>, touched) : null;
@@ -190,6 +190,7 @@ async function updateSectionCore(id: string, input: SectionUpdateInput) {
         ...(input.reviewStatus ? { reviewStatus: WEB_TO_REV_STATUS[input.reviewStatus] } : {}),
         ...(input.reviewComment !== undefined ? { reviewComment: input.reviewComment } : {}),
         ...(input.reportText !== undefined ? { reportText: input.reportText } : {}),
+        ...(input.textEdits !== undefined ? { textEdits: input.textEdits as Prisma.InputJsonValue } : {}),
         // Merge rather than replace so edits don't drop fields the form doesn't show (e.g. photo counters).
         ...(input.fields
           ? {

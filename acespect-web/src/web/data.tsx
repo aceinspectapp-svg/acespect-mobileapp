@@ -41,6 +41,7 @@ interface AppData {
       excludedPhotoUrls?: string[];
       photos?: string[];
       photoMeta?: Record<string, { size: PhotoPrintSize }>;
+      textEdits?: import("./textEdits").TextEdits;
       replaceDamagePhotos?: boolean;
       answers?: Record<string, unknown>;
       damages?: { type: string; location: string; direction: string; widthMm: number; lengthMm: number; notes: string; photos?: string[] }[];

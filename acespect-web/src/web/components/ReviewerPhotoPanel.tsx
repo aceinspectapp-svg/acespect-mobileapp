@@ -20,6 +20,7 @@ import type { ActiveTemplate, AnswerTree } from "../templateFields";
 import { flattenSectionToDraft } from "../templateFields";
 import { reportProfileOf } from "../wording/profile";
 import { photoKey } from "../reportParts";
+import { applyEdits, hasEdits } from "../textEdits";
 import {
   flatOrder, moved, photosAt, rotateEdit, SECTION_GROUP_ID, toolGroups, withPhotoAdded, withPhotoMoved, withPhotoRemoved, withPhotosMovedTo, type ToolGroup,
 } from "../photoToolGroups";
@@ -157,9 +158,11 @@ export function ReviewerPhotoPanel({
   const handEdited = useMemo(() => {
     try {
       const composed = flattenSectionToDraft(template.fields, (section.answers ?? {}) as AnswerTree, sectionKey, reportProfileOf(inspection.type, inspection.propertyType)).reportText;
-      return composed.replace(/\s+/g, " ").trim() !== section.reportText.replace(/\s+/g, " ").trim();
+      // the reviewer's wording saved through the text editor is put back after a move, so only text typed some other way is at risk
+      const expected = hasEdits(section.textEdits) ? applyEdits(composed, section.textEdits).text : composed;
+      return expected.replace(/\s+/g, " ").trim() !== section.reportText.replace(/\s+/g, " ").trim();
     } catch { return false; }
-  }, [template.fields, section.answers, section.reportText, sectionKey, inspection.type, inspection.propertyType]);
+  }, [template.fields, section.answers, section.reportText, section.textEdits, sectionKey, inspection.type, inspection.propertyType]);
 
   // ---- small helpers ------------------------------------------------------------------------------------------------------------
 

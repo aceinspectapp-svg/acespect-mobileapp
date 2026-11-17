@@ -4,6 +4,15 @@ export const sectionUpdateSchema = z.object({
   reviewStatus: z.enum(['pending', 'approved', 'revision-requested']).optional(),
   reviewComment: z.string().max(2000).optional(),
   reportText: z.string().max(100000).optional(),
+  // The reviewer's own wording, kept apart from the generated text so it survives a re-compose (see prisma schema: Section.textEdits).
+  textEdits: z
+    .object({
+      lines: z.array(z.object({ from: z.string().max(20000), to: z.string().max(20000), n: z.number().int().min(0).optional() })).max(2000).optional(),
+      added: z.array(z.object({ after: z.string().max(20000), text: z.string().max(20000), n: z.number().int().min(0).optional() })).max(2000).optional(),
+      blocks: z.record(z.string().max(40), z.string().max(20000)).optional(),
+      stale: z.array(z.object({ from: z.string().max(20000), to: z.string().max(20000), n: z.number().int().min(0).optional() })).max(2000).optional(),
+    })
+    .optional(),
   fields: z.record(z.string(), z.unknown()).optional(),
   // Photo URLs (from this section's own `photos`) a reviewer has chosen to
   // leave out of the generated report. Replaces the stored list wholesale --

@@ -409,6 +409,7 @@ export const api = {
       photos?: string[];
       // How each photo of the section prints ({ "<photo id>": { size: "large" } }); photos with no entry print at the standard size.
       photoMeta?: Record<string, { size: PhotoPrintSize }>;
+      textEdits?: import("./textEdits").TextEdits;
       // True when `damages[].photos` is the complete list (the photo panel moved or removed a photo): replace, don't merge.
       replaceDamagePhotos?: boolean;
       // The reviewer's Field Data edit -- see web.schemas.ts's sectionUpdateSchema.
