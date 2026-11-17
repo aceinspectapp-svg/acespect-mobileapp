@@ -141,3 +141,23 @@ describe("the flat photo list follows the arrangement", () => {
     assert.deepEqual(G.flatOrder([g([p(2)]), g([p(2), p(1)])], [p(1, "?e=1&s=a"), p(2, "?e=1&s=b")]), [p(2, "?e=1&s=b"), p(1, "?e=1&s=a")]);
   });
 });
+
+describe("photo groups of an Apartment's rooms", () => {
+  const fields = fieldsOf("apartment", "internal_areas");
+  // the database keeps object keys in its own order (shortest first), not the form's
+  const answers = { rooms: { dining: { present: "yes", photos: [p(3)] }, kitchen: { present: "yes", photos: [p(4)] }, living_room: { present: "yes", photos: [p(2)] }, entry_hallway: { present: "yes", photos: [p(1)] } } };
+  const groups = G.toolGroups(fields, answers, [p(1), p(2), p(3), p(4)]);
+
+  it("lists the rooms in the form's order, the order the report prints them", () => {
+    const rooms = groups.filter((g) => g.path).map((g) => g.title.split(" › ")[0]);
+    assert.deepEqual(rooms, ["Entry / Hallway", "Living Room", "Dining", "Kitchen"]);
+  });
+
+  it("keeps each room's photos at the room's own key", () => {
+    assert.deepEqual(groups.find((g) => g.title.startsWith("Kitchen")).path, ["rooms", "kitchen", "photos"]);
+  });
+
+  it("puts the section's flat list in that order too", () => {
+    assert.deepEqual(G.flatOrder(groups, [p(4), p(3), p(2), p(1)]), [p(1), p(2), p(3), p(4)]);
+  });
+});

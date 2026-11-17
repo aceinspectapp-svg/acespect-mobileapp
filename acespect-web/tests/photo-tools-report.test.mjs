@@ -12,6 +12,7 @@ const server = await createServer({ root: webRoot, server: { middlewareMode: tru
 after(() => server.close());
 const { packPhotoRows, PAGE_PACK, COMPACT_PACK, LARGE_HEIGHT_FACTOR } = await server.ssrLoadModule("/src/web/photoLayout.ts");
 const { markedPhotos } = await server.ssrLoadModule("/src/web/reportParts.ts");
+const { withExcludedPhotosRemoved } = await server.ssrLoadModule("/src/web/report.ts");
 
 const P = 3 / 4;
 const L = 4 / 3;
@@ -73,5 +74,24 @@ describe("photos printed under an item follow the order the reviewer arranged", 
   it("prints a photo once even when two marks name it, and never a defect's own", () => {
     const s = { answers: { a: [p(1), p(2)] }, photos: [p(1), p(2), p(3)], damages: [{ photos: [p(2)] }] };
     assert.deepEqual(markedPhotos(s, ["a", p(1)]), [p(1)]);
+  });
+});
+
+describe("a photo the reviewer leaves out of the report", () => {
+  const section = (excluded, damageExcluded = []) => ({ photos: [p(1), p(2)], excludedPhotoUrls: excluded, damages: [{ photos: [p(2), p(3)], excludedPhotoUrls: damageExcluded }] });
+
+  it("is left out of a defect's photos too (the photo panel records it on the section)", () => {
+    const s = withExcludedPhotosRemoved(section([p(3)]));
+    assert.deepEqual(s.damages[0].photos, [p(2)]);
+    assert.deepEqual(s.photos, [p(1), p(2)]);
+  });
+
+  it("is recognised whatever signature its link carries", () => {
+    const s = withExcludedPhotosRemoved({ ...section([p(1)]), photos: [p(1, "?e=1&s=a"), p(2, "?e=1&s=b")] });
+    assert.deepEqual(s.photos, [p(2, "?e=1&s=b")]);
+  });
+
+  it("still honours a defect's own list", () => {
+    assert.deepEqual(withExcludedPhotosRemoved(section([], [p(2)])).damages[0].photos, [p(3)]);
   });
 });

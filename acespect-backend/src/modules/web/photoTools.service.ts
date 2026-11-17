@@ -1,5 +1,5 @@
 /**
- * The reviewer's photo tools: rotate / crop a photo, put the original back, and delete a photo the reviewer added.
+ * The reviewer's photo tools: rotate / crop a photo, swap it for another file, put the original back, and delete a photo the reviewer added.
  *
  * An edit never touches the photo it starts from. It saves a NEW copy (linked to its original in the photos table) and points the section
  * at the copy everywhere the original was used -- the section's photo list, its answers, its defect records, the composed report text --
@@ -59,11 +59,17 @@ async function readPhotoBytes(id: string): Promise<Buffer> {
   return Buffer.from(await new Response(got.body).arrayBuffer());
 }
 
-/** The id of the photo a copy was made from (or the photo itself when it is an original), with its row. */
+/** True for a photo the reviewer swapped in for another (its `editedFromId` is the photo it replaced, so Revert undoes the swap). */
+const isReplacement = (edit: unknown): boolean => !!edit && typeof edit === 'object' && (edit as { replace?: unknown }).replace === true;
+
+/**
+ * The photo an edit of `photoId` starts from, with its row: the original a rotate / crop copy was made from, or the photo itself when it
+ * is an original -- or a photo swapped in for another (an edit of it works on the new photo, not on the one it replaced).
+ */
 async function rootOf(photoId: string) {
   const row = await prisma.photo.findUnique({ where: { id: photoId }, select: { id: true, editedFromId: true, edit: true, addedById: true } });
   if (!row) throw ApiError.notFound('Photo not found');
-  return { row, rootId: row.editedFromId ?? row.id };
+  return { row, rootId: isReplacement(row.edit) ? row.id : row.editedFromId ?? row.id };
 }
 
 const metaOf = (section: LoadedSection): Record<string, unknown> => ((section.photoMeta as Record<string, unknown> | null) ?? {});
@@ -97,8 +103,10 @@ async function revertPhoto(sectionId: string, input: { url: string }, actor: Act
   const section = await loadSection(sectionId, actor);
   const photoId = mediaIdOf(input.url);
   if (!photoId) throw ApiError.badRequest('That is not a photo link');
-  const { row, rootId } = await rootOf(photoId);
+  const { row } = await rootOf(photoId);
   if (!row.editedFromId) throw new ApiError(409, 'That photo has not been edited', 'NOT_EDITED');
+  // the photo this one was made from: the original of a rotate / crop copy, or the photo a swapped-in one replaced
+  const rootId = row.editedFromId;
   const meta = { ...metaOf(section) };
   if (photoId in meta) { meta[rootId] = meta[photoId]; delete meta[photoId]; }
   const saved = await saveWith(section, (v) => swapMediaId(v, photoId, rootId), meta);
@@ -109,6 +117,33 @@ async function revertPhoto(sectionId: string, input: { url: string }, actor: Act
     metadata: { sectionKey: section.key, from: photoId, to: rootId },
   });
   return { url: input.url.replace(photoId, rootId), section: saved };
+}
+
+/**
+ * Swaps a photo for another one the reviewer has just uploaded (`with`), everywhere the old one is used -- exactly like an edit, so the
+ * report text and the photo's place stay as they are. The new photo remembers the one it replaced, so "Revert to original" undoes the swap.
+ */
+async function replacePhoto(sectionId: string, input: { url: string; with: string }, actor: Actor) {
+  const section = await loadSection(sectionId, actor);
+  const photoId = mediaIdOf(input.url);
+  const newId = mediaIdOf(input.with);
+  if (!photoId || !newId) throw ApiError.badRequest('That is not a photo link');
+  if (photoId === newId) throw ApiError.badRequest('That is the same photo');
+  const { row } = await rootOf(photoId);
+  const fresh = await prisma.photo.findUnique({ where: { id: newId }, select: { id: true, editedFromId: true } });
+  if (!fresh) throw ApiError.notFound('The new photo could not be found');
+  if (fresh.editedFromId) throw ApiError.badRequest('That photo is already in use as an edit of another');
+  await prisma.photo.update({ where: { id: newId }, data: { editedFromId: photoId, edit: json({ rotate: 0, replace: true }), addedById: row.addedById ?? null } });
+  const meta = { ...metaOf(section) };
+  if (photoId in meta) { meta[newId] = meta[photoId]; delete meta[photoId]; }
+  const saved = await saveWith(section, (v) => swapMediaId(v, photoId, newId), meta);
+  await audit({
+    category: 'web', action: 'photo.replace', inspectionId: section.inspection.id, jobNo: section.inspection.jobNo,
+    target: { type: 'Section', id: section.id, label: section.name },
+    message: `${section.name}: a photo was replaced with another file`,
+    metadata: { sectionKey: section.key, from: photoId, to: newId },
+  });
+  return { url: input.url.replace(photoId, newId), section: saved };
 }
 
 /** Deletes a photo the reviewer added: out of the section everywhere. The inspector's own photos can only be left out of the report. */
@@ -133,7 +168,11 @@ async function deletePhoto(sectionId: string, input: { url: string }, actor: Act
 /** What the review panel needs to know about each photo: is it an edited copy (and of which original), did a reviewer add it. */
 async function photoInfo(ids: string[]) {
   const rows = await prisma.photo.findMany({ where: { id: { in: ids } }, select: { id: true, editedFromId: true, edit: true, addedById: true } });
-  return Object.fromEntries(rows.map((r) => [r.id, { editedFromId: r.editedFromId, originalUrl: r.editedFromId ? `/api/v1/media/${r.editedFromId}` : null, edit: r.edit, addedByReviewer: !!r.addedById }]));
+  // `originalUrl` is what the editor draws and edits: a swapped-in photo is edited as itself.
+  return Object.fromEntries(rows.map((r) => {
+    const replaced = isReplacement(r.edit);
+    return [r.id, { editedFromId: r.editedFromId, originalUrl: r.editedFromId && !replaced ? `/api/v1/media/${r.editedFromId}` : null, edit: replaced ? null : r.edit, addedByReviewer: !!r.addedById, replaced }];
+  }));
 }
 
 /** Every photo id a value links to, in order, once each. */
@@ -210,4 +249,4 @@ async function optimizePhotos(inspectionId: string, input: { sectionId?: string 
   return result;
 }
 
-export const photoToolsService = { editPhoto, revertPhoto, deletePhoto, photoInfo, optimizePhotos };
+export const photoToolsService = { editPhoto, revertPhoto, replacePhoto, deletePhoto, photoInfo, optimizePhotos };

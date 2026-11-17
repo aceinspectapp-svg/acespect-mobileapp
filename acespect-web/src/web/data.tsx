@@ -49,6 +49,7 @@ interface AppData {
   /** The review portal's photo tools: each changes the server's copy of the section, then reloads the inspection. `edit` / `revert` return the photo's new link. */
   editSectionPhoto: (inspectionId: string, sectionId: string, url: string, edit: PhotoEditSpec) => Promise<string>;
   revertSectionPhoto: (inspectionId: string, sectionId: string, url: string) => Promise<string>;
+  replaceSectionPhoto: (inspectionId: string, sectionId: string, url: string, withUrl: string) => Promise<string>;
   deleteSectionPhoto: (inspectionId: string, sectionId: string, url: string) => Promise<void>;
   /** Same idea as patchSection, one level down -- a damage record's own photo-exclusion list. */
   patchDamage: (
@@ -342,6 +343,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     },
     [replaceInspection],
   );
+  const replaceSectionPhoto = useCallback<AppData["replaceSectionPhoto"]>(
+    async (inspectionId, sectionId, url, withUrl) => {
+      const { url: next } = await api.replaceSectionPhoto(sectionId, url, withUrl);
+      await replaceInspection(inspectionId);
+      return next;
+    },
+    [replaceInspection],
+  );
   const deleteSectionPhoto = useCallback<AppData["deleteSectionPhoto"]>(
     async (inspectionId, sectionId, url) => {
       await api.deleteSectionPhoto(sectionId, url);
@@ -429,6 +438,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     patchSection,
     editSectionPhoto,
     revertSectionPhoto,
+    replaceSectionPhoto,
     deleteSectionPhoto,
     patchDamage,
     patchInspection,

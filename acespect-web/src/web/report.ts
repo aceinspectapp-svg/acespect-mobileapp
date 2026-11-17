@@ -274,13 +274,17 @@ export function buildReportHeader(inspection: Inspection, inspector?: Pick<User,
  * which photos are in the report.
  */
 export function withExcludedPhotosRemoved(section: FormSection): FormSection {
-  const sectionExcluded = section.excludedPhotoUrls ?? [];
+  // Matched by the photo's address without its signed-link query, so a re-signed link is still recognised.
+  const key = (url: string) => url.split("?")[0]!;
+  const sectionExcluded = new Set((section.excludedPhotoUrls ?? []).map(key));
   return {
     ...section,
-    photos: section.photos.filter((url) => !sectionExcluded.includes(url)),
+    photos: section.photos.filter((url) => !sectionExcluded.has(key(url))),
+    // A photo left out on the section (the reviewer's photo panel does this for every photo, a defect's too) is left out of its defect
+    // as well; a defect's own list still applies.
     damages: section.damages.map((d) => {
-      const damageExcluded = d.excludedPhotoUrls ?? [];
-      return damageExcluded.length === 0 ? d : { ...d, photos: d.photos.filter((url) => !damageExcluded.includes(url)) };
+      const out = new Set([...sectionExcluded, ...(d.excludedPhotoUrls ?? []).map(key)]);
+      return out.size === 0 ? d : { ...d, photos: d.photos.filter((url) => !out.has(key(url))) };
     }),
   };
 }

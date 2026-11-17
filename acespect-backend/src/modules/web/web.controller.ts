@@ -113,6 +113,13 @@ export const webController = {
     res.status(200).json(await photoToolsService.revertPhoto(id, req.body, req.user));
   }),
 
+  replacePhoto: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Section id is required');
+    res.status(200).json(await photoToolsService.replacePhoto(id, req.body, req.user));
+  }),
+
   deletePhoto: asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw ApiError.unauthorized();
     const { id } = req.params;
