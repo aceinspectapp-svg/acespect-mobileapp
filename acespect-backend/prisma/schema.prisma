@@ -287,6 +287,10 @@ model Section {
   excludedPhotoUrls Json                @default("[]")
   /// How each photo of this section prints, keyed by photo id: { "<id>": { "size": "large" } }. No entry: the standard size.
   photoMeta         Json                @default("{}")
+  /// The reviewer's own wording of this section's report text, kept apart from the text written from the answers so it survives a
+  /// re-compose: { lines: [{ from, to }] (a generated line and what the reviewer made of it; "" = removed), added: [{ after, text }],
+  /// blocks: { key: text } (Description-page sentences that are not part of reportText), stale: [...] (edits whose sentence has changed) }.
+  textEdits         Json                @default("{}")
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 

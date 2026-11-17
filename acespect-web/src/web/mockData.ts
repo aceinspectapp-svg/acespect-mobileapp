@@ -67,6 +67,8 @@ export interface FormSection {
   excludedPhotoUrls?: string[];
   /** How each photo prints, by photo id: { "<id>": { size: "large" } }. A photo with no entry prints at the standard size. */
   photoMeta?: Record<string, { size: "standard" | "large" }>;
+  /** The reviewer's own wording of the report text, kept so it survives a re-compose (see textEdits.ts). */
+  textEdits?: import("./textEdits").TextEdits;
 }
 
 export interface Inspection {

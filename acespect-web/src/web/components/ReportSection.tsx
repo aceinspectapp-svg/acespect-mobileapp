@@ -2,6 +2,7 @@ import type { DamageRecord, FormSection } from "../mockData";
 import { conditionTagColors } from "../conditionGrades";
 import { useContext } from "react";
 import { Heading, Para, PhotoGrid, PhotoMetaContext, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand, usePhotoNumbering } from "./reportKit";
+import { InlineText } from "./InlineText";
 import { markedKeys, markedPhotos, PART_RE, photoKey, PHOTOS_RE } from "../reportParts";
 
 // Internal Areas' floor headings (see the report type's wording (src/web/wording/) internal_areas
@@ -102,11 +103,11 @@ function renderParsedItem(item: ParsedItem, compact: boolean, key: number | stri
       return (
         <div key={key} style={{ margin: "0 0 6px" }}>
           <p style={{ margin: "0 0 1px", fontWeight: 700, breakAfter: "avoid" }}>{item.heading}</p>
-          <Para style={{ margin: "0 0 2px" }}>{item.text}</Para>
+          <Para style={{ margin: "0 0 2px" }}><InlineText text={item.text} /></Para>
         </div>
       );
     case "para":
-      return <Para key={key}>{item.text}</Para>;
+      return <Para key={key}><InlineText text={item.text} /></Para>;
   }
 }
 
@@ -119,7 +120,7 @@ function renderParsedItem(item: ParsedItem, compact: boolean, key: number | stri
 function DefectBlock({ text, damage, compact }: { text: string; damage?: DamageRecord; compact: boolean }) {
   const photos = damage?.photos ?? [];
   const numbering = usePhotoNumbering(photos, `defect:${damage?.id ?? text}`);
-  const sentence = <Para style={{ margin: "0 0 6px" }}>{text}</Para>;
+  const sentence = <Para style={{ margin: "0 0 6px" }}><InlineText text={text} /></Para>;
   if (photos.length === 0) return <div style={{ margin: "0 0 10px" }}>{sentence}</div>;
   return (
     <div style={{ margin: "0 0 10px" }}>

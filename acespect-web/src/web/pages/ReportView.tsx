@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
+import { InlineText } from "../components/InlineText";
+import { canEditInspection } from "../reviewerQueue";
 import { ArrowLeft, Printer, Download, FileText } from "lucide-react";
 import type { FormSection } from "../mockData";
 import { buildReportHeader, withExcludedPhotosRemoved } from "../report";
@@ -31,7 +33,10 @@ const sectionAnchorId = (id: string): string => `section-${id}`;
 export function ReportView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getUser, loading } = useAppData();
+  const { getUser, loading, currentUser } = useAppData();
+  // The "Edit text" jump on each section: for a reviewer or admin who can edit this inspection, on screen only -- never in the PDF / Word
+  // file, which the server makes from this same page in a headless browser (navigator.webdriver).
+  const canEditText = !!currentUser && !(typeof navigator !== "undefined" && navigator.webdriver);
   const { inspection, loadingDetail } = useInspectionDetail(id);
   // The report type decides which wording applies (see wording/registry.ts).
   const reportWording = wordingFor(reportProfileOf(inspection?.type ?? "", inspection?.propertyType ?? ""));
@@ -341,7 +346,19 @@ export function ReportView() {
 
   function renderSection(s: (typeof bodySections)[number], i: number, piece?: Omit<ReportPiece, "section">) {
     return (
-      <div key={s.id} id={sectionAnchorId(s.id)} style={{ marginTop: i === 0 ? 0 : "16px" }}>
+      <div key={s.id} id={sectionAnchorId(s.id)} style={{ marginTop: i === 0 ? 0 : "16px", position: "relative" }}>
+        {canEditText && inspection && canEditInspection(currentUser, inspection) && piece?.showHeading !== false && (
+          <button
+            type="button"
+            className="screen-only"
+            data-action="report-edit-text"
+            onClick={() => navigate(`${currentUser!.role === "admin" ? "/admin/inspections" : "/reviewer/review"}/${inspection!.id}?section=${encodeURIComponent(s.id)}&edit=text`)}
+            title="Edit this section's text in place"
+            style={{ position: "absolute", top: 0, right: 0, zIndex: 2, fontSize: "11px", fontWeight: 700, color: "#1d4ed8", background: "#eff6ff", border: "1px solid #93c5fd", borderRadius: "6px", padding: "3px 8px", cursor: "pointer", fontFamily: "Inter, sans-serif" }}
+          >
+            ✏ Edit text
+          </button>
+        )}
         {slug(s).startsWith("description") ? (
           /* Description & Overview uses the full template layout */
           <ReportDescription inspection={inspection!} reportText={s.reportText} />
@@ -368,7 +385,7 @@ export function ReportView() {
                 .filter(Boolean)
                 .map((para, j) => (
                   <li key={j} style={{ margin: "0 0 6px", lineHeight: 1.45, breakInside: "avoid" }}>
-                    {para}
+                    <InlineText text={para} />
                   </li>
                 ))}
             </ol>

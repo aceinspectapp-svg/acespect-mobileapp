@@ -30,7 +30,9 @@ describe("full download Click here -> original photos zip", () => {
   it("\"For a full download of N photographs\" counts what the zip holds (every photo of the inspection) when it links the zip", () => {
     const src = read("src/web/components/ReportDescription.tsx");
     assert.match(src, /const fullDownloadCount = originals\.url \? originals\.count : totalPhotos;/);
-    assert.equal((src.match(/For a full download\s*\{fullDownloadCount > 0 \? ` of \$\{fullDownloadCount\} photographs` : ""\}/g) ?? []).length, 2);
+    // the count goes into both sentences (the Photographs paragraph and the note under Scope), which a reviewer can also retype
+    assert.match(src, /const count = fullDownloadCount > 0 \? ` of \$\{fullDownloadCount\} photographs` : "";/);
+    assert.equal((src.match(/For a full download\$\{count\}/g) ?? []).length, 2);
     assert.doesNotMatch(src, /For a full download\s*\{totalPhotos/);
   });
 

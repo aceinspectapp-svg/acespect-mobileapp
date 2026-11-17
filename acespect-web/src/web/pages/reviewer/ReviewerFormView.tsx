@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft, CheckCircle, RotateCcw, Send, ChevronRight, ChevronDown, ChevronLeft,
   Image as ImageIcon, FileText, AlertTriangle, Layers, Save, X,
@@ -36,6 +36,10 @@ import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/insp
 import { reportProfileOf } from "../../wording/profile";
 import { api, resolveMediaUrl } from "../../api";
 import { openReportFile, reportFileName } from "../../reportFile";
+import { applyEdits, hasEdits, type TextEdits } from "../../textEdits";
+import { ReportTextEditor } from "../../components/ReportTextEditor";
+import { InlineText } from "../../components/InlineText";
+import { useDescriptionContent } from "../../components/ReportDescription";
 
 /* ─── helpers ─────────────────────────────────────────────────────── */
 function formatFieldKey(key: string): string {
@@ -852,6 +856,20 @@ export function ReviewerFormView() {
   const [answerEdits, setAnswerEdits] = useState<Record<string, AnswerTree>>({});
   const [savingAnswersFor, setSavingAnswersFor] = useState<string | null>(null);
   const [answersSavedAt, setAnswersSavedAt] = useState<Record<string, number>>({});
+  // The section whose report text is open in the in-place editor (null: the printed preview is shown).
+  const [textEditingFor, setTextEditingFor] = useState<string | null>(null);
+
+  // Opened from the report page's "Edit text" (?section=<id>&edit=text): that section, with its text editor open -- once.
+  const [searchParams] = useSearchParams();
+  const openedFromLink = useRef(false);
+  useEffect(() => {
+    if (!inspection || openedFromLink.current) return;
+    const wanted = searchParams.get("section");
+    if (!wanted || !inspection.sections.some((s) => s.id === wanted)) return;
+    openedFromLink.current = true;
+    setSelectedSectionId(wanted);
+    if (searchParams.get("edit") === "text") setTextEditingFor(wanted);
+  }, [inspection, searchParams]);
 
   // Seed selection + comment drafts once the inspection is loaded.
   useEffect(() => {
@@ -1099,12 +1117,15 @@ export function ReviewerFormView() {
     const template = templates[section.key ?? section.id];
     if (!answers || !template) return;
     const derived = flattenSectionToDraft(template.fields, answers, section.key ?? section.id, reportProfileOf(inspection!.type, inspection!.propertyType));
+    // The reviewer's own wording goes back into the freshly written text; an edit whose sentence changed is kept aside as "stale".
+    const kept = hasEdits(section.textEdits) ? applyEdits(derived.reportText, section.textEdits) : null;
     setSavingAnswersFor(section.id);
     try {
       await patchSection(inspection!.id, section.id, {
         answers,
         fields: derived.fields,
-        reportText: derived.reportText,
+        reportText: kept ? kept.text : derived.reportText,
+        ...(kept ? { textEdits: kept.edits } : {}),
         damages: derived.damages.map((d) => ({
           type: d.type,
           location: d.location,
@@ -1149,6 +1170,79 @@ export function ReviewerFormView() {
             onReopen={() => setReviewStatus(selectedSection.id, "pending")}
           />
         </div>
+      </div>
+    );
+  }
+
+  /** The text the inspector's answers write for a section (without the reviewer's edits); null when it cannot be worked out here. */
+  function generatedTextFor(section: FormSection): string | null {
+    const key = section.key ?? section.id;
+    const template = templates[key];
+    if (!template || isConstructionKey(key)) return null;
+    try {
+      return flattenSectionToDraft(template.fields, (section.answers as AnswerTree | null | undefined) ?? {}, key, reportProfileOf(inspection!.type, inspection!.propertyType)).reportText;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Saves the in-place editor's text (and the reviewer's wording kept apart, so it survives a re-compose). */
+  async function saveReportText(section: FormSection, text: string, edits: TextEdits | undefined) {
+    const typedOver = isConstructionKey(section.key ?? section.id);
+    await patchSection(inspection!.id, section.id, {
+      reportText: text,
+      ...(edits !== undefined ? { textEdits: edits } : {}),
+      // A Construction Stage section's text is written from its answers; text typed over it is kept until the answers change.
+      ...(typedOver ? { fields: { ...(section.fields as Record<string, unknown>), reportTextOverride: true } } : {}),
+    });
+  }
+
+  /** The editor for the selected section (the Description section gets its page's own sentences too). */
+  function textEditorFor(section: FormSection, shown: FormSection) {
+    const props = {
+      section: shown,
+      generated: generatedTextFor(section),
+      locked: section.reviewStatus === "approved",
+      onSave: (text: string, edits: TextEdits | undefined) => saveReportText(section, text, edits),
+      onClose: () => setTextEditingFor(null),
+      onReopen: () => setReviewStatus(section.id, "pending"),
+    };
+    const editor = (section.key ?? section.id).startsWith("description")
+      ? <DescriptionTextEditor inspection={inspection!} {...props} />
+      : <ReportTextEditor {...props} />;
+    // A document window over the review page: a page-wide sheet, like a word processor's page view.
+    return (
+      <div data-text-window="" style={{ position: "fixed", inset: 0, zIndex: 950, background: "rgba(15,23,42,0.55)", overflow: "auto", padding: "24px 16px" }}>
+        <div style={{ maxWidth: "860px", margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: "10px", color: "white", marginBottom: "10px" }}>
+            <h3 style={{ margin: 0, fontSize: "16px" }}>{section.name}</h3>
+            <span style={{ fontSize: "12px", opacity: 0.8 }}>{inspection!.jobNo ?? ""} · report text</span>
+          </div>
+          <div style={{ background: "white", borderRadius: "10px", boxShadow: "0 20px 60px rgba(0,0,0,0.35)" }}>{editor}</div>
+        </div>
+      </div>
+    );
+  }
+
+  /** "Edit text" for the selected section, with a warning when some of the reviewer's edits need checking. */
+  function editTextButton(section: FormSection) {
+    const stale = section.textEdits?.stale?.length ?? 0;
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginTop: "12px" }}>
+        <button
+          type="button"
+          data-action="open-text-editor"
+          onClick={() => setTextEditingFor(section.id)}
+          style={{ fontSize: "12px", fontWeight: 700, color: "white", background: "#2563eb", border: "none", borderRadius: "8px", padding: "6px 12px", cursor: "pointer" }}
+        >
+          ✏ Edit text
+        </button>
+        {stale > 0 && (
+          <span data-text-stale-badge="" style={{ fontSize: "11.5px", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "999px", padding: "2px 9px" }}>
+            ⚠ {stale === 1 ? "1 edit needs checking" : stale + " edits need checking"}
+          </span>
+        )}
+        {hasEdits(section.textEdits) && !stale && <span style={{ fontSize: "11px", color: "#64748b" }}>Includes your own wording</span>}
       </div>
     );
   }
@@ -1680,17 +1774,11 @@ export function ReviewerFormView() {
                       padding: "16px 18px",
                       borderLeft: "3px solid #2563eb",
                     }}>
-                      <ReportDescription inspection={inspection} reportText={selectedSection.reportText} compact />
-                      <div style={{ display: "flex", gap: "16px", marginTop: "12px" }}>
-                        <button
-                          onClick={() => {
-                            const newText = prompt("Edit the property description paragraph:", selectedSection.reportText);
-                            if (newText !== null) updateSectionReportText(selectedSection.id, newText);
-                          }}
-                          style={{ fontSize: "11px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}
-                        >
-                          ✏ Edit description text
-                        </button>
+                      {textEditingFor === selectedSection.id
+                        ? textEditorFor(selectedSection, selectedSection)
+                        : <ReportDescription inspection={inspection} reportText={selectedSection.reportText} compact />}
+                      <div style={{ display: "flex", gap: "16px", alignItems: "center", marginTop: "12px" }}>
+                        {textEditingFor !== selectedSection.id && editTextButton(selectedSection)}
                         <button
                           onClick={() => updatePhotoArchiveUrl(selectedSection)}
                           title="The 'Click here' photo link in the report is generated automatically from the job number. Use this only to override it."
@@ -1718,24 +1806,20 @@ export function ReviewerFormView() {
                       padding: "16px 18px",
                       borderLeft: "3px solid #2563eb",
                     }}>
-                      {selectedSection.reportText
-                        .split(/\n{2,}|\n/)
-                        .map((p) => p.trim())
-                        .filter(Boolean)
-                        .map((p, j) => (
-                          <p key={j} style={{ fontSize: "13px", lineHeight: 1.7, color: "#374151", margin: "0 0 10px", textAlign: "justify" }}>
-                            {p}
-                          </p>
-                        ))}
-                      <button
-                        onClick={() => {
-                          const newText = prompt("Edit the notes text:", selectedSection.reportText);
-                          if (newText !== null) updateSectionReportText(selectedSection.id, newText);
-                        }}
-                        style={{ fontSize: "11px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}
-                      >
-                        ✏ Edit notes text
-                      </button>
+                      {textEditingFor === selectedSection.id ? textEditorFor(selectedSection, selectedSection) : (
+                        <>
+                          {selectedSection.reportText
+                            .split(/\n{2,}|\n/)
+                            .map((p) => p.trim())
+                            .filter(Boolean)
+                            .map((p, j) => (
+                              <p key={j} style={{ fontSize: "13px", lineHeight: 1.7, color: "#374151", margin: "0 0 10px", textAlign: "justify" }}>
+                                <InlineText text={p} />
+                              </p>
+                            ))}
+                          {editTextButton(selectedSection)}
+                        </>
+                      )}
                       {/* Standard SCOPE + Conditions appendices that print with this section */}
                       <div style={{ marginTop: "16px", borderTop: "1px solid #f1f5f9", paddingTop: "14px" }}>
                         {printsAgreement(reportProfileOf(inspection.type, inspection.propertyType)) ? (
@@ -1766,18 +1850,14 @@ export function ReviewerFormView() {
                       padding: "16px 18px",
                       borderLeft: "3px solid #2563eb",
                     }}>
-                      {constructionView && constructionModel
-                        ? <ConstructionSectionPreview model={constructionModel} sectionKey={selectedKey} />
-                        : <ReportSection section={withExcludedPhotosRemoved(shownSection)} compact />}
-                      <button
-                        onClick={() => {
-                          const newText = prompt("Edit report text:", shownSection.reportText);
-                          if (newText !== null) updateSectionReportText(selectedSection.id, newText);
-                        }}
-                        style={{ marginTop: "12px", fontSize: "11px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}
-                      >
-                        ✏ Edit report text
-                      </button>
+                      {textEditingFor === selectedSection.id ? textEditorFor(selectedSection, shownSection) : (
+                        <>
+                          {constructionView && constructionModel
+                            ? <ConstructionSectionPreview model={constructionModel} sectionKey={selectedKey} />
+                            : <ReportSection section={withExcludedPhotosRemoved(shownSection)} compact />}
+                          {editTextButton(selectedSection)}
+                        </>
+                      )}
                     </div>
                     {/* Every photo captured for this category, with a checkbox to
                         leave specific ones out of the report above -- unchecking
@@ -2015,4 +2095,10 @@ export function ReviewerFormView() {
       </div>
     </div>
   );
+}
+
+/** The text editor for the Description section, with the page's own sentences (works, scope, ...) to edit as well. */
+function DescriptionTextEditor({ inspection, ...props }: { inspection: Inspection } & Omit<Parameters<typeof ReportTextEditor>[0], "descriptionBlocks">) {
+  const { blocks } = useDescriptionContent(inspection, props.section.reportText);
+  return <ReportTextEditor {...props} descriptionBlocks={blocks} />;
 }
