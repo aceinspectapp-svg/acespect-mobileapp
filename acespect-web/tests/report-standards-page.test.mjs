@@ -1,5 +1,6 @@
-// The "References and Guide to Standards and Tolerances" page of the Pre-pour Construction Stage report, as in the Nov 2026 office template
-// ("ACESPECT Pre-pour_Office Template Nov 2026.dotm"): its own page after Client Concerns and before the Conditions, with both links.
+// The "References and Guide to Standards and Tolerances" page of the Construction Stage report, as in the Nov 2026 office templates
+// ("ACESPECT Pre-pour_Office Template Nov 2026.dotm", "ACESPECT Frame_Office Template Nov 2026.dotm"): its own page after Client Concerns
+// and before the Conditions, with both links. Checked here on Pre-pour; every other stage in report-construction-stages-print.test.mjs.
 //
 // Run with: npm test
 import { after, describe, it } from "node:test";
@@ -90,7 +91,7 @@ describe("Pre-pour: References and Guide to Standards and Tolerances", () => {
     }
   });
 
-  it("is left out of stages whose office template does not have it", () => {
-    assert.doesNotMatch(render({ ...model, stage: "framework" }), /GUIDE TO STANDARDS AND TOLERANCES/);
+  it("is printed in the other stages too (every stage: see report-construction-stages-print.test.mjs)", () => {
+    assert.equal(render({ ...model, stage: "framework" }).split(STANDARDS_TITLE).length - 1, 1);
   });
 });

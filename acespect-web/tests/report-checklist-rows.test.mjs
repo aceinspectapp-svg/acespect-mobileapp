@@ -1,5 +1,5 @@
 // Construction Inspection Checklist: each row shows only the item's name on the left (its status is in the right-hand column),
-// and the "not complete" key tile reads "NOT YET".
+// and the "not complete" status reads "NOT YET" in the key, the rows and the count line.
 //
 // Run with: npm test
 import { describe, it } from "node:test";
@@ -16,9 +16,10 @@ describe("construction checklist rows and key", () => {
     assert.doesNotMatch(table, /\{it\.text\}/);
     assert.match(table, /\{statusLabel\(it\)\} ›<\/a> : statusLabel\(it\)\}/, "the right-hand status column: the status (with a defect row's count)");
   });
-  it("the not-complete key tile reads NOT YET; the row's right-hand column keeps NOT COMPLETE", () => {
-    assert.match(src, /const TILE_LABEL: Partial<Record<ItemStatus, string>> = \{ notcomplete: "NOT YET" \};/);
-    assert.match(src, /\{TILE_LABEL\[k\] \?\? s\.label\}/);
-    assert.match(src, /notcomplete: \{ label: "NOT COMPLETE", sub: "Not yet started \/ not sighted"/);
+  it("the not-complete status reads NOT YET everywhere: the key tile, the row's right-hand column and the table's count line", () => {
+    assert.match(src, /notcomplete: \{ label: "NOT YET", sub: "Not yet started \/ not sighted"/);
+    assert.match(src, /\{s\.label\}/, "the key tile prints the same label as the rows");
+    assert.match(src, /\$\{t\.counts\.notcomplete\} not yet`/);
+    assert.doesNotMatch(src, /NOT COMPLETE|not complete`/);
   });
 });

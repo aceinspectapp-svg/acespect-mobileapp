@@ -38,7 +38,7 @@ const capFirst = (w: string) => (/^[a-z]/.test(w) ? w.charAt(0).toUpperCase() + 
  */
 export function itemName(name: string): string {
   if (!name) return name;
-  const words = name.split(/(\s+)/);
+  const words = withoutInstruction(name).split(/(\s+)/);
   const lastAt = words.map((w) => /\S/.test(w)).lastIndexOf(true);
   let first = true;
   let prev = "";
@@ -51,6 +51,33 @@ export function itemName(name: string): string {
       return out;
     })
     .join("");
+}
+
+/**
+ * The form's instructions to the inspector, which some checklist labels carry after the item's name ("Roof covering — if cladding and
+ * roof covering are both done, check with the office before you leave site (Lock-up report)"). The phone keeps showing them; the report
+ * prints only the item's name. Each pattern matches one instruction as the templates word it, so no other name changes.
+ */
+const INSTRUCTION_TAILS: RegExp[] = [
+  /\s+—\s+if cladding and roof covering are both done, check with the office before you leave site \(lock-up report\)$/i, // Frame, Slab and Frame
+  /\s+—\s+show digital level$/i, // Lock-up, Lock-up and Fixing, Fixing: brickwork / walls bowed and plumb
+  /\s+—\s+should this be a (combined )?lock up (and|and\/or) fixing \(pre-paint\) inspection$/i, // Frame, Slab and Frame, Lock-up: plaster(work) completed
+  /\s+inspector to test all appliances operate$/i, // PCI: gas appliances
+  /\s*\(check at each elevation 4 to 6 weepholes\)$/i, // PCI House: damp proof course
+  /\s*\(is there an ensuite\?\)$/i, // PCI: bedroom 2
+  /\?\s*if so,? provide details\.?$/i, // PCI: (private) roof terrace
+];
+/** Labels that are an instruction from start to end (PCI Apartment roof): the item they are about. */
+const INSTRUCTION_LABELS: Record<string, string> = {
+  "if accessible is roof covering ok? if limited views put ok & details to notes": "Roof covering",
+  "if terrace is common, adds notes and photos to common area section": "Terrace is common",
+};
+
+/** A checklist label without the form's instruction to the inspector (see INSTRUCTION_TAILS); any other label as it is. */
+export function withoutInstruction(name: string): string {
+  const whole = INSTRUCTION_LABELS[name.trim().toLowerCase()];
+  if (whole) return whole;
+  return INSTRUCTION_TAILS.reduce((n, re) => n.replace(re, ""), name);
 }
 
 /** A line that opens with the item's name ("Slab formwork dimensions. Please refer …") with that name printed in Title Case; any other line as it is. */
