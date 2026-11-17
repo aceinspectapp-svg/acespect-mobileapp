@@ -166,7 +166,7 @@ const EXPECTED = [
 const OTHER_ROW = {
   generalOther: "General", qualityOther: "Slab quality", fitOutOther: "Painting", kerbOther: "Site and facilities", hebelOther: "Hebel",
   boardOther: "Blueboard, weatherboard, styrene foam, timber", stairwellOther: "Stairwell/s", finishes_other_note: "Finishes",
-  internal_other_note: "Internal", walls_other_note: "Walls", doors_other_note: "Doors, etc", garage_other_note: "Garage",
+  internal_other_note: "Internal", walls_other_note: "Walls", doors_other_note: "Windows and Doors", garage_other_note: "Garage",
   balconies_other_note: "Balconies", site_other_note: "Site", common_other_note: "Common areas", roof_other_note: "Roof",
   other_other_note: "Services and other",
 };
@@ -228,7 +228,9 @@ describe("each field prints the right sentence for each answer, and none for the
     for (const r of typed) {
       const name = OTHER_ROW[r.field.key];
       assert.ok(name, `a row name is expected for ${where(r)}`);
-      assert.deepEqual(r.added, [`${name}: ${TYPED}.`], where(r));
+      // A house PCI report leaves the unit form's Common Areas out, its "Other" box too.
+      const houseCommonArea = r.field.key === "common_other_note" && /House/.test(r.propName);
+      assert.deepEqual(r.added, houseCommonArea ? [] : [`${name}: ${TYPED}.`], where(r));
     }
   });
   it("keeps the inspector's capitals and punctuation ('Hebel: some sheets cracked at the NE corner!')", () => {

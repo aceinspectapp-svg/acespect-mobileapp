@@ -95,6 +95,8 @@ const NOT_PRINTED_BY_DESIGN = {
 // The Apartment form's Pre-Purchase checklist questions, which the Multi Level Office template has no sentence for.
 const { apartmentLeavesOut } = await server.ssrLoadModule("/src/web/wording/dilapidation.apartment.ts");
 const LEFT_OUT_BY_DESIGN = {
+  // A house PCI report leaves the unit form's Common Areas checks out (fix/pci-template-wording); only a defect recorded there prints.
+  "construction_stage/residential_house": (entry) => entry.startsWith("pci_garage_site: common_"),
   "dilapidation/apartment": (entry) => {
     const m = /^([^:]+): (\S+)/.exec(entry);
     return !!m && apartmentLeavesOut(m[1], m[2]);
