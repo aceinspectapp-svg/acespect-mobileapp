@@ -161,3 +161,50 @@ describe("photo groups of an Apartment's rooms", () => {
     assert.deepEqual(G.flatOrder(groups, [p(4), p(3), p(2), p(1)]), [p(1), p(2), p(3), p(4)]);
   });
 });
+
+describe("one-click rotate", () => {
+  it("turns an unedited photo a quarter turn either way", () => {
+    assert.deepEqual(G.rotateEdit(null, 1), { rotate: 90 });
+    assert.deepEqual(G.rotateEdit(null, -1), { rotate: 270 });
+    assert.deepEqual(G.rotateEdit({ rotate: 270 }, 1), { rotate: 0 });
+  });
+
+  it("turns a crop box with the photo, so the same part stays cropped", () => {
+    const crop = { x: 0.1, y: 0.2, w: 0.3, h: 0.4 };
+    const right = G.rotateEdit({ rotate: 0, crop }, 1);
+    assert.equal(right.rotate, 90);
+    assert.deepEqual(right.crop, { x: 0.4, y: 0.1, w: 0.4, h: 0.3 });
+    // and back again
+    assert.deepEqual(G.rotateEdit(right, -1), { rotate: 0, crop });
+    // four turns come back to the start
+    let e = { rotate: 0, crop };
+    for (let i = 0; i < 4; i++) e = G.rotateEdit(e, 1);
+    assert.deepEqual(e, { rotate: 0, crop });
+  });
+});
+
+describe("moving several photos at once", () => {
+  const fields = fieldsOf("apartment", "internal_areas");
+  const answers = { rooms: { kitchen: { present: "yes", photos: [p(1), p(2)] }, dining: { present: "yes", photos: [p(3)] } } };
+  const groups = G.toolGroups(fields, answers, [p(1), p(2), p(3), p(4)]);
+  const kitchen = groups.find((g) => g.title.startsWith("Kitchen"));
+  const dining = groups.find((g) => g.title.startsWith("Dining"));
+  const own = groups.find((g) => g.path === null);
+
+  it("moves them into another room, in order, at the end", () => {
+    const next = G.withPhotosMovedTo(answers, [{ url: p(1), from: kitchen }, { url: p(2), from: kitchen }], dining);
+    assert.deepEqual(next.rooms.kitchen.photos, []);
+    assert.deepEqual(next.rooms.dining.photos, [p(3), p(1), p(2)]);
+  });
+
+  it("takes photos out of a room into the section's own list, and brings own-list photos into a room", () => {
+    const out = G.withPhotosMovedTo(answers, [{ url: p(2), from: kitchen }], own);
+    assert.deepEqual(out.rooms.kitchen.photos, [p(1)]);
+    const back = G.withPhotosMovedTo(answers, [{ url: p(4), from: own }], kitchen);
+    assert.deepEqual(back.rooms.kitchen.photos, [p(1), p(2), p(4)]);
+  });
+
+  it("leaves a photo alone when it is already in the destination", () => {
+    assert.deepEqual(G.withPhotosMovedTo(answers, [{ url: p(3), from: dining }], dining), answers);
+  });
+});
