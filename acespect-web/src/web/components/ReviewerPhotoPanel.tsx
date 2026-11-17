@@ -20,7 +20,7 @@ import type { ActiveTemplate, AnswerTree } from "../templateFields";
 import { flattenSectionToDraft } from "../templateFields";
 import { reportProfileOf } from "../wording/profile";
 import { photoKey } from "../reportParts";
-import { flatOrder, moved, photosAt, SECTION_GROUP_ID, toolGroups, withPhotoAdded, withPhotoMoved, withPhotoRemoved, withPhotoReplaced, type ToolGroup } from "../photoToolGroups";
+import { flatOrder, moved, photosAt, SECTION_GROUP_ID, toolGroups, withPhotoAdded, withPhotoMoved, withPhotoRemoved, type ToolGroup } from "../photoToolGroups";
 import { PhotoEditorModal } from "./PhotoEditorModal";
 
 type Info = PhotoInfo & { originalUrl?: string | null };
@@ -43,6 +43,7 @@ export function ReviewerPhotoPanel({
   answers,
   locked,
   onSaveAnswers,
+  onReopen,
 }: {
   inspection: Inspection;
   section: FormSection;
@@ -53,8 +54,10 @@ export function ReviewerPhotoPanel({
   locked: boolean;
   /** Saves new answers (the report text is composed again from them) together with `extra` -- the section's flat photo list. */
   onSaveAnswers: (answers: AnswerTree, extra: { photos?: string[] }) => Promise<void>;
+  /** Takes the section out of "approved" (back to pending) so its photos can be changed again. */
+  onReopen?: () => Promise<void>;
 }) {
-  const { patchSection, patchInspection, editSectionPhoto, revertSectionPhoto, deleteSectionPhoto } = useAppData();
+  const { patchSection, patchInspection, editSectionPhoto, revertSectionPhoto, replaceSectionPhoto, deleteSectionPhoto } = useAppData();
   const sectionKey = section.key ?? section.id;
   const groups = useMemo(() => toolGroups(template.fields, answers, section.photos), [template.fields, answers, section.photos]);
   const excluded = section.excludedPhotoUrls ?? [];
@@ -77,6 +80,19 @@ export function ReviewerPhotoPanel({
     api.photoInfo(ids).then((got) => !cancelled && setInfo((prev) => ({ ...prev, ...got }))).catch(() => undefined);
     return () => { cancelled = true; };
   }, [idsKey]);
+
+  // A file dropped anywhere else on the page (a near miss) must not make the browser open it in place of the review page -- which would
+  // also sign the reviewer out. Drops on a group or a photo are handled there.
+  useEffect(() => {
+    const guard = (e: DragEvent) => {
+      if (!Array.from(e.dataTransfer?.types ?? []).includes("Files") || e.defaultPrevented) return; // a group or photo took it
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "none";
+    };
+    window.addEventListener("dragover", guard);
+    window.addEventListener("drop", guard);
+    return () => { window.removeEventListener("dragover", guard); window.removeEventListener("drop", guard); };
+  }, []);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
@@ -102,8 +118,9 @@ export function ReviewerPhotoPanel({
       await onSaveAnswers(next, { photos: photos ?? arranged(next) });
     });
 
+  const isOut = (url: string) => excluded.some((u) => photoKey(u) === photoKey(url));
   const toggleExcluded = (url: string) =>
-    run(() => patchSection(inspection.id, section.id, { excludedPhotoUrls: excluded.includes(url) ? excluded.filter((u) => u !== url) : [...excluded, url] }));
+    run(() => patchSection(inspection.id, section.id, { excludedPhotoUrls: isOut(url) ? excluded.filter((u) => photoKey(u) !== photoKey(url)) : [...excluded, url] }));
 
   const setSize = (url: string, size: PhotoPrintSize) =>
     run(() => {
@@ -124,7 +141,8 @@ export function ReviewerPhotoPanel({
       const slots = section.photos.map((u, i) => (own.some((o) => photoKey(o) === photoKey(u)) ? i : -1)).filter((i) => i >= 0);
       const flat = [...section.photos];
       slots.forEach((slot, k) => { flat[slot] = reordered[k]!; });
-      return void saveAnswers(answers, flat);
+      // no answer changes, so the report text is left exactly as it is -- only the photo order is saved
+      return void run(() => patchSection(inspection.id, section.id, { photos: flat }));
     }
     let next = answers;
     if (from.path && to.path) next = withPhotoMoved(answers, from.path, to.path, url, index);
@@ -174,14 +192,15 @@ export function ReviewerPhotoPanel({
     });
   }
 
-  /** A file dropped on a photo (or picked for it) takes its place. */
+  /**
+   * A file dropped on a photo (or picked for it) takes its place -- everywhere the old photo is used, in the same spot, with the report
+   * text left as it is. The server keeps the old photo, so "Revert" in the editor puts it back.
+   */
   function replace(url: string, file: File) {
     if (locked || !file.type.startsWith("image/")) return;
     void run(async () => {
       const { url: fresh } = await api.uploadInspectionPhoto(file, inspection.id, sectionKey);
-      const next = withPhotoReplaced(answers, groups, url, fresh);
-      const flat = section.photos.map((u) => (photoKey(u) === photoKey(url) ? fresh : u));
-      await onSaveAnswers(next, { photos: arranged(next, flat) });
+      await replaceSectionPhoto(inspection.id, section.id, url, fresh);
     });
   }
 
@@ -206,12 +225,33 @@ export function ReviewerPhotoPanel({
 
   const editingInfo = editing ? info[mediaId(editing)] ?? NO_INFO : NO_INFO;
 
+  // What a screen reader says while a photo is dragged: "Photo 3 of Kitchen › Room photos", not internal ids.
+  const describe = (id: string | number | undefined): string => {
+    if (id === undefined) return "nowhere";
+    const s = String(id);
+    if (s.startsWith("drop:")) return groups.find((g) => `drop:${g.id}` === s)?.title ?? "a group";
+    const g = groups.find((x) => s.startsWith(`${x.id}|`));
+    const at = g ? g.photos.findIndex((u) => itemId(g, u) === s) : -1;
+    return g ? `photo ${at + 1} of ${g.title}` : "a photo";
+  };
+  const announcements = {
+    onDragStart: ({ active }: { active: { id: string | number } }) => `Picked up ${describe(active.id)}.`,
+    onDragOver: ({ over }: { over: { id: string | number } | null }) => (over ? `Over ${describe(over.id)}.` : "Not over a group."),
+    onDragEnd: ({ over }: { over: { id: string | number } | null }) => (over ? `Dropped on ${describe(over.id)}.` : "Dropped back where it was."),
+    onDragCancel: () => "Move cancelled; the photo stays where it was.",
+  };
+
   return (
     <div data-photo-panel="" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       {locked && (
-        <p data-photo-locked="" style={{ margin: 0, fontSize: "12px", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "8px 10px" }}>
-          This section is approved, so its photos are locked. Reopen it to rotate, crop, resize, move or delete photos.
-        </p>
+        <div data-photo-locked="" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", fontSize: "12px", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "8px 10px" }}>
+          <span style={{ flex: "1 1 220px" }}>This section is approved, so its photos are locked. Reopen it to rotate, crop, resize, move or delete photos.</span>
+          {onReopen && (
+            <button type="button" data-action="reopen-section" onClick={() => void run(onReopen)} disabled={busy} style={{ fontSize: "11.5px", fontWeight: 700, color: "#92400e", background: "white", border: "1px solid #f59e0b", borderRadius: "8px", padding: "5px 10px", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}>
+              {busy ? "Reopening…" : "Reopen to edit photos"}
+            </button>
+          )}
+        </div>
       )}
       {!locked && (
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
@@ -222,7 +262,7 @@ export function ReviewerPhotoPanel({
         </div>
       )}
       {error && <p role="alert" style={{ margin: 0, fontSize: "12px", color: "#b91c1c" }}>{error}</p>}
-      <DndContext sensors={locked ? [] : sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+      <DndContext accessibility={{ announcements, screenReaderInstructions: { draggable: "To move a photo, press Space or Enter, use the arrow keys, then press Space or Enter again to drop it. Escape cancels." } }} sensors={locked ? [] : sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
         {groups.map((g) => (
           <Group
             key={g.id}
@@ -243,7 +283,7 @@ export function ReviewerPhotoPanel({
                   url={url}
                   groupId={g.id}
                   number={i + 1}
-                  out={excluded.includes(url)}
+                  out={isOut(url)}
                   size={(meta[id]?.size as PhotoPrintSize | undefined) ?? "standard"}
                   info={inf}
                   locked={locked}
@@ -294,13 +334,19 @@ function Group({
       ref={setNodeRef}
       data-photo-group={group.title}
       data-drop-target={highlight ? "" : undefined}
-      onDragOver={(e) => { if (!locked && hasFiles(e)) { e.preventDefault(); setFileOver(true); } }}
+      onDragOver={(e) => {
+        if (!hasFiles(e)) return;
+        // always taken here, so a file dropped on a locked panel is refused instead of the browser opening it in place of this page
+        e.preventDefault();
+        if (locked) { e.dataTransfer.dropEffect = "none"; return; }
+        setFileOver(true);
+      }}
       onDragLeave={() => setFileOver(false)}
       onDrop={(e) => {
         if (!hasFiles(e)) return;
         e.preventDefault();
         setFileOver(false);
-        onFiles(Array.from(e.dataTransfer.files));
+        if (!locked) onFiles(Array.from(e.dataTransfer.files));
       }}
       style={{ borderTop: "1px solid #f1f5f9", paddingTop: "10px", borderRadius: "8px", background: highlight ? "#eff6ff" : "transparent", outline: highlight ? "2px dashed #60a5fa" : canDropHere ? "1px dashed #cbd5e1" : "none", outlineOffset: "2px", transition: "background 0.1s" }}
     >
@@ -373,6 +419,7 @@ function Tile({
         data-action="toggle-include"
         onClick={onToggle}
         onPointerDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
         disabled={locked || busy}
         title={out ? "Left out of the report — click to put it back" : "In the report — click to leave it out"}
         style={{ position: "absolute", top: "3px", right: "3px", width: "20px", height: "20px", borderRadius: "50%", border: "none", cursor: locked ? "default" : "pointer", fontSize: "11px", fontWeight: 700, color: "white", background: out ? "rgba(15,23,42,0.6)" : "#16a34a", boxShadow: "0 1px 3px rgba(0,0,0,0.3)", padding: 0 }}
@@ -380,17 +427,19 @@ function Tile({
         {out ? "✕" : "✓"}
       </button>
       <div style={{ position: "absolute", left: "3px", bottom: "3px", display: "flex", gap: "3px" }}>
-        {info.editedFromId && <span title="Rotated or cropped; the original is kept" style={badge}>edited</span>}
+        {info.editedFromId && (info.replaced
+          ? <span title="Swapped for another file; click the photo and use Revert to put the old one back" style={badge}>swapped</span>
+          : <span title="Rotated or cropped; the original is kept" style={badge}>edited</span>)}
         {info.addedByReviewer && <span title="Added by a reviewer" style={badge}>added</span>}
         {size === "large" && <span title="Prints large" style={{ ...badge, background: "#1d4ed8" }}>large</span>}
       </div>
       {!locked && (
-        <div data-photo-tools="" onPointerDown={(e) => e.stopPropagation()} style={{ display: "flex", flexWrap: "wrap", gap: "2px", marginTop: "3px" }}>
+        <div data-photo-tools="" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} style={{ display: "flex", flexWrap: "wrap", gap: "2px", marginTop: "3px" }}>
           <ToolBtn label="Edit" title="Rotate or crop" onClick={onEdit} disabled={busy} />
           <ToolBtn label={size === "large" ? "Std" : "Large"} title={size === "large" ? "Print at the standard size" : "Print large, on its own row"} onClick={() => onSize(size === "large" ? "standard" : "large")} disabled={busy} />
           <ToolBtn label="◀" title="Move earlier" onClick={() => onShift(-1)} disabled={busy || first} />
           <ToolBtn label="▶" title="Move later" onClick={() => onShift(1)} disabled={busy || last} />
-          <ToolBtn label="Swap" title="Replace with another file" onClick={() => pick.current?.click()} disabled={busy} />
+          <ToolBtn label="Swap" title="Replace with another file (Revert in the editor puts this one back)" onClick={() => pick.current?.click()} disabled={busy} />
           {info.addedByReviewer && <ToolBtn label="Delete" title="Delete this photo you added" onClick={onDelete} disabled={busy} danger />}
           <input ref={pick} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onReplace(f); }} />
         </div>

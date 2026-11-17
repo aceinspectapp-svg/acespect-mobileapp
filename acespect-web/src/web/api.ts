@@ -36,6 +36,8 @@ export interface PhotoInfo {
   originalUrl?: string | null;
   edit: PhotoEditSpec | null;
   addedByReviewer: boolean;
+  /** True when a reviewer swapped this photo in for another one ("Revert" puts the old one back). */
+  replaced?: boolean;
 }
 
 export interface AssignmentOverview {
@@ -421,6 +423,9 @@ export const api = {
   /** Put an edited photo back to its original. */
   revertSectionPhoto: (sectionId: string, url: string) =>
     req<{ url: string }>(`/web/sections/${sectionId}/photos/revert`, { method: "POST", body: JSON.stringify({ url }) }),
+  /** Swap a photo for one just uploaded (`withUrl`), everywhere it is used; "Revert" undoes it. */
+  replaceSectionPhoto: (sectionId: string, url: string, withUrl: string) =>
+    req<{ url: string }>(`/web/sections/${sectionId}/photos/replace`, { method: "POST", body: JSON.stringify({ url, with: withUrl }) }),
   /** Delete a photo a reviewer added (an inspector's own photo can only be left out of the report). */
   deleteSectionPhoto: (sectionId: string, url: string) =>
     req<unknown>(`/web/sections/${sectionId}/photos/delete`, { method: "POST", body: JSON.stringify({ url }) }),

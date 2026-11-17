@@ -61,6 +61,29 @@ ok(r.status === 200, "a reviewer-added photo can be deleted (" + r.status + ")")
 sec = (await get()).sections.find((s) => s.key === "description");
 ok(!JSON.stringify(sec).includes(media(up.url)), "it is gone from the section");
 
+// swap (replace) an inspector's photo for a new upload, then undo the swap
+const form2 = new FormData();
+form2.append("photo", new File([await (await fetch("http://127.0.0.1:8099/TC_00951.JPG")).blob()], "y.jpg", { type: "image/jpeg" }));
+form2.append("inspectionId", ID); form2.append("sectionKey", "description");
+const up2 = await (await fetch(API + "/inspections/photos", { method: "POST", headers: { authorization: H.authorization }, body: form2 })).json();
+r = await call("POST", `/web/sections/${sec.id}/photos/replace`, { url: url0, with: up2.url });
+ok(r.status === 200, "swap returns 200 (" + r.status + ")");
+sec = (await get()).sections.find((s) => s.key === "description");
+ok(sec.answers.siteAssetsOverview[0].includes(media(up2.url)) && !JSON.stringify(sec.answers).includes(media(url0)), "the new photo takes the old one's place");
+const info = (await call("POST", "/web/photos/info", { ids: [media(up2.url)] })).body.photos[media(up2.url)];
+ok(info.replaced === true && !info.originalUrl, "it is reported as swapped, and is edited as itself");
+r = await call("POST", `/web/sections/${sec.id}/photos/edit`, { url: sec.answers.siteAssetsOverview[0], edit: { rotate: 90 } });
+const rowS = await prisma.photo.findUnique({ where: { id: media(r.body.url) } });
+ok(rowS.editedFromId === media(up2.url), "an edit of the swapped-in photo starts from it, not from the photo it replaced");
+r = await call("POST", `/web/sections/${sec.id}/photos/revert`, { url: r.body.url });
+sec = (await get()).sections.find((s) => s.key === "description");
+ok(sec.answers.siteAssetsOverview[0].includes(media(up2.url)), "reverting that edit goes back to the swapped-in photo");
+r = await call("POST", `/web/sections/${sec.id}/photos/revert`, { url: sec.answers.siteAssetsOverview[0] });
+sec = (await get()).sections.find((s) => s.key === "description");
+ok(r.status === 200 && sec.answers.siteAssetsOverview[0].includes(media(url0)), "undoing the swap puts the inspector's photo back");
+r = await call("POST", `/web/sections/${sec.id}/photos/replace`, { url: url0, with: url0 });
+ok(r.status === 400, "swapping a photo for itself is refused");
+
 // print size
 r = await call("PATCH", `/web/sections/${sec.id}`, { photoMeta: { [media(url0)]: { size: "large" } } });
 ok(r.status === 200 && r.body.section.photoMeta[media(url0)].size === "large", "print size is saved");

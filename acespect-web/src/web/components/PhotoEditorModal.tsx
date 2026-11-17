@@ -105,6 +105,23 @@ export function PhotoEditorModal({
     return { x: dx < 0 ? a.x - w : a.x, y: dy < 0 ? a.y - h : a.y, w, h };
   };
 
+  /**
+   * Picking a shape reshapes the box straight away: the largest box of that shape inside the current box (or, with no box yet, inside
+   * the whole photo), centred -- so the button never shows a shape the saved crop does not have.
+   */
+  const pickRatio = (next: number | null) => {
+    setRatio(next);
+    if (!next) return;
+    const base = crop ?? { x: 0, y: 0, w: 1, h: 1 };
+    const bw = base.w * size.w;
+    const bh = base.h * size.h;
+    const wpx = bw / bh > next ? bh * next : bw;
+    const hpx = wpx / next;
+    const w = wpx / size.w;
+    const h = hpx / size.h;
+    setCrop({ x: base.x + (base.w - w) / 2, y: base.y + (base.h - h) / 2, w, h });
+  };
+
   const onDown = (e: ReactPointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     const p = point(e);
@@ -172,7 +189,7 @@ export function PhotoEditorModal({
           <span style={{ width: "1px", height: "20px", background: "#e2e8f0" }} />
           <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b" }}>Crop shape</span>
           {ASPECTS.map((a) => (
-            <button key={a.label} type="button" onClick={() => setRatio(a.ratio)} style={{ ...tool, ...(ratio === a.ratio ? toolOn : {}) }}>{a.label}</button>
+            <button key={a.label} type="button" onClick={() => pickRatio(a.ratio)} style={{ ...tool, ...(ratio === a.ratio ? toolOn : {}) }}>{a.label}</button>
           ))}
           <button type="button" onClick={() => setCrop(null)} disabled={!crop} style={{ ...tool, opacity: crop ? 1 : 0.45 }}>Clear crop</button>
         </div>
@@ -203,13 +220,13 @@ export function PhotoEditorModal({
           )}
         </div>
         <p style={{ fontSize: "11px", color: "#64748b", margin: "8px 0 0" }}>
-          Drag on the photo to draw a crop box; drag inside it to move it, or a corner to resize it. {edited ? "You are editing from the original photo, so nothing stacks up." : "The original photo is kept."}
+          Drag on the photo to draw a crop box; drag inside it to move it, or a corner to resize it. {info.replaced ? "This photo was swapped in; the one it replaced is kept." : edited ? "You are editing from the original photo, so nothing stacks up." : "The original photo is kept."}
         </p>
         {error && img && <p role="alert" style={{ fontSize: "12px", color: "#b91c1c", margin: "8px 0 0" }}>{error}</p>}
 
         <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", marginTop: "14px" }}>
-          <button type="button" onClick={() => run("revert")} disabled={!edited || !!busy} style={{ ...tool, opacity: edited ? 1 : 0.4 }} title="Put the original photo back">
-            {busy === "revert" ? "Reverting…" : "Revert to original"}
+          <button type="button" onClick={() => run("revert")} disabled={!edited || !!busy} style={{ ...tool, opacity: edited ? 1 : 0.4 }} title={info.replaced ? "Undo the swap: put back the photo this one replaced" : "Put the original photo back"}>
+            {busy === "revert" ? "Reverting…" : info.replaced ? "Undo swap" : "Revert to original"}
           </button>
           <div style={{ display: "flex", gap: "8px" }}>
             <button type="button" onClick={onClose} disabled={!!busy} style={tool}>Cancel</button>

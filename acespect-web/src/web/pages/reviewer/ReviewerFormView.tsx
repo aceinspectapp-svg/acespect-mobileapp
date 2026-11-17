@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
   ArrowLeft, CheckCircle, RotateCcw, Send, ChevronRight, ChevronDown, ChevronLeft,
@@ -837,7 +837,14 @@ export function ReviewerFormView() {
   const [openingReport, setOpeningReport] = useState(false);
   // sectionKey -> its current published template (or null once we know none
   // exists for that key, e.g. a legacy/custom section).
-  const [templates, setTemplates] = useState<Record<string, ActiveTemplate | null>>({});
+  // Each section's form, cached by section key FOR ONE report type: the same key ("elevations") is a different form for an Apartment and
+  // for Public Assets, so moving to an inspection of another type (without leaving this page) must not reuse the previous type's forms.
+  const formFamily = inspection ? `${inspectionIdFromTitle(inspection.type)}|${propertyIdFromTitle(inspection.propertyType)}` : "";
+  const [templateStore, setTemplateStore] = useState<{ family: string; byKey: Record<string, ActiveTemplate | null> }>({ family: "", byKey: {} });
+  const templates = useMemo<Record<string, ActiveTemplate | null>>(
+    () => (templateStore.family === formFamily ? templateStore.byKey : {}),
+    [templateStore, formFamily],
+  );
   // sectionId -> the inspector's answer tree as the reviewer has edited it
   // here, not yet saved -- same idea as the inspector's own web editor
   // (InspectorFormEditor's answerEdits), just scoped to the reviewer's
@@ -868,14 +875,15 @@ export function ReviewerFormView() {
     let cancelled = false;
     const inspectionTypeId = inspectionIdFromTitle(inspection.type);
     const propertyTypeId = propertyIdFromTitle(inspection.propertyType);
+    const family = formFamily;
     Promise.all(
       missing.map((key) => fetchActiveTemplate(inspectionTypeId, propertyTypeId, key).then((t) => [key, t] as const)),
     ).then((pairs) => {
       if (cancelled) return;
-      setTemplates((prev) => {
-        const next = { ...prev };
+      setTemplateStore((prev) => {
+        const next = { ...(prev.family === family ? prev.byKey : {}) };
         for (const [key, t] of pairs) next[key] = t;
-        return next;
+        return { family, byKey: next };
       });
     });
     return () => {
@@ -1117,6 +1125,32 @@ export function ReviewerFormView() {
     } finally {
       setSavingAnswersFor(null);
     }
+  }
+
+  /** The reviewer's photo panel for a section with its own page layout (Description, Notes), shown under its report text. */
+  function ownLayoutPhotoPanel() {
+    if (!selectedSection) return null;
+    const key = selectedSection.key ?? selectedSection.id;
+    const template = templates[key];
+    if (!template) return null;
+    return (
+      <div style={{ marginTop: "14px" }}>
+        <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "8px" }}>
+          Select Photos For Report
+        </label>
+        <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "10px 16px 14px" }}>
+          <ReviewerPhotoPanel
+            inspection={inspection!}
+            section={selectedSection}
+            template={template}
+            answers={answerEdits[selectedSection.id] ?? ((selectedSection.answers as AnswerTree | null | undefined) ?? {})}
+            locked={selectedSection.reviewStatus === "approved"}
+            onSaveAnswers={(next, extra) => saveSectionAnswers(selectedSection, next, { ...extra, replaceDamagePhotos: true })}
+            onReopen={() => setReviewStatus(selectedSection.id, "pending")}
+          />
+        </div>
+      </div>
+    );
   }
 
   async function approveAll() {
@@ -1670,6 +1704,7 @@ export function ReviewerFormView() {
                         </button>
                       </div>
                     </div>
+                    {ownLayoutPhotoPanel()}
                   </div>
                 ) : (selectedSection.key ?? selectedSection.id).startsWith("notes") ? (
                   <div>
@@ -1715,6 +1750,7 @@ export function ReviewerFormView() {
                         )}
                       </div>
                     </div>
+                    {ownLayoutPhotoPanel()}
                   </div>
                 ) : (
                   /* Every category: description → photographs → cracks (described + imaged).
@@ -1783,6 +1819,7 @@ export function ReviewerFormView() {
                               answers={answerEdits[selectedSection.id] ?? ((selectedSection.answers as AnswerTree | null | undefined) ?? {})}
                               locked={selectedSection.reviewStatus === "approved"}
                               onSaveAnswers={(next, extra) => saveSectionAnswers(selectedSection, next, { ...extra, replaceDamagePhotos: true })}
+                              onReopen={() => setReviewStatus(selectedSection.id, "pending")}
                             />
                           </div>
                         </>

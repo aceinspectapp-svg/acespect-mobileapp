@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { webController } from './web.controller';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
-import { assignSchema, changeRoleSchema, createUserSchema, deactivateUserSchema, damageUpdateSchema, photoEditSchema, photoInfoSchema, photoOptimizeSchema, photoUrlSchema, transferRespondSchema, inspectionUpdateSchema, sectionUpdateSchema, userUpdateSchema } from './web.schemas';
+import { assignSchema, changeRoleSchema, createUserSchema, deactivateUserSchema, damageUpdateSchema, photoEditSchema, photoInfoSchema, photoOptimizeSchema, photoUrlSchema,
+  photoReplaceSchema, transferRespondSchema, inspectionUpdateSchema, sectionUpdateSchema, userUpdateSchema } from './web.schemas';
 import { stripSignedMediaLinks } from '../../middleware/stripMediaSignatures';
 
 const router = Router();
@@ -46,6 +47,7 @@ router.post('/inspections/:id/photos/optimize', requireAuth, reviewers, validate
 router.post('/photos/info', requireAuth, reviewers, validate(photoInfoSchema), webController.photoInfo);
 router.post('/sections/:id/photos/edit', requireAuth, reviewers, validate(photoEditSchema), webController.editPhoto);
 router.post('/sections/:id/photos/revert', requireAuth, reviewers, validate(photoUrlSchema), webController.revertPhoto);
+router.post('/sections/:id/photos/replace', requireAuth, reviewers, validate(photoReplaceSchema), webController.replacePhoto);
 router.post('/sections/:id/photos/delete', requireAuth, reviewers, validate(photoUrlSchema), webController.deletePhoto);
 router.patch(
   '/damages/:id',

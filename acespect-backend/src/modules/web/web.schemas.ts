@@ -69,6 +69,8 @@ export const photoInfoSchema = z.object({ ids: z.array(z.string().uuid()).max(20
 export const photoOptimizeSchema = z.object({ sectionId: z.string().uuid().optional() });
 export const photoUrlSchema = z.object({ url: z.string().min(1).max(2000) });
 
+export const photoReplaceSchema = z.object({ url: z.string().min(1).max(2000), with: z.string().min(1).max(2000) });
+
 export const inspectionUpdateSchema = z.object({
   status: z.enum(['draft', 'submitted', 'in-review', 'approved', 'rejected']).optional(),
   notes: z.string().max(5000).optional(),

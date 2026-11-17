@@ -7,7 +7,7 @@
  * added to the section as a whole (and, for older inspections, every photo). Pure (no React); tested in tests/photo-tool-groups.test.mjs.
  */
 import type { AnswerTree, AnswerValue, TemplateField } from "./templateFields";
-import { asAnswerTree, asString, asStringArray, isGateSatisfied } from "./templateFields";
+import { asAnswerTree, asString, asStringArray, isGateSatisfied, resolveInstances } from "./templateFields";
 import { photoKey } from "./reportParts";
 
 export type AnswerPath = (string | number)[];
@@ -37,7 +37,8 @@ function gateLabel(f: TemplateField, siblings: TemplateField[]): string | undefi
 }
 
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-const clean = (label: string) => label.replace(/\s*\*$/, "").replace(/\s*\((?:start|end|min \d+)[^)]*\)/gi, "").trim();
+const clean = (label: string) =>
+  label.replace(/\s*\*$/, "").replace(/\s*\((?:start|end|min \d+)[^)]*\)/gi, "").replace(/\s*\(\d+\s*[–-]\s*\d+\s*(?:pics|photos)\)/gi, "").trim();
 
 /** Every photo group of a section, in form order, then the section's own list. */
 export function toolGroups(fields: TemplateField[], answers: AnswerTree | null | undefined, sectionPhotos: string[]): ToolGroup[] {
@@ -64,11 +65,11 @@ export function toolGroups(fields: TemplateField[], answers: AnswerTree | null |
           walk(f.itemFields ?? [], inst, [...prefix, f.key, i], [...trail, isDefectList ? `${noun} ${i + 1}` : named || `${noun} ${i + 1}`], isDefectList ? named || undefined : undefined, isDefectList);
         });
       } else if (value && typeof value === "object") {
-        const fixed = f.repeat?.fixedInstances ?? [];
-        for (const [key, item] of Object.entries(value as Record<string, AnswerTree>)) {
-          const inst = asAnswerTree(item as AnswerValue);
-          const label = asString(inst.roomName).trim() || fixed.find((x) => x.key === key)?.label || key;
-          walk(f.itemFields ?? [], inst, [...prefix, f.key, key], [...trail, label]);
+        // In the form's own room order (the order the report prints them), not the order the database happens to keep the keys in;
+        // each room's scope also carries which room it is, which some fields are gated on.
+        for (const { key, label, scope: inst } of resolveInstances(f, value)) {
+          if (!key || !(key in (value as Record<string, unknown>))) continue;
+          walk(f.itemFields ?? [], inst, [...prefix, f.key, key], [...trail, asString(inst.roomName).trim() || label]);
         }
       }
     }
