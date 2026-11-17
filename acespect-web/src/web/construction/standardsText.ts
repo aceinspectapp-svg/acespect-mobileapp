@@ -4,11 +4,10 @@
  * is bold, the same two links); do not reword here -- update the template wording, then copy it again. The PDF and the Word report are both
  * made from the rendered page, so this file is the one place the wording lives.
  *
- * Only the Pre-pour office template carries this page so far; when another stage's template gets it, add that stage to STANDARDS_PAGE_STAGES.
+ * Every stage prints it (Pre-pour, Slab Down, Slab and Frame, Frame, Lock-up, Lock-up and Fixing, Fixing, PCI/Handover; House and Apartment):
+ * the Frame office template ("ACESPECT Frame_Office Template Nov 2026.dotm") carries the same text and links, and puts the page in the same
+ * place -- after the report's last section, on a new page, immediately before the Conditions.
  */
-import type { StageId } from "./stages";
-
-export const STANDARDS_PAGE_STAGES: readonly StageId[] = ["pre_pour"];
 
 export const STANDARDS_TITLE = "REFERENCES AND GUIDE TO STANDARDS AND TOLERANCES";
 export const STANDARDS_GUIDE_URL = "https://houspect.egnyte.com/dl/8vb6WbJQqK3k";

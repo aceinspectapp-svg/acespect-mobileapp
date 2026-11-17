@@ -10,7 +10,7 @@ import { ReportAgreement } from "../components/ReportAgreement";
 import { OriginalPhotosPending, useOriginalPhotosLink } from "../components/OriginalPhotosLink";
 import { CONSTRUCTION_AGREEMENT_BLOCKS, CONSTRUCTION_AGREEMENT_TITLE } from "./agreementText";
 import { itemName, optionText, withItemName } from "./printCase";
-import { STANDARDS_PAGE_STAGES, STANDARDS_PARAGRAPHS, STANDARDS_TITLE } from "./standardsText";
+import { STANDARDS_PARAGRAPHS, STANDARDS_TITLE } from "./standardsText";
 import {
   ITEM_STATUSES, buildConstructionReport, type AttachedList, type ChecklistTable, type ConstructionReportModel, type DefectEntry, type ItemStatus, type SectionInput,
 } from "./reportModel";
@@ -78,7 +78,7 @@ const STATUS: Record<ItemStatus, { label: string; sub: string; stripe: string; b
   progress: { label: "IN PROGRESS", sub: "Work under way at inspection", stripe: "#2b5fd9", bg: "#dde8fb", fg: "#1e40af" },
   defect: { label: "REFER DEFECTS", sub: "Listed in Identified Defects", stripe: "#d1262b", bg: "#fde3e3", fg: "#9b1c1c" },
   note: { label: "REFER NOTES", sub: "See comment or Notes section", stripe: "#ee9b00", bg: "#fef0cf", fg: "#8a5300" },
-  notcomplete: { label: "NOT COMPLETE", sub: "Not yet started / not sighted", stripe: "#7b8794", bg: "#e6e8ec", fg: "#374151" },
+  notcomplete: { label: "NOT YET", sub: "Not yet started / not sighted", stripe: "#7b8794", bg: "#e6e8ec", fg: "#374151" },
   na: { label: "NOT APPLICABLE", sub: "Does not apply to this build", stripe: "#b8c0cc", bg: "#f1f2f4", fg: "#4b5563" },
 };
 
@@ -167,9 +167,6 @@ export function Cover({ r, model, inspection, compact = false }: { r: ReportHead
 
 // ───────────────────────── Checklist ─────────────────────────
 
-/** The key tiles above the checklist word a status differently from the row's right-hand column. */
-const TILE_LABEL: Partial<Record<ItemStatus, string>> = { notcomplete: "NOT YET" };
-
 function SummaryTiles({ model }: { model: ConstructionReportModel }) {
   const target: Partial<Record<ItemStatus, string>> = { defect: "#defects", note: "#notes" };
   return (
@@ -179,7 +176,7 @@ function SummaryTiles({ model }: { model: ConstructionReportModel }) {
         const inner = (
           <>
             <div style={{ fontSize: "26px", fontWeight: 800, color: s.fg, lineHeight: 1.1 }}>{model.totals[k]}</div>
-            <div style={{ fontSize: "8.5px", fontWeight: 800, letterSpacing: "0.03em", color: s.fg, margin: "3px 0 4px", whiteSpace: "nowrap", textDecoration: target[k] ? "underline" : "none" }}>{TILE_LABEL[k] ?? s.label}</div>
+            <div style={{ fontSize: "8.5px", fontWeight: 800, letterSpacing: "0.03em", color: s.fg, margin: "3px 0 4px", whiteSpace: "nowrap", textDecoration: target[k] ? "underline" : "none" }}>{s.label}</div>
             <div style={{ fontSize: "9.5px", color: "#4b5563", lineHeight: 1.3 }}>{s.sub}</div>
           </>
         );
@@ -202,7 +199,7 @@ function countsLine(t: ChecklistTable): string {
   if (t.counts.defect) parts.push(plural(t.counts.defect, "defect", "defects"));
   if (t.counts.note) parts.push(plural(t.counts.note, "note", "notes"));
   if (t.counts.progress) parts.push(`${t.counts.progress} in progress`);
-  if (t.counts.notcomplete) parts.push(`${t.counts.notcomplete} not complete`);
+  if (t.counts.notcomplete) parts.push(`${t.counts.notcomplete} not yet`);
   if (t.counts.ok) parts.push(`${t.counts.ok} OK`);
   return parts.join(" · ");
 }
@@ -501,7 +498,8 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           />
         </div>
 
-        {model.stage && STANDARDS_PAGE_STAGES.includes(model.stage) && <StandardsPage />}
+        {/* Every stage, House and Apartment: after the last section, on a new page, immediately before the Conditions. */}
+        <StandardsPage />
 
         <TermsPages />
       </PhotoNumberProvider>
