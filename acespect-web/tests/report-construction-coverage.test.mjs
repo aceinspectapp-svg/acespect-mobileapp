@@ -149,7 +149,7 @@ for (const prop of PROPS) {
         const [t, f] = target;
         const answers = structuredClone(base);
         answers[t.sectionKey][f.key] = f.defectOn[0];
-        answers[t.sectionKey][`${f.key}__defect`] = { location: "Level 1 hall", category: ["damage"], severity: ["minor"], photos: ["/a.jpg", "/b.jpg"], comments: "probe comment", constructionCode: "2.04" };
+        answers[t.sectionKey][`${f.key}__defect`] = { location: "Level 1 hall", category: ["non_compliant_plans_specs"], severity: ["minor"], photos: ["/a.jpg", "/b.jpg"], comments: "probe comment", constructionCode: "2.04" };
         const m = build(prop, prefix, answers);
         assert.equal(m.defectCount, 1);
         const d = m.defectGroups[0].defects[0];
@@ -157,7 +157,7 @@ for (const prop of PROPS) {
         assert.match(d.text, /Level 1 hall/);
         assert.match(d.text, /probe comment/);
         assert.equal(d.severity, "Minor");
-        assert.equal(d.category, "Damage");
+        assert.equal(d.category, "Non-compliant with approved plans/specs");
         assert.equal(d.code, "2.04");
         assert.match(d.codeTitle, /^2\.04 /);
         assert.equal(d.photos.length, 2);
@@ -171,7 +171,7 @@ for (const prop of PROPS) {
       it("prints each part of a defect's details", () => {
         const base = baseAnswers(prop, prefix);
         const [t, f] = secs.flatMap((t) => t.fields.filter((f) => f.type === "pill-select" && f.defectOn?.length).map((f) => [t, f]))[0];
-        const detail = { location: "L", category: ["damage"], severity: ["minor"], photos: ["/a.jpg"], comments: "c", constructionCode: "2.04" };
+        const detail = { location: "L", category: ["non_compliant_plans_specs"], severity: ["minor"], photos: ["/a.jpg"], comments: "c", constructionCode: "2.04" };
         const withDetail = (d) => { const a = structuredClone(base); a[t.sectionKey][f.key] = f.defectOn[0]; a[t.sectionKey][`${f.key}__defect`] = d; return printed(build(prop, prefix, a)); };
         const full = withDetail(detail);
         for (const k of Object.keys(detail)) assert.notEqual(withDetail({ ...detail, [k]: Array.isArray(detail[k]) ? [] : "" }), full, `${k} reaches the report`);
