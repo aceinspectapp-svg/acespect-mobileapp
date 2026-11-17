@@ -59,7 +59,7 @@ describe("Defect form: Category and Severity choices", () => {
     const files = [];
     const walk = (d) => { for (const n of readdirSync(d)) { const p = resolve(d, n); statSync(p).isDirectory() ? walk(p) : /\.(ts|tsx)$/.test(n) && files.push(p); } };
     walk(resolve(webRoot, "src"));
-    const defining = files.filter((p) => /workmanship_outside_tolerance|non_compliant_ncc_as/.test(readFileSync(p, "utf8"))).map((p) => p.slice(webRoot.length + 1));
+    const defining = files.filter((p) => /workmanship_outside_tolerance|non_compliant_ncc_as/.test(readFileSync(p, "utf8"))).map((p) => p.slice(webRoot.length + 1).replaceAll("\\", "/")); // "/" on every OS (Windows lists "src\web\...")
     assert.deepEqual(defining, ["src/web/construction/words.ts"]);
     const editor = readFileSync(resolve(webRoot, "src/web/components/SectionFieldEditor.tsx"), "utf8");
     assert.match(editor, /fields=\{DEFECT_DETAIL_FIELDS\}/);

@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 
 const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const mobile = resolve(webRoot, "../acespect-mobile/src/constants");
+// Vite's /@fs/ form wants forward slashes and a leading "/" before a Windows drive letter ("/@fs/C:/...")
+const mobile = resolve(webRoot, "../acespect-mobile/src/constants").replaceAll("\\", "/").replace(/^(?!\/)/, "/");
 // The mobile files are plain TypeScript; a fixed tsconfig stops vite looking up the mobile app's own (it extends "expo/tsconfig.base", which only exists
 // where the mobile app's node_modules are installed -- not in CI, which installs the web app alone).
 const server = await createServer({
