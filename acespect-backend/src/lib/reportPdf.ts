@@ -3,7 +3,7 @@ import { env } from '../config/env';
 import { ApiError } from '../utils/ApiError';
 import { reportBrowserPath } from './reportBrowserSetup';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
-import { photosFailedMessage, routeReportPhotos } from './reportPhotos';
+import { photosFailedMessage, routeReportPhotos, type ReportPhotoLog } from './reportPhotos';
 
 /**
  * Renders the inspection report to a real PDF by pointing a headless browser
@@ -108,17 +108,62 @@ async function takeTurn(): Promise<() => void> {
   };
 }
 
+/** Where a report is up to, for a background job's "Preparing report…" (reportJobs.ts). */
+export type ReportStage = 'waiting' | 'opening' | 'photos' | 'printing';
+
+export interface ReportPageOptions {
+  print?: boolean;
+  width?: number;
+  /** Told each stage as it starts; at 'opening' also given the photo log, so photographs loaded so far can be shown. */
+  onStage?: (stage: ReportStage, photos?: ReportPhotoLog) => void;
+  /** For the timing line in the log: which file this is ('pdf' / 'docx'). */
+  label?: string;
+}
+
+/** Seconds, one decimal, for the timing line. */
+const secs = (ms: number) => `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+
+/**
+ * One line per report in the server log with how long each stage took, e.g.
+ *   [report] pdf <id>: queue 0.0s · launch 1.1s · open 92.4s (250 photos 2.0s→91.9s, 0 missing) · settle 0.3s · print 18.7s · total 112.5s
+ * "open" is the page loading, which includes fetching the photographs (they load while the page opens); the photo span shows when the
+ * first was asked for and the last answered, measured from the start of "open".
+ */
+export class ReportTimer {
+  private readonly t0 = Date.now();
+  private last = this.t0;
+  private readonly parts: string[] = [];
+  openedAt = 0;
+  mark(name: string, extra = ''): void {
+    const now = Date.now();
+    this.parts.push(`${name} ${secs(now - this.last)}${extra}`);
+    this.last = now;
+  }
+  line(label: string, inspectionId: string, outcome = ''): string {
+    return `[report] ${label} ${inspectionId}: ${[...this.parts, `total ${secs(Date.now() - this.t0)}`].join(' · ')}${outcome ? ` · ${outcome}` : ''}`;
+  }
+}
+
 export async function withReportPage<T>(
   inspectionId: string,
   authToken: string,
   use: (page: Page) => Promise<T>,
-  options: { print?: boolean; width?: number } = {},
+  options: ReportPageOptions = {},
 ): Promise<T> {
+  const timer = new ReportTimer();
+  // 'waiting' only when this report really has to wait for others to finish (at most REPORT_MAX_CONCURRENT run at once).
+  if (running >= MAX_RUNNING) options.onStage?.('waiting');
   const done = await takeTurn();
+  timer.mark('queue');
+  options.onStage?.('opening');
+  let outcome = 'failed';
   try {
-    return await withReportPageNow(inspectionId, authToken, use, options);
+    const result = await withReportPageNow(inspectionId, authToken, use, options, timer);
+    outcome = Buffer.isBuffer(result) ? `${(result.length / 1048576).toFixed(1)} MB` : 'done';
+    return result;
   } finally {
     done();
+    console.log(timer.line(options.label ?? 'file', inspectionId, outcome));
   }
 }
 
@@ -145,7 +190,8 @@ async function withReportPageNow<T>(
   inspectionId: string,
   authToken: string,
   use: (page: Page) => Promise<T>,
-  options: { print?: boolean; width?: number } = {},
+  options: ReportPageOptions,
+  timer: ReportTimer,
 ): Promise<T> {
   if (reportPageMisconfigured()) {
     console.error('[report] WEB_APP_URL is not set on this server (still ' + reportPageOrigin() + '), so the report page cannot be opened.');
@@ -175,6 +221,7 @@ async function withReportPageNow<T>(
   } catch (e) {
     throw reportFailure('browser', 'The server could not start its report printer (headless browser). Check the server log for "[report] browser".', e);
   }
+  timer.mark('launch');
   try {
     const page = await browser.newPage();
     if (options.print) await page.emulateMediaType('print');
@@ -191,13 +238,24 @@ async function withReportPageNow<T>(
     }, authToken);
     // The photographs are fetched by this server, a few at a time and tried again on a failure (reportPhotos.ts).
     const photos = await routeReportPhotos(page, inspectionId);
+    options.onStage?.('opening', photos);
 
     const url = `${reportPageOrigin()}/report/${inspectionId}`;
+    const openStart = Date.now();
+    const photoSpan = () => {
+      const st = photos.stats();
+      return st.requested
+        ? ` (${st.requested} photos ${secs(st.firstAt - openStart)}→${secs(st.lastAt - openStart)}, ${photos.missing.length} missing, ${photos.failed.length} failed)`
+        : ' (no photos)';
+    };
     try {
       await page.goto(url, { waitUntil: 'networkidle0', timeout: PHOTO_LOAD_TIMEOUT_MS });
     } catch (e) {
+      timer.mark('open', photoSpan());
       throw reportFailure('open', `The server could not open the report page at ${reportPageOrigin()}. Check WEB_APP_URL on the server.`, e);
     }
+    timer.mark('open', photoSpan());
+    options.onStage?.('photos', photos);
     // Past the "Loading…" / "Inspection not found." placeholder -- the real
     // document only exists once this class mounts.
     try {
@@ -217,15 +275,20 @@ async function withReportPageNow<T>(
     await page
       .waitForFunction("!document.querySelector('[data-photo-grid-pending]')", { timeout: PHOTO_LOAD_TIMEOUT_MS })
       .catch(() => undefined);
+    timer.mark('settle');
     // A photograph that could not be loaded (after its retries) stops the report: it is never printed without it.
     const photoProblem = photosFailedMessage(photos);
     if (photoProblem) {
       console.error(`[report] photos failed for inspection ${inspectionId}:`, photos.failed.map((f) => f.message).slice(0, 20), `(${photos.pending()} still loading)`);
       throw new ApiError(502, photoProblem, 'REPORT_PHOTOS_FAILED', { stage: 'photos' });
     }
+    options.onStage?.('printing', photos);
     try {
-      return await use(page);
+      const result = await use(page);
+      timer.mark('print');
+      return result;
     } catch (e) {
+      timer.mark('print');
       if (e instanceof ApiError) throw e;
       throw reportFailure('print', 'The report page opened but could not be turned into a file. Check the server log for "[report] print".', e);
     }
@@ -238,6 +301,7 @@ export async function generateInspectionReportPdf(
   inspectionId: string,
   authToken: string,
   meta: { clientName: string; jobNo: string; inspectionDate?: string },
+  onStage?: ReportPageOptions['onStage'],
 ): Promise<Buffer> {
   return withReportPage(inspectionId, authToken, async (page) => {
     const pdf = await page.pdf({
@@ -253,5 +317,5 @@ export async function generateInspectionReportPdf(
       margin: { top: '30mm', bottom: '42mm', left: MARGIN_H, right: MARGIN_H },
     });
     return Buffer.from(pdf);
-  });
+  }, { onStage, label: 'pdf' });
 }

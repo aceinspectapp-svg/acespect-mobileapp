@@ -10,11 +10,35 @@ import { generateInspectionReportDocx } from '../../lib/reportDocx';
 import { recordSubmissionEvent } from '../../lib/submissionLog';
 import { audit, firstWithin, flushPhotoBatches, notePhotoUpload } from '../../lib/auditTrail';
 import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import { getReportJob, jobStatus, startReportJob, type ReportFormat } from '../../lib/reportJobs';
+import { signAccessToken, verifyAccessToken } from '../../utils/jwt';
 import { canViewDetail } from '../web/assignment.rules';
 
 /** A reviewer may open (and download the report of) an inspection that is theirs or unassigned, not one another reviewer holds. */
 function assertReviewerMayOpen(user: { id: string; role: string }, inspection: { reviewerId: string | null; status: string }) {
   if (user.role === 'REVIEWER' && !canViewDetail(user, inspection)) throw new ApiError(403, 'This inspection is assigned to another reviewer', 'ASSIGNED_TO_OTHER');
+}
+
+const REPORT_MIME: Record<ReportFormat, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+};
+
+/** What a report of this inspection needs: its kind, file name and the details printed in its header and footer. */
+async function reportDetails(id: string, inspection: { jobNo: string | null; client: string | null; date: Date | string; inspectionType: string | null }, format: ReportFormat) {
+  const kind = /construction/i.test(inspection.inspectionType ?? '') ? 'construction' : 'dilapidation';
+  const jobNo = await inspectionsService.reportJobNo(id, inspection.jobNo);
+  return {
+    kind,
+    fileName: `${inspection.jobNo || id}-${kind}-report.${format}`.replace(/[^a-z0-9.-]+/gi, '-'),
+    meta: {
+      clientName: inspection.client ?? '',
+      jobNo,
+      title: `${kind === 'construction' ? 'Construction' : 'Dilapidation'} Report ${jobNo}`.trim(),
+      inspectionDate: footerDate(inspection.date),
+    },
+  };
 }
 
 /**
@@ -202,6 +226,64 @@ export const inspectionsController = {
       await audit({ category: 'web', action: 'inspection.view', inspectionId: id, jobNo: inspection.jobNo, target: { type: 'Inspection', id, label: inspection.jobNo } });
     }
     res.status(200).json({ inspection });
+  }),
+
+  // The report (PDF or Word) made in the background (lib/reportJobs.ts): this starts it -- or joins the one already being made -- and
+  // answers at once with the job. The web app then asks GET .../report-jobs/:jobId until it is done and downloads .../file.
+  createReportJob: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id } = req.params;
+    if (!id) throw ApiError.badRequest('Inspection id is required');
+    const format = req.body?.format;
+    if (format !== 'pdf' && format !== 'docx') throw ApiError.badRequest('format must be "pdf" or "docx"');
+    const inspection = await inspectionsService.getById(id);
+    assertReviewerMayOpen(req.user, inspection);
+    const details = await reportDetails(id, inspection, format);
+    // The report page is opened as the person who asked, with a sign-in of its own that lasts long enough for a report that has to wait
+    // its turn (the caller's own one may run out meanwhile). Same user, role and session version, so a revoked session still stops it.
+    const caller = verifyAccessToken((req.headers.authorization ?? '').slice('Bearer '.length).trim());
+    const jobToken = signAccessToken({ sub: caller.sub, role: caller.role, tv: caller.tv }, 45);
+    const { job, joined } = startReportJob({
+      inspectionId: id,
+      format,
+      userId: req.user.id,
+      fileName: details.fileName,
+      meta: { kind: details.kind },
+      make: (onStage) =>
+        format === 'pdf'
+          ? generateInspectionReportPdf(id, jobToken, details.meta, onStage)
+          : generateInspectionReportDocx(id, jobToken, details.meta, onStage),
+    });
+    res.status(joined ? 200 : 202).json({ job: jobStatus(job) });
+  }),
+
+  getReportJob: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id, jobId } = req.params;
+    if (!id || !jobId) throw ApiError.badRequest('Inspection id and job id are required');
+    const inspection = await inspectionsService.getById(id);
+    assertReviewerMayOpen(req.user, inspection);
+    const job = getReportJob(id, jobId);
+    if (!job) throw new ApiError(404, 'This report is no longer being prepared (the server may have restarted). Please ask for it again.', 'REPORT_JOB_NOT_FOUND');
+    res.status(200).json({ job: jobStatus(job) });
+  }),
+
+  downloadReportJob: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { id, jobId } = req.params;
+    if (!id || !jobId) throw ApiError.badRequest('Inspection id and job id are required');
+    const inspection = await inspectionsService.getById(id);
+    assertReviewerMayOpen(req.user, inspection);
+    const job = getReportJob(id, jobId);
+    if (!job) throw new ApiError(404, 'This report is no longer available (it is kept for 30 minutes). Please ask for it again.', 'REPORT_JOB_NOT_FOUND');
+    if (job.state === 'failed' && job.error) throw new ApiError(job.error.status, job.error.message, job.error.code);
+    if (job.state !== 'done' || !job.path) throw new ApiError(409, 'The report is still being prepared.', 'REPORT_NOT_READY');
+    res.setHeader('Content-Type', REPORT_MIME[job.format]);
+    res.setHeader('Content-Disposition', `attachment; filename="${job.fileName}"`);
+    res.setHeader('Content-Length', String(job.bytes ?? 0));
+    res.setHeader('Cache-Control', 'private, no-store');
+    await audit({ category: 'web', action: 'report.download', inspectionId: id, jobNo: inspection.jobNo, target: { type: 'Report', id, label: job.fileName }, message: `${job.format === 'pdf' ? 'PDF' : 'Word'} report downloaded`, metadata: { format: job.format, bytes: job.bytes, sha256: job.sha256, kind: job.meta.kind, background: true } });
+    createReadStream(job.path).on('error', () => res.destroy()).pipe(res);
   }),
 
   // Renders the same `/report/:id` page a reviewer already sees into a real

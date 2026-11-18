@@ -44,6 +44,8 @@ export function ReportView() {
   // A Construction Stage inspection has its own report layout (undefined while its templates load).
   const construction = useConstructionReport(inspection);
   const [downloading, setDownloading] = useState(false);
+  // "Preparing report… loading photographs (120 of 250)" while the server makes the file in the background.
+  const [progress, setProgress] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // The actual branded PDF (real logo, per-page footer, page breaks) --
@@ -62,11 +64,12 @@ export function ReportView() {
     setDownloading(true);
     setDownloadError(null);
     try {
-      await openReportFile(id, format, reportFileName({ id, jobNo: inspection?.jobNo }, !!construction, format));
+      await openReportFile(id, format, reportFileName({ id, jobNo: inspection?.jobNo }, !!construction, format), setProgress);
     } catch (e) {
       setDownloadError(e instanceof Error ? e.message : "Failed to download the report");
     } finally {
       setDownloading(false);
+      setProgress(null);
     }
   }
 
@@ -178,6 +181,9 @@ export function ReportView() {
           {downloadError && (
             <span style={{ fontSize: "12px", color: "#dc2626", fontWeight: 600 }}>{downloadError}</span>
           )}
+          {downloading && progress && (
+            <span role="status" data-report-progress="" style={{ fontSize: "12px", color: "#475569", fontWeight: 600 }}>{progress}</span>
+          )}
           <button
             onClick={() => handleDownload("pdf")}
             disabled={downloading}
@@ -198,7 +204,7 @@ export function ReportView() {
               boxShadow: "0 2px 8px rgba(26,42,74,0.3)",
             }}
           >
-            <Download size={15} /> {downloading ? "Generating…" : "Download PDF"}
+            <Download size={15} /> {downloading ? "Preparing report…" : "Download PDF"}
           </button>
           <button
             onClick={() => handleDownload("docx")}
@@ -219,7 +225,7 @@ export function ReportView() {
               opacity: downloading ? 0.7 : 1,
             }}
           >
-            <FileText size={15} /> {downloading ? "Generating…" : "Download Word"}
+            <FileText size={15} /> {downloading ? "Preparing report…" : "Download Word"}
           </button>
           <button
             onClick={() => window.print()}
