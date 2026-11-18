@@ -56,7 +56,7 @@ export function useConstructionReport(inspection?: Inspection, opts?: { includeU
     ).then((inputs) => {
       if (cancelled) return;
       const jobInfo = inspection.sections.find((s) => (s.key ?? s.id).startsWith("job-info"));
-      setModel(buildConstructionReport(inputs, (jobInfo?.answers as AnswerTree | null | undefined) ?? null));
+      setModel(buildConstructionReport(inputs, (jobInfo?.answers as AnswerTree | null | undefined) ?? null, { apartment: profile.propertyType === "apartment" }));
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -263,6 +263,7 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
         </Fragment>
       ))}
       {t.footnote && <p style={{ margin: "8px 0 4px", fontStyle: "italic", fontSize: "12px", lineHeight: 1.4, breakInside: "avoid" }}>{t.footnote}</p>}
+      {t.closing?.map((c, i) => <p key={`closing-${i}`} data-table-closing="" style={{ margin: "8px 0 4px", breakInside: "avoid" }}>{c}</p>)}
       {t.photos.map((p, i) => <RowPhotos key={i} heading={p.heading} photos={p.photos} compact={compact} />)}
     </div>
   );
@@ -469,9 +470,11 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           )}
         </div>
 
-        {model.notes.length > 0 && (
+        {(model.notes.length > 0 || model.commonAreaNotes.length > 0) && (
           <div id="notes" style={{ marginTop: "26px" }}>
-            <Bullets items={model.notes} lead={<><Heading>Notes</Heading><Back /></>} />
+            {model.notes.length > 0 ? <Bullets items={model.notes} lead={<><Heading>Notes</Heading><Back /></>} /> : <><Heading>Notes</Heading><Back /></>}
+            {/* PCI Apartment: the template's COMMON AREAS notes, under their own sub-heading. */}
+            {model.commonAreaNotes.length > 0 && <Bullets items={model.commonAreaNotes} lead={<SubHeading>Common Areas</SubHeading>} />}
           </div>
         )}
 
