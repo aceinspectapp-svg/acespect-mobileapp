@@ -56,9 +56,9 @@ export function useDescriptionContent(inspection: Inspection, reportText: string
   const description = inspection.sections.find((s) => (s.key ?? s.id).startsWith("description"));
   const wording = wordingFor(reportProfileOf(inspection.type, inspection.propertyType));
   // The Residential form's "front_elevation" photo; the Apartment form's is its "Building & street overview pics" (the first of them);
-  // Public Assets' is the first of its "Site & Assets Overview" photo sequence.
+  // Public Assets' is the first of its "Site & Assets Overview" photo sequence; Commercial Properties' the first of its "Street views".
   const answers = (description?.answers as Record<string, unknown> | null | undefined) ?? {};
-  const frontPhotos = [answers.front_elevation, answers.overviewPhotos, answers.siteAssetsOverview].find((v) => Array.isArray(v) && typeof v[0] === "string") as string[] | undefined;
+  const frontPhotos = [answers.front_elevation, answers.overviewPhotos, answers.siteAssetsOverview, answers.streetViews].find((v) => Array.isArray(v) && typeof v[0] === "string") as string[] | undefined;
   const photoUrl = frontPhotos?.[0];
   const totalPhotos = countReportPhotos(inspection);
 

@@ -455,6 +455,8 @@ export const dilapidationCommercialProperties: ReportWording = {
     propertyType: "commercial_properties",
   },
   status: "final",
+  // The form's Pool / Spa slot holds the Offices & Staff Facilities here -- a commercial report has no pool disclaimer.
+  poolSpaDisclaimer: false,
   composers: {
     description,
     driveway,

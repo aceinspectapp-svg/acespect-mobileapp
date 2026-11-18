@@ -445,10 +445,13 @@ export function defectOffsets(itemFields: TemplateField[], inst: AnswerTree): Re
  * limitations to the scope, safety issues (and, for Public Assets, whether safety and access were assessed). Nothing
  * is said for an answer of "No" with nothing to add.
  */
+const NO_CHANGE = /^(no|nope|none|nil|n\/?a|not applicable|no changes?(\s+(to|in)\s+(the\s+)?scope)?)[.!]?$/i;
+
 export function scopeAndSafetyParagraphs(inst: AnswerTree): string[] {
   const out: string[] = [];
   const changes = asString(inst.scopeChanges).trim();
-  if (changes) out.push(`The scope of the inspection was changed. ${capitalize(withPeriod(changes.replace(/\s*\n+\s*/g, " ")))}`);
+  // "Changes to scope?" must be answered on the phone, so "No" / "None" / "N/A" there means nothing changed.
+  if (changes && !NO_CHANGE.test(changes)) out.push(`The scope of the inspection was changed. ${capitalize(withPeriod(changes.replace(/\s*\n+\s*/g, " ")))}`);
   if (yesNo(inst, "scopeLimitations")) {
     const notes = asString(inst.scopeLimitationsNotes).trim();
     out.push(`There were limitations to the scope of the inspection.${notes ? ` ${capitalize(withPeriod(notes.replace(/\s*\n+\s*/g, " ")))}` : ""}`);
