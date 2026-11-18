@@ -7,6 +7,7 @@ import type { FormSection } from "../mockData";
 import { buildReportHeader, withExcludedPhotosRemoved } from "../report";
 import { useAppData, useInspectionDetail } from "../data";
 import { openReportFile, reportFileName } from "../reportFile";
+import { reportBackAction, reviewPagePath } from "../reportPage";
 import { ReportCover } from "../components/ReportCover";
 import { sectionPhotoArchiveUrl } from "../photoArchive";
 import { ReportDescription } from "../components/ReportDescription";
@@ -55,7 +56,7 @@ export function ReportView() {
   // Opens in a new tab. The tab is opened straight away (inside the click, so the browser does not block it as a pop-up) and shows a
   // short "Preparing" note while the server builds the file; then a PDF shows in the browser's own viewer, and a Word file (which a
   // browser cannot show) is saved from that tab under its proper name. If the browser blocks new tabs, the file downloads here as before.
-  // (the body is openReportFile in reportFile.ts -- the reviewer page's Report button uses the same one)
+  // (the body is openReportFile in reportFile.ts)
   async function handleDownload(format: "pdf" | "docx") {
     if (!id) return;
     setDownloading(true);
@@ -149,7 +150,13 @@ export function ReportView() {
         }}
       >
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            // Opened in its own tab by the review page's Report button: close it (the review page is still open behind it).
+            if (reportBackAction(window.history.length) === "back") return navigate(-1);
+            window.close();
+            // The browser did not let the tab close: show the inspection's review page here.
+            if (!window.closed) navigate(reviewPagePath(currentUser?.role, inspection.id));
+          }}
           style={{
             display: "flex",
             alignItems: "center",

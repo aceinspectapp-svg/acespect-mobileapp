@@ -35,7 +35,7 @@ import { ActiveTemplate, AnswerTree, AnswerValue, TemplateFieldOption, flattenSe
 import { inspectionIdFromTitle, propertyIdFromTitle } from "../../constants/inspectionData";
 import { reportProfileOf } from "../../wording/profile";
 import { api, resolveMediaUrl } from "../../api";
-import { openReportFile, reportFileName } from "../../reportFile";
+import { openReportPage, reportPagePath } from "../../reportPage";
 import { anatomy, applyEdits, diffEdits, hasEdits, joinLines, splitLines, type TextEdits } from "../../textEdits";
 import { EditableText, ReportEditContext, type ReportEditApi } from "../../components/EditableText";
 import { ReportTextEditor } from "../../components/ReportTextEditor";
@@ -838,8 +838,6 @@ export function ReviewerFormView() {
   const [, setBusy] = useState(false);
   /** id of the section/damage a photo upload is currently in flight for -- disables just that one "Add Photo" button. */
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
-  // The Report button while the PDF is being made for its new tab.
-  const [openingReport, setOpeningReport] = useState(false);
   // sectionKey -> its current published template (or null once we know none
   // exists for that key, e.g. a legacy/custom section).
   // Each section's form, cached by section key FOR ONE report type: the same key ("elevations") is a different form for an Apartment and
@@ -1363,14 +1361,10 @@ export function ReviewerFormView() {
 
         <button
           onClick={() => {
-            // Straight to the report PDF in a new tab, exactly like the report page's Download PDF.
-            if (openingReport) return;
-            setOpeningReport(true);
-            openReportFile(inspection.id, "pdf", reportFileName(inspection, isConstructionInspection(inspection), "pdf"))
-              .catch((e) => window.alert(e instanceof Error ? e.message : "Could not open the report."))
-              .finally(() => setOpeningReport(false));
+            // The report page in a new tab, where the report can be read and downloaded as a PDF or a Word file.
+            // If the browser blocks the new tab, the report page opens here instead.
+            if (!openReportPage(inspection.id)) navigate(reportPagePath(inspection.id));
           }}
-          disabled={openingReport}
           style={{
             height: "32px",
             padding: "0 12px",
@@ -1389,7 +1383,7 @@ export function ReviewerFormView() {
           title={isConstructionInspection(inspection) ? "Generate Construction Report" : "Generate Dilapidation Report"}
         >
           <FileText size={14} />
-          {openingReport ? "Opening…" : "Report"}
+          Report
         </button>
 
         <div style={{ fontSize: "12px", color: "#94a3b8", flexShrink: 0 }}>
