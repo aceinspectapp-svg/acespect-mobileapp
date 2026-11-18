@@ -32,9 +32,15 @@ export const lower = (s: string) => (s ? s.charAt(0).toLowerCase() + s.slice(1) 
 export function inline(typed: string): string {
   const t = typed.trim().replace(/[\s.;:,!]+$/, "");
   const first = /^\S+/.exec(t)?.[0] ?? "";
-  const keep = /^[A-Z0-9]{2,}\b/.test(first) || /^.[^\s]*[A-Z]/.test(first) || /^\S+\s+\d/.test(t);
+  const keep = /^[A-Z0-9]{2,}\b/.test(first) || /^.[^\s]*[A-Z]/.test(first) || /^\S+\s+\d/.test(t) || PROPER_NAMES.has(first.replace(/[^A-Za-z]/g, "").toLowerCase());
   return keep ? t : lower(t);
 }
+
+/**
+ * Brand and builder names the forms offer as choices ("Hebel", "Colorbond", "Simonds"): a name keeps its capital wherever the report
+ * puts it inside a sentence ("Wall cladding is constructed of Hebel …"), as the office templates write it.
+ */
+export const PROPER_NAMES = new Set(["hebel", "colorbond", "zincalume", "kliplock", "simonds", "mirvac", "hacer"]);
 
 /**
  * The template's own spelling for a few words the forms spell another way ("Eave linings / sofitt" -> "Eave linings / soffit",

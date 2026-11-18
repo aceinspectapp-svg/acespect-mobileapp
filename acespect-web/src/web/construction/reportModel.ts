@@ -48,7 +48,20 @@ export interface ChecklistTable {
   intro?: string;
   /** The template's fixed note printed after the table's rows, in italics (Pre-pour: the land surveying note after the setbacks). */
   footnote?: string;
+  /** The template's own sentences printed after the table's rows, as plain text (PCI Apartment: the Owners Corporation roof note). */
+  closing?: string[];
 }
+
+/** PCI Apartment template, under ROOF. */
+export const APARTMENT_ROOF_NOTE = "Roof coverings in an apartment complex are common property and need to be maintained through the Owners Corporation.";
+/** PCI Apartment template, after the COMMON AREAS checks. */
+export const APARTMENT_COMMON_AREAS_NOTE =
+  "Any comments regarding Common Areas are general only. The Inspector is not providing a pool safety barrier certification nor verifying the condition nor operation of any equipment to any of the Common Area facilities. Refer to the strata manager and owners corporation regarding the maintenance and safety of any common areas and facilities such as pools, gyms, BBQ’s, fire and security systems, basements and foyers.";
+/** PCI Apartment template, COMMON AREAS notes (the two that apply to every apartment, in the template's order). */
+export const APARTMENT_COMMON_AREA_NOTES = [
+  "Regular maintenance or repair work to the common areas of the apartment complex, such as roofing, driveways and fencing, should be coordinated and funded through the Owners Corporation.",
+  "Houspect’s inspection is focussed on the specific Apartment in scope, and whilst Common areas are observed we do not provide an assessment of the entire building during a Pre-settlement/Handover inspection.  The inspector may provide comments on common area concerns and incomplete works to assist owners with understanding the status of the construction and any general facilities.",
+];
 
 /** Pre-pour template: the sentence under the PRE POUR heading, before the first of its checks. */
 export const PRE_POUR_INTRO = "These items were checked for construction and workmanship.";
@@ -119,6 +132,8 @@ export interface ConstructionReportModel {
   defectGroups: DefectGroup[];
   defectCount: number;
   notes: string[];
+  /** PCI Apartment: the template's COMMON AREAS notes, printed under their own sub-heading after the Notes. */
+  commonAreaNotes: string[];
   /** The same notes by the section that wrote them (Summary, Site & Facilities), for the reviewer portal's one-section view. */
   notesBySection: Record<string, string[]>;
   previous: AttachedList;
@@ -233,7 +248,7 @@ export function pciProgress(status: string): string {
  * of the Rooms checklist, Manhole … after Other). General is always last. A heading not listed stays after the one printed before it.
  */
 const PCI_TOPIC_ORDER = [
-  "site and facilities", "roof", "walls", "windows and doors", "flyscreens and car bay", "porch", "garage", "driveway and paving", "balconies", "site", "common areas",
+  "site and facilities", "roof", "walls", "windows and doors", "flyscreens and car bay", "basement", "porch", "garage", "driveway and paving", "balconies", "site", "common areas",
   "internal", "front door", "hallway and entry", "kitchen and pantry", "living family", "lounge", "theatre room", "bedroom 1 and ensuite", "bedroom 2", "bedroom 3",
   "bedroom 4", "study", "stairs and stairwell", "bathroom", "powder room", "laundry", "finishes", "utilities services", "other", "manhole roof cavity insulation",
 ];
@@ -285,7 +300,7 @@ const norm = (s: string) => s.toLowerCase().replace(/&/g, "and").replace(/[^a-z0
 
 // ───────────────────────── The whole report ─────────────────────────
 
-export function buildConstructionReport(sections: SectionInput[], jobInfo: AnswerTree | null): ConstructionReportModel | null {
+export function buildConstructionReport(sections: SectionInput[], jobInfo: AnswerTree | null, opts: { apartment?: boolean } = {}): ConstructionReportModel | null {
   const stage = stageOfSectionKeys(sections.map((s) => s.key));
   if (!stage) return null;
   const meta = STAGES[stage];
@@ -398,6 +413,11 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
           // ... and closes its four setbacks with the land surveying note (not when the setbacks are not there or not applicable).
           if (kept.some((g) => g.items.some((it) => /setback/i.test(it.heading) && it.status !== "na"))) table.footnote = SETBACK_NOTE;
         }
+        if (stage === "pci" && opts.apartment) {
+          // The PCI Apartment template's own sentences: the Owners Corporation note under ROOF, the disclaimer after the COMMON AREAS checks.
+          if (s.key === "pci_roof" && kept.length) table.closing = [APARTMENT_ROOF_NOTE];
+          if (kept.some((g) => g.heading && norm(g.heading) === "common areas")) table.closing = [...(table.closing ?? []), APARTMENT_COMMON_AREAS_NOTE];
+        }
         tables.push(table);
       }
     } else if (kind === "summary") {
@@ -455,6 +475,6 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
 
   return {
     stage, stageLabel, coverTitle: coverTitleOf(stage), purpose: PURPOSE, general: GENERAL, description, streetPhotos, otherPhotos, tables, totals,
-    defectGroups, defectCount: n, notes: printedNotes, notesBySection, previous, clientConcerns, waitingSections, attachedKeys,
+    defectGroups, defectCount: n, notes: printedNotes, commonAreaNotes: stage === "pci" && opts.apartment ? [...APARTMENT_COMMON_AREA_NOTES] : [], notesBySection, previous, clientConcerns, waitingSections, attachedKeys,
   };
 }

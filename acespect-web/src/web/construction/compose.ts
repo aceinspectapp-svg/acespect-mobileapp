@@ -50,9 +50,10 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartm
 
   const kind = one("constructionIs") || one("design");
   const foundations = one("foundations");
-  if (stage === "pci" && !apartment) {
-    // The PCI template: "The construction is a sing/double storey residential house." then "Foundations are concrete slab / …".
-    if (kind) out.push(`The construction is a ${kind} residential house.`);
+  if (stage === "pci") {
+    // The PCI templates: "The construction is a single/double storey residential house." (House) or "The construction is a single level
+    // apartment in a multi-level complex." (Apartment), then "Foundations are concrete slab / …" as its own line.
+    if (kind) out.push(`The construction is a ${kind} ${apartment ? "apartment in a multi-level complex" : "residential house"}.`);
     if (foundations) out.push(`Foundations are ${foundations}.`);
   }
   else if (kind && foundations) out.push(`The construction is a ${kind}${apartment ? " apartment" : ""} on a ${foundations}.`);
@@ -125,6 +126,8 @@ function defectText(heading: string, location: string, comments: string, severit
  * A place the checklist already has a heading for ("Garage", "Balconies") is printed under that heading (reportModel.ts, placeKey).
  */
 const PLACES: [RegExp, string][] = [
+  // An apartment complex's common property ("Common corridor, level 3", "Foyer"): the checklist's Common areas.
+  [/\b(common|foyer|lobby)\b/i, "Common areas"],
   [/\bfront door\b/i, "Front door"], [/\b(manhole|roof (space|cavity)|ceiling insulation|insulation|sarking)\b/i, "Manhole, Roof Cavity, Insulation"],
   [/\b(garage|carport)\b/i, "Garage / Carport"], [/\b(roof|gutters?|downpipes?|fascias?|eaves?|soffits?)\b/i, "Roof"], [/\bporch\b/i, "Porch"],
   [/\b(alfresco|balcon(y|ies)|decking|deck|verandah|terrace)\b/i, "Alfresco / Balcony"], [/\b(driveway|paving|path)\b/i, "Driveway & Paving"],
@@ -173,7 +176,9 @@ export const TYPICAL_DEFECTS: Record<string, { place: string; text?: string }> =
   garage_slab: { place: "Garage / Carport", text: "Scrape and clean garage hardstand." },
   ground_falls: { place: "Site" },
   sliding_door_tracks: { place: "Windows and Doors" }, window_seals_at: { place: "Windows and Doors" },
-  front_door_fire: { place: "Front door" }, front_door_latching: { place: "Front door" }, excess_paint_door: { place: "Front door" }, screws_door_hinges: { place: "Front door" },
+  front_door_fire: { place: "Front door" }, front_door_latching: { place: "Front door" }, excess_paint_door: { place: "Front door" },
+  // The form's "Screws missing from Front door hinges", without the capital in the middle of the sentence.
+  screws_door_hinges: { place: "Front door", text: "Screws missing from front door hinges." },
   hallway_marks: { place: "Hallway & Entry" },
   kitchen_cabinet_doors: { place: "Kitchen & Pantry" }, cabinets_chipped: { place: "Kitchen & Pantry" }, kitchen_family_marks: { place: "Kitchen & Pantry" }, kitchen_caulking: { place: "Kitchen & Pantry" },
   bed1_marks: { place: "Bedroom 1 & Ensuite" }, ensuite1_caulking: { place: "Bedroom 1 & Ensuite" },
@@ -181,6 +186,7 @@ export const TYPICAL_DEFECTS: Record<string, { place: string; text?: string }> =
   grouting_poor: { place: "Finishes" }, floor_coverings_marked: { place: "Finishes" },
   windows_doors_cleaned: { place: "General", text: "All windows and doors to be cleaned and detailed." },
   // The form's "All windows and floor tile and coverings to be cleaned": the template's line, keeping the windows.
+  // When "All windows and doors to be cleaned and detailed." is printed too, it is the template's own line (windows are not said twice).
   windows_floor_cleaned: { place: "General", text: "All windows, tiles and floor coverings to be cleaned and detailed." },
   benchtops_cleaned: { place: "General", text: "All benchtops and vanities to be cleaned and detailed." },
 };
@@ -198,8 +204,12 @@ function joined(lead: string, followUp: TemplateField | undefined, typed: string
   return sentence(`${lead} ${join}${t}`);
 }
 
+/** The template's General line for tiles and floor coverings (printed beside "All windows and doors to be cleaned and detailed."). */
+export const TILES_CLEANED = "All tiles and floor coverings to be cleaned and detailed.";
+
 function typicalDefects(fields: TemplateField[], a: AnswerTree): Defect[] {
   const out: Defect[] = [];
+  const ticked = new Set(fields.filter((f) => f.type === "chip-multiselect" && isGateSatisfied(f, a)).flatMap((f) => asList(a[f.key])));
   for (const f of fields) {
     if (f.type !== "chip-multiselect" || !isGateSatisfied(f, a)) continue;
     for (const optKey of asList(a[f.key])) {
@@ -207,7 +217,8 @@ function typicalDefects(fields: TemplateField[], a: AnswerTree): Defect[] {
       if (!opt) continue;
       const at = asString(a[`${optKey}_at`]).trim();
       const known = TYPICAL_DEFECTS[optKey];
-      const description = known?.text && !at ? known.text : joined(opt.label, fields.find((x) => x.key === `${optKey}_at`), at);
+      const both = optKey === "windows_floor_cleaned" && ticked.has("windows_doors_cleaned");
+      const description = both ? TILES_CLEANED : known?.text && !at ? known.text : joined(opt.label, fields.find((x) => x.key === `${optKey}_at`), at);
       // Printed under its place with no bold line of its own: the place is the heading, and the numbered line says what it is (not the tick's name twice).
       out.push({ sub: known?.place ?? "General", area: f.sectionLetter === "External" ? "EXTERNAL" : "INTERNAL", location: "", text: defectText("", "", description, [], [], ""), photos: photosIn(a[`${optKey}_pics`]), item: "", description });
     }
@@ -265,8 +276,16 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
   const visible = [...fields].filter((f) => isGateSatisfied(f, a) && !commonArea(f)).sort((x, y) => x.order - y.order);
   const headings = headingMap(fields);
   const area = kind === "site" ? "EXTERNAL" : areaOfSection(key);
+  // The Apartment form groups Flyscreens with the car bay ("Flyscreens and car bay"); its template prints Flyscreens under Windows and
+  // Doors and the car bay, storage cage and car stacker under BASEMENT.
+  const windowsGroup = fields.map((f) => (f.sectionLetter ? groupOf(f.sectionLetter) : "")).find((g) => /^windows and doors$/i.test(g)) ?? "Windows and Doors";
+  const groupFor = (f: TemplateField): string | undefined => {
+    const g = f.sectionLetter ? groupOf(f.sectionLetter) : undefined;
+    if (apartment && g && /^flyscreens and car bay$/i.test(g)) return /^flyscreens/i.test(f.label) ? windowsGroup : "Basement";
+    return g;
+  };
   const add = (f: TemplateField, heading: string, status: ItemStatus, text: string) => {
-    if (text) rows.push({ group: f.sectionLetter ? groupOf(f.sectionLetter) : undefined, heading, status, text, key: f.key });
+    if (text) rows.push({ group: groupFor(f), heading, status, text, key: f.key });
   };
   const hasRed = (f: TemplateField) => !!f.options?.some((x) => toneOfOption(x.color) === "bad");
 
@@ -281,7 +300,7 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
     const typed = /_other$/.test(f.key) ? asString(a[`${f.key}_note`]).trim().replace(/[.]$/, "") : "";
     if (typed) heading = cap(typed);
     defects.push({
-      sub: f.sectionLetter ? groupOf(f.sectionLetter) : "General", area, location: asString(d.location).trim(),
+      sub: groupFor(f) ?? "General", area, location: asString(d.location).trim(),
       text: defectText(heading, asString(d.location).trim(), asString(d.comments).trim(), mapLabels(d.severity, SEVERITY_LABELS), mapLabels(d.category, CATEGORY_LABELS), asString(d.constructionCode).trim()),
       item: heading, description: rowDescription(heading, asString(d.location).trim(), asString(d.comments).trim()),
       photos: photosIn(d.photos),
@@ -414,6 +433,12 @@ const observed = (c: Chosen): string => {
       const isOtherRow = /_other$/.test(f.key);
       const isDefect = f.defectOn ? f.defectOn.includes(v) : c.tone === "bad";
       let status = statusOf(c, isDefect);
+      if (apartment && !isDefect) {
+        // The Apartment template uses "Multi-level complex" only in the construction line, not as a Roof row; and an apartment has no
+        // garage row unless the inspector answered it with something other than N/A.
+        if (/^multi-level complex$/i.test(heading)) continue;
+        if (/^garage\b/i.test(heading) && status === "na") continue;
+      }
       // "Yes" / "No" on a check that also offers "see notes" (power supply: Yes / No - see notes) means it is fine; "Complete? Yes" is an answer in itself.
       const plainYesNo = !/complete\??$/i.test(heading) && !!f.options?.some((x) => toneOfOption(x.color) !== "ok");
       let text = textFor(status, c, hasRed(f), plainYesNo);
@@ -431,7 +456,7 @@ const observed = (c: Chosen): string => {
           if (status === "ok" || status === "na") status = "note";
         }
       }
-      const row: Row = { group: f.sectionLetter ? groupOf(f.sectionLetter) : undefined, heading, status, text, key: f.key, answer: c.label, typed: typedText || undefined };
+      const row: Row = { group: groupFor(f), heading, status, text, key: f.key, answer: c.label, typed: typedText || undefined };
       rows.push(row);
       rowByKey.set(f.key, row);
       if (isDefect) captureDefect(f, heading);
