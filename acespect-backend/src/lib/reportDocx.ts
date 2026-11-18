@@ -22,7 +22,7 @@ import {
 } from 'docx';
 import type { Page } from 'puppeteer';
 import { REPORT_EXTRACT_SOURCE } from './reportDocxExtract';
-import { BRAND_NAVY, BRAND_RED, COMPANY_ABN_ACN, COMPANY_NAME, withReportPage } from './reportPdf';
+import { BRAND_NAVY, BRAND_RED, COMPANY_ABN_ACN, COMPANY_NAME, withReportPage, type ReportPageOptions } from './reportPdf';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
 import { fetchReportPhoto, isMediaUrl, photosFailedMessage, ReportPhotoError, warnMissingPhoto } from './reportPhotos';
 import { ApiError } from '../utils/ApiError';
@@ -578,6 +578,7 @@ export async function generateInspectionReportDocx(
   inspectionId: string,
   authToken: string,
   meta: { clientName: string; jobNo: string; title: string; inspectionDate?: string },
+  onStage?: ReportPageOptions['onStage'],
 ): Promise<Buffer> {
   const { extracted, pictures } = await withReportPage(
     inspectionId,
@@ -587,7 +588,7 @@ export async function generateInspectionReportDocx(
       return { extracted: read, pictures: read.error ? new Map<string, Picture>() : await loadPictures(read.blocks, page, authToken, inspectionId) };
     },
     // A4 (794px at 96 dpi) less the PDF's 22mm side margins: the width the PDF is laid out at.
-    { print: true, width: Math.round((TEXT_WIDTH_TWIPS / 1440) * 96) },
+    { print: true, width: Math.round((TEXT_WIDTH_TWIPS / 1440) * 96), onStage, label: 'docx' },
   );
   if (extracted.error) throw new Error(`Could not read the report page: ${extracted.error}`);
 
