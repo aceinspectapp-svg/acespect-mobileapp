@@ -58,6 +58,20 @@ const DEFECT_SUFFIX = "__defect";
 
 // ───────────────────────── Description ─────────────────────────
 
+/**
+ * The foundations as they read after "The construction is a … ": "on a concrete slab", but "on stumps", "on timber stumps",
+ * "on brick piers" (the templates: "on a concrete slab / timber stumps / concrete stumps"). "a" / "an" only before one thing; a typed
+ * "Other" that already starts with "a", "an" or "the" is kept as typed.
+ */
+export function onFoundations(foundations: string): string {
+  const f = foundations.trim();
+  if (/^(a|an|the)\s/i.test(f)) return `on ${f}`;
+  const last = (/([A-Za-z]+)[^A-Za-z]*$/.exec(f)?.[1] ?? "").toLowerCase();
+  const plural = /(s|es)$/.test(last) && !/(ss|us|is)$/.test(last);
+  if (plural || / and /i.test(f)) return `on ${f}`;
+  return `on ${/^[aeiou]/i.test(f) ? "an" : "a"} ${f}`;
+}
+
 function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartment: boolean): string[] {
   const f = (k: string) => fields.find((x) => x.key === k);
   // Each answer as it reads inside the sentence: a typed "Other" loses its own full stop and capital (inline).
@@ -76,7 +90,7 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartm
     if (kind) out.push(`The construction is a ${kind} ${apartment ? "apartment in a multi-level complex" : "residential house"}.`);
     if (foundations) out.push(`Foundations are ${foundations}.`);
   }
-  else if (kind && foundations) out.push(`The construction is a ${kind}${apartment ? " apartment" : ""} on a ${foundations}.`);
+  else if (kind && foundations) out.push(`The construction is a ${kind}${apartment ? " apartment" : ""} ${onFoundations(foundations)}.`);
   else if (kind) out.push(`The construction is a ${kind}${apartment ? " apartment" : ""}.`);
   else if (foundations) out.push(`Foundations are ${foundations}.`);
 
