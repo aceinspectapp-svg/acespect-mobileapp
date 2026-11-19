@@ -12,7 +12,7 @@
  */
 import type { AnswerTree, TemplateField } from "../templateFields";
 import { asString } from "../templateFields";
-import { headingMap, headingOf, photosIn } from "./words";
+import { defectItemName, headingMap, headingOf, photosIn } from "./words";
 import { GENERAL, PURPOSE, SECTION_ORDER, STAGES, coverTitleOf, kindOfKey, stageOfSectionKeys, type StageId } from "./stages";
 import { ITEM_STATUSES, TAGS, type ItemStatus } from "./compose";
 import library from "./codeLibrary.json";
@@ -34,8 +34,15 @@ export interface ChecklistItem {
   defectNo?: number;
   /** How many of the report's numbered defects this row raised (a defect row only): printed as "REFER DEFECTS (2)". */
   defectCount?: number;
+  /** The template's sentence printed under the row (the roof OH&S sentences). */
+  after?: string;
 }
-export interface ChecklistGroup { heading?: string; items: ChecklistItem[] }
+export interface ChecklistGroup {
+  heading?: string;
+  items: ChecklistItem[];
+  /** The template's sentence printed after the group's rows (the services disclaimer under SERVICES). */
+  closing?: string;
+}
 export interface ChecklistTable {
   /** The section this table was built from (the reviewer portal shows one section at a time). */
   sectionKey: string;
@@ -51,6 +58,11 @@ export interface ChecklistTable {
   /** The template's own sentences printed after the table's rows, as plain text (PCI Apartment: the Owners Corporation roof note). */
   closing?: string[];
 }
+
+/** Lock-up and PCI templates, under the SERVICES rows. */
+export const SERVICES_DISCLAIMER = "As the Houspect building inspector is not a licensed plumber, gas fitter technician nor licensed electrician the comments are observations by the inspector only.";
+/** The stages whose templates print SERVICES_DISCLAIMER (Lock-up, Lock-up and Fixing, PCI/Handover House and Apartment). */
+const SERVICES_DISCLAIMER_STAGES: StageId[] = ["lock_up", "lock_fix", "pci"];
 
 /** PCI Apartment template, under ROOF. */
 export const APARTMENT_ROOF_NOTE = "Roof coverings in an apartment complex are common property and need to be maintained through the Owners Corporation.";
@@ -163,6 +175,7 @@ export interface SectionInput {
 type Line =
   | { kind: "room"; text: string }
   | { kind: "item"; heading: string; status: ItemStatus; text: string }
+  | { kind: "after"; text: string }
   | { kind: "note"; text: string }
   | { kind: "defect"; index: number; text: string }
   | { kind: "para"; text: string };
@@ -175,6 +188,7 @@ export function parseLines(reportText: string): Line[] {
     const item = ITEM.exec(l);
     if (item) return { kind: "item", heading: item[1]!, status: (item[2] as ItemStatus | undefined) ?? "ok", text: item[3]!.trim() };
     if (l.startsWith(TAGS.note)) return { kind: "note", text: l.slice(TAGS.note.length) };
+    if (l.startsWith(TAGS.after)) return { kind: "after", text: l.slice(TAGS.after.length).trim() };
     const d = /^DEFECT::(\d+)::([\s\S]*)$/.exec(l);
     if (d) return { kind: "defect", index: Number(d[1]), text: d[2]!.trim() };
     return { kind: "para", text: l };
@@ -338,7 +352,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
     // The defects this section records, each paired with its own photos.
     const firstRaised = raised.length;
     // The names of this section's checklist items, as the template's rows give them (not what an inspector typed for an "Other" row).
-    const rowNames = new Set<string>([...lines.flatMap((l) => (l.kind === "item" ? [l.heading] : [])), ...headingMap(s.fields).values(), ...s.fields.map((f) => headingOf(f.label))]);
+    const rowNames = new Set<string>([...lines.flatMap((l) => (l.kind === "item" ? [l.heading] : [])), ...headingMap(s.fields).values(), ...s.fields.map((f) => headingOf(f.label)), ...s.fields.map((f) => defectItemName(headingOf(f.label)))]);
     for (const l of lines) {
       if (l.kind !== "defect") continue;
       const dmg = s.damages[l.index];
@@ -371,6 +385,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
           continue;
         }
         if (l.kind === "note") { siteNotes.push(l.text); (notesBySection[s.key] ??= []).push(l.text); continue; }
+        if (l.kind === "after") { const last = current?.items[current.items.length - 1]; if (!inDefects && last && l.text) last.after = l.text; continue; }
         if (inDefects || l.kind !== "item") continue;
         if (!current) { current = { items: [] }; groups.push(current); }
         const item: ChecklistItem = { id: `item-${++itemSeq}`, heading: l.heading, status: l.status, text: l.text };
@@ -389,7 +404,10 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       const kept = groups.filter((g) => g.items.length > 0).map((g) => {
         const heading = g.heading ? cleanGroup(g.heading) : undefined;
         // A sub-heading that only repeats the table's own title says nothing.
-        return { ...g, heading: heading && norm(heading) !== norm(title) ? heading : undefined };
+        const shown = heading && norm(heading) !== norm(title) ? heading : undefined;
+        // The template's disclaimer under the SERVICES rows (the services group, or a SERVICES table of its own).
+        const services = SERVICES_DISCLAIMER_STAGES.includes(stage) && /\bservices\b/.test(norm(heading ?? title));
+        return { ...g, heading: shown, ...(services ? { closing: SERVICES_DISCLAIMER } : {}) };
       });
       // Photographs the inspector took against a row ("Photos with measurements", "Photo showing the digital level").
       const photos: ChecklistTable["photos"] = [];

@@ -240,6 +240,7 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
                 <div style={{ padding: "6px 10px 7px" }}>
                   {/* Only the item's name: its status already shows in the right-hand column. */}
                   <div>{href ? <a href={href} style={{ textDecoration: "none" }}>{name}</a> : name}</div>
+                  {it.after && <div data-row-after="" style={{ fontSize: compact ? "11px" : "12px", lineHeight: 1.4, marginTop: "3px", color: C.ink }}>{it.after}</div>}
                 </div>
                 <div style={{ background: s.bg, color: s.fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: compact ? "8.5px" : "10px", fontWeight: 800, letterSpacing: compact ? "0.04em" : "0.1em", textAlign: "center", padding: "0 4px" }}>
                   {href ? <a href={href} style={{ color: s.fg, textDecoration: "underline" }}>{statusLabel(it)} ›</a> : statusLabel(it)}
@@ -260,6 +261,7 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
               </KeepTogether>
             );
           })}
+          {g.closing && <p data-group-closing="" style={{ margin: "6px 0 8px", fontSize: compact ? "11px" : "12px", lineHeight: 1.4, breakInside: "avoid" }}>{g.closing}</p>}
         </Fragment>
       ))}
       {t.footnote && <p style={{ margin: "8px 0 4px", fontStyle: "italic", fontSize: "12px", lineHeight: 1.4, breakInside: "avoid" }}>{t.footnote}</p>}

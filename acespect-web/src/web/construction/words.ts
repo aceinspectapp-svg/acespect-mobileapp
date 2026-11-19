@@ -51,6 +51,13 @@ export const spelled = (label: string): string => SPELLING.reduce((t, [re, to]) 
 export const sentence = (s: string) => (/[.!?]$/.test(s.trim()) ? s.trim() : `${s.trim()}.`);
 export const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
+/**
+ * A checklist row's name as its defect is headed: without the form's "how it was checked" wording ("Lower level roof covering
+ * inspected from ladder" -> "Lower level roof covering", "Lower level guttering inspected from ladder is" -> "Lower level guttering").
+ * The checklist row keeps its full name.
+ */
+export const defectItemName = (heading: string): string => heading.replace(/\s+inspected\s+from\s+(the\s+)?ladder(\s+is)?\s*[.:]?$/i, "").trim() || heading;
+
 /** "Gutters; debris, lack of fall…" -> "Gutters": the report headings are the short names; the rest is the form's own guidance. */
 export function headingOf(raw: string): string {
   const label = spelled(raw);
