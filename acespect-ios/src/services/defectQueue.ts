@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as qc from './qcApi';
-import { errorMessage, isNetworkError } from './qcCache';
+import { errorMessage, isRetryLater } from './qcCache';
 
 /**
  * Offline outbox for defect work. Anything an inspector or site user does to a defect (raise one, save the
@@ -77,7 +77,7 @@ export async function runOrQueue<T>(attempt: () => Promise<T>, op: QueueOp, labe
   try {
     return { queued: false, result: await attempt() };
   } catch (e) {
-    if (!isNetworkError(e)) throw e;
+    if (!isRetryLater(e)) throw e; // a real refusal; no connection or a busy server keeps the change for later
     const { entry } = await enqueueDefectWork(op, label);
     return { queued: true, entry };
   }
@@ -112,7 +112,7 @@ async function send(entry: QueueEntry, ids: Map<string, string>): Promise<void> 
 let flushing: Promise<FlushResult> | null = null;
 export interface FlushResult { sent: number; failed: number; offline: boolean }
 
-/** Send everything waiting, oldest first. Stops at the first network failure. */
+/** Send everything waiting, oldest first. Stops at the first network failure or busy server (and keeps the rest). */
 export function flushDefectQueue(): Promise<FlushResult> {
   if (!flushing) flushing = doFlush().finally(() => { flushing = null; });
   return flushing;
@@ -140,7 +140,8 @@ async function doFlush(): Promise<FlushResult> {
       await send(entry, ids);
       sent++;
     } catch (e) {
-      if (isNetworkError(e)) {
+      if (isRetryLater(e)) {
+        // No connection, or the server briefly busy (408 / 429 / 5xx): keep it and everything after it for the next try (every 30 s).
         offline = true;
         remaining.push(entry);
       } else {

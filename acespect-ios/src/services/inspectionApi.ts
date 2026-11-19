@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import type { AxiosRequestConfig } from 'axios';
 import { api, ensureFreshAccessToken, refreshAccessToken } from './apiClient';
+import { isTransientFailure, statusOf, withRetry } from './retryPolicy';
 import type { SubmitPayload } from '../context/InspectionDraftContext';
 
 /**
@@ -44,29 +45,27 @@ export async function uploadPhoto(
   };
 
   // Renew the sign-in first if it is about to run out (a long run of photos outlives a 15-minute sign-in), send, and if the sign-in still
-  // expired or the connection dropped, renew / wait and send again with a new form. Safe to repeat: the server keeps one copy per photoId.
-  for (let attempt = 0; ; attempt++) {
+  // expired renew it and send again with a new form. A busy server (408 / 429 / 5xx -- e.g. while it makes a large report) is waited out
+  // for about three minutes, no answer at all for about half a minute (retryPolicy.ts); "this photo is already being saved" (409) is sent
+  // again shortly (the server then returns the saved copy). Safe to repeat: the server keeps one copy per photoId.
+  const sendOnce = async (): Promise<string> => {
+    const config: AxiosRequestConfig & { _noAutoRetry?: boolean } = {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      _noAutoRetry: true,
+      timeout: 180000,
+    };
+    await ensureFreshAccessToken();
     try {
-      await ensureFreshAccessToken();
-      const config: AxiosRequestConfig & { _noAutoRetry?: boolean } = {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        _noAutoRetry: true,
-        timeout: 180000,
-      };
       const { data } = await api.post<{ url: string }>('/inspections/photos', buildForm(), config);
       return data.url;
     } catch (err) {
-      const status = (err as { response?: { status?: number } }).response?.status;
-      if (attempt >= 3) throw err;
-      if (status === 401) {
-        if (!(await refreshAccessToken())) throw err; // signed out for real: the app sends the person to sign in
-        continue;
-      }
-      const transient = status === undefined || status >= 500 || status === 429 || status === 409; // no reply at all (network / timeout), a server hiccup, "slow down", or "this photo is already being saved" (send again: the server then returns the saved copy)
-      if (!transient) throw err;
-      await new Promise((r) => setTimeout(r, [2000, 6000, 15000][attempt]!));
+      if (statusOf(err) !== 401) throw err;
+      if (!(await refreshAccessToken())) throw err; // signed out for real: the app sends the person to sign in
+      const { data } = await api.post<{ url: string }>('/inspections/photos', buildForm(), config);
+      return data.url;
     }
-  }
+  };
+  return withRetry(sendOnce, { retryable: (err) => isTransientFailure(err) || statusOf(err) === 409 });
 }
 
 export interface SubmitResult {
@@ -83,7 +82,9 @@ export interface SubmitResult {
 export async function submitInspection(
   payload: SubmitPayload,
 ): Promise<SubmitResult> {
-  const { data } = await api.post('/inspections/submit', payload, {
+  // A busy server (or no answer) is waited out and the inspection sent again (retryPolicy.ts): asking again for an inspection the server
+  // already holds is a success there, never a second copy. A real refusal (PHOTOS_MISSING, NOT_A_DRAFT …) comes back at once.
+  const { data } = await withRetry(() => api.post<SubmitResult>('/inspections/submit', payload, {
     // Same reasoning as uploadPhoto's override above: the payload itself is
     // small (photos are already-uploaded URLs by this point), but creating
     // the inspection + every section + damage row + the review job is real
@@ -91,7 +92,7 @@ export async function submitInspection(
     // default 15s (apiClient.ts) has been tight enough to throw a spurious
     // "Network Error" on an otherwise-successful submit.
     timeout: 60000,
-  });
+  }));
   return data;
 }
 

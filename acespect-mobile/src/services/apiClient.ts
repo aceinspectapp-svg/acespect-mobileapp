@@ -2,6 +2,7 @@ import { appHeaders, currentCorrelation } from './auditEvents';
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { API_URL } from '../config/api';
 import { tokenStorage } from './tokenStorage';
+import { isTransientFailure, retryAfterMs } from './retryPolicy';
 
 /**
  * Authenticated axios client.
@@ -98,8 +99,17 @@ api.interceptors.response.use(
   (res) => res,
   async (error: AxiosError) => {
     const original = error.config as
-      | (InternalAxiosRequestConfig & { _retry?: boolean; _noAutoRetry?: boolean })
+      | (InternalAxiosRequestConfig & { _retry?: boolean; _noAutoRetry?: boolean; _busyRetries?: number })
       | undefined;
+
+    // A read (GET) that met a busy server (408 / 429 / 5xx) or got no answer is asked again, twice, after a short wait (retryPolicy.ts).
+    // Only reads: they are always safe to repeat. Writes have their own retries (photo upload, submit) or queues.
+    if (original && (original.method ?? 'get').toLowerCase() === 'get' && isTransientFailure(error) && (original._busyRetries ?? 0) < 2) {
+      const n = original._busyRetries ?? 0;
+      original._busyRetries = n + 1;
+      await new Promise((r) => setTimeout(r, retryAfterMs(error) ?? [1500, 4000][n]));
+      return api(original);
+    }
 
     // `_noAutoRetry`: the caller renews the sign-in and re-sends by itself (a photo upload must rebuild its form data, which cannot be re-sent as is).
     if (error.response?.status === 401 && original && !original._retry && !original._noAutoRetry) {

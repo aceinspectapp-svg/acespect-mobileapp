@@ -50,7 +50,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "tunnel": "expo start --tunnel"
+    "tunnel": "expo start --tunnel",
+    "test": "node --test tests/*.test.mjs"
   },
   "private": true,
   "expo": {

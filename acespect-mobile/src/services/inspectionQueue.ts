@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as qc from './qcPlatformApi';
+import { isTransientFailure } from './retryPolicy';
 
 /**
  * Offline capture for inspection results (REQ-INP-OFFLINE): every result is
@@ -48,7 +49,8 @@ export async function dropEntry(inspectionId: string, itemNumber: string): Promi
   await write((await read()).filter((x) => !(x.inspectionId === inspectionId && x.itemNumber === itemNumber)));
 }
 
-const isNetworkError = (e: unknown) => !(e as { response?: unknown }).response;
+/** No connection, or the server briefly busy (408 / 429 / 5xx): the result is kept and sent again later, not marked as refused. */
+const isNetworkError = (e: unknown) => isTransientFailure(e);
 
 /** Send everything queued. Stops at the first network failure; entries the server rejects are kept with the reason. */
 export async function flushQueue(inspectionId?: string): Promise<{ sent: number; failed: number; offline: boolean }> {
