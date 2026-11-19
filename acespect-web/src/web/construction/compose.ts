@@ -5,6 +5,7 @@
  * The text is lines, in the same plain format every report type uses, with these tags:
  *   ROOMHEAD::<heading>        a sub-heading (a group of checks, "Roof", "Walls" ...)
  *   ITEM::<heading>::<status>::<text>   one checklist row: its short name, its status (ok, progress, defect, note, notcomplete, na) and its sentence
+ *   AFTER::<text>              the template's sentence printed under the checklist row just above it (the roof OH&S sentences)
  *   NOTE::<text>               a sentence that belongs under the report's Notes (printed there, and shown in the section for the reviewer)
  *   DEFECT::<n>::<text>        defect n of this section (its photos are the section's n-th damage record)
  * and plain paragraphs for everything else.
@@ -13,7 +14,7 @@ import type { AnswerTree, TemplateField } from "../templateFields";
 import { asAnswerTree, asString, asStringArray, isGateSatisfied } from "../templateFields";
 import { EXTERNAL_WORDS, STAGES, areaOfSection, kindOfKey, stageOfKey, type StageId } from "./stages";
 import {
-  type Chosen, CATEGORY_LABELS, NOT_APPLICABLE, SATISFACTORY, SEVERITY_LABELS, asList, cap, chosen, groupOf, headingMap, headingOf, inline, joinList, labelsOf, lower, mapLabels, photosIn, sentence, toneOfOption,
+  type Chosen, CATEGORY_LABELS, NOT_APPLICABLE, SATISFACTORY, SEVERITY_LABELS, asList, cap, chosen, defectItemName, groupOf, headingMap, headingOf, inline, joinList, labelsOf, lower, mapLabels, photosIn, sentence, toneOfOption,
 } from "./words";
 
 export interface ComposedDamage {
@@ -33,7 +34,26 @@ export interface ComposedDamage {
 }
 export interface Composed { text: string; damages: ComposedDamage[] }
 
-export const TAGS = { room: "ROOMHEAD::", item: "ITEM::", note: "NOTE::", defect: "DEFECT::" };
+export const TAGS = { room: "ROOMHEAD::", item: "ITEM::", after: "AFTER::", note: "NOTE::", defect: "DEFECT::" };
+
+/**
+ * The Lock-up template's OH&S sentences for a roof the inspector could not get onto (viewed from the ground). Under "Roof Covering" and
+ * "Roof Gutters" they are filled in from the form's upper / lower answers; the flashings have no upper / lower answers of their own, so
+ * under "Roof Flashing" and "Parapet Flashing / Capping" they read from that row's answer.
+ */
+export const OHS = {
+  roof: "Due to OH&S constraints the upper roof could not be safely accessed.",
+  roofUpper: (x: string) => `Observations from the ground indicate that the roof covering is ${x}.`,
+  roofLower: (x: string) => `Lower level roofing was checked and is ${x}.`,
+  flashings: "Due to OH&S constraints the upper roof flashings could not be safely inspected.",
+  flashingsUpper: (x: string) => `Observations from the ground indicate that the flashings are ${x}.`,
+  flashingsLower: (x: string) => `Lower level flashings were checked and are ${x}.`,
+  gutters: "Due to OH&S constraints the upper guttering could not be safely accessed.",
+  guttersUpper: (x: string) => `Observations from the ground indicate that the guttering is ${x}.`,
+  guttersLower: (x: string) => `Lower level guttering was checked and is ${x}.`,
+};
+/** The rows the flashings sentences are printed under (the Lock-up template has them under both). */
+const FLASHING_ROWS = new Set(["roofFlashing", "parapetFlashing"]);
 const DEFECT_SUFFIX = "__defect";
 
 // ───────────────────────── Description ─────────────────────────
@@ -262,7 +282,11 @@ function textFor(status: ItemStatus, c: Chosen, hasRedOption: boolean, plainYesN
 const SEVERITY_ORDER: ItemStatus[] = ["defect", "note", "notcomplete", "progress", "ok", "na"];
 const worst = (list: ItemStatus[]): ItemStatus => SEVERITY_ORDER.find((s) => list.includes(s)) ?? "ok";
 
-interface Row { group?: string; heading: string; status: ItemStatus; text: string; key?: string; answer?: string; /** What the inspector typed, exactly (the row's text is it as a sentence). */ typed?: string }
+interface Row {
+  group?: string; heading: string; status: ItemStatus; text: string; key?: string; answer?: string;
+  /** What the inspector typed, exactly (the row's text is it as a sentence). */ typed?: string;
+  /** The template's sentence printed under the row (AFTER::). */ after?: string;
+}
 
 /** One checklist section -> its rows (heading, status and sentence) and the defects raised in it. */
 function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind: "site" | "stage", apartment = false): { rows: Row[]; defects: Defect[] } {
@@ -290,8 +314,9 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
   const hasRed = (f: TemplateField) => !!f.options?.some((x) => toneOfOption(x.color) === "bad");
 
   /** If this row was answered "Defect", record the defect (with the details the inspector gave) and say so. */
-  const captureDefect = (f: TemplateField, heading: string): boolean => {
+  const captureDefect = (f: TemplateField, rowHeading: string): boolean => {
     const v = a[f.key];
+    let heading = defectItemName(rowHeading); // "Lower level roof covering inspected from ladder" -> "Lower level roof covering"
     if (f.type !== "pill-select" || typeof v !== "string") return false;
     const isDefect = f.defectOn ? f.defectOn.includes(v) : chosen(f, v).tone === "bad";
     if (!isDefect) return false;
@@ -363,8 +388,12 @@ const observed = (c: Chosen): string => {
   return lower(c.label);
 };
 
-// The upper-roof rows carry a limitation sentence in the office template.
+  /** The template's sentence printed under the row just added. */
+  const printUnder = (text: string) => { const last = rows[rows.length - 1]; if (last && text) last.after = text; };
+
+  // The upper-roof rows carry a limitation sentence in the office template.
   const roofFrom = fieldByKey.get("upperRoofFrom");
+  const upperRoofFromGround = !!roofFrom && typeof a.upperRoofFrom === "string" && /ground/i.test(chosen(roofFrom, a.upperRoofFrom).label);
   if (roofFrom && a.upperRoofFrom && !used.has("upperRoofFrom")) {
     const from = chosen(roofFrom, asString(a.upperRoofFrom)).label;
     const appears = fieldByKey.get("upperRoofAppears");
@@ -373,9 +402,9 @@ const observed = (c: Chosen): string => {
     const low = lowerRoof && a.lowerRoofLadder ? observed(chosen(lowerRoof, asString(a.lowerRoofLadder))) : "";
     const ground = /ground/i.test(from);
     const parts = [
-      ground ? "Due to OH&S constraints the upper roof could not be safely accessed." : /scaffold/i.test(from) ? "The upper roof covering was inspected from the scaffold." : "",
-      up ? `${ground ? "Observations from the ground indicate that the roof covering is" : "The upper roof covering is"} ${up}.` : "",
-      low ? `Lower level roofing was checked from the ladder and is ${low}.` : "",
+      ground ? OHS.roof : /scaffold/i.test(from) ? "The upper roof covering was inspected from the scaffold." : "",
+      up ? (ground ? OHS.roofUpper(up) : `The upper roof covering is ${up}.`) : "",
+      low ? OHS.roofLower(low) : "",
     ].filter(Boolean);
     used.add("upperRoofFrom"); used.add("upperRoofAppears"); used.add("lowerRoofLadder");
     if (parts.length) {
@@ -383,6 +412,7 @@ const observed = (c: Chosen): string => {
       emitAt.set("upperRoofFrom", () => {
         const defect = [appears, lowerRoof].map((f) => (f ? captureDefect(f, headingOf(f.label)) : false)).some(Boolean);
         add(roofFrom, "Roof covering", defect ? "defect" : worst([statusOfField(appears), statusOfField(lowerRoof)]), defect ? `${text} Refer defects.` : text);
+        if (ground) printUnder(text); // the template's OH&S sentences, under the row
       });
     }
   }
@@ -394,9 +424,9 @@ const observed = (c: Chosen): string => {
     const up = g && a.upperGutteringGround ? observed(chosen(g, asString(a.upperGutteringGround))) : "";
     const low = l && a.lowerGutteringLadder ? observed(chosen(l, asString(a.lowerGutteringLadder))) : "";
     const parts = [
-      noAccess ? "Due to OH&S constraints the upper guttering could not be safely accessed." : "",
-      up ? `Observations from the ground indicate that the guttering is ${up}.` : "",
-      low ? `Lower level guttering was checked and is ${low}.` : "",
+      noAccess ? OHS.gutters : "",
+      up ? OHS.guttersUpper(up) : "",
+      low ? OHS.guttersLower(low) : "",
     ].filter(Boolean);
     used.add("safeAccessGuttering"); used.add("upperGutteringGround"); used.add("lowerGutteringLadder");
     if (parts.length) {
@@ -404,6 +434,7 @@ const observed = (c: Chosen): string => {
       emitAt.set("safeAccessGuttering", () => {
         const defect = [g, l].map((f) => (f ? captureDefect(f, headingOf(f.label)) : false)).some(Boolean);
         add(gutterAccess, "Roof gutters", defect ? "defect" : worst([statusOfField(g), statusOfField(l)]), defect ? `${text} Refer defects.` : text);
+        if (noAccess) printUnder(text);
       });
     }
   }
@@ -457,6 +488,14 @@ const observed = (c: Chosen): string => {
         }
       }
       const row: Row = { group: groupFor(f), heading, status, text, key: f.key, answer: c.label, typed: typedText || undefined };
+      // The upper roof seen from the ground only: the template's flashings sentences under "Roof Flashing" and "Parapet Flashing / Capping".
+      // The form has no upper / lower answers for the flashings, so they read from the row's own answer: OK fills both in; a defect
+      // keeps the first sentence and points to the defects (which level is defective is in the defect itself).
+      if (upperRoofFromGround && FLASHING_ROWS.has(f.key) && status !== "na") {
+        row.after = status === "defect" ? `${OHS.flashings} Refer defects.`
+          : status === "ok" ? [OHS.flashings, OHS.flashingsUpper("satisfactory"), OHS.flashingsLower("satisfactory")].join(" ")
+          : [OHS.flashings, OHS.flashingsUpper(observed(c)), OHS.flashingsLower(observed(c))].join(" ");
+      }
       rows.push(row);
       rowByKey.set(f.key, row);
       if (isDefect) captureDefect(f, heading);
@@ -497,6 +536,10 @@ function siteNotes(stage: StageId, fields: TemplateField[], a: AnswerTree): stri
   const rubbish = pick("rubbishDangerous");
   const managed = pick("siteManaged");
   const finalClean = pick("finalSiteClean");
+  // "Is the site well managed?" answered "Can be improved …" (REFER NOTES): the Lock-up template's "Site appears to be well managed."
+  // before the clean-up note -- unless the inspector typed a note of their own about it in this section, which is printed instead.
+  const typedHere = fields.filter((x) => x.type === "text" || x.type === "textarea").map((x) => asString(a[x.key]).trim()).filter(Boolean);
+  if (managed && managed.tone === "warn" && !typedHere.some((t) => SITE_MANAGEMENT.test(t))) notes.push(WELL_MANAGED);
   if ((rubbish && rubbish.tone === "bad") || (managed && managed.tone !== "ok") || (finalClean && /required/i.test(finalClean.label))) {
     notes.push(stage === "pci" ? "Final builder's clean to be completed." : "Site needs a clean-up of rubbish/debris to improve access and safety.");
   }
@@ -504,6 +547,11 @@ function siteNotes(stage: StageId, fields: TemplateField[], a: AnswerTree): stri
   if (kerb && kerb.tone !== "ok") notes.push(stage === "pci" ? KERB_PCI : KERB);
   return notes;
 }
+
+/** The Lock-up template's sentence under "Management of Site". */
+export const WELL_MANAGED = "Site appears to be well managed.";
+/** A typed note that is about how the site is managed (so it is the note for "Is the site well managed?"). */
+const SITE_MANAGEMENT = /\b(well[- ]managed|managed|management|rubbish|clean[- ]?up|untidy|tidy|debris)\b/i;
 
 /** The kerb damage note: the Pre-pour, Slab and Frame templates' wording, and the PCI template's own. */
 export const KERB = "Damage was noted to the footpath/kerbs/nature strip/vehicle crossover. Usually, such items are attended to at the end of the project and arranged between the construction company and the local authority.";
@@ -533,10 +581,10 @@ function theSubject(heading: string): string {
  * e.g. Frame: "Sisalation has not yet been installed to frame."). Each field has one answer that leads to a note; the pattern checks it is
  * that answer, so no other answer can print the sentence. Shared by every stage that has the field.
  */
-const NOTE_SENTENCES: Record<string, { answer: RegExp; note: string }> = {
-  powerSupply: { answer: /^no\b/i, note: "There is no power supply to the site." },
-  waterSupply: { answer: /^no\b/i, note: "There is no water supply to the site." },
-  siteToilet: { answer: /^no\b/i, note: "There is no site toilet in position." },
+const NOTE_SENTENCES: Record<string, { answer: RegExp; note: string; /** What a typed note on the same thing mentions: then the inspector's note is printed, not this one. */ typedAbout?: RegExp }> = {
+  powerSupply: { answer: /^no\b/i, note: "There is no power supply to the site.", typedAbout: /\bpower\b|\belectricity\b/i },
+  waterSupply: { answer: /^no\b/i, note: "There is no water supply to the site.", typedAbout: /\bwater\s+(supply|connect\w*|service)\b|\bno\s+water\b|\btap\b/i },
+  siteToilet: { answer: /^no\b/i, note: "There is no site toilet in position.", typedAbout: /\btoilet\b/i },
   ceilingInsulation: { answer: /^no\b/i, note: "Ceiling insulation has not yet been installed." },
   manhole: { answer: /^not yet\b/i, note: "The manhole has not yet been installed." },
   garageSlab: { answer: /^infill later\b/i, note: "The garage slab is to be infilled later." },
@@ -561,7 +609,7 @@ function otherRowName(r: Row): string {
 }
 
 /** One "Refer notes" row as its note: a full sentence, never the row's name and the answer ("Ceiling insulation installed — no."). */
-function noteOf(r: Row): string {
+function noteOf(r: Row, rows: Row[] = []): string {
   // What the inspector typed (an "Other" box, "Part done to …") is the note, in their words.
   if (r.typed) {
     const typed = r.typed.trim();
@@ -570,7 +618,11 @@ function noteOf(r: Row): string {
     return sentence(`${otherRowName(r)}: ${typed}`);
   }
   const own = r.key ? NOTE_SENTENCES[r.key] : undefined;
-  if (own && own.answer.test(r.answer ?? "")) return own.note;
+  if (own && own.answer.test(r.answer ?? "")) {
+    // One sentence per thing: when the inspector typed a note about it in this section ("No water supply on site …"), theirs is printed.
+    if (own.typedAbout && rows.some((o) => o !== r && o.typed && own.typedAbout!.test(o.typed))) return "";
+    return own.note;
+  }
   // A measurement the builder is to re-check: "The front setback is to be re-checked by the builder. As estimated from pegs, setbacks on plan are …"
   if (/\bbuilder to re-check\.?$/i.test(r.text)) {
     const detail = r.text.replace(/\s*\bbuilder to re-check\.?$/i, "").trim()
@@ -598,7 +650,8 @@ function referredNotes(rows: Row[]): string[] {
   if (drainage) notes.push(GROUND_FALLS);
   for (const r of rows) {
     if (r.status !== "note" || (r.key && OWN_NOTE.has(r.key))) continue;
-    notes.push(noteOf(r));
+    const n = noteOf(r, rows);
+    if (n) notes.push(n);
   }
   return notes;
 }
@@ -667,6 +720,7 @@ export function composeConstructionSection(key: string, fields: TemplateField[],
         if (group) lines.push(`${TAGS.room}${group}`);
       }
       lines.push(`${TAGS.item}${r.heading}::${r.status}::${r.text}`);
+      if (r.after) lines.push(`${TAGS.after}${r.after}`);
     }
     defects.push(...raised);
     if (kind === "site") for (const n of siteNotes(stage, fields, a)) lines.push(`${TAGS.note}${n}`);

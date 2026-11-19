@@ -152,8 +152,8 @@ const EXPECTED = [
   { field: "garageSlabStepResult", answer: /^Builder to re-check$/, note: /^The garage slab step down is to be re-checked by the builder\. On plan it is 1,?500 (mm|millimetres) and on site it is 1,?500 (mm|millimetres)\.$/ },
   { field: "porchSlabStepResult", answer: /^Builder to re-check$/, note: /^The porch slab step down is to be re-checked by the builder\. On plan it is .+ and on site it is .+\.$/ },
   { field: "alfrescoSlabStepResult", answer: /^Builder to re-check$/, note: /^The alfresco slab step down is to be re-checked by the builder\. On plan it is .+ and on site it is .+\.$/ },
-  { field: "upperRoofAppears", answer: /^Refer notes$/, note: "The upper roof covering was inspected from the scaffold. The upper roof covering is noted for attention. Lower level roofing was checked from the ladder and is satisfactory." },
-  { field: "lowerRoofLadder", answer: /^Refer notes$/, note: "The upper roof covering was inspected from the scaffold. The upper roof covering is satisfactory. Lower level roofing was checked from the ladder and is noted for attention." },
+  { field: "upperRoofAppears", answer: /^Refer notes$/, note: "The upper roof covering was inspected from the scaffold. The upper roof covering is noted for attention. Lower level roofing was checked and is satisfactory." },
+  { field: "lowerRoofLadder", answer: /^Refer notes$/, note: "The upper roof covering was inspected from the scaffold. The upper roof covering is satisfactory. Lower level roofing was checked and is noted for attention." },
   { field: "upperGutteringGround", answer: /^Refer notes$/, note: "Due to OH&S constraints the upper guttering could not be safely accessed. Observations from the ground indicate that the guttering is noted for attention. Lower level guttering was checked and is satisfactory." },
   { field: "lowerGutteringLadder", answer: /^Refer notes$/, note: /^(Due to OH&S constraints the upper guttering could not be safely accessed\. Observations from the ground indicate that the guttering is satisfactory\. )?Lower level guttering was checked and is noted for attention\.$/ },
   // The Summary's ticks, and the inspector's words after them.
@@ -188,7 +188,7 @@ describe("every note the checklists and the Summary print is a full sentence", (
     assert.deepEqual(bad.map(({ r, n }) => `${where(r)}: ${n}`), []);
   });
   it("has an expected sentence for every answer that prints a note (none left to a generic wording)", () => {
-    const own = /^(Due to ground falls|Sections of the security fence|Security fencing is|Site needs a clean-up|Final builder's clean|Damage was noted to the footpath|The (finish and )?workmanship|The works are|The inspector contacted|Agi drains are advised\.$|Roof access was limited\.$|Retaining walls are advised\.$)/;
+    const own = /^(Due to ground falls|Sections of the security fence|Security fencing is|Site appears to be well managed\.$|Site needs a clean-up|Final builder's clean|Damage was noted to the footpath|The (finish and )?workmanship|The works are|The inspector contacted|Agi drains are advised\.$|Roof access was limited\.$|Retaining walls are advised\.$)/;
     const unknown = ALL.filter((r) => r.added.some((n) => !own.test(n)) && !EXPECTED.some((e) => e.field === r.field.key) && !TYPED_AS_IS.test(r.field.key));
     assert.deepEqual(unknown.map((r) => `${where(r)}: ${r.added.join(" | ")}`), []);
   });
