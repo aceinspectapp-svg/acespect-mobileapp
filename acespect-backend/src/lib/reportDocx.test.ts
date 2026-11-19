@@ -7,6 +7,8 @@ import type { AddressInfo } from 'node:net';
 process.env.DATABASE_URL ||= 'postgresql://x:x@localhost:5432/x';
 process.env.JWT_ACCESS_SECRET ||= 'x'.repeat(32);
 process.env.JWT_REFRESH_SECRET ||= 'y'.repeat(32);
+// These tests serve the photographs from a stand-in HTTP server, so the report reads them over HTTP (the in-process read is tested in reportPhotos.inprocess.test.ts).
+process.env.REPORT_PHOTOS_IN_PROCESS = 'off';
 
 const MISSING_ID = 'aaaaaaaa-2222-4333-8444-555555555555';
 const OK_ID = 'bbbbbbbb-2222-4333-8444-555555555555';

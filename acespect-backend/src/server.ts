@@ -88,6 +88,7 @@ async function main() {
       await flushPhotoBatches().catch(() => undefined); // photo summaries still waiting are written before the process ends
       await drainAudit(); // ...and so are audit entries still on their way
       await stopQueue().catch(() => undefined); // running review jobs finish before the queue's pool closes
+      await (await import('./lib/reportBrowser')).closeReportBrowser().catch(() => undefined); // the shared report browser (lib/reportBrowser.ts)
       await prisma.$disconnect();
       process.exit(0);
     });

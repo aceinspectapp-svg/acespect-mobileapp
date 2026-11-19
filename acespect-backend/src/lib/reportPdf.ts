@@ -1,8 +1,8 @@
-import puppeteer, { type Page } from 'puppeteer';
-import { MemoryPeak, memoryText } from './reportMemory';
+import type { Page } from 'puppeteer';
+import { LoopDelay, MemoryPeak, freeMemoryMb, memoryText } from './reportMemory';
 import { env } from '../config/env';
 import { ApiError } from '../utils/ApiError';
-import { reportBrowserPath } from './reportBrowserSetup';
+import { leaseReportBrowser, type ReportBrowserLease } from './reportBrowser';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
 import { photosFailedMessage, routeReportPhotos, type ReportPhotoLog } from './reportPhotos';
 
@@ -109,6 +109,42 @@ async function takeTurn(): Promise<() => void> {
   };
 }
 
+/**
+ * The memory guard. A report's browser can take more memory than a small plan has (a 250-photo PDF: about 1.75 GB with the server, all of
+ * a B1's), and when the machine runs out it is the whole server that stops answering -- for everyone -- while it swaps or is restarted.
+ * So while a report is made, the machine's free memory is checked every second (Linux: MemAvailable and the container's own limit); when
+ * it falls below REPORT_MIN_FREE_MB (default 150; 0 = off) that report is stopped, its browser context closed, and the person who asked is
+ * told why. The server, and everyone else using it, carries on.
+ */
+const MIN_FREE_MB = Math.max(0, Number(process.env.REPORT_MIN_FREE_MB ?? 150));
+export function reportMemoryError(freeMb: number): ApiError {
+  return new ApiError(
+    503,
+    `This report was stopped because the server was running out of memory (${freeMb} MB left), so that it keeps answering everyone else. ` +
+      'Please try again in a few minutes. If it happens again for this report, the server needs more memory (a bigger App Service plan).',
+    'REPORT_MEMORY',
+    { stage: 'memory', freeMb },
+  );
+}
+
+/** Watches free memory every second while a report is made; `onLow` is called once when it falls below the floor. */
+export class MemoryGuard {
+  tripped: number | null = null;
+  private readonly timer: NodeJS.Timeout | undefined;
+  constructor(onLow: (freeMb: number) => void, minFreeMb = MIN_FREE_MB, read: () => number | null = freeMemoryMb, everyMs = 1000) {
+    if (minFreeMb <= 0 || read() === null) return; // off, or this machine cannot tell (macOS, Windows)
+    this.timer = setInterval(() => {
+      const free = read();
+      if (this.tripped === null && free !== null && free < minFreeMb) {
+        this.tripped = free;
+        onLow(free);
+      }
+    }, everyMs);
+    this.timer.unref();
+  }
+  stop(): void { if (this.timer) clearInterval(this.timer); }
+}
+
 /** Where a report is up to, for a background job's "Preparing report…" (reportJobs.ts). */
 export type ReportStage = 'waiting' | 'opening' | 'photos' | 'printing';
 
@@ -127,7 +163,9 @@ const secs = (ms: number) => `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
 /**
  * One line per report in the server log with how long each stage took, e.g.
  *   [report] pdf <id>: queue 0.0s · launch 1.1s · open 92.4s (250 photos 2.0s→91.9s, 0 missing) · settle 0.3s · print 18.7s · total 112.5s · 14.2 MB
- *     · memory peak 1180 MB (server 410 MB + browser 770 MB) of 1750 MB
+ *     · memory peak 1180 MB (server 410 MB + browser 770 MB) of 1750 MB · event loop held up p99 40 ms, max 310 ms
+ * "launch" says "(browser already running)" when the shared browser was reused (reportBrowser.ts). The event-loop figures are how long this
+ * server's one thread was kept from answering other requests (phone uploads, web pages) while the report was made.
  * "open" is the page loading, which includes fetching the photographs (they load while the page opens); the photo span shows when the
  * first was asked for and the last answered, measured from the start of "open".
  */
@@ -201,36 +239,20 @@ async function withReportPageNow<T>(
     console.error('[report] WEB_APP_URL is not set on this server (still ' + reportPageOrigin() + '), so the report page cannot be opened.');
     throw new ApiError(503, 'Reports cannot be made yet: the server is not told where the web app is (WEB_APP_URL). Ask an administrator to set it.', 'REPORT_NOT_CONFIGURED');
   }
-  let browser: Awaited<ReturnType<typeof puppeteer.launch>>;
+  let lease: ReportBrowserLease;
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      // Chromium writes its profile and crash-reporter database under HOME / XDG folders. On a cloud container (Azure App Service)
-      // those can be unset or read-only, and Chromium then exits at once ("chrome_crashpad_handler: --database is required"), so it is
-      // pointed at /tmp, which is always writable. Locally (Windows, macOS) the defaults are left alone.
-      env: process.platform === 'linux'
-        ? { ...process.env, HOME: process.env.HOME || '/tmp', XDG_CONFIG_HOME: '/tmp/.chromium', XDG_CACHE_HOME: '/tmp/.chromium' }
-        : process.env,
-      // --disable-dev-shm-usage: containers (Azure App Service included) give /dev/shm only 64 MB, which a long report with many photos
-      // overruns, crashing the page part-way ("Target closed"); Chromium then uses /tmp instead.
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-crash-reporter', '--no-zygote'],
-      // In the production container this points at Alpine's own `chromium`
-      // package (see Dockerfile) instead of Puppeteer's bundled download --
-      // that download is a glibc build that doesn't run on Alpine's musl libc
-      // anyway, and PUPPETEER_SKIP_DOWNLOAD skips fetching it at install time.
-      // Unset locally, so `npm install`'s own downloaded Chrome is used as-is.
-      // On Azure App Service (Node code deployment, no Dockerfile) it is the Chrome set up at start-up -- see reportBrowserSetup.ts.
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (await reportBrowserPath()) || undefined,
-    });
+    lease = await leaseReportBrowser();
   } catch (e) {
     throw reportFailure('browser', 'The server could not start its report printer (headless browser). Check the server log for "[report] browser".', e);
   }
-  timer.mark('launch');
+  timer.mark('launch', lease.warm ? ' (browser already running)' : '');
   // This server's and the browser's memory, sampled while the report is made (for the timing line: how close a large report comes to the
-  // plan's limit).
-  const memory = new MemoryPeak(browser.process()?.pid);
+  // plan's limit), how long the server's thread was held up, and the memory guard (above).
+  const memory = new MemoryPeak(lease.pid);
+  const loop = new LoopDelay();
+  const guard = new MemoryGuard(() => { void lease.context.close().catch(() => undefined); });
   try {
-    const page = await browser.newPage();
+    const page = await lease.context.newPage();
     if (options.print) await page.emulateMediaType('print');
     // The width the page prints at (A4 less its side margins), so the page lays out the way the PDF does.
     if (options.width) await page.setViewport({ width: options.width, height: 1100, deviceScaleFactor: 2 });
@@ -299,9 +321,15 @@ async function withReportPageNow<T>(
       if (e instanceof ApiError) throw e;
       throw reportFailure('print', 'The report page opened but could not be turned into a file. Check the server log for "[report] print".', e);
     }
+  } catch (e) {
+    // The memory guard closed the report's browser context: whatever failed after that failed because of it.
+    if (guard.tripped !== null) throw reportMemoryError(guard.tripped);
+    throw e;
   } finally {
-    timer.tail = memoryText(memory.stop());
-    await browser.close().catch(() => undefined);
+    guard.stop();
+    const held = loop.stop();
+    timer.tail = `${memoryText(memory.stop())} · event loop held up p99 ${held.p99Ms} ms, max ${held.maxMs} ms${guard.tripped !== null ? ` · stopped: ${guard.tripped} MB free` : ''}`;
+    await lease.release();
   }
 }
 

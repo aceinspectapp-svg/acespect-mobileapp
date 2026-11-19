@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import type { AddressInfo } from 'node:net';
+// These tests serve the photographs from a stand-in HTTP server, so the report reads them over HTTP (the in-process read: reportPhotos.inprocess.test.ts).
+process.env.REPORT_PHOTOS_IN_PROCESS = 'off';
 import { fetchReportPhoto, photoQueueState, photosFailedMessage, REPORT_PHOTO_CONCURRENCY, ReportPhotoError, routeReportPhotos, isMediaUrl, mediaIdOf } from './reportPhotos';
 
 const id = (n: number) => `${String(n).padStart(8, '0')}-2222-4333-8444-555555555555`;

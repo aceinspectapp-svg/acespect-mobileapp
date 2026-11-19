@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
-import { totalmem } from 'node:os';
+import { freemem, getPriority, setPriority, totalmem } from 'node:os';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 
 /**
  * How much memory a report takes while it is made: this server (Node) and its headless browser (Chromium and all its child processes),
@@ -11,11 +12,26 @@ import { totalmem } from 'node:os';
 
 const MB = 1024 * 1024;
 
+type Proc = { pid: number; ppid: number; rss: number };
+
 /** Resident memory of a process and every process under it, in bytes (Linux: /proc; macOS: ps). 0 when it cannot be read. */
 export function processTreeRss(rootPid: number | undefined, platform: NodeJS.Platform = process.platform): number {
   if (!rootPid) return 0;
+  const procs = processList(platform);
+  return procs ? treeSum(procs, rootPid) : 0;
+}
+
+/** The ids of a process and every process under it (the browser and its renderers). Empty when they cannot be read. */
+export function processTreePids(rootPid: number | undefined, platform: NodeJS.Platform = process.platform): number[] {
+  if (!rootPid) return [];
+  const procs = processList(platform);
+  return procs ? treePids(procs, rootPid) : [];
+}
+
+/** Every process on this machine with its parent and resident memory (Linux: /proc; macOS: ps), or null when they cannot be read. */
+function processList(platform: NodeJS.Platform): Proc[] | null {
   try {
-    const procs: { pid: number; ppid: number; rss: number }[] = [];
+    const procs: Proc[] = [];
     if (platform === 'linux') {
       const page = 4096;
       for (const name of readdirSync('/proc')) {
@@ -36,11 +52,87 @@ export function processTreeRss(rootPid: number | undefined, platform: NodeJS.Pla
         if (pid) procs.push({ pid, ppid: ppid ?? 0, rss: (rssKb ?? 0) * 1024 });
       }
     } else {
-      return 0;
+      return null;
     }
-    return treeSum(procs, rootPid);
+    return procs;
   } catch {
-    return 0;
+    return null;
+  }
+}
+
+/** `rootPid` and all its descendants, from a process list. */
+export function treePids(procs: { pid: number; ppid: number }[], rootPid: number): number[] {
+  const children = new Map<number, number[]>();
+  for (const p of procs) children.set(p.ppid, [...(children.get(p.ppid) ?? []), p.pid]);
+  const out: number[] = [];
+  const seen = new Set<number>();
+  const stack = [rootPid];
+  while (stack.length) {
+    const pid = stack.pop()!;
+    if (seen.has(pid)) continue;
+    seen.add(pid);
+    out.push(pid);
+    stack.push(...(children.get(pid) ?? []));
+  }
+  return out;
+}
+
+/**
+ * Gives the report browser (and every process it has started) a lower CPU priority than this server, so on a 1-CPU plan the API -- phone
+ * uploads, syncs, web pages -- is served first and the report takes the CPU time that is left. `nice` 0..19 (higher = lower priority);
+ * a process is only ever lowered, never raised. Returns how many processes were changed. Linux and macOS; elsewhere it does nothing.
+ */
+export function lowerPriority(
+  rootPid: number | undefined,
+  nice: number,
+  os: { pids: (root: number) => number[]; get: (pid: number) => number; set: (pid: number, nice: number) => void } = { pids: (r) => processTreePids(r), get: getPriority, set: setPriority },
+): number {
+  if (!rootPid || nice <= 0) return 0;
+  let changed = 0;
+  for (const pid of os.pids(rootPid)) {
+    try {
+      if (os.get(pid) < nice) { os.set(pid, nice); changed++; }
+    } catch {
+      /* the process ended meanwhile, or this platform does not allow it */
+    }
+  }
+  return changed;
+}
+
+/**
+ * Memory this machine (or its container's limit) still has free, in MB: Linux's MemAvailable, and the container's own limit when it has one
+ * (cgroup v2 memory.max / v1 memory.limit_in_bytes), whichever is less. Null where it cannot be told reliably (macOS, Windows): the memory
+ * guard then stays off.
+ */
+export function freeMemoryMb(
+  read: (path: string) => string | null = (path) => { try { return readFileSync(path, 'utf8'); } catch { return null; } },
+  platform: NodeJS.Platform = process.platform,
+): number | null {
+  if (platform !== 'linux') return null;
+  const meminfo = read('/proc/meminfo');
+  const avail = meminfo ? /^MemAvailable:\s+(\d+)\s+kB/m.exec(meminfo) : null;
+  let free = avail ? Number(avail[1]) / 1024 : null;
+  const limits: [string, string][] = [['/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory.current'], ['/sys/fs/cgroup/memory/memory.limit_in_bytes', '/sys/fs/cgroup/memory/memory.usage_in_bytes']];
+  for (const [limitPath, usedPath] of limits) {
+    const limit = Number((read(limitPath) ?? '').trim());
+    const used = Number((read(usedPath) ?? '').trim());
+    // "max" (no limit) or a v1 "unlimited" of ~2^63 reads as no limit.
+    if (Number.isFinite(limit) && limit > 0 && limit < 2 ** 50 && Number.isFinite(used) && used > 0) {
+      const left = (limit - used) / MB;
+      free = free === null ? left : Math.min(free, left);
+      break;
+    }
+  }
+  return free === null ? null : Math.round(free);
+}
+
+/** How much the event loop (this server's one thread, which answers every request) was held up while a report was made. */
+export class LoopDelay {
+  private readonly h = monitorEventLoopDelay({ resolution: 20 });
+  constructor() { this.h.enable(); }
+  stop(): { p99Ms: number; maxMs: number } {
+    this.h.disable();
+    return { p99Ms: Math.round(this.h.percentile(99) / 1e6), maxMs: Math.round(this.h.max / 1e6) };
   }
 }
 
@@ -88,6 +180,9 @@ export class MemoryPeak {
     return { serverMb, browserMb, totalMb: serverMb + browserMb, machineMb: Math.round(totalmem() / MB) };
   }
 }
+
+/** The machine's memory, in MB (for the log). */
+export const machineMb = (): { totalMb: number; freeMb: number } => ({ totalMb: Math.round(totalmem() / MB), freeMb: Math.round(freemem() / MB) });
 
 /** The timing line's memory part. */
 export const memoryText = (m: MemoryPeakResult): string =>

@@ -1,4 +1,5 @@
 import type { HTTPRequest, Page } from 'puppeteer';
+import { ApiError } from '../utils/ApiError';
 
 /**
  * How a report (PDF or Word) loads its photographs.
@@ -8,15 +9,21 @@ import type { HTTPRequest, Page } from 'puppeteer';
  * run the pool dry, and the photographs whose look-up timed out simply came out of the report as "Photograph unavailable".
  *
  * So the report's headless browser does not fetch photographs itself: each /api/v1/media/ request is handed to this server process, which
- * fetches it at the very same URL (signed link and all -- the media route checks it exactly as before), at most REPORT_PHOTO_CONCURRENCY at a
- * time across every report being made, tries a failed one again, and gives the browser the answer. A photograph that still cannot be
+ * reads it through the media route's own checks and storage read (readMedia in media.controller.ts: the signed link, the tenant-file rule,
+ * the security log -- exactly as for a request from outside), at most REPORT_PHOTO_CONCURRENCY at a time across every report being made,
+ * tries a failed one again, and gives the browser the answer.
+ *
+ * It used to fetch the same URL over HTTP: from this server, out through the internet and Azure's front end, and back in to this same server
+ * -- every photograph twice through the whole request stack, TLS and the front end's connection limits included, while the report's browser
+ * already had the one CPU busy. On Azure that took about 1.8 s a photograph (locally, under 5 ms) and was what made other people's requests
+ * time out while a report was being made. REPORT_PHOTOS_IN_PROCESS=off goes back to fetching over HTTP. A photograph that still cannot be
  * loaded is remembered, and the report is stopped with a clear error instead of being printed without it. A photograph that is truly not
  * there (the media route answers 404) is the exception: the report prints "Photograph unavailable" for it, as before, and a warning naming
  * the photo id is logged, so the report can still be downloaded.
  */
 
 /** Photographs fetched at once, across all reports being made on this server. */
-export const REPORT_PHOTO_CONCURRENCY = Math.max(1, Number(process.env.REPORT_PHOTO_CONCURRENCY ?? 6));
+export const REPORT_PHOTO_CONCURRENCY = Math.max(1, Number(process.env.REPORT_PHOTO_CONCURRENCY ?? 4));
 /** Tries per photograph (the first and the retries). */
 const ATTEMPTS = 4;
 /** Wait before each retry, in ms. */
@@ -89,6 +96,67 @@ function transient(status: number, body: Buffer): boolean {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** One try at a photograph: the answer (or why there was none). */
+interface PhotoTry { ok: boolean; status: number; headers: Record<string, string>; body: Buffer; error?: string }
+/** Where a report's photographs are read from: in this process (the default), or over HTTP (`fetcher`, and tests). */
+export type PhotoSource = (url: string, headers: Record<string, string>) => Promise<PhotoTry>;
+
+/** Over HTTP, at the photograph's own URL. */
+function httpSource(fetcher: typeof fetch): PhotoSource {
+  return async (url, headers) => {
+    try {
+      const res = await fetcher(url, { headers, signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS) });
+      const body = Buffer.from(await res.arrayBuffer());
+      const out: Record<string, string> = {};
+      for (const h of PASSED_HEADERS) {
+        const v = res.headers.get(h);
+        if (v !== null) out[h] = v;
+      }
+      return { ok: res.ok, status: res.status, headers: out, body };
+    } catch (e) {
+      return { ok: false, status: 0, headers: {}, body: Buffer.alloc(0), error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+}
+
+/** The report page's own origin, the only one its photographs are given to (as the API's CORS rule gives them to the web app). */
+const reportOrigin = () => (process.env.WEB_APP_URL || 'http://localhost:5173').replace(/\/+$/, ''); // as config/env.ts (read here directly, so this file loads without the server's settings)
+
+/**
+ * In this process, through the media route's checks and read (readMedia). The answer carries what the route's answer would: the type, the
+ * cache rule, Cross-Origin-Resource-Policy, and the CORS headers for the report page's origin. A refusal comes back as the route's status
+ * (403, 404, 400); anything unexpected (the database briefly out of connections, storage not answering) as a 503, which is tried again.
+ */
+export const inProcessSource: PhotoSource = async (url, headers) => {
+  const { readMedia } = await import('../modules/media/media.controller');
+  return inProcessSourceFrom(readMedia)(url, headers);
+};
+
+/** The in-process read, through a given media reader (the real one: readMedia; tests: one with stand-in storage). */
+export const inProcessSourceFrom = (readMedia: (id: string, query: { e?: unknown; s?: unknown }, ip: string | null) => Promise<{ contentType: string; cacheControl: string; body: ReadableStream }>): PhotoSource => async (url, headers) => {
+  const q = new URL(url, 'http://report.local').searchParams;
+  try {
+    let timer: NodeJS.Timeout | undefined;
+    const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`no answer within ${ATTEMPT_TIMEOUT_MS / 1000} s`)), ATTEMPT_TIMEOUT_MS); });
+    const { photo, body } = await Promise.race([
+      (async () => {
+        const photo = await readMedia(mediaIdOf(url), { e: q.get('e') ?? undefined, s: q.get('s') ?? undefined }, null);
+        return { photo, body: Buffer.from(await new Response(photo.body as ReadableStream).arrayBuffer()) };
+      })(),
+      late,
+    ]).finally(() => clearTimeout(timer));
+    const origin = headers.origin ?? headers.Origin;
+    const cors: Record<string, string> = origin && origin === reportOrigin() ? { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true', vary: 'Origin' } : {};
+    return { ok: true, status: 200, headers: { 'content-type': photo.contentType, 'cache-control': photo.cacheControl, 'cross-origin-resource-policy': 'cross-origin', ...cors }, body };
+  } catch (e) {
+    if (e instanceof ApiError) return { ok: false, status: e.statusCode, headers: {}, body: Buffer.from(JSON.stringify({ error: { code: e.code } })), error: e.message };
+    return { ok: false, status: 503, headers: {}, body: Buffer.alloc(0), error: e instanceof Error ? e.message.split('\n')[0] : String(e) };
+  }
+};
+
+/** In-process unless REPORT_PHOTOS_IN_PROCESS=off. */
+const defaultSource = (): PhotoSource => (process.env.REPORT_PHOTOS_IN_PROCESS === 'off' ? httpSource(fetch) : inProcessSource);
+
 /** The answer's headers the browser needs for an <img> (and a fetch) on the report page. */
 const PASSED_HEADERS = ['content-type', 'cache-control', 'cross-origin-resource-policy', 'access-control-allow-origin', 'access-control-allow-credentials', 'vary'];
 
@@ -99,29 +167,17 @@ const PASSED_HEADERS = ['content-type', 'cache-control', 'cross-origin-resource-
 export async function fetchReportPhoto(
   url: string,
   headers: Record<string, string> = {},
-  { fetcher = fetch, delays = RETRY_DELAYS_MS }: { fetcher?: typeof fetch; delays?: number[] } = {},
+  { fetcher, source, delays = RETRY_DELAYS_MS }: { fetcher?: typeof fetch; source?: PhotoSource; delays?: number[] } = {},
 ): Promise<FetchedReportPhoto> {
+  const read = source ?? (fetcher ? httpSource(fetcher) : defaultSource());
   let reason = 'unknown';
   let status = 0;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     if (attempt > 0) await wait(delays[Math.min(attempt - 1, delays.length - 1)] ?? 0);
-    const result = await slot(async () => {
-      try {
-        const res = await fetcher(url, { headers, signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS) });
-        const body = Buffer.from(await res.arrayBuffer());
-        const out: Record<string, string> = {};
-        for (const h of PASSED_HEADERS) {
-          const v = res.headers.get(h);
-          if (v !== null) out[h] = v;
-        }
-        return { ok: res.ok, status: res.status, headers: out, body };
-      } catch (e) {
-        return { ok: false, status: 0, headers: {}, body: Buffer.alloc(0), error: e instanceof Error ? e.message : String(e) };
-      }
-    });
+    const result = await slot(() => read(url, headers));
     if (result.ok) return { status: result.status, headers: result.headers, body: result.body };
     status = result.status;
-    reason = result.status ? `the server answered ${result.status}` : `no answer (${(result as { error?: string }).error ?? 'network error'})`;
+    reason = result.status ? `the server answered ${result.status}` : `no answer (${result.error ?? 'network error'})`;
     if (result.status && !transient(result.status, result.body)) break;
   }
   throw new ReportPhotoError(url, reason, status);
