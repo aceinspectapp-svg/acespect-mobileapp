@@ -139,14 +139,23 @@ export interface ApiError extends Error {
   details?: Record<string, any>;
 }
 
-/** Leave the signed-in area for the sign-in page, with the reason it shows. */
-function endSession(reason: string): void {
+/** Leave the signed-in area for the sign-in page, with the reason it shows (or, with `redirect: false`, only forget the login). */
+function endSession(reason: string, redirect = true): void {
   clearSession();
   setRefreshToken(null);
-  if (typeof window !== "undefined" && window.location.pathname !== "/") window.location.assign("/?reason=" + reason);
+  if (redirect && typeof window !== "undefined" && window.location.pathname !== "/") window.location.assign("/?reason=" + reason);
 }
 
-let refreshing: Promise<boolean> | null = null;
+/**
+ * How renewing the login went: "renewed" (a new login is stored, or another tab already stored one), "signed-out" (the server refused the
+ * renewal, or there is nothing to renew with: the person has to sign in again) or "unavailable" (the server could not be reached or was
+ * busy: try again shortly).
+ */
+export type RenewOutcome = "renewed" | "signed-out" | "unavailable";
+
+let refreshing: Promise<RenewOutcome> | null = null;
+/** Whether a page that asked not to be taken to the sign-in page (the report tab) is the one renewing. */
+let renewQuietly = false;
 /**
  * Swap the refresh token for a new pair once; every request that hit an expired token waits for the same attempt.
  *
@@ -156,38 +165,68 @@ let refreshing: Promise<boolean> | null = null;
  * person is signed out to the sign-in page with a message; otherwise the page would stay up with every request failing. A temporary
  * failure (too many requests, a restart) leaves the session alone so the next request can try again.
  */
-async function refreshSession(usedToken?: string | null): Promise<boolean> {
+export function renewSession(usedToken?: string | null, opts: { redirect?: boolean } = {}): Promise<RenewOutcome> {
+  if (opts.redirect === false) renewQuietly = true;
   refreshing ??= (async () => {
-    const renew = async (): Promise<boolean> => {
+    const renew = async (): Promise<RenewOutcome> => {
       const current = getToken();
-      if (usedToken && current && current !== usedToken) return true; // another tab already renewed
+      if (usedToken && current && current !== usedToken) return "renewed"; // another tab already renewed
       const rt = (() => { try { return localStorage.getItem("acespect_refresh"); } catch { return null; } })();
-      if (!rt) return false;
+      if (!rt) return "signed-out";
       try {
         const res = await fetch(`${API_BASE}/auth/refresh`, { method: "POST", headers: { "Content-Type": "application/json", "X-App-Client": "web" }, body: JSON.stringify({ refreshToken: rt }) });
         if (res.status === 401 || res.status === 403) {
           const code = (await res.json().catch(() => null))?.error?.code as string | undefined;
-          endSession(code === "SESSION_IDLE" ? "SESSION_IDLE" : "SESSION_REVOKED");
-          return false;
+          endSession(code === "SESSION_IDLE" ? "SESSION_IDLE" : "SESSION_REVOKED", !renewQuietly);
+          return "signed-out";
         }
-        if (!res.ok) return false;
+        if (!res.ok) return "unavailable";
         const r = (await res.json()) as AuthResponse;
         const u = getStoredUser();
         if (u) setSession(r.accessToken, u);
+        else localStorage.setItem(TOKEN_KEY, r.accessToken);
         setRefreshToken(r.refreshToken ?? null);
-        return true;
+        return "renewed";
       } catch {
-        return false;
+        return "unavailable"; // no answer (offline, or the server's front end gave up while it was busy)
       }
     };
     try {
       const locks = typeof navigator !== "undefined" ? (navigator as { locks?: { request: <T>(name: string, cb: () => Promise<T>) => Promise<T> } }).locks : undefined;
       return locks ? await locks.request("acespect-refresh", renew) : await renew();
     } finally {
-      setTimeout(() => { refreshing = null; }, 0);
+      setTimeout(() => { refreshing = null; renewQuietly = false; }, 0);
     }
   })();
   return refreshing;
+}
+async function refreshSession(usedToken?: string | null): Promise<boolean> {
+  return (await renewSession(usedToken)) === "renewed";
+}
+
+/** Milliseconds until a login (access token) expires, from its own expiry time; 0 when it has expired or cannot be read. */
+export function tokenExpiresInMs(token: string | null, now = Date.now()): number {
+  if (!token) return 0;
+  try {
+    const part = token.split(".")[1] ?? "";
+    const json = JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(part.length / 4) * 4, "=")));
+    return typeof json.exp === "number" ? Math.max(0, json.exp * 1000 - now) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Makes sure the stored login is good for at least `minValidMs` more, renewing it first when it is not (or always, with `force`). For a page
+ * that waits a long time between requests -- the report tab polls a background job for minutes, past the login's 15 minutes -- so a request
+ * never goes out with a login that is about to expire. `redirect: false` keeps the page where it is when the person has to sign in again
+ * (it then says so itself).
+ */
+export async function ensureSession(opts: { minValidMs?: number; force?: boolean; redirect?: boolean } = {}): Promise<"ok" | "signed-out" | "unavailable"> {
+  const token = getToken();
+  if (!opts.force && token && tokenExpiresInMs(token) > (opts.minValidMs ?? 60_000)) return "ok";
+  const outcome = await renewSession(token, { redirect: opts.redirect });
+  return outcome === "renewed" ? "ok" : outcome;
 }
 
 /** fetch for a signed-in call: if the login has expired it is renewed and the call repeated once. Every call that carries the login should use this. */

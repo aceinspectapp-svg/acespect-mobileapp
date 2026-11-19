@@ -1,4 +1,5 @@
 import puppeteer, { type Page } from 'puppeteer';
+import { MemoryPeak, memoryText } from './reportMemory';
 import { env } from '../config/env';
 import { ApiError } from '../utils/ApiError';
 import { reportBrowserPath } from './reportBrowserSetup';
@@ -125,7 +126,8 @@ const secs = (ms: number) => `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
 
 /**
  * One line per report in the server log with how long each stage took, e.g.
- *   [report] pdf <id>: queue 0.0s · launch 1.1s · open 92.4s (250 photos 2.0s→91.9s, 0 missing) · settle 0.3s · print 18.7s · total 112.5s
+ *   [report] pdf <id>: queue 0.0s · launch 1.1s · open 92.4s (250 photos 2.0s→91.9s, 0 missing) · settle 0.3s · print 18.7s · total 112.5s · 14.2 MB
+ *     · memory peak 1180 MB (server 410 MB + browser 770 MB) of 1750 MB
  * "open" is the page loading, which includes fetching the photographs (they load while the page opens); the photo span shows when the
  * first was asked for and the last answered, measured from the start of "open".
  */
@@ -134,13 +136,15 @@ export class ReportTimer {
   private last = this.t0;
   private readonly parts: string[] = [];
   openedAt = 0;
+  /** Said at the end of the line (the memory peak, reportMemory.ts). */
+  tail = '';
   mark(name: string, extra = ''): void {
     const now = Date.now();
     this.parts.push(`${name} ${secs(now - this.last)}${extra}`);
     this.last = now;
   }
   line(label: string, inspectionId: string, outcome = ''): string {
-    return `[report] ${label} ${inspectionId}: ${[...this.parts, `total ${secs(Date.now() - this.t0)}`].join(' · ')}${outcome ? ` · ${outcome}` : ''}`;
+    return `[report] ${label} ${inspectionId}: ${[...this.parts, `total ${secs(Date.now() - this.t0)}`].join(' · ')}${outcome ? ` · ${outcome}` : ''}${this.tail ? ` · ${this.tail}` : ''}`;
   }
 }
 
@@ -222,6 +226,9 @@ async function withReportPageNow<T>(
     throw reportFailure('browser', 'The server could not start its report printer (headless browser). Check the server log for "[report] browser".', e);
   }
   timer.mark('launch');
+  // This server's and the browser's memory, sampled while the report is made (for the timing line: how close a large report comes to the
+  // plan's limit).
+  const memory = new MemoryPeak(browser.process()?.pid);
   try {
     const page = await browser.newPage();
     if (options.print) await page.emulateMediaType('print');
@@ -293,6 +300,7 @@ async function withReportPageNow<T>(
       throw reportFailure('print', 'The report page opened but could not be turned into a file. Check the server log for "[report] print".', e);
     }
   } finally {
+    timer.tail = memoryText(memory.stop());
     await browser.close().catch(() => undefined);
   }
 }

@@ -26,6 +26,7 @@ import { BRAND_NAVY, BRAND_RED, COMPANY_ABN_ACN, COMPANY_NAME, withReportPage, t
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
 import { fetchReportPhoto, isMediaUrl, photosFailedMessage, ReportPhotoError, warnMissingPhoto } from './reportPhotos';
 import { ApiError } from '../utils/ApiError';
+import { MemoryPeak, memoryText } from './reportMemory';
 
 /**
  * The inspection report as an editable Word file. It is made from the same page the PDF is printed from: the page is read as it prints
@@ -591,31 +592,39 @@ export async function generateInspectionReportDocx(
     { print: true, width: Math.round((TEXT_WIDTH_TWIPS / 1440) * 96), onStage, label: 'docx' },
   );
   if (extracted.error) throw new Error(`Could not read the report page: ${extracted.error}`);
+  // Writing the Word file happens after the browser has closed, with every photograph in this server's memory: measured on its own line.
+  const built = Date.now();
+  const memory = new MemoryPeak(undefined);
+  try {
+    // Report CSS pixels -> Word pixels, so the page's text column is the Word text column.
+    const scale = TEXT_WIDTH_PX / (extracted.contentWidth || TEXT_WIDTH_PX);
+    const body = await new Writer(scale, pictures).blocks(extracted.blocks);
 
-  // Report CSS pixels -> Word pixels, so the page's text column is the Word text column.
-  const scale = TEXT_WIDTH_PX / (extracted.contentWidth || TEXT_WIDTH_PX);
-  const body = await new Writer(scale, pictures).blocks(extracted.blocks);
-
-  const doc = new Document({
-    creator: 'Houspect Victoria',
-    title: meta.title,
-    description: meta.title,
-    styles: { default: { document: { run: { font: 'Arial', size: 25 } } } },
-    sections: [
-      {
-        properties: {
-          page: {
-            size: { width: A4.width, height: A4.height },
-            margin: { top: Math.round(3.0 * TWIPS_PER_CM), bottom: Math.round(3.4 * TWIPS_PER_CM), left: SIDE_MARGIN, right: SIDE_MARGIN, header: Math.round(0.8 * TWIPS_PER_CM), footer: Math.round(0.5 * TWIPS_PER_CM) },
+    const doc = new Document({
+      creator: 'Houspect Victoria',
+      title: meta.title,
+      description: meta.title,
+      styles: { default: { document: { run: { font: 'Arial', size: 25 } } } },
+      sections: [
+        {
+          properties: {
+            page: {
+              size: { width: A4.width, height: A4.height },
+              margin: { top: Math.round(3.0 * TWIPS_PER_CM), bottom: Math.round(3.4 * TWIPS_PER_CM), left: SIDE_MARGIN, right: SIDE_MARGIN, header: Math.round(0.8 * TWIPS_PER_CM), footer: Math.round(0.5 * TWIPS_PER_CM) },
+            },
           },
+          headers: { default: buildHeader() },
+          footers: { default: buildFooter(meta.clientName, meta.jobNo, meta.inspectionDate ?? '') },
+          children: body.length ? body : [new Paragraph({ children: [] })],
         },
-        headers: { default: buildHeader() },
-        footers: { default: buildFooter(meta.clientName, meta.jobNo, meta.inspectionDate ?? '') },
-        children: body.length ? body : [new Paragraph({ children: [] })],
-      },
-    ],
-  });
-  return Packer.toBuffer(doc);
+      ],
+    });
+    const file = await Packer.toBuffer(doc);
+    console.log(`[report] docx ${inspectionId} write: ${((Date.now() - built) / 1000).toFixed(1)}s for ${pictures.size} pictures · ${(file.length / 1048576).toFixed(1)} MB · ${memoryText(memory.stop())}`);
+    return file;
+  } finally {
+    memory.stop();
+  }
 }
 
 /** For tests only: loads a page's pictures and writes blocks, as the Word build does, without opening a report page. */

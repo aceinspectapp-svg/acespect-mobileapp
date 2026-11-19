@@ -6,7 +6,8 @@ import { ArrowLeft, Printer, Download, FileText } from "lucide-react";
 import type { FormSection } from "../mockData";
 import { buildReportHeader, withExcludedPhotosRemoved } from "../report";
 import { useAppData, useInspectionDetail } from "../data";
-import { openReportFile, reportFileName } from "../reportFile";
+import { openReportFile, reportFileName, signInAgainHref, type ReadyReport } from "../reportFile";
+import { SignInAgainError } from "../reportJob";
 import { reportBackAction, reviewPagePath } from "../reportPage";
 import { ReportCover } from "../components/ReportCover";
 import { sectionPhotoArchiveUrl } from "../photoArchive";
@@ -47,6 +48,9 @@ export function ReportView() {
   // "Preparing report… loading photographs (120 of 250)" while the server makes the file in the background.
   const [progress, setProgress] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  // The finished file, offered as a button here too ("Open PDF" / "Download Word"): the person clicks it, so the browser allows it.
+  const [ready, setReady] = useState<ReadyReport | null>(null);
+  const [signInAgain, setSignInAgain] = useState(false);
 
   // The actual branded PDF (real logo, per-page footer, page breaks) --
   // generated server-side by the backend's own Puppeteer pipeline, not the
@@ -63,9 +67,12 @@ export function ReportView() {
     if (!id) return;
     setDownloading(true);
     setDownloadError(null);
+    setReady(null);
+    setSignInAgain(false);
     try {
-      await openReportFile(id, format, reportFileName({ id, jobNo: inspection?.jobNo }, !!construction, format), setProgress);
+      setReady(await openReportFile(id, format, reportFileName({ id, jobNo: inspection?.jobNo }, !!construction, format), setProgress));
     } catch (e) {
+      if (e instanceof SignInAgainError) setSignInAgain(true);
       setDownloadError(e instanceof Error ? e.message : "Failed to download the report");
     } finally {
       setDownloading(false);
@@ -180,6 +187,20 @@ export function ReportView() {
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           {downloadError && (
             <span style={{ fontSize: "12px", color: "#dc2626", fontWeight: 600 }}>{downloadError}</span>
+          )}
+          {signInAgain && (
+            <a href={signInAgainHref()} data-report-sign-in="" style={{ fontSize: "12px", fontWeight: 700, color: reportTokens.accent }}>Sign in again</a>
+          )}
+          {ready && !downloading && (
+            <button
+              type="button"
+              onClick={() => ready.open()}
+              data-report-ready={ready.format}
+              title={`${ready.fileName} is ready`}
+              style={{ display: "flex", alignItems: "center", gap: "7px", padding: "9px 18px", borderRadius: "8px", border: "none", background: "#15803d", color: "white", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}
+            >
+              {ready.format === "pdf" ? <Download size={15} /> : <FileText size={15} />} {ready.label}
+            </button>
           )}
           {downloading && progress && (
             <span role="status" data-report-progress="" style={{ fontSize: "12px", color: "#475569", fontWeight: 600 }}>{progress}</span>
