@@ -11,11 +11,26 @@ const TONE_BY_COLOR: Record<string, Tone> = { "#1FA463": "ok", "#E63329": "bad",
 export interface Chosen { label: string; tone: Tone; other: boolean }
 
 /** The option a stored value points at (its label and colour tone), or the typed "Other" text. */
+/**
+ * While on (the Lock-up & Fixing report, compose.ts): a stored answer the form no longer offers is printed as words ("parked_car" ->
+ * "Parked car"), never as its code. Off for the other stages, whose reports are left exactly as they are.
+ */
+let readableCodes = false;
+export function withReadableCodes<T>(make: () => T): T {
+  const was = readableCodes;
+  readableCodes = true;
+  try { return make(); } finally { readableCodes = was; }
+}
+/** "workmanship_outside_tolerance" -> "Workmanship outside tolerance"; anything that is not a code is left as it is. */
+export function readableCode(raw: string): string {
+  return /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/.test(raw) || /^[a-z]+$/.test(raw) ? cap(raw.replace(/[_-]+/g, " ")) : raw;
+}
+
 export function chosen(field: TemplateField, raw: string): Chosen {
   const other = otherAnswerText(raw);
   if (other !== undefined) return { label: other, tone: "plain", other: true };
   const opt = field.options?.find((o) => o.value === raw);
-  if (!opt) return { label: raw, tone: "plain", other: false };
+  if (!opt) return { label: readableCodes ? readableCode(raw) : raw, tone: "plain", other: false };
   return { label: opt.label, tone: (opt.color && TONE_BY_COLOR[opt.color]) || "plain", other: false };
 }
 
@@ -124,7 +139,7 @@ export const SEVERITY_LABELS: Record<string, string> = {
 export const mapLabels = (v: AnswerValue, table: Record<string, string>) => {
   const order = Object.keys(table);
   const rank = (x: string) => { const i = order.indexOf(x); return i === -1 ? order.length : i; };
-  return [...asList(v)].sort((a, b) => rank(a) - rank(b)).map((x) => table[x] ?? x);
+  return [...asList(v)].sort((a, b) => rank(a) - rank(b)).map((x) => table[x] ?? (readableCodes ? readableCode(x) : x));
 };
 
 export type { AnswerTree };

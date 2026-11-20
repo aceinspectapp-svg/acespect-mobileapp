@@ -273,7 +273,7 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
 
 // ───────────────────────── Defects ─────────────────────────
 
-function Defect({ d, lead, compact }: { d: DefectEntry; lead?: ReactNode; compact?: boolean }) {
+function Defect({ d, lead, compact, withSeverity = true }: { d: DefectEntry; lead?: ReactNode; compact?: boolean; /** Lock-up & Fixing prints no Severity / Category line (its template has none). */ withSeverity?: boolean }) {
   const numbering = usePhotoNumbering(d.photos, `defect:${d.no}`);
   const small: CSSProperties = { fontSize: "11px", color: "#4b5563", marginTop: "2px" };
   // `lead` (the headings above the first defect of a topic) and the defect's card print on one page with the first row of its photos;
@@ -288,7 +288,7 @@ function Defect({ d, lead, compact }: { d: DefectEntry; lead?: ReactNode; compac
         <div style={{ background: C.red, color: "white", fontWeight: 700, fontSize: "12px", padding: "6px 0 0", textAlign: "center" }}>{d.no}</div>
         <div style={{ padding: "6px 10px 7px" }}>
           <div style={{ fontSize: "13.5px" }}>{[withItemName(d.description, d.item), photoReference(numbering.start, d.photos.length)].filter(Boolean).join(" ")}</div>
-          {(d.severity || d.category) && (
+          {withSeverity && (d.severity || d.category) && (
             <div style={small}>
               {d.severity && <><b style={{ color: C.ink }}>Severity:</b> {d.severity}</>}
               {d.severity && d.category && "   ·   "}
@@ -322,9 +322,14 @@ function Defects({ model, archiveUrl, lead }: { model: ConstructionReportModel; 
             {archiveUrl && <a href={archiveUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", fontSize: "11px", fontWeight: 700 }}>View additional photos ›</a>}
           </div>
         );
+        // Lock-up & Fixing: the template's EXTERNAL / INTERNAL heading, once, above the first topic under it.
+        const areaHead = g.area && groups[gi - 1]?.area !== g.area
+          ? <div data-defect-area="" style={{ color: C.navy, fontWeight: 700, fontSize: "15px", letterSpacing: "0.04em", margin: "16px 0 4px" }}>{g.area}</div>
+          : null;
+        const lockFix = model.stage === "lock_fix";
         return (
-          <div key={g.heading}>
-            {g.defects.map((d, i) => <Defect key={d.no} d={d} lead={i === 0 ? <>{gi === 0 && lead}{topic}</> : undefined} />)}
+          <div key={`${g.area ?? ""}:${g.heading}`}>
+            {g.defects.map((d, i) => <Defect key={d.no} d={d} withSeverity={!lockFix} lead={i === 0 ? <>{gi === 0 && lead}{areaHead}{topic}</> : undefined} />)}
           </div>
         );
       })}
