@@ -14,7 +14,7 @@ import type { AnswerTree, TemplateField } from "../templateFields";
 import { asAnswerTree, asString, asStringArray, isGateSatisfied } from "../templateFields";
 import { EXTERNAL_WORDS, STAGES, areaOfSection, kindOfKey, stageOfKey, type StageId } from "./stages";
 import {
-  type Chosen, CATEGORY_LABELS, NOT_APPLICABLE, SATISFACTORY, SEVERITY_LABELS, asList, cap, chosen, defectItemName, groupOf, headingMap, headingOf, inline, joinList, labelsOf, lower, mapLabels, photosIn, sentence, toneOfOption,
+  type Chosen, withReadableCodes, CATEGORY_LABELS, NOT_APPLICABLE, SATISFACTORY, SEVERITY_LABELS, asList, cap, chosen, defectItemName, groupOf, headingMap, headingOf, inline, joinList, labelsOf, lower, mapLabels, photosIn, sentence, toneOfOption,
 } from "./words";
 
 export interface ComposedDamage {
@@ -55,6 +55,8 @@ export const OHS = {
 /** The rows the flashings sentences are printed under (the Lock-up template has them under both). */
 const FLASHING_ROWS = new Set(["roofFlashing", "parapetFlashing"]);
 const DEFECT_SUFFIX = "__defect";
+/** Lock-up & Fixing, Doors: the fixing-stage (internal) door checks. Their defects print under INTERNAL > Internal doors; the rest of Doors is EXTERNAL. */
+export const LF_INTERNAL_DOORS = new Set(["internalDoorsFitted", "doorsHungStraight", "doorFramesRubbed", "doorFinish", "cavitySliders"]);
 
 // ───────────────────────── Description ─────────────────────────
 
@@ -106,10 +108,12 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartm
   }
 
   const windows = one("windowsAre");
-  if (windows) out.push(`Windows are constructed of ${windows}.`);
+  const windowsLine = windows ? `Windows are constructed of ${windows}.` : "";
   const roofDesign = one("roofDesign");
   const roofCover = one("roofCoveringIs");
-  if (roofDesign || roofCover) out.push(`The roof design is ${roofDesign || "—"}${roofCover ? ` and the covering is constructed of ${roofCover}` : ""}.`);
+  const roofLine = roofDesign || roofCover ? `The roof design is ${roofDesign || "—"}${roofCover ? ` and the covering is constructed of ${roofCover}` : ""}.` : "";
+  // The Lock-up & Fixing template: builder, construction, wall cladding, ROOF, then windows. The other stages keep their own order.
+  out.push(...(stage === "lock_fix" ? [roofLine, windowsLine] : [windowsLine, roofLine]).filter(Boolean));
   const frontage = one("frontage");
   if (frontage) out.push(`The street frontage is to the ${frontage}.`); // template: "The street frontage is to the north / south / east / west."
   const block = one("blockSlope");
@@ -134,8 +138,9 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartm
 interface Defect { sub: string; area: "EXTERNAL" | "INTERNAL"; location: string; text: string; photos: string[]; item: string; description: string }
 
 /** A checklist row's defect as the template's numbered line reads under its location: the row, then the inspector's comments. */
-function rowDescription(item: string, location: string, comments: string): string {
-  if (!location) return comments ? sentence(cap(comments)) : sentence(cap(item));
+function rowDescription(item: string, location: string, comments: string, stage?: StageId): string {
+  // The Lock-up & Fixing template: "<the inspector's description>. Please refer to Photographs …" -- not the checklist row's name in front.
+  if (!location || stage === "lock_fix") return comments ? sentence(cap(comments)) : sentence(cap(item));
   return [sentence(cap(item)), comments ? sentence(cap(comments)) : ""].filter(Boolean).join(" ");
 }
 
@@ -305,6 +310,7 @@ interface Row {
 /** One checklist section -> its rows (heading, status and sentence) and the defects raised in it. */
 function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind: "site" | "stage", apartment = false): { rows: Row[]; defects: Defect[] } {
   const prePour = stageOfKey(key) === "pre_pour";
+  const lockFix = stageOfKey(key) === "lock_fix";
   const rows: Row[] = [];
   const defects: Defect[] = [];
   const used = new Set<string>();
@@ -338,10 +344,11 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
     // An "Other" row is named by what the inspector typed for it ("Other: reclaimed hardwood" -> "Reclaimed hardwood — Front yard.").
     const typed = /_other$/.test(f.key) ? asString(a[`${f.key}_note`]).trim().replace(/[.]$/, "") : "";
     if (typed) heading = cap(typed);
+    const internalDoor = lockFix && LF_INTERNAL_DOORS.has(f.key);
     defects.push({
-      sub: groupFor(f) ?? "General", area, location: asString(d.location).trim(),
+      sub: internalDoor ? "Internal doors" : groupFor(f) ?? "General", area: internalDoor ? "INTERNAL" : area, location: asString(d.location).trim(),
       text: defectText(heading, asString(d.location).trim(), asString(d.comments).trim(), mapLabels(d.severity, SEVERITY_LABELS), mapLabels(d.category, CATEGORY_LABELS), asString(d.constructionCode).trim()),
-      item: heading, description: rowDescription(heading, asString(d.location).trim(), asString(d.comments).trim()),
+      item: heading, description: rowDescription(heading, asString(d.location).trim(), asString(d.comments).trim(), lockFix ? "lock_fix" : undefined),
       photos: photosIn(d.photos),
     });
     return true;
@@ -487,6 +494,8 @@ const observed = (c: Chosen): string => {
       // "Yes" / "No" on a check that also offers "see notes" (power supply: Yes / No - see notes) means it is fine; "Complete? Yes" is an answer in itself.
       const plainYesNo = !/complete\??$/i.test(heading) && !!f.options?.some((x) => toneOfOption(x.color) !== "ok");
       let text = textFor(status, c, hasRed(f), plainYesNo);
+      // Lock-up & Fixing: an answer the form no longer offers (an older inspection) is said in words, not as "Checked and okay."
+      if (lockFix && !c.other && !f.options?.some((o) => o.value === v)) text = sentence(c.label);
       // The Pre-pour template's fixed wording for two rows: the power supply's "Meter & Pole at Slab", and the note above the kitchen bench penetrations.
       if (prePour && f.key === "powerSupply" && status === "ok") text = POWER_SUPPLY_OK;
       if (prePour && f.key === "kitchenBenchPenetrations" && status !== "na") text = `${KITCHEN_BENCH_FIXED} ${text}`;
@@ -553,15 +562,30 @@ function siteNotes(stage: StageId, fields: TemplateField[], a: AnswerTree): stri
   // "Is the site well managed?" answered "Can be improved …" (REFER NOTES): the Lock-up template's "Site appears to be well managed."
   // before the clean-up note -- unless the inspector typed a note of their own about it in this section, which is printed instead.
   const typedHere = fields.filter((x) => x.type === "text" || x.type === "textarea").map((x) => asString(a[x.key]).trim()).filter(Boolean);
+  if (stage === "lock_fix") {
+    // The Lock-up & Fixing template: one sentence for the answer. "Yes" -> "Site appears to be well managed." (unless the inspector wrote
+    // their own note about it); "Can be improved by cleaning up rubbish …" -> only the clean-up sentence, once.
+    if (managed && managed.tone === "ok" && !typedHere.some((t) => SITE_MANAGEMENT.test(t))) notes.push(WELL_MANAGED);
+    if ((rubbish && rubbish.tone === "bad") || (managed && managed.tone !== "ok") || (finalClean && /required/i.test(finalClean.label))) notes.push(CLEAN_UP);
+    // Kerb damage: the template's sentence once, then the inspector's own kerb note in their words (no "Site and facilities:" in front).
+    const kerbLf = pick("kerbDamage");
+    if (kerbLf && kerbLf.tone !== "ok") {
+      const typed = asString(a.kerbOther).trim();
+      notes.push(typed ? `${KERB} ${sentence(cap(typed))}` : KERB);
+    }
+    return notes;
+  }
   if (managed && managed.tone === "warn" && !typedHere.some((t) => SITE_MANAGEMENT.test(t))) notes.push(WELL_MANAGED);
   if ((rubbish && rubbish.tone === "bad") || (managed && managed.tone !== "ok") || (finalClean && /required/i.test(finalClean.label))) {
-    notes.push(stage === "pci" ? "Final builder's clean to be completed." : "Site needs a clean-up of rubbish/debris to improve access and safety.");
+    notes.push(stage === "pci" ? "Final builder's clean to be completed." : CLEAN_UP);
   }
   const kerb = pick("kerbDamage");
   if (kerb && kerb.tone !== "ok") notes.push(stage === "pci" ? KERB_PCI : KERB);
   return notes;
 }
 
+/** The templates' site clean-up note. */
+export const CLEAN_UP = "Site needs a clean-up of rubbish/debris to improve access and safety.";
 /** The Lock-up template's sentence under "Management of Site". */
 export const WELL_MANAGED = "Site appears to be well managed.";
 /** A typed note that is about how the site is managed (so it is the note for "Is the site well managed?"). */
@@ -616,20 +640,24 @@ const NOTE_SENTENCES: Record<string, { answer: RegExp; note: string; /** What a 
  * The row an "Other" box belongs to, as the report names it: its group on the form ("Hebel", "Slab quality", "Roof"), else the row's own
  * name without "other" ("Stairwell/s — other" -> "Stairwell/s"). The PCI "Services & Other" group's own "Other" reads "Services and other".
  */
-function otherRowName(r: Row): string {
+function otherRowName(r: Row, lockFix = false): string {
   const own = r.heading.replace(/\s*[—–-]\s*other\??$/i, "").replace(/^other\??$/i, "").trim();
+  // Lock-up & Fixing: a group's name in front reads wrong ("Painting: Kitchen island end panel …" from the fit-out's "Other?"): only the
+  // row's own name ("Hebel — other" -> "Hebel"), and no name when the box is just "Other".
+  if (lockFix) return own ? cap(own) : "";
   const name = r.group && !/^other$/i.test(r.group) ? r.group : own || (r.group ? "Services and other" : "Other");
   return cap(name);
 }
 
 /** One "Refer notes" row as its note: a full sentence, never the row's name and the answer ("Ceiling insulation installed — no."). */
-function noteOf(r: Row, rows: Row[] = []): string {
+function noteOf(r: Row, rows: Row[] = [], lockFix = false): string {
   // What the inspector typed (an "Other" box, "Part done to …") is the note, in their words.
   if (r.typed) {
     const typed = r.typed.trim();
     if (r.key === "plasterworkPartDone") return sentence(`Plasterwork is part done to ${lower(typed).replace(/[.]$/, "")}`);
     // An "Other" box: the row it belongs to, then the inspector's words exactly as typed, with a full stop if they left none ("Hebel: Some sheets cracked.").
-    return sentence(`${otherRowName(r)}: ${typed}`);
+    const name = otherRowName(r, lockFix);
+    return sentence(name ? `${name}: ${typed}` : cap(typed));
   }
   const own = r.key ? NOTE_SENTENCES[r.key] : undefined;
   if (own && own.answer.test(r.answer ?? "")) {
@@ -658,13 +686,15 @@ function noteOf(r: Row, rows: Row[] = []): string {
  * other row's note is a sentence of its own (noteOf).
  */
 const OWN_NOTE = new Set(["securityFencing", "rubbishDangerous", "siteManaged", "finalSiteClean", "kerbDamage", "siteDrainage", "agiDrain"]);
-function referredNotes(rows: Row[]): string[] {
+function referredNotes(rows: Row[], lockFix = false): string[] {
   const notes: string[] = [];
   const drainage = rows.some((r) => (r.key === "siteDrainage" && r.status === "defect") || (r.key === "agiDrain" && r.status === "note"));
   if (drainage) notes.push(GROUND_FALLS);
   for (const r of rows) {
     if (r.status !== "note" || (r.key && OWN_NOTE.has(r.key))) continue;
-    const n = noteOf(r, rows);
+    // Lock-up & Fixing: the OH&S sentences print once, under their row (not again in Notes); the kerb box is in the kerb note (siteNotes).
+    if (lockFix && (r.after || (r.key === "kerbOther" && rows.some((o) => o.key === "kerbDamage" && o.status !== "ok")))) continue;
+    const n = noteOf(r, rows, lockFix);
     if (n) notes.push(n);
   }
   return notes;
@@ -715,6 +745,12 @@ function attachedList(a: AnswerTree, prefix: "clientList" | "previousDefects"): 
 export function composeConstructionSection(key: string, fields: TemplateField[], a: AnswerTree, apartment: boolean): Composed {
   const stage = stageOfKey(key);
   if (!stage) return { text: "", damages: [] };
+  // Lock-up & Fixing: an answer the form no longer offers (an older inspection) prints as words, never as its stored code.
+  if (stage === "lock_fix") return withReadableCodes(() => composeSection(key, stage, fields, a, apartment));
+  return composeSection(key, stage, fields, a, apartment);
+}
+
+function composeSection(key: string, stage: StageId, fields: TemplateField[], a: AnswerTree, apartment: boolean): Composed {
   const kind = kindOfKey(key);
   const lines: string[] = [];
   const defects: Defect[] = [];
@@ -738,7 +774,7 @@ export function composeConstructionSection(key: string, fields: TemplateField[],
     }
     defects.push(...raised);
     if (kind === "site") for (const n of siteNotes(stage, fields, a)) lines.push(`${TAGS.note}${n}`);
-    for (const n of referredNotes(rows)) lines.push(`${TAGS.note}${n}`);
+    for (const n of referredNotes(rows, stage === "lock_fix")) lines.push(`${TAGS.note}${n}`);
   }
 
   if (defects.length > 0) {

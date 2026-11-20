@@ -124,7 +124,12 @@ export interface DefectEntry {
   /** The section that recorded it. */
   sectionKey: string;
 }
-export interface DefectGroup { heading: string; defects: DefectEntry[] }
+export interface DefectGroup {
+  heading: string;
+  defects: DefectEntry[];
+  /** Lock-up & Fixing: the template's EXTERNAL / INTERNAL heading the topic sits under (printed once, above its first topic). */
+  area?: "EXTERNAL" | "INTERNAL";
+}
 
 export interface AttachedList { attached: boolean; text: string; photos: string[] }
 
@@ -337,7 +342,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
   let previous = noList();
   let clientConcerns = noList();
 
-  interface Raised { key: string; sub: string; text: string; photos: string[]; fromId?: string; heading: string; description: string; item: string }
+  interface Raised { key: string; sub: string; text: string; photos: string[]; fromId?: string; heading: string; description: string; item: string; area: "EXTERNAL" | "INTERNAL" }
   const raised: Raised[] = [];
   /** Checklist rows that say "refer defects", per section, to be tied to their defects once those are numbered. */
   const pending: { item: ChecklistItem; raisedIndexes: number[] }[] = [];
@@ -359,7 +364,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       const where = (dmg?.location ?? "").trim();
       const item = (dmg?.item ?? "").trim();
       raised.push({
-        key: s.key, sub: dmg?.type || "General", text: l.text, photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)),
+        key: s.key, sub: dmg?.type || "General", area: dmg?.direction === "EXTERNAL" ? "EXTERNAL" : "INTERNAL", text: l.text, photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)),
         heading: where || item, description: (dmg?.description ?? "").trim() || splitDefect(l.text).sentence, item: rowNames.has(item) ? item : "",
       });
     }
@@ -461,13 +466,22 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
     if (!topicOrder.includes(d.sub)) topicOrder.push(d.sub);
   }
   if (stage === "pci") topicOrder.splice(0, topicOrder.length, ...pciTopicOrder(topicOrder));
+  // Lock-up & Fixing: the template sorts the defects under EXTERNAL, then INTERNAL; under each, the checklist's sub-headings in order,
+  // and the general Defects list last. A heading with no defects is not printed.
+  const lockFix = stage === "lock_fix";
+  const placed: { topic: string; area?: "EXTERNAL" | "INTERNAL" }[] = lockFix
+    ? (["EXTERNAL", "INTERNAL"] as const).flatMap((area) => {
+      const here = topicOrder.filter((t) => raised.some((d) => d.sub === t && d.area === area));
+      return [...here.filter((t) => t !== "General"), ...here.filter((t) => t === "General")].map((topic) => ({ topic, area }));
+    })
+    : topicOrder.map((topic) => ({ topic }));
   const defectGroups: DefectGroup[] = [];
   const numberOf = new Map<number, number>();
   let n = 0;
-  for (const topic of topicOrder) {
-    const group: DefectGroup = { heading: topic, defects: [] };
+  for (const { topic, area } of placed) {
+    const group: DefectGroup = { heading: topic, defects: [], ...(area ? { area } : {}) };
     raised.forEach((d, i) => {
-      if (d.sub !== topic) return;
+      if (d.sub !== topic || (area && d.area !== area)) return;
       n += 1;
       numberOf.set(i, n);
       const parts = splitDefect(d.text);

@@ -111,9 +111,16 @@ describe("1. a defect is headed by the row's name, without the form's 'inspected
     it(`${key} (${prop}): the printed defects read "Lower Level Roof Covering." and "Lower Level Guttering."; the checklist rows keep their names`, () => {
       const { html, model } = render(prefix, prop, { [key]: roofing(prop, key) });
       const t = text(html);
-      assert.match(t, /Lower Level Roof Covering\. Apron flashing is not stepped/);
-      assert.match(t, /Lower Level Guttering\. Gutter end cap is loose/);
-      assert.match(t, /Upper Roof — Generally Appears to Be\. Ridge capping lifted/, "the upper roof defect keeps its name");
+      if (prefix === "lf_") {
+        // Lock-up & Fixing: the LF template's line is the inspector's description (no row name in front) -- report-lf-template-wording.test.mjs.
+        assert.match(t, /Apron flashing is not stepped into the mortar joints\./);
+        assert.doesNotMatch(t, /Lower Level Roof Covering\. Apron/);
+        assert.doesNotMatch(t, /Upper Roof — Generally Appears to Be\. Ridge capping lifted/);
+      } else {
+        assert.match(t, /Lower Level Roof Covering\. Apron flashing is not stepped/);
+        assert.match(t, /Lower Level Guttering\. Gutter end cap is loose/);
+        assert.match(t, /Upper Roof — Generally Appears to Be\. Ridge capping lifted/, "the upper roof defect keeps its name");
+      }
       assert.doesNotMatch(t, /Inspected from Ladder/i);
       const items = model.tables.flatMap((tb) => tb.groups.flatMap((g) => g.items.map((i) => i.heading)));
       assert.ok(items.includes("Roof covering") && items.includes("Roof gutters"), items.join(" | "));
@@ -138,6 +145,16 @@ describe("2. 'Is the site well managed?' REFER NOTES", () => {
     const improved = fieldsOf(prop, key).find((f) => f.key === "siteManaged").options.find((o) => /can be improved/i.test(o.label));
     if (!improved) continue;
     const typedField = fieldsOf(prop, key).find((f) => f.type === "textarea" || f.type === "text");
+    if (/^lf_/.test(key)) {
+      // Lock-up & Fixing: one sentence for the answer (report-lf-template-wording.test.mjs has the rest).
+      it(`${key} (${prop}): "Can be improved …" -> only the clean-up note; "Yes" -> "${WELL_MANAGED}"`, () => {
+        const n = notesOf(prop, key, { siteManaged: improved.value });
+        assert.ok(!n.includes(WELL_MANAGED), n.join(" | "));
+        assert.equal(n.filter((x) => /clean-up/i.test(x)).length, 1, n.join(" | "));
+        assert.ok(notesOf(prop, key, {}).includes(WELL_MANAGED));
+      });
+      continue;
+    }
     it(`${key} (${prop}): no note typed -> "${WELL_MANAGED}" (then the clean-up note, as now)`, () => {
       const n = notesOf(prop, key, { siteManaged: improved.value });
       assert.ok(n.includes(WELL_MANAGED), n.join(" | "));
