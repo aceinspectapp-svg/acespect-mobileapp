@@ -326,7 +326,8 @@ function Defects({ model, archiveUrl, lead }: { model: ConstructionReportModel; 
         const areaHead = g.area && groups[gi - 1]?.area !== g.area
           ? <div data-defect-area="" style={{ color: C.navy, fontWeight: 700, fontSize: "15px", letterSpacing: "0.04em", margin: "16px 0 4px" }}>{g.area}</div>
           : null;
-        const lockFix = model.stage === "lock_fix";
+        // Lock-up & Fixing and Slab Down & Frame: no Severity / Category line (their templates have none).
+        const lockFix = model.stage === "lock_fix" || model.stage === "slab_frame";
         return (
           <div key={`${g.area ?? ""}:${g.heading}`}>
             {g.defects.map((d, i) => <Defect key={d.no} d={d} withSeverity={!lockFix} lead={i === 0 ? <>{gi === 0 && lead}{areaHead}{topic}</> : undefined} />)}

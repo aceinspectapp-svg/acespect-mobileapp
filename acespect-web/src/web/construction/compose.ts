@@ -119,7 +119,9 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartm
   const block = one("blockSlope");
   if (block) out.push(`The block is ${block}.`);
   if (a.supervisorOnSite === "yes" || a.supervisorOnSite === "no") out.push(`The site supervisor was${a.supervisorOnSite === "no" ? " not" : ""} onsite at the time of inspection.`);
-  if (a.ownersOnSite === "yes" || a.ownersOnSite === "no") out.push(`The owner ${a.ownersOnSite === "no" ? "was not" : "was"} onsite at the time of inspection.`);
+  // The Slab Down & Frame template: "The owners were (not) present for the inspection." The other stages keep their own wording.
+  if ((a.ownersOnSite === "yes" || a.ownersOnSite === "no") && stage === "slab_frame") out.push(`The owners were ${a.ownersOnSite === "no" ? "not " : ""}present for the inspection.`);
+  else if (a.ownersOnSite === "yes" || a.ownersOnSite === "no") out.push(`The owner ${a.ownersOnSite === "no" ? "was not" : "was"} onsite at the time of inspection.`);
   if (a.safetyIssues === "yes") {
     const d = asString(a.safetyDescribe).trim();
     out.push(d ? `Safety issues were noted on site — ${sentence(inline(d))}` : "Safety issues were noted on site.");
@@ -135,12 +137,12 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartm
  * report's Identified Defects prints, as the template does: the location in bold (the item when there is no location), then the
  * numbered description.
  */
-interface Defect { sub: string; area: "EXTERNAL" | "INTERNAL"; location: string; text: string; photos: string[]; item: string; description: string }
+interface Defect { sub: string; area: "EXTERNAL" | "INTERNAL"; location: string; text: string; photos: string[]; item: string; description: string; /** The checklist row that raised it. */ key?: string }
 
 /** A checklist row's defect as the template's numbered line reads under its location: the row, then the inspector's comments. */
 function rowDescription(item: string, location: string, comments: string, stage?: StageId): string {
   // The Lock-up & Fixing template: "<the inspector's description>. Please refer to Photographs …" -- not the checklist row's name in front.
-  if (!location || stage === "lock_fix") return comments ? sentence(cap(comments)) : sentence(cap(item));
+  if (!location || stage === "lock_fix" || stage === "slab_frame") return comments ? sentence(cap(comments)) : sentence(cap(item));
   return [sentence(cap(item)), comments ? sentence(cap(comments)) : ""].filter(Boolean).join(" ");
 }
 
@@ -308,10 +310,15 @@ interface Row {
 }
 
 /** One checklist section -> its rows (heading, status and sentence) and the defects raised in it. */
-function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind: "site" | "stage", apartment = false): { rows: Row[]; defects: Defect[] } {
+function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind: "site" | "stage", apartment = false): { rows: Row[]; defects: Defect[]; notes: string[] } {
   const prePour = stageOfKey(key) === "pre_pour";
   const lockFix = stageOfKey(key) === "lock_fix";
+  const slabFrame = stageOfKey(key) === "slab_frame";
   const rows: Row[] = [];
+  /** Slab Down & Frame: the template's reviewer notes a field decides on its own (printed in Notes). */
+  const notes: string[] = [];
+  /** Slab Down & Frame: the step-down rows whose step on site is over the 190 mm riser maximum. */
+  const highSteps: string[] = [];
   const defects: Defect[] = [];
   const used = new Set<string>();
   const fieldByKey = new Map(fields.map((f) => [f.key, f]));
@@ -345,10 +352,13 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
     const typed = /_other$/.test(f.key) ? asString(a[`${f.key}_note`]).trim().replace(/[.]$/, "") : "";
     if (typed) heading = cap(typed);
     const internalDoor = lockFix && LF_INTERNAL_DOORS.has(f.key);
-    defects.push({
+    const comments = asString(d.comments).trim();
+    // Slab Down & Frame: the template's wording for two rows, when the inspector wrote no description of their own.
+    const templateText = slabFrame && !comments ? SF_DEFECT_TEXT[f.key] : undefined;
+    defects.push({ key: f.key,
       sub: internalDoor ? "Internal doors" : groupFor(f) ?? "General", area: internalDoor ? "INTERNAL" : area, location: asString(d.location).trim(),
       text: defectText(heading, asString(d.location).trim(), asString(d.comments).trim(), mapLabels(d.severity, SEVERITY_LABELS), mapLabels(d.category, CATEGORY_LABELS), asString(d.constructionCode).trim()),
-      item: heading, description: rowDescription(heading, asString(d.location).trim(), asString(d.comments).trim(), lockFix ? "lock_fix" : undefined),
+      item: heading, description: templateText ?? rowDescription(heading, asString(d.location).trim(), comments, lockFix ? "lock_fix" : slabFrame ? "slab_frame" : undefined),
       photos: photosIn(d.photos),
     });
     return true;
@@ -376,13 +386,36 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
     const group = f.sectionLetter ? groupOf(f.sectionLetter) : "";
     const baseName = f.label.replace(/\s+on plan( is)?$/i, "").replace(/ \(approx\)$/i, "");
     const name = group && !baseName.toLowerCase().startsWith(group.toLowerCase().split(" ")[0]!) ? `${group} — ${lower(baseName)}` : baseName;
-    const plan = asString(a[f.key]);
-    const onSite = asString(a[site.key]);
+    // A number box can hold a number as well as text.
+    const plan = slabFrame ? numOrText(a[f.key]) : asString(a[f.key]);
+    const onSite = slabFrame ? numOrText(a[site.key]) : asString(a[site.key]);
     if (!plan && !onSite) continue;
+    let under = "";
+    if (slabFrame) {
+      // The Slab Down & Frame template's sentences, printed under the row (a sentence with a number missing is left out):
+      //   "Estimated using <datum>. Setbacks on plan are <plan> millimetres and on site are approximately <site> millimetres."
+      //   "Garage step down on plan is <plan> millimetres and on site is <site> millimetres."
+      const step = /SlabStep$/.test(base);
+      const mm = (x: string) => (/^\d+(\.\d+)?$/.test(x) ? `${x} millimetres` : x);
+      const said: string[] = [];
+      if (datum && a[datum.key]) {
+        const d = chosen(datum, asString(a[datum.key])).label;
+        if (d.trim()) said.push(/^estimated /i.test(d) ? sentence(cap(d)) : `Estimated using ${lower(inline(d)).replace(/[.]$/, "")}.`); // an "Other" with nothing typed says nothing
+      }
+      if (plan && onSite) {
+        said.push(step ? `${cap(base.replace(/SlabStep$/, ""))} step down on plan is ${mm(plan)} and on site is ${mm(onSite)}.`
+          : f.type === "numeric" ? `Setbacks on plan are ${mm(plan)} and on site are approximately ${mm(onSite)}.`
+          : `${cap(base.replace(/([A-Z])/g, " $1").toLowerCase())} on plan is ${mm(plan)} and on site is ${mm(onSite)}.`);
+      }
+      const res = result && asString(a[result.key]) ? chosen(result, asString(a[result.key])) : null;
+      if (res?.label && !(res.tone === "ok" && SATISFACTORY.test(res.label))) said.push(sentence(res.label));
+      if (step && Number(onSite) > 190) highSteps.push(base.replace(/Step$/, ""));
+      under = said.join(" ");
+    }
     const parts: string[] = [];
     if (datum && a[datum.key]) {
       const d = chosen(datum, asString(a[datum.key])).label;
-      parts.push(/^estimated (from|using) /i.test(d) ? `As ${lower(d)}.` : `As estimated using the ${lower(d)}.`);
+      if (d.trim() || !slabFrame) parts.push(/^estimated (from|using) /i.test(d) ? `As ${lower(d)}.` : `As estimated using the ${lower(d)}.`);
     }
     parts.push(
       f.type === "numeric"
@@ -398,7 +431,8 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
     }
     used.add(f.key); used.add(site.key); if (datum) used.add(datum.key); if (result) used.add(result.key);
     const text = parts.join(" ");
-    emitAt.set(anchorOf(datum, f, site, result), () => add(f, name, status, text));
+    // Slab Down & Frame: the template's sentences print under the row (the row's own text, which its note is made from, as before).
+    emitAt.set(anchorOf(datum, f, site, result), () => { add(f, name, status, text); if (under && rows[rows.length - 1]?.key === f.key) rows[rows.length - 1]!.after = under; });
   }
 
   /** An observation as it reads after "… is": "Satisfactory" -> "satisfactory", "Refer defects" -> "defective", "Refer notes" -> "noted for attention". */
@@ -495,7 +529,9 @@ const observed = (c: Chosen): string => {
       const plainYesNo = !/complete\??$/i.test(heading) && !!f.options?.some((x) => toneOfOption(x.color) !== "ok");
       let text = textFor(status, c, hasRed(f), plainYesNo);
       // Lock-up & Fixing: an answer the form no longer offers (an older inspection) is said in words, not as "Checked and okay."
-      if (lockFix && !c.other && !f.options?.some((o) => o.value === v)) text = sentence(c.label);
+      if ((lockFix || slabFrame) && !c.other && !f.options?.some((o) => o.value === v)) text = sentence(c.label);
+      // Slab Down & Frame: sisalation not yet installed is the template's note.
+      if (slabFrame && f.key === "sisalation" && /not[ _-]?yet/i.test(`${v} ${c.label}`)) { notes.push(SISALATION_NOT_YET); }
       // The Pre-pour template's fixed wording for two rows: the power supply's "Meter & Pole at Slab", and the note above the kitchen bench penetrations.
       if (prePour && f.key === "powerSupply" && status === "ok") text = POWER_SUPPLY_OK;
       if (prePour && f.key === "kitchenBenchPenetrations" && status !== "na") text = `${KITCHEN_BENCH_FIXED} ${text}`;
@@ -543,8 +579,28 @@ const observed = (c: Chosen): string => {
       if (t) { add(f, heading, "note", sentence(cap(t))); rows[rows.length - 1]!.typed = t; }
     }
   }
-  return { rows, defects };
+  if (slabFrame) {
+    // The template's reviewer notes, after the defect they belong to (each once).
+    const after = (row: string, note: string): boolean => { const d = defects.find((x) => x.key === row); if (d) d.description = `${d.description} ${note}`.trim(); return !!d; };
+    if (highSteps.length && !highSteps.some((row) => after(row, STEP_RISER))) notes.push(STEP_RISER);
+    after("slabLevels", SELF_LEVELLER);
+  }
+  return { rows, defects, notes };
 }
+
+/** A number box's answer as text (the app keeps it as text; it may also be a number). */
+const numOrText = (v: AnswerTree[string]): string => (typeof v === "number" && Number.isFinite(v) ? String(v) : asString(v).trim());
+/** Slab Down & Frame template: the reviewer's note for a step down over 190 mm on site. */
+export const STEP_RISER = "Step riser maximum is 190mm as per BCA requirements.";
+/** Slab Down & Frame template: the reviewer's note after a Slab Surface Levels defect. */
+export const SELF_LEVELLER = "Typically, the minor variations in surface levels to the main house will be rectified at later stages of the project when a self-leveller is applied when floor coverings are installed.";
+/** Slab Down & Frame template: the note for sisalation not yet installed. */
+export const SISALATION_NOT_YET = "Sisalation has not yet been installed to frame.";
+/** Slab Down & Frame template: a defect's text for these rows when the inspector wrote no description. */
+export const SF_DEFECT_TEXT: Record<string, string> = {
+  polythene: "The polyethylene is not visible to some sections of slab edges. Backfill may need to be scraped back to reveal the black plastic to ensure it has been turned up to the slab edges.",
+  builderSign: "There is no builder's sign showing details and contacts names and telephone numbers, which is required for safety on site.",
+};
 
 /** Sentences the Site & Facilities answers add to the report's Notes. */
 function siteNotes(stage: StageId, fields: TemplateField[], a: AnswerTree): string[] {
@@ -746,7 +802,7 @@ export function composeConstructionSection(key: string, fields: TemplateField[],
   const stage = stageOfKey(key);
   if (!stage) return { text: "", damages: [] };
   // Lock-up & Fixing: an answer the form no longer offers (an older inspection) prints as words, never as its stored code.
-  if (stage === "lock_fix") return withReadableCodes(() => composeSection(key, stage, fields, a, apartment));
+  if (stage === "lock_fix" || stage === "slab_frame") return withReadableCodes(() => composeSection(key, stage, fields, a, apartment));
   return composeSection(key, stage, fields, a, apartment);
 }
 
@@ -762,7 +818,7 @@ function composeSection(key: string, stage: StageId, fields: TemplateField[], a:
   else if (kind === "defects") defects.push(...tableDefects(a, stage));
   else if (kind === "typical") defects.push(...typicalDefects(fields, a));
   else {
-    const { rows, defects: raised } = checklistRows(key, fields, a, kind === "site" ? "site" : "stage", apartment);
+    const { rows, defects: raised, notes: own } = checklistRows(key, fields, a, kind === "site" ? "site" : "stage", apartment);
     let group: string | undefined;
     for (const r of rows) {
       if (r.group !== group) {
@@ -775,6 +831,7 @@ function composeSection(key: string, stage: StageId, fields: TemplateField[], a:
     defects.push(...raised);
     if (kind === "site") for (const n of siteNotes(stage, fields, a)) lines.push(`${TAGS.note}${n}`);
     for (const n of referredNotes(rows, stage === "lock_fix")) lines.push(`${TAGS.note}${n}`);
+    for (const n of own) lines.push(`${TAGS.note}${n}`);
   }
 
   if (defects.length > 0) {
