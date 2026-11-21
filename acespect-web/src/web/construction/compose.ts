@@ -314,6 +314,8 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
   const prePour = stageOfKey(key) === "pre_pour";
   const lockFix = stageOfKey(key) === "lock_fix";
   const slabFrame = stageOfKey(key) === "slab_frame";
+  // Pre-pour and Slab Down print their setbacks and step downs in their templates' sentences too (as Slab Down & Frame).
+  const templateMeasures = slabFrame || prePour || stageOfKey(key) === "slab";
   const rows: Row[] = [];
   /** Slab Down & Frame: the template's reviewer notes a field decides on its own (printed in Notes). */
   const notes: string[] = [];
@@ -387,20 +389,21 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
     const baseName = f.label.replace(/\s+on plan( is)?$/i, "").replace(/ \(approx\)$/i, "");
     const name = group && !baseName.toLowerCase().startsWith(group.toLowerCase().split(" ")[0]!) ? `${group} — ${lower(baseName)}` : baseName;
     // A number box can hold a number as well as text.
-    const plan = slabFrame ? numOrText(a[f.key]) : asString(a[f.key]);
-    const onSite = slabFrame ? numOrText(a[site.key]) : asString(a[site.key]);
+    const plan = templateMeasures ? numOrText(a[f.key]) : asString(a[f.key]);
+    const onSite = templateMeasures ? numOrText(a[site.key]) : asString(a[site.key]);
     if (!plan && !onSite) continue;
     let under = "";
-    if (slabFrame) {
-      // The Slab Down & Frame template's sentences, printed under the row (a sentence with a number missing is left out):
-      //   "Estimated using <datum>. Setbacks on plan are <plan> millimetres and on site are approximately <site> millimetres."
+    // Pre-pour and Slab Down: only the setbacks and step downs (their slab width / length already print the numbers, in Notes).
+    if (slabFrame || (templateMeasures && (f.type === "numeric" || /SlabStep$/.test(base)))) {
+      // The templates' sentences, printed under the row (a sentence with a number missing is left out):
+      //   "Estimated using <datum>. (Pre-pour: "As estimated using <datum>.") Setbacks on plan are <plan> millimetres and on site are approximately <site> millimetres."
       //   "Garage step down on plan is <plan> millimetres and on site is <site> millimetres."
       const step = /SlabStep$/.test(base);
       const mm = (x: string) => (/^\d+(\.\d+)?$/.test(x) ? `${x} millimetres` : x);
       const said: string[] = [];
       if (datum && a[datum.key]) {
         const d = chosen(datum, asString(a[datum.key])).label;
-        if (d.trim()) said.push(/^estimated /i.test(d) ? sentence(cap(d)) : `Estimated using ${lower(inline(d)).replace(/[.]$/, "")}.`); // an "Other" with nothing typed says nothing
+        if (d.trim()) said.push(/^estimated /i.test(d) ? sentence(prePour ? `As ${lower(inline(d)).replace(/[.]$/, "")}` : cap(d)) : `${prePour ? "As estimated" : "Estimated"} using ${lower(inline(d)).replace(/[.]$/, "")}.`); // an "Other" with nothing typed says nothing
       }
       if (plan && onSite) {
         said.push(step ? `${cap(base.replace(/SlabStep$/, ""))} step down on plan is ${mm(plan)} and on site is ${mm(onSite)}.`
@@ -409,13 +412,13 @@ function checklistRows(key: string, fields: TemplateField[], a: AnswerTree, kind
       }
       const res = result && asString(a[result.key]) ? chosen(result, asString(a[result.key])) : null;
       if (res?.label && !(res.tone === "ok" && SATISFACTORY.test(res.label))) said.push(sentence(res.label));
-      if (step && Number(onSite) > 190) highSteps.push(base.replace(/Step$/, ""));
+      if (slabFrame && step && Number(onSite) > 190) highSteps.push(base.replace(/Step$/, ""));
       under = said.join(" ");
     }
     const parts: string[] = [];
     if (datum && a[datum.key]) {
       const d = chosen(datum, asString(a[datum.key])).label;
-      if (d.trim() || !slabFrame) parts.push(/^estimated (from|using) /i.test(d) ? `As ${lower(d)}.` : `As estimated using the ${lower(d)}.`);
+      if (d.trim() || !templateMeasures) parts.push(/^estimated (from|using) /i.test(d) ? `As ${lower(d)}.` : `As estimated using the ${lower(d)}.`);
     }
     parts.push(
       f.type === "numeric"

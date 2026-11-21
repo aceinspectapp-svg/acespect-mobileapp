@@ -204,7 +204,6 @@ describe("Other stages print as before", () => {
       assert.ok(!r.text.includes(SELF_LEVELLER));
       assert.ok(!r.model.tables.some((t) => t.intro === SLAB_INTRO));
     }
-    assert.ok(!sd.text.includes(SETBACK_NOTE));
-    assert.ok(!sd.model.tables.flatMap((t) => t.groups).flatMap((g) => g.items).some((it) => it.after && /millimetres/.test(it.after)));
+    // Slab Down's setbacks / step downs (and its land surveying note) follow its own template: report-measurements-prepour-slabdown.test.mjs.
   });
 });

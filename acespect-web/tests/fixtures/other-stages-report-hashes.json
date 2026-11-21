@@ -1,5 +1,5 @@
 {
- "note": "sha256 of each stage's printed report on main 85d0f8e (before the Slab Down & Frame wording fix). Made by tests/report-other-stages-unchanged.test.mjs's answers; only Slab Down & Frame (sf) may differ.",
+ "note": "sha256 of each stage's printed report on main (Pre-pour and Slab Down without their Measurements section). Made by tests/report-other-stages-unchanged.test.mjs's answers; Slab Down & Frame is not included.",
  "hashes": {
   "residential_house|fr|v0": "9e510d1586c26948d26dae8510bd1df5f340febb506003ae9a8a04cff92ddcb1",
   "residential_house|fr|v1": "c6ba7121d8b00eecd168b28f633be04986594592d648ab6058585fed4b094418",
@@ -16,12 +16,12 @@
   "residential_house|pci|v0": "01256462a3397b856804ed7013738a93f74613053cceb76659c8ceb6b163c25c",
   "residential_house|pci|v1": "933d11e50e3636675941dc8d8958427acb9abf34833a8e01a339374862915a6b",
   "residential_house|pci|v2": "dc33b544d591dc587734a26a484d56ed63c3d4a5d7cf3574f65f8b7e43175983",
-  "residential_house|pp|v0": "60512addf56c5ef3fe044e26ae10c704d41da7e942eeaae0e216798c8524b912",
-  "residential_house|pp|v1": "723d8645b3c452bf1a25aa178ca86042e14db57a87ccb6c198e96d951d25b417",
-  "residential_house|pp|v2": "b8bd40f6e97b489c44cb68c248bc40f769ce96b2dd09f2d57253cea58f074a66",
-  "residential_house|sd|v0": "77a2efe5d74c40845929749cbac8ef523ffc3a13cb96307656ad22c18864b218",
-  "residential_house|sd|v1": "9ea58da2f1bff5810a38f35f70e3eb345b53483e4c157c677d32daf0d8a4e1c0",
-  "residential_house|sd|v2": "f7ba6d43c0f61a4755b9681d5a46d0b3b3b841e51cc7978880144f48e24c4c60",
+  "residential_house|pp|v0|no-measurements": "e102a5c4fd2a702e17b3b31160ae23d1d328da66069735427ca2981f5c4c6c0c",
+  "residential_house|pp|v1|no-measurements": "5f4ab7eeeccc3df50022795cf4d7a4f26b1a467e3911be7c173b6871eba2a180",
+  "residential_house|pp|v2|no-measurements": "650f55bfcf26756a8f8e80087adb68427a9fefbee9dd3ffdb913055b4597dbe2",
+  "residential_house|sd|v0|no-measurements": "9f4166ba58256d7059fb9371471936227bcc0f6516a2141bcbb5319307af4b1e",
+  "residential_house|sd|v1|no-measurements": "6981aa494c10d9d4525b4f49c711fb03bd8462e8751d0e2888741dda18b00ae0",
+  "residential_house|sd|v2|no-measurements": "be781549d3a979dfde9f9fbf6effcda505e2caef48758173a696e7c883099b78",
   "apartment|fr|v0": "fb3b9a43624172b513b921ddae1ece99ef211daff2679fd071c2751b412d5c76",
   "apartment|fr|v1": "6e871454dcdd98b71ac9338e7590f5a53e624d642435a1e4d0bada088cc94f49",
   "apartment|fr|v2": "d40702b4cf0ba2bab2a07da311245317ecf5ab63248acac8c74c780dc709c026",
@@ -37,11 +37,11 @@
   "apartment|pci|v0": "60c12d75973c2c6b68905798d0bc77db2fe72471be752fc45233d9d10f374c35",
   "apartment|pci|v1": "ddc8c33e82a096d9654237adab94680c392abc26e74c8cb1c845f30fa016036c",
   "apartment|pci|v2": "702dd7b5659274bab3168b8be89c3ef38ab266be569daf36111a52088867776f",
-  "apartment|pp|v0": "03eb0837671ea594995b158629ec03677ece50e7b8db97a5600f2b4a4a4245d0",
-  "apartment|pp|v1": "b7fbac12fd66b0c189b71d486b262d717097d28ff7389cfa9235eb05f9770380",
-  "apartment|pp|v2": "6fed6d437eb4e1782f05307fdc1b605b6eacd3b867834ebc4166fc2572fb0e8c",
-  "apartment|sd|v0": "c3a8a35e4f8811eae261338c4527523c12324a6574951685ed6600bf1709dd45",
-  "apartment|sd|v1": "a07d16ad575da0fd917a16b0bc2a324abe979a81ac29059272b729bd90bd1e8d",
-  "apartment|sd|v2": "f02b00d788fc00b6e20e3f53156997d557de580a74e461b8c7efbea9d901a54c"
+  "apartment|pp|v0|no-measurements": "471229b97a3ba0ab766ede6af854cf7eb4f4d10ef40e63281e535e3038d36048",
+  "apartment|pp|v1|no-measurements": "23af2ffbf7f1cbefed1c9ab2ca88f4fb7819bed31bb36ca02ffb020181804564",
+  "apartment|pp|v2|no-measurements": "7b693a68c6daefe60e578a43a28eaa65b786e29964f967fd023113a4c7047ae5",
+  "apartment|sd|v0|no-measurements": "c0bede5308219aacc758b6266d7ccd432da647f938f7e0753d06ef275270b5c7",
+  "apartment|sd|v1|no-measurements": "fa50d125ebfd0a533fbc415c953c93e06a08217ad0cd982a14cf209fcca27035",
+  "apartment|sd|v2|no-measurements": "53338f284860629a20b8252defcc73f71b30eb3ebde7f71e2da4fef5da1c725f"
  }
 }
