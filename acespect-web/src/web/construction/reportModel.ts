@@ -53,6 +53,8 @@ export interface ChecklistTable {
   photos: { heading: string; photos: string[] }[];
   /** The template's fixed sentence printed above the table (Pre-pour: "These items were checked for construction and workmanship."). */
   intro?: string;
+  /** Print `intro` under the table's title bar instead of above it (Slab Down & Frame: the sentence sits under its SLAB heading). */
+  introUnderTitle?: boolean;
   /** The template's fixed note printed after the table's rows, in italics (Pre-pour: the land surveying note after the setbacks). */
   footnote?: string;
   /** The template's own sentences printed after the table's rows, as plain text (PCI Apartment: the Owners Corporation roof note). */
@@ -77,6 +79,10 @@ export const APARTMENT_COMMON_AREA_NOTES = [
 
 /** Pre-pour template: the sentence under the PRE POUR heading, before the first of its checks. */
 export const PRE_POUR_INTRO = "These items were checked for construction and workmanship.";
+/** Slab Down & Frame template: the sentence under the SLAB heading (the same as Pre-pour's). */
+export const SLAB_INTRO = PRE_POUR_INTRO;
+/** Slab Down & Frame template: the disclaimer after Services (the template's wording, kept exactly). */
+export const SF_SERVICES_DISCLAIMER = "As the Houspect building inspector is not licensed plumber, licensed gas fitter technician or licensed electrician, the comments are observations by the inspector only. It is recommended that all electrical circuits include RCD protection, with hard-wired smoke detectors.";
 /** Pre-pour template: the italic note after the four setback items (the template's wording, kept exactly). */
 export const SETBACK_NOTE =
   "Houspect Building Inspector is not a providing a land surveying service therefore the comments are observations by the inspector only. Note; pegs on site may sometimes be knocked over or inadvertently moved during base/slab preparation and concrete pour and the inspector is providing estimates only from site markers available on the day of inspection.";
@@ -435,6 +441,14 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
           if (!tables.some((t) => t.intro === PRE_POUR_INTRO)) table.intro = PRE_POUR_INTRO;
           // ... and closes its four setbacks with the land surveying note (not when the setbacks are not there or not applicable).
           if (kept.some((g) => g.items.some((it) => /setback/i.test(it.heading) && it.status !== "na"))) table.footnote = SETBACK_NOTE;
+        }
+        if (stage === "slab_frame") {
+          // The Slab Down & Frame template: the sentence under the SLAB heading, above the first slab checks; the land surveying note
+          // after the setbacks; the services disclaimer after Services.
+          if (s.key === "sf_measurements" || (s.key === "sf_quality" && !tables.some((t) => t.intro === SLAB_INTRO))) { table.intro = SLAB_INTRO; table.introUnderTitle = true; }
+          const setbacks = kept.map((g, i) => (g.items.some((it) => /setback/i.test(it.heading) && it.status !== "na") ? i : -1)).filter((i) => i >= 0);
+          if (s.key === "sf_measurements" && setbacks.length) kept[setbacks[setbacks.length - 1]!]!.closing = SETBACK_NOTE;
+          if (s.key === "sf_services") table.closing = [SF_SERVICES_DISCLAIMER];
         }
         if (stage === "pci" && opts.apartment) {
           // The PCI Apartment template's own sentences: the Owners Corporation note under ROOF, the disclaimer after the COMMON AREAS checks.

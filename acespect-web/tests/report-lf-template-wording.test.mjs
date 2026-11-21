@@ -216,8 +216,9 @@ describe("9. an answer the form no longer offers (an older inspection) prints as
 
 // ───────────────────────── The other stages print as before ─────────────────────────
 
-describe("the other stages are unchanged (Pre-pour, Slab, Frame, Lock-up, Fixing, PCI, Slab + Frame; House and Apartment)", () => {
-  const OTHERS = ["pp_", "sd_", "fr_", "lu_", "fx_", "pci_", "sf_"];
+describe("the other stages are unchanged (Pre-pour, Slab, Frame, Lock-up, Fixing, PCI; House and Apartment)", () => {
+  // Slab + Frame has its own template wording now (report-sf-template-wording.test.mjs).
+  const OTHERS = ["pp_", "sd_", "fr_", "lu_", "fx_", "pci_"];
   const answerFor = (f) => {
     if (f.type === "pill-select" && f.options?.length) return (f.defectOn?.length ? f.options.find((o) => f.defectOn.includes(o.value)) : f.options[0]).value;
     if (f.type === "yesno") return "yes";

@@ -226,8 +226,9 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
   );
   return (
     <div style={{ margin: "0 0 20px" }}>
-      {t.intro && !t.groups.length && <p style={{ margin: "0 0 8px" }}>{t.intro}</p>}
+      {t.intro && !t.introUnderTitle && !t.groups.length && <p style={{ margin: "0 0 8px" }}>{t.intro}</p>}
       {!t.groups.length && titleBar}
+      {t.intro && t.introUnderTitle && !t.groups.length && <p style={{ margin: "6px 0 8px" }}>{t.intro}</p>}
       {t.groups.map((g, gi) => (
         <Fragment key={gi}>
           {g.items.map((it, ii) => {
@@ -252,8 +253,9 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
             // template's sentence above the table and the table's title bar -- so none of them is ever left alone at a page bottom.
             return (
               <KeepTogether key={it.id}>
-                {gi === 0 && t.intro && <p style={{ margin: "0 0 8px" }}>{t.intro}</p>}
+                {gi === 0 && t.intro && !t.introUnderTitle && <p style={{ margin: "0 0 8px" }}>{t.intro}</p>}
                 {gi === 0 && titleBar}
+                {gi === 0 && t.intro && t.introUnderTitle && <p style={{ margin: "6px 0 8px" }}>{t.intro}</p>}
                 {g.heading && (
                   <div style={{ background: C.band, color: C.navy, fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "4px 10px" }}>{g.heading}</div>
                 )}
@@ -326,7 +328,8 @@ function Defects({ model, archiveUrl, lead }: { model: ConstructionReportModel; 
         const areaHead = g.area && groups[gi - 1]?.area !== g.area
           ? <div data-defect-area="" style={{ color: C.navy, fontWeight: 700, fontSize: "15px", letterSpacing: "0.04em", margin: "16px 0 4px" }}>{g.area}</div>
           : null;
-        const lockFix = model.stage === "lock_fix";
+        // Lock-up & Fixing and Slab Down & Frame: no Severity / Category line (their templates have none).
+        const lockFix = model.stage === "lock_fix" || model.stage === "slab_frame";
         return (
           <div key={`${g.area ?? ""}:${g.heading}`}>
             {g.defects.map((d, i) => <Defect key={d.no} d={d} withSeverity={!lockFix} lead={i === 0 ? <>{gi === 0 && lead}{areaHead}{topic}</> : undefined} />)}
