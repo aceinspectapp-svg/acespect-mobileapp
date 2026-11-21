@@ -53,6 +53,8 @@ export interface ChecklistTable {
   photos: { heading: string; photos: string[] }[];
   /** The template's fixed sentence printed above the table (Pre-pour: "These items were checked for construction and workmanship."). */
   intro?: string;
+  /** Print `intro` under the table's title bar instead of above it (Slab Down & Frame: the sentence sits under its SLAB heading). */
+  introUnderTitle?: boolean;
   /** The template's fixed note printed after the table's rows, in italics (Pre-pour: the land surveying note after the setbacks). */
   footnote?: string;
   /** The template's own sentences printed after the table's rows, as plain text (PCI Apartment: the Owners Corporation roof note). */
@@ -443,7 +445,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
         if (stage === "slab_frame") {
           // The Slab Down & Frame template: the sentence under the SLAB heading, above the first slab checks; the land surveying note
           // after the setbacks; the services disclaimer after Services.
-          if (s.key === "sf_measurements" || (s.key === "sf_quality" && !tables.some((t) => t.intro === SLAB_INTRO))) table.intro = SLAB_INTRO;
+          if (s.key === "sf_measurements" || (s.key === "sf_quality" && !tables.some((t) => t.intro === SLAB_INTRO))) { table.intro = SLAB_INTRO; table.introUnderTitle = true; }
           const setbacks = kept.map((g, i) => (g.items.some((it) => /setback/i.test(it.heading) && it.status !== "na") ? i : -1)).filter((i) => i >= 0);
           if (s.key === "sf_measurements" && setbacks.length) kept[setbacks[setbacks.length - 1]!]!.closing = SETBACK_NOTE;
           if (s.key === "sf_services") table.closing = [SF_SERVICES_DISCLAIMER];

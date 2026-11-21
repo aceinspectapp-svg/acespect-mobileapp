@@ -79,10 +79,14 @@ describe("1. General Description: the owners line in the template's words", () =
 });
 
 describe("2. The SLAB sentence", () => {
-  it("is printed once, above the first slab checks", () => {
+  it("is printed once, under the slab heading, above the first slab checks", () => {
     assert.equal(tableOf(full.model, "sf_measurements").intro, SLAB_INTRO);
     assert.equal(SLAB_INTRO, "These items were checked for construction and workmanship.");
     assert.equal(count(full.text, SLAB_INTRO), 1);
+    // Under the SITE & SLAB MEASUREMENTS title, not above it (where it would read as the end of Site & Facilities).
+    const head = full.text.indexOf("SITE & SLAB MEASUREMENTS");
+    const sentence = full.text.indexOf(SLAB_INTRO);
+    assert.ok(head >= 0 && sentence > head && sentence < full.text.indexOf("Boundary Survey Pegs", head));
   });
 });
 
