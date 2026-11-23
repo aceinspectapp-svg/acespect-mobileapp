@@ -53,6 +53,7 @@ const ROOM_RE = /^ROOMHEAD::(.+)$/;
 const DEFECT_RE = /^(DEFECT::\d+::)([\s\S]*)$/;
 const ITEM_RE = /^(ITEM::(.+?)::(?:(?:ok|progress|defect|note|notcomplete|na)::)?)([\s\S]*)$/;
 const NOTE_RE = /^(NOTE::)([\s\S]*)$/;
+const BULLET_RE = /^(BULLET::)([\s\S]*)$/;
 const FLOOR_HEADINGS = ["GROUND FLOOR", "FIRST FLOOR", "SECOND FLOOR", "BASEMENT"];
 const FLOOR_LINE_RE = /^(?:LEVEL \d+|[A-Z]+ FLOOR|LOWER GROUND|MEZZANINE)$/;
 
@@ -68,6 +69,8 @@ export function anatomy(line: string): LineAnatomy {
   if ((m = line.match(DEFECT_RE))) return { kind: "defect", prefix: m[1]!, text: m[2]!.trim(), editable: true };
   if ((m = line.match(ITEM_RE))) return { kind: "item", prefix: m[1]!, text: m[3]!.trim(), editable: true, label: m[2]! };
   if ((m = line.match(NOTE_RE))) return { kind: "note", prefix: m[1]!, text: m[2]!.trim(), editable: true };
+  // A bullet sentence (Pre-Purchase / Apartment's lists of sentences): its words can be retyped, the bullet stays.
+  if ((m = line.match(BULLET_RE))) return { kind: "note", prefix: m[1]!, text: m[2]!.trim(), editable: true };
   if (FLOOR_HEADINGS.includes(line) || FLOOR_LINE_RE.test(line)) return { kind: "floor", prefix: line, text: "", editable: false, label: line };
   return { kind: "para", prefix: "", text: line, editable: true };
 }

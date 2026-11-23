@@ -12,6 +12,7 @@ import { audit, firstWithin, flushPhotoBatches, notePhotoUpload } from '../../li
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { getReportJob, jobStatus, startReportJob, type ReportFormat } from '../../lib/reportJobs';
+import { reportFileNameFor, reportKind, reportKindTitle } from '../../lib/reportKind';
 import { signAccessToken, verifyAccessToken } from '../../utils/jwt';
 import { canViewDetail } from '../web/assignment.rules';
 
@@ -26,16 +27,16 @@ const REPORT_MIME: Record<ReportFormat, string> = {
 };
 
 /** What a report of this inspection needs: its kind, file name and the details printed in its header and footer. */
-async function reportDetails(id: string, inspection: { jobNo: string | null; client: string | null; date: Date | string; inspectionType: string | null }, format: ReportFormat) {
-  const kind = /construction/i.test(inspection.inspectionType ?? '') ? 'construction' : 'dilapidation';
+async function reportDetails(id: string, inspection: { jobNo: string | null; client: string | null; date: Date | string; inspectionType: string | null; propertyType?: string | null }, format: ReportFormat) {
+  const kind = reportKind(inspection.inspectionType, inspection.propertyType);
   const jobNo = await inspectionsService.reportJobNo(id, inspection.jobNo);
   return {
     kind,
-    fileName: `${inspection.jobNo || id}-${kind}-report.${format}`.replace(/[^a-z0-9.-]+/gi, '-'),
+    fileName: reportFileNameFor(inspection.jobNo || id, kind, format),
     meta: {
       clientName: inspection.client ?? '',
       jobNo,
-      title: `${kind === 'construction' ? 'Construction' : 'Dilapidation'} Report ${jobNo}`.trim(),
+      title: `${reportKindTitle(kind)} Report ${jobNo}`.trim(),
       inspectionDate: footerDate(inspection.date),
     },
   };
@@ -298,14 +299,14 @@ export const inspectionsController = {
 
     const inspection = await inspectionsService.getById(id);
     assertReviewerMayOpen(req.user, inspection);
-    const kind = /construction/i.test(inspection.inspectionType ?? '') ? 'construction' : 'dilapidation';
+    const kind = reportKind(inspection.inspectionType, inspection.propertyType);
     const pdf = await generateInspectionReportPdf(id, token, {
       clientName: inspection.client ?? '',
       jobNo: await inspectionsService.reportJobNo(id, inspection.jobNo),
       inspectionDate: footerDate(inspection.date),
     });
 
-    const fileName = `${inspection.jobNo || id}-${kind}-report.pdf`.replace(/[^a-z0-9.-]+/gi, '-');
+    const fileName = reportFileNameFor(inspection.jobNo || id, kind, 'pdf');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     await audit({ category: 'web', action: 'report.download', inspectionId: id, jobNo: inspection.jobNo, target: { type: 'Report', id, label: fileName }, message: 'PDF report downloaded', metadata: { format: 'pdf', bytes: pdf.length, sha256: createHash('sha256').update(pdf).digest('hex'), kind } });
@@ -322,16 +323,16 @@ export const inspectionsController = {
 
     const inspection = await inspectionsService.getById(id);
     assertReviewerMayOpen(req.user, inspection);
-    const kind = /construction/i.test(inspection.inspectionType ?? '') ? 'construction' : 'dilapidation';
+    const kind = reportKind(inspection.inspectionType, inspection.propertyType);
     const reportJobNo = await inspectionsService.reportJobNo(id, inspection.jobNo);
     const docx = await generateInspectionReportDocx(id, token, {
       clientName: inspection.client ?? '',
       jobNo: reportJobNo,
-      title: `${kind === 'construction' ? 'Construction' : 'Dilapidation'} Report ${reportJobNo}`.trim(),
+      title: `${reportKindTitle(kind)} Report ${reportJobNo}`.trim(),
       inspectionDate: footerDate(inspection.date),
     });
 
-    const fileName = `${inspection.jobNo || id}-${kind}-report.docx`.replace(/[^a-z0-9.-]+/gi, '-');
+    const fileName = reportFileNameFor(inspection.jobNo || id, kind, 'docx');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     await audit({ category: 'web', action: 'report.download', inspectionId: id, jobNo: inspection.jobNo, target: { type: 'Report', id, label: fileName }, message: 'Word report downloaded', metadata: { format: 'docx', bytes: docx.length, sha256: createHash('sha256').update(docx).digest('hex'), kind } });
