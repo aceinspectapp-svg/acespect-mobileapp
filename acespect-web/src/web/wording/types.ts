@@ -66,6 +66,13 @@ export interface ReportWording {
   reportParts?: { title: string; band: "EXTERNAL" | "INTERNAL"; structures?: boolean; heading?: false }[];
   /** False for a report type whose template has no Condition Summary page. */
   conditionSummary?: boolean;
+  /**
+   * How a list answer with no sentence of its own is written, where this report type words it differently from "Label: a, b."
+   * (Pre-Purchase / Apartment: a list of sentences prints as one bullet per sentence). Undefined, or returning undefined: the standard line.
+   */
+  listLine?(sectionKey: string, field: TemplateField, labels: string[]): string | undefined;
+  /** A last pass over a section's finished report text, for a report type that tidies it (Pre-Purchase / Apartment). Undefined: as written. */
+  finish?(sectionKey: string, reportText: string): string;
 }
 
 /** No wording: every section falls back to the generic "Label: value." lines. */

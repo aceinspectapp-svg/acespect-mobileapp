@@ -83,29 +83,29 @@ const STATUS: Record<ItemStatus, { label: string; sub: string; stripe: string; b
   na: { label: "NOT APPLICABLE", sub: "Does not apply to this build", stripe: "#b8c0cc", bg: "#f1f2f4", fg: "#4b5563" },
 };
 
-const page: CSSProperties = { fontFamily: C.font, color: C.ink, fontSize: "13px", lineHeight: 1.45 };
+export const page: CSSProperties = { fontFamily: C.font, color: C.ink, fontSize: "13px", lineHeight: 1.45 };
 
-function Heading({ children }: { children: ReactNode }) {
+export function Heading({ children }: { children: ReactNode }) {
   return (
     <h2 style={{ margin: "0 0 14px", paddingBottom: "6px", borderBottom: `2.5px solid ${C.red}`, color: C.navy, fontSize: "17px", fontWeight: 700, textTransform: "uppercase", breakAfter: "avoid" }}>
       {children}
     </h2>
   );
 }
-const SubHeading = ({ children }: { children: ReactNode }) => (
+export const SubHeading = ({ children }: { children: ReactNode }) => (
   <h3 style={{ margin: "18px 0 6px", color: C.navy, fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", breakAfter: "avoid" }}>{children}</h3>
 );
 /**
  * Prints its children on one page: a heading and the first thing under it, so a heading is never left alone at the bottom of a page
  * (Chrome's PDF does not honour break-after: avoid reliably; break-inside: avoid on a wrapper is honoured).
  */
-const KeepTogether = ({ children }: { children: ReactNode }) => <div style={{ breakInside: "avoid" }}>{children}</div>;
+export const KeepTogether = ({ children }: { children: ReactNode }) => <div style={{ breakInside: "avoid" }}>{children}</div>;
 const Back = () => (
   <div style={{ textAlign: "right", margin: "-4px 0 12px" }}>
     <a href="#checklist" style={{ color: "#2563eb", fontSize: "11.5px" }}>↑ Back to summary</a>
   </div>
 );
-const Bullets = ({ items, lead }: { items: string[]; lead?: ReactNode }) => {
+export const Bullets = ({ items, lead }: { items: string[]; lead?: ReactNode }) => {
   const li = (t: string, i: number) => (
     <li key={i} style={{ display: "flex", gap: "10px", margin: "0 0 4px", breakInside: "avoid" }}>
       <span style={{ color: C.red, lineHeight: 1.45 }}>•</span>
@@ -432,6 +432,28 @@ function TermsPages() {
 
 // ───────────────────────── The page ─────────────────────────
 
+/**
+ * The template's PHOTOGRAPHS paragraph and its note, under the General Description: one block, shared by every report laid out this way
+ * (Construction, and Pre-Purchase / Apartment -- prepurchase/PrePurchaseReport.tsx).
+ */
+export function PhotographsBlock({ fullDownloadUrl, originals }: { fullDownloadUrl?: string | null; originals: { url: string | null; pending: boolean } }) {
+  return (
+    <>
+      <KeepTogether>
+      <SubHeading>Photographs</SubHeading>
+      <OriginalPhotosPending pending={originals.pending} />
+      <p style={{ margin: "0 0 8px" }}>
+        Selected photographs are included in the body of this report. For a full download please{" "}
+        {fullDownloadUrl ? <a href={fullDownloadUrl} data-original-photos-link={originals.url ? "" : undefined} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>Click here</a> : "Click here"} to access. We recommend that you download the digital photographs immediately and save in a secure folder on your device, as the link will remain active for only a few months from the date of this report.
+      </p>
+      </KeepTogether>
+      <p style={{ margin: 0, fontStyle: "italic", fontSize: "10.5px", color: C.grey, lineHeight: 1.7 }}>
+        You may view/save individual photographs by clicking on a file in the list. To save a copy of all photographs, click the Download All button above the list of files and follow the prompts. The security settings on your computer may display a bar at the top of the window, indicating that you need to allow your browser to download from the site. If this message appears, please allow downloads temporarily from this site. If a window does not then appear asking where you would like the download saved, simply click on the Download All button again to commence the download.
+      </p>
+    </>
+  );
+}
+
 export function ConstructionReportBody({ inspection, model, header }: { inspection: Inspection; model: ConstructionReportModel; header: ReportHeader }) {
   const archive = inspection.photoArchiveUrl;
   // The Photographs "Click here" downloads every original photo of the inspection as one zip (the folder link is the fallback).
@@ -450,17 +472,7 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           {front && (
             <PhotoGrid photos={[front]} compact={false} maxHeight={7.5} />
           )}
-          <KeepTogether>
-          <SubHeading>Photographs</SubHeading>
-          <OriginalPhotosPending pending={originals.pending} />
-          <p style={{ margin: "0 0 8px" }}>
-            Selected photographs are included in the body of this report. For a full download please{" "}
-            {fullDownloadUrl ? <a href={fullDownloadUrl} data-original-photos-link={originals.url ? "" : undefined} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>Click here</a> : "Click here"} to access. We recommend that you download the digital photographs immediately and save in a secure folder on your device, as the link will remain active for only a few months from the date of this report.
-          </p>
-          </KeepTogether>
-          <p style={{ margin: 0, fontStyle: "italic", fontSize: "10.5px", color: C.grey, lineHeight: 1.7 }}>
-            You may view/save individual photographs by clicking on a file in the list. To save a copy of all photographs, click the Download All button above the list of files and follow the prompts. The security settings on your computer may display a bar at the top of the window, indicating that you need to allow your browser to download from the site. If this message appears, please allow downloads temporarily from this site. If a window does not then appear asking where you would like the download saved, simply click on the Download All button again to commence the download.
-          </p>
+          <PhotographsBlock fullDownloadUrl={fullDownloadUrl} originals={originals} />
         </div>
 
         <div className="report-page-break" id="checklist">
