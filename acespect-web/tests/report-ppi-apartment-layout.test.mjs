@@ -77,10 +77,13 @@ function report(v, { registration = "DBU 58070", inspector = "Joe Briffa", occup
   return { html, text, printed };
 }
 
-describe("PPI Apartment: the shared cover with the template's title, purpose and General", () => {
+describe("PPI Apartment: the shared cover with the property type as its title, the template's purpose and General", () => {
   const { html, text } = report(0);
   it("is the shared cover page", () => assert.match(html, /data-cover="page"/));
-  it("is titled Building Report", () => assert.match(html, /data-cover="title"[^>]*>Building Report</));
+  it("is titled with the property type, under PRE-PURCHASE REPORT", () => {
+    assert.match(html, /data-cover="kicker"[^>]*>Pre-Purchase Report</);
+    assert.match(html, /data-cover="title"[^>]*>Apartment</);
+  });
   it("prints the template's Report Purpose", () =>
     assert.ok(text.includes("Report Purpose\nThe purpose of this report is to identify the action required to rectify major defects or structural faults in the building, insofar as a licensed builder can reasonably identify those defects or faults.")));
   it("prints the template's General", () =>
