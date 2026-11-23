@@ -100,9 +100,10 @@ export const SubHeading = ({ children }: { children: ReactNode }) => (
  * (Chrome's PDF does not honour break-after: avoid reliably; break-inside: avoid on a wrapper is honoured).
  */
 export const KeepTogether = ({ children }: { children: ReactNode }) => <div style={{ breakInside: "avoid" }}>{children}</div>;
-const Back = () => (
+/** "↑ Back to summary" under a heading: to the Inspection Checklist (#checklist), or the summary `href` names (Pre-Purchase: #summary). */
+export const Back = ({ href = "#checklist" }: { href?: string }) => (
   <div style={{ textAlign: "right", margin: "-4px 0 12px" }}>
-    <a href="#checklist" style={{ color: "#2563eb", fontSize: "11.5px" }}>↑ Back to summary</a>
+    <a href={href} style={{ color: "#2563eb", fontSize: "11.5px" }}>↑ Back to summary</a>
   </div>
 );
 export const Bullets = ({ items, lead }: { items: string[]; lead?: ReactNode }) => {
