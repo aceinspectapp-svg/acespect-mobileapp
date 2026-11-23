@@ -8,6 +8,24 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export async function renderOtherReports(webRoot, server) {
+  // The Construction cover prints the day the report is made: everything is printed as of one fixed day, in UTC, so the hashes are the
+  // same on any day and in any time zone.
+  const RealDate = globalThis.Date, realTz = process.env.TZ;
+  const FIXED_DAY = new RealDate("2026-11-01T12:00:00Z").getTime();
+  process.env.TZ = "UTC";
+  globalThis.Date = class extends RealDate {
+    constructor(...args) { super(...(args.length ? args : [FIXED_DAY])); }
+    static now() { return FIXED_DAY; }
+  };
+  try {
+    return await printAll(webRoot, server);
+  } finally {
+    globalThis.Date = RealDate;
+    if (realTz === undefined) delete process.env.TZ; else process.env.TZ = realTz;
+  }
+}
+
+async function printAll(webRoot, server) {
   const { createElement } = await import(resolve(webRoot, "node_modules/react/index.js"));
   const { renderToStaticMarkup } = await import(resolve(webRoot, "node_modules/react-dom/server.node.js"));
   const { buildConstructionReport } = await server.ssrLoadModule("/src/web/construction/reportModel.ts");
