@@ -19,7 +19,7 @@ const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // The Construction cover prints the day the report is made: the reports are printed as of one fixed day, so the hashes do not change
 // from one day to the next.
 const RealDate = Date;
-const FIXED_DAY = new RealDate("2026-11-01T00:00:00Z").getTime();
+const FIXED_DAY = new RealDate("2026-11-01T12:00:00Z").getTime();
 globalThis.Date = class extends RealDate {
   constructor(...args) { super(...(args.length ? args : [FIXED_DAY])); }
   static now() { return FIXED_DAY; }
