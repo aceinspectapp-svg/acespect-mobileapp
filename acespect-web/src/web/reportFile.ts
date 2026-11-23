@@ -3,9 +3,10 @@ import { constructionFileName } from "./construction/ConstructionReport";
 import { makeReportFile, progressText, SignInAgainError, type ReportFormat } from "./reportJob";
 
 /** The name the report file is saved under (the same one the report page's Download PDF / Word buttons use). */
-export function reportFileName(inspection: { id: string; jobNo?: string | null }, construction: boolean, format: "pdf" | "docx"): string {
+/** `kind`: true for a Construction report, "pre-purchase" for Pre-Purchase / Apartment, false for every other report (as before). */
+export function reportFileName(inspection: { id: string; jobNo?: string | null }, kind: boolean | "pre-purchase", format: "pdf" | "docx"): string {
   const job = inspection.jobNo || inspection.id;
-  const pdf = construction ? constructionFileName(job) : `${job.replace(/[^a-z0-9.-]+/gi, "-")}-dilapidation-report.pdf`;
+  const pdf = kind === true ? constructionFileName(job) : `${job.replace(/[^a-z0-9.-]+/gi, "-")}-${kind === "pre-purchase" ? "pre-purchase" : "dilapidation"}-report.pdf`;
   return format === "pdf" ? pdf : pdf.replace(/\.pdf$/, ".docx");
 }
 

@@ -109,7 +109,7 @@ describe("the report page", () => {
     assert.match(view, /\{downloading \? "Preparing report…" : "Download PDF"\}/);
     assert.match(view, /\{downloading \? "Preparing report…" : "Download Word"\}/);
     assert.match(view, /data-report-progress=""/);
-    assert.match(view, /openReportFile\(id, format, reportFileName\(\{ id, jobNo: inspection\?\.jobNo \}, !!construction, format\), setProgress\)/);
+    assert.match(view, /openReportFile\(id, format, reportFileName\(\{ id, jobNo: inspection\?\.jobNo \}, prePurchase \? "pre-purchase" : !!construction, format\), setProgress\)/);
   });
   it("makes both files through the background job", () => {
     assert.match(file, /await makeReportFile\(id, format, request,/);

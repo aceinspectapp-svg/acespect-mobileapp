@@ -14,10 +14,14 @@ import { CoverPage, DEFAULT_SIGNATURE } from "../components/CoverPage";
 import { PhotoGrid, PhotoMetaContext, PhotoNumberProvider, ReportWordingStyleContext } from "../components/reportKit";
 import { ReportSection } from "../components/ReportSection";
 import { ReportConditionSummary, type ConditionSummaryCategory } from "../components/ReportConditionSummary";
-import { ReportScope } from "../components/ReportScope";
 import { ReportConditions } from "../components/ReportConditions";
 import { useOriginalPhotosLink } from "../components/OriginalPhotosLink";
-import { Heading, KeepTogether, PhotographsBlock, page } from "../construction/ConstructionReport";
+import { Bullets, Heading, KeepTogether, PhotographsBlock, SubHeading, page } from "../construction/ConstructionReport";
+import { ScopeBlocks } from "./ScopeBlocks";
+import { siteAccessSentences } from "./siteAccess";
+import {
+  PPI_CONDITION_DEFINITIONS_BLOCKS, PPI_CONDITION_DEFINITIONS_TITLE, PPI_DEFECTS_BLOCKS, PPI_SCOPE_BLOCKS, PPI_SCOPE_TITLE, PPI_SITE_ACCESS_TITLE,
+} from "./scopeText";
 import { optionText } from "../construction/printCase";
 import type { ConditionSummaryRow } from "../templateFields";
 
@@ -134,18 +138,44 @@ function frontPhotoOf(description?: FormSection): string | undefined {
   return front?.[0] ?? description?.photos[0];
 }
 
+/**
+ * The sections in the template's order, under the template's headings: ROOF, EXTERNAL, INTERNAL, then "Structural & Safety" where the
+ * template has STRUCTURAL DEFECTS, MAJOR DEFECTS, SAFETY HAZARDS and NOTES, then COMMON AREAS. A section the template does not name
+ * (an inspector-added one) prints after them, under its own name.
+ */
+export const PPI_SECTION_ORDER: { key: string; heading?: string }[] = [
+  { key: "roof_chimneys", heading: "Roof" },
+  { key: "elevations", heading: "External" },
+  { key: "internal_areas", heading: "Internal" },
+  // Where the template has STRUCTURAL DEFECTS, MAJOR DEFECTS, SAFETY HAZARDS and NOTES (the live form calls it "Structural & Safety").
+  { key: "notes", heading: "Structural & Safety" },
+  { key: "paving_paths", heading: "Common Areas" },
+];
+
+/** The body sections in the template's order, each with the heading it prints under. */
+export function orderedPrePurchaseSections(rest: FormSection[]): { section: FormSection; heading: string }[] {
+  const rank = (s: FormSection) => {
+    const i = PPI_SECTION_ORDER.findIndex((o) => o.key === slug(s));
+    return i < 0 ? PPI_SECTION_ORDER.length : i;
+  };
+  return rest
+    .map((section, i) => ({ section, i }))
+    .sort((a, b) => rank(a.section) - rank(b.section) || a.i - b.i)
+    .map(({ section }) => ({ section, heading: PPI_SECTION_ORDER.find((o) => o.key === slug(section))?.heading ?? section.name }));
+}
+
 export function PrePurchaseReportBody({ inspection, sections, header }: { inspection: Inspection; sections: FormSection[]; header: ReportHeader }) {
   const originals = useOriginalPhotosLink(inspection.id);
   const fullDownloadUrl = originals.url || inspection.photoArchiveUrl;
   const body = sections.filter((s) => !slug(s).startsWith("job-info"));
   const description = body.find((s) => slug(s).startsWith("description"));
-  const descriptionText = (description?.reportText ?? "").split(/\n{2,}|\n/).map((p) => p.trim()).filter(Boolean);
   const front = frontPhotoOf(description);
-  // Every other section, with something to print.
-  const rest = body.filter((s) => s !== description && (s.reportText.trim() || s.photos.length > 0 || s.damages.length > 0));
+  // Every other section with something to print, in the template's order (no heading is printed with nothing under it).
+  const rest = orderedPrePurchaseSections(body.filter((s) => s !== description && (s.reportText.trim() || s.photos.length > 0 || s.damages.length > 0)));
   const summary: ConditionSummaryCategory[] = rest
-    .map((s) => ({ sectionName: s.name, anchorId: `section-${s.id}`, rows: (s.fields as unknown as { conditionSummary?: ConditionSummaryRow[] }).conditionSummary ?? [] }))
+    .map(({ section: s, heading }) => ({ sectionName: heading, anchorId: `section-${s.id}`, rows: (s.fields as unknown as { conditionSummary?: ConditionSummaryRow[] }).conditionSummary ?? [] }))
     .filter((c) => c.rows.length > 0);
+  const siteAccess = siteAccessSentences(body);
 
   return (
     <div style={page}>
@@ -153,9 +183,34 @@ export function PrePurchaseReportBody({ inspection, sections, header }: { inspec
       <PhotoNumberProvider>
         {/* "Please refer to Photographs 9 to 12." -- the template's words, as the Construction reports print them. */}
         <ReportWordingStyleContext.Provider value={{ nov2026: true }}>
+          {/* SCOPE (1 Purpose of inspection, 2 Scope of inspection), 3 DEFECTS and the Condition Definitions: the template's own text. */}
+          <div className="report-page-break" id="scope">
+            <Heading>{PPI_SCOPE_TITLE}</Heading>
+            <ScopeBlocks blocks={PPI_SCOPE_BLOCKS} />
+            <div id="defects"><ScopeBlocks blocks={PPI_DEFECTS_BLOCKS} /></div>
+            <div id="condition-definitions" style={{ marginTop: "18px" }}>
+              <KeepTogether><SubHeading>{PPI_CONDITION_DEFINITIONS_TITLE}</SubHeading></KeepTogether>
+              <ScopeBlocks blocks={PPI_CONDITION_DEFINITIONS_BLOCKS} />
+            </div>
+          </div>
+
+          {/* Our Condition Summary table, straight after the definitions. */}
+          {summary.length > 0 && (
+            <div style={{ marginTop: "26px" }}>
+              <ReportConditionSummary categories={summary} nov2026 legend={false} />
+            </div>
+          )}
+
+          {/* Site Access Conditions: only the template's sentences a field decides (siteAccess.ts). */}
+          {siteAccess.length > 0 && (
+            <div id="site-access" style={{ marginTop: "26px" }}>
+              <Bullets items={siteAccess} lead={<SubHeading>{PPI_SITE_ACCESS_TITLE}</SubHeading>} />
+            </div>
+          )}
+
+          {/* GENERAL DESCRIPTION and PHOTOGRAPHS. The template's "The building is a ... built around ..." sentence has no form field, so it is not printed. */}
           <div className="report-page-break">
             <Heading>General Description</Heading>
-            {descriptionText.map((p, i) => <p key={i} style={{ margin: "0 0 8px" }}>{p}</p>)}
             {front && (
               <PhotoMetaContext.Provider value={description?.photoMeta ?? {}}>
                 <PhotoGrid photos={[front]} compact={false} maxHeight={7.5} />
@@ -164,22 +219,14 @@ export function PrePurchaseReportBody({ inspection, sections, header }: { inspec
             <PhotographsBlock fullDownloadUrl={fullDownloadUrl} originals={originals} />
           </div>
 
-          {summary.length > 0 && (
-            <div className="report-page-break">
-              <ReportConditionSummary categories={summary} nov2026 />
-            </div>
-          )}
-
-          {rest.map((s, i) => (
+          {rest.map(({ section: s, heading }, i) => (
             <div key={s.id} id={`section-${s.id}`} className={i === 0 ? "report-page-break" : undefined} style={{ marginTop: i === 0 ? 0 : "26px" }}>
-              <KeepTogether><Heading>{s.name}</Heading></KeepTogether>
+              <KeepTogether><Heading>{heading}</Heading></KeepTogether>
               <ReportSection section={withExcludedPhotosRemoved(s)} showHeading={false} hideDamageText />
             </div>
           ))}
 
-          <div className="report-page-break">
-            <ReportScope />
-          </div>
+          {/* The Terms and Conditions (the Nov 2026 template's own text comes with its GLOSSARY and MAINTENANCE). */}
           <div className="report-page-break" style={{ marginTop: "20px" }}>
             <ReportConditions />
           </div>
@@ -188,4 +235,3 @@ export function PrePurchaseReportBody({ inspection, sections, header }: { inspec
     </div>
   );
 }
-

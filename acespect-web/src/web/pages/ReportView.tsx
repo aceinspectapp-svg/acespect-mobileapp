@@ -73,7 +73,7 @@ export function ReportView() {
     setReady(null);
     setSignInAgain(false);
     try {
-      setReady(await openReportFile(id, format, reportFileName({ id, jobNo: inspection?.jobNo }, !!construction, format), setProgress));
+      setReady(await openReportFile(id, format, reportFileName({ id, jobNo: inspection?.jobNo }, prePurchase ? "pre-purchase" : !!construction, format), setProgress));
     } catch (e) {
       if (e instanceof SignInAgainError) setSignInAgain(true);
       setDownloadError(e instanceof Error ? e.message : "Failed to download the report");
