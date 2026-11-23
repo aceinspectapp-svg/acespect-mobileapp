@@ -450,6 +450,11 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
           if (s.key === "sf_measurements" && setbacks.length) kept[setbacks[setbacks.length - 1]!]!.closing = SETBACK_NOTE;
           if (s.key === "sf_services") table.closing = [SF_SERVICES_DISCLAIMER];
         }
+        if (stage === "slab" && s.key === "sd_measurements") {
+          // Slab Down: its template (the Slab Down part of "Slab Down & Frame") closes the setbacks with the land surveying note.
+          const setbacks = kept.map((g, i) => (g.items.some((it) => /setback/i.test(it.heading) && it.status !== "na") ? i : -1)).filter((i) => i >= 0);
+          if (setbacks.length) kept[setbacks[setbacks.length - 1]!]!.closing = SETBACK_NOTE;
+        }
         if (stage === "pci" && opts.apartment) {
           // The PCI Apartment template's own sentences: the Owners Corporation note under ROOF, the disclaimer after the COMMON AREAS checks.
           if (s.key === "pci_roof" && kept.length) table.closing = [APARTMENT_ROOF_NOTE];
