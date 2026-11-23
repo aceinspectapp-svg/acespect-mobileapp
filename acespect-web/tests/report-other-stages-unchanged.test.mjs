@@ -18,6 +18,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // The Construction cover prints the day the report is made: the reports are printed as of one fixed day, so the hashes do not change
 // from one day to the next.
+process.env.TZ = "UTC"; // and in one time zone, so it is the same day wherever the tests run
 const RealDate = Date;
 const FIXED_DAY = new RealDate("2026-11-01T12:00:00Z").getTime();
 globalThis.Date = class extends RealDate {
