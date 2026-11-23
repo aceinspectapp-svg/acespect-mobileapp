@@ -32,8 +32,8 @@ describe("condition tag contrast", () => {
 
 describe("brand colours stay on the Dilapidation report", () => {
   const view = readFileSync(resolve(webRoot, "src/web/pages/ReportView.tsx"), "utf8");
-  it("the brand variables are applied only when the report is not a Construction one", () => {
-    assert.match(view, /\.\.\.\(construction \? \{\} : DILAPIDATION_BRAND\)/);
+  it("the brand variables are applied only when the report is not a Construction one (nor Pre-Purchase / Apartment, laid out as Construction is)", () => {
+    assert.match(view, /\.\.\.\(construction \|\| prePurchase \? \{\} : DILAPIDATION_BRAND\)/);
   });
   it("the Construction report sets no brand colours of its own", () => {
     const src = readFileSync(resolve(webRoot, "src/web/construction/ConstructionReport.tsx"), "utf8");

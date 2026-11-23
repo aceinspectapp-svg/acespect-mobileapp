@@ -25,6 +25,7 @@ import type { ConditionSummaryRow } from "../templateFields";
 import { DILAPIDATION_BRAND, PhotoNumberProvider, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 import { ConstructionReportBody, useConstructionReport } from "../construction/ConstructionReport";
 import { orderedPieces, type ReportPiece } from "../reportParts";
+import { PrePurchaseReportBody, usePrePurchaseSections } from "../prepurchase/PrePurchaseReport";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
 const slug = (s: Pick<FormSection, "id" | "key">): string => s.key ?? s.id;
@@ -44,6 +45,8 @@ export function ReportView() {
   const reportWording = wordingFor(reportProfileOf(inspection?.type ?? "", inspection?.propertyType ?? ""));
   // A Construction Stage inspection has its own report layout (undefined while its templates load).
   const construction = useConstructionReport(inspection);
+  // Pre-Purchase / Apartment is laid out as the Construction reports are (undefined while its templates load, null for any other report).
+  const prePurchase = usePrePurchaseSections(inspection);
   const [downloading, setDownloading] = useState(false);
   // "Preparing report… loading photographs (120 of 250)" while the server makes the file in the background.
   const [progress, setProgress] = useState<string | null>(null);
@@ -80,10 +83,10 @@ export function ReportView() {
     }
   }
 
-  if (!inspection || construction === undefined) {
+  if (!inspection || construction === undefined || prePurchase === undefined) {
     return (
       <div style={{ padding: "48px", textAlign: "center", color: "#94a3b8", fontFamily: "Inter, sans-serif" }}>
-        {loading || loadingDetail || (inspection && construction === undefined) ? "Loading…" : "Inspection not found."}
+        {loading || loadingDetail || (inspection && (construction === undefined || prePurchase === undefined)) ? "Loading…" : "Inspection not found."}
       </div>
     );
   }
@@ -281,11 +284,13 @@ export function ReportView() {
           borderRadius: "10px",
           boxShadow: "0 4px 28px rgba(0,0,0,0.12)",
           ...reportTextStyle(false),
-          ...(construction ? {} : DILAPIDATION_BRAND),
+          ...(construction || prePurchase ? {} : DILAPIDATION_BRAND),
         }}
       >
         {construction ? (
           <ConstructionReportBody inspection={inspection} model={construction} header={r} />
+        ) : prePurchase ? (
+          <PrePurchaseReportBody inspection={inspection} sections={prePurchase} header={r} />
         ) : (
           <>
         {/* Cover / front matter, generated from Job Information */}

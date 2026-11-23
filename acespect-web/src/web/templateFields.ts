@@ -519,9 +519,11 @@ export function flattenSectionToDraft(
   profile: ReportProfile,
 ): FlattenedSection {
   // The report type is resolved first; the sentences come from that report type's own wording, never from the section name alone.
-  const draft = walk(templateFields, answers, [], sectionKey, wordingFor(profile));
+  const wording = wordingFor(profile);
+  const draft = walk(templateFields, answers, [], sectionKey, wording);
   // The wording marks the capitals of typed names and places so `lower` keeps them (wording/shared.ts); the finished text has no marks.
-  return { ...draft, reportText: stripKeepMarks(draft.reportText), fields: scrubMarks(draft.fields) as Record<string, unknown> };
+  const reportText = stripKeepMarks(draft.reportText);
+  return { ...draft, reportText: wording.finish ? wording.finish(sectionKey ?? "", reportText) : reportText, fields: scrubMarks(draft.fields) as Record<string, unknown> };
 }
 
 function walk(
@@ -767,7 +769,11 @@ function walk(
     if (!isFlatComposedSection && !isNotesMetadata && !isPresenceFlag && !isLeadInField) {
       // A free-text comment (the Notes' own) is said as typed, not as "Additional notes: ...".
       const isPlain = !!sectionKey && (wording.plainFields?.[sectionKey]?.includes(field.key) ?? false);
-      textParts.push(isPlain ? withPeriod(strValue) : `${field.label}: ${withPeriod(strValue)}`);
+      // A report type may word a list answer its own way (a list of sentences as bullets); otherwise the standard line.
+      const listLine = Array.isArray(value) && wording.listLine
+        ? wording.listLine(sectionKey ?? "", field, value.filter((v): v is string => typeof v === "string").map(toLabel).filter(Boolean))
+        : undefined;
+      textParts.push(listLine ?? (isPlain ? withPeriod(strValue) : `${field.label}: ${withPeriod(strValue)}`));
     }
   }
 
