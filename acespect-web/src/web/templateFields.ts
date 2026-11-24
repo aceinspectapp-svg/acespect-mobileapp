@@ -173,7 +173,29 @@ export function isFieldMissing(field: TemplateField, siblings: TemplateField[], 
  * Submit on the same mandatory-defect rule mobile does (Condition = Average/
  * Poor without a recorded defect).
  */
-export function meetsAllRequireWhen(templateFields: TemplateField[], scope: AnswerTree): boolean {
+/**
+ * `scope` without the answers of the questions that are hidden right now, so they neither open other questions nor trigger a required
+ * defect. A gate only reads one answer, so without this a chain broke: "Available for inspection? No" hid "Any damage?" and the
+ * condition, but their earlier "Yes" / "Average" stayed saved and still opened the damages list and demanded a defect. Repeats until
+ * nothing more hides. Mirrors the mobile app's withoutHiddenAnswers.
+ */
+export function withoutHiddenAnswers(fields: TemplateField[], scope: AnswerTree): AnswerTree {
+  let out = scope;
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const f of fields) {
+      if (f.gate && f.key in out && !isGateSatisfied(f, out)) {
+        if (out === scope) out = { ...scope };
+        delete out[f.key];
+        changed = true;
+      }
+    }
+  }
+  return out;
+}
+
+export function meetsAllRequireWhen(templateFields: TemplateField[], answers: AnswerTree): boolean {
+  const scope = withoutHiddenAnswers(templateFields, answers);
   for (const field of templateFields) {
     if (!isGateSatisfied(field, scope)) continue;
     const value = scope[field.key];
@@ -194,7 +216,8 @@ export function meetsAllRequireWhen(templateFields: TemplateField[], scope: Answ
  * by its own `gate` doesn't block completion while invisible, and fields
  * sharing a `requiredGroup` are "either/or".
  */
-export function meetsAllRequiredFields(templateFields: TemplateField[], scope: AnswerTree): boolean {
+export function meetsAllRequiredFields(templateFields: TemplateField[], answers: AnswerTree): boolean {
+  const scope = withoutHiddenAnswers(templateFields, answers);
   const required = templateFields.filter((f) => f.required && isGateSatisfied(f, scope));
   const grouped = new Map<string, TemplateField[]>();
   const ungrouped: TemplateField[] = [];
@@ -216,10 +239,19 @@ export function meetsAllRequiredFields(templateFields: TemplateField[], scope: A
     if (field.type !== "repeating-group") continue;
     if (!isGateSatisfied(field, scope)) continue;
     for (const { scope: inst } of resolveInstances(field, scope[field.key])) {
-      if (!meetsAllRequiredFields(field.itemFields ?? [], inst)) return false;
+      if (!meetsAllRequiredFields(instanceItemFields(field), inst)) return false;
     }
   }
   return true;
+}
+
+/**
+ * A repeating group's item fields for the completeness checks. The instance's name box (`repeat.titleFieldKey`, "Room name (leave
+ * blank to keep the standard name)") is never required: blank means the standard name, even when the template marks it required.
+ */
+export function instanceItemFields(field: TemplateField): TemplateField[] {
+  const titleKey = field.repeat?.titleFieldKey;
+  return (field.itemFields ?? []).map((f) => (titleKey && f.key === titleKey && f.required ? { ...f, required: false } : f));
 }
 
 /**
@@ -230,7 +262,8 @@ export function meetsAllRequiredFields(templateFields: TemplateField[], scope: A
  * group are prefixed with that instance's own label ("Front: Condition").
  * Fields sharing a `requiredGroup` (either/or) are listed once, joined with "or".
  */
-export function listMissingItems(templateFields: TemplateField[], scope: AnswerTree, context = ""): string[] {
+export function listMissingItems(templateFields: TemplateField[], answers: AnswerTree, context = ""): string[] {
+  const scope = withoutHiddenAnswers(templateFields, answers);
   const out: string[] = [];
   const named = (label: string) => (context ? `${context}: ${label}` : label);
   const seenGroups = new Set<string>();
@@ -238,8 +271,11 @@ export function listMissingItems(templateFields: TemplateField[], scope: AnswerT
     if (!isGateSatisfied(field, scope)) continue;
     const value = scope[field.key];
     if (field.type === "repeating-group") {
+      // The instance's name box (repeat.titleFieldKey, "Room name (leave blank to keep the standard name)") is never missing: blank
+      // means the standard name, even when the template marks it required.
+      const itemFields = instanceItemFields(field);
       for (const { label, scope: inst } of resolveInstances(field, value)) {
-        out.push(...listMissingItems(field.itemFields ?? [], inst, context ? `${context} / ${label}` : label));
+        out.push(...listMissingItems(itemFields, inst, context ? `${context} / ${label}` : label));
       }
       if (field.required && !isAnswered(value)) out.push(named(field.label));
     }
