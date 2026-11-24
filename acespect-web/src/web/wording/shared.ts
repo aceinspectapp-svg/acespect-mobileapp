@@ -175,9 +175,10 @@ export function conditionOf(
   return { word: lower(shortConditionLabel(option?.label ?? raw)) };
 }
 
-/** "Several minor cracks" -> "Several minor cracks observed." / "Numerous cracking throughout" -> "Numerous cracking observed throughout." */
+/** "Several minor cracks" -> "Several minor cracks observed." / "Numerous cracking throughout" -> "Numerous cracks observed throughout." */
 export function observedSentence(label: string): string {
-  const l = lower(label).trim();
+  // "Numerous cracking" is not English: the form's choice is said "numerous cracks".
+  const l = lower(label).trim().replace(/^numerous cracking\b/, "numerous cracks");
   if (l.endsWith(" throughout")) return `${capitalize(l.slice(0, -" throughout".length))} observed throughout.`;
   return `${capitalize(l)} observed.`;
 }

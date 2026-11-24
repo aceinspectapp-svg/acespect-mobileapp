@@ -64,7 +64,7 @@ type ParsedItem =
   | { kind: "cond"; color: string; label: string }
   | { kind: "defect"; index: number; text: string; line?: number }
   | { kind: "item"; heading: string; text: string; line?: number }
-  | { kind: "photos"; keys: string[] }
+  | { kind: "photos"; keys: string[]; lead?: { text: string; line?: number } }
   | { kind: "para"; text: string; line?: number };
 
 // Matches the report type's wording (src/web/wording/) damageSentences -- one tagged paragraph per recorded defect, where `index` is that defect's position in the section's damage list, so its own photos can be printed right under its sentence.
@@ -77,7 +77,7 @@ function renderParsedItem(item: ParsedItem, compact: boolean, key: number | stri
   const damages = section.damages;
   switch (item.kind) {
     case "photos":
-      return <ItemPhotos key={key} photos={markedPhotos(section, item.keys)} compact={compact} at={String(key)} />;
+      return <ItemPhotos key={key} photos={markedPhotos(section, item.keys)} compact={compact} at={String(key)} lead={item.lead} />;
     case "heading":
       return (
         <Heading key={key} compact={compact}>
@@ -121,8 +121,17 @@ function renderParsedItem(item: ParsedItem, compact: boolean, key: number | stri
 function DefectBlock({ text, line, damage, compact }: { text: string; line?: number; damage?: DamageRecord; compact: boolean }) {
   const photos = damage?.photos ?? [];
   const numbering = usePhotoNumbering(photos, `defect:${damage?.id ?? text}`);
-  const sentence = <Para style={{ margin: "0 0 6px" }}><LineText text={text} line={line} /></Para>;
+  const { inlineRefs } = useContext(ReportWordingStyleContext);
+  // The Industrial-Commercial template: "... 500 millimetres long. Please refer to Photographs 9 to 12." -- one sentence, the photos under it.
+  const inline = inlineRefs && photos.length > 0;
+  const sentence = (
+    <Para style={{ margin: "0 0 6px" }}>
+      <LineText text={text} line={line} />
+      {inline ? ` ${numbering.label}` : null}
+    </Para>
+  );
   if (photos.length === 0) return <div style={{ margin: "0 0 10px" }}>{sentence}</div>;
+  if (inline) return <div style={{ margin: "0 0 10px" }}><PhotoGrid photos={photos} compact={compact} startNumber={numbering.start} caption={sentence} /></div>;
   return (
     <div style={{ margin: "0 0 10px" }}>
       <PhotoGrid
@@ -141,9 +150,12 @@ function DefectBlock({ text, line, damage, compact }: { text: string; line?: num
 }
 
 /** One item's photos, printed where the report text marks them ("PHOTOS::..."): the template's "Please refer to Photographs 9 to 12." under the item. */
-function ItemPhotos({ photos, compact, at }: { photos: string[]; compact: boolean; at: string }) {
+function ItemPhotos({ photos, compact, at, lead }: { photos: string[]; compact: boolean; at: string; lead?: { text: string; line?: number } }) {
   const numbering = usePhotoNumbering(photos, `item:${at}`);
-  if (photos.length === 0) return null;
+  // The part's own sentence, ending with its photo reference (the Industrial-Commercial template), kept with its photos.
+  const leadPara = lead ? <Para style={{ margin: "0 0 6px" }}><LineText text={lead.text} line={lead.line} />{photos.length ? ` ${numbering.label}` : null}</Para> : null;
+  if (photos.length === 0) return leadPara;
+  if (leadPara) return <div style={{ margin: "0 0 10px" }}><PhotoGrid photos={photos} compact={compact} startNumber={numbering.start} caption={leadPara} /></div>;
   return (
     <div style={{ margin: "0 0 10px" }}>
       <PhotoGrid
@@ -207,6 +219,8 @@ function GeneralPhotos({ photos, compact }: { photos: string[]; compact: boolean
  * same as before.
  */
 function groupForPagination(items: ParsedItem[]): ParsedItem[][] {
+  // The text a heading or condition tag is kept with: a paragraph, or a part's photos led by its own sentence (inline references).
+  const isLead = (it: ParsedItem | undefined): boolean => !!it && (it.kind === "para" || (it.kind === "photos" && !!it.lead));
   const groups: ParsedItem[][] = [];
   let i = 0;
   while (i < items.length) {
@@ -218,7 +232,7 @@ function groupForPagination(items: ParsedItem[]): ParsedItem[][] {
         group.push(items[i]);
         i++;
       }
-      if (i < items.length && items[i].kind === "para") {
+      if (isLead(items[i])) {
         group.push(items[i]);
         i++;
       }
@@ -226,7 +240,7 @@ function groupForPagination(items: ParsedItem[]): ParsedItem[][] {
     } else if (item.kind === "cond") {
       const group: ParsedItem[] = [item];
       i++;
-      if (i < items.length && items[i].kind === "para") {
+      if (isLead(items[i])) {
         group.push(items[i]);
         i++;
       }
@@ -322,6 +336,7 @@ export function ReportSection({
   /** True for a section whose reportText already narrates each crack/damage inline (see the report type's wording (src/web/wording/)) -- skip the sentence here so it isn't said twice, but still show that damage's photos. */
   hideDamageText?: boolean;
 }) {
+  const { inlineRefs } = useContext(ReportWordingStyleContext);
   const paras = section.reportText
     .split(/\n{2,}|\n/)
     .map((p) => p.trim())
@@ -330,8 +345,9 @@ export function ReportSection({
   // The section's own heading joins the same grouping pass as the parsed
   // paragraphs below (see groupForPagination) so it, too, can't be
   // stranded alone at the bottom of a page.
-  const items: ParsedItem[] = [
-    ...(showHeading ? [{ kind: "heading", text: section.name } as const] : []),
+  const parsedItems: ParsedItem[] = [
+    // A report type whose template gives a section no heading of its own (Commercial's Warehouse & Production) names it "".
+    ...(showHeading && section.name.trim() ? [{ kind: "heading", text: section.name } as const] : []),
     ...paras.map((p, line): ParsedItem => {
       const condMatch = p.match(CONDITION_TAG_RE);
       if (condMatch) return { kind: "cond", color: condMatch[1], label: condMatch[2] };
@@ -352,6 +368,25 @@ export function ReportSection({
       return { kind: "para", text: p, line };
     }),
   ];
+  // A heading the same as the one just above it (two structures under the template's one "Sheds / Loading dock ..." heading, or
+  // that heading right under the section's own) is printed once.
+  let lastHeading = "";
+  const deduped = parsedItems.filter((it) => {
+    if (it.kind !== "heading" && it.kind !== "roomhead") return true;
+    const text = it.text.trim().toLowerCase();
+    if (!text || text === lastHeading) return false;
+    lastHeading = text;
+    return true;
+  });
+  // The Industrial-Commercial template: a part's sentence ends with its photo reference and its photos follow it, so the paragraph
+  // right before a part's photos becomes their lead-in.
+  const items: ParsedItem[] = [];
+  for (const it of deduped) {
+    const prev = items[items.length - 1];
+    if (inlineRefs && it.kind === "photos" && prev?.kind === "para") {
+      items[items.length - 1] = { ...it, lead: { text: prev.text, line: prev.line } };
+    } else items.push(it);
+  }
   const groups = groupForPagination(items);
   // Defects whose sentence carries no tag (a report saved before defects were paired with their photos) keep the older layout: their photos follow the text.
   const taggedDefects = new Set(items.flatMap((it) => (it.kind === "defect" ? [it.index] : [])));

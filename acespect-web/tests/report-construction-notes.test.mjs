@@ -164,7 +164,7 @@ const EXPECTED = [
 ];
 /** The row each "Other" box belongs to, printed before the inspector's words ("Hebel: Some sheets cracked."). */
 const OTHER_ROW = {
-  generalOther: "General", qualityOther: "Slab quality", fitOutOther: "Painting", kerbOther: "Site and facilities", hebelOther: "Hebel",
+  generalOther: "General", qualityOther: "Slab quality", fitOutOther: "Skirtings, cabinets and painting", kerbOther: "Site and facilities", hebelOther: "Hebel",
   boardOther: "Blueboard, weatherboard, styrene foam, timber", stairwellOther: "Stairwell/s", finishes_other_note: "Finishes",
   internal_other_note: "Internal", walls_other_note: "Walls", doors_other_note: "Doors, etc", garage_other_note: "Garage",
   balconies_other_note: "Balconies", site_other_note: "Site", common_other_note: "Common areas", roof_other_note: "Roof",
@@ -262,6 +262,19 @@ describe("General Description: 'The street frontage is to the …'", () => {
       }
     });
   }
+});
+
+describe("General Description: a typed cladding combination reads inside the sentence", () => {
+  const s = SECTIONS.find((x) => x.key === "fx_description" && x.apt);
+  const line = (a) => composeConstructionSection(s.key, s.fields, a, true).text.split(/\n+/).find((l) => l.startsWith("Wall cladding"));
+  it("lowers the typed first letter and introduces it as a combination", () => {
+    assert.equal(line({ groundCladding: ["brick_veneer", "combination_of"], groundCladdingCombo: "Rendered brick and cement sheet" }),
+      "Wall cladding is constructed of brick veneer and a combination of rendered brick and cement sheet.");
+  });
+  it("keeps an acronym and does not repeat 'combination'", () => {
+    assert.equal(line({ groundCladding: ["combination_of"], groundCladdingCombo: "Combination of FC sheet and render.", firstCladding: ["combination_of"], firstCladdingCombo: "AAC panels and brick" }),
+      "Wall cladding is constructed of a combination of FC sheet and render to the ground floor and a combination of AAC panels and brick to the first floor.");
+  });
 });
 
 // ───────────────────────── The Frame report as printed ─────────────────────────

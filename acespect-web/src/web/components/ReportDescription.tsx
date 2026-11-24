@@ -7,7 +7,7 @@ import { reportProfileOf } from "../wording/profile";
 import { OriginalPhotosPending, useOriginalPhotosLink } from "./OriginalPhotosLink";
 import { wordingFor } from "../wording/registry";
 import { scopeOfInspectionSentences } from "../descriptionScope";
-import { DILAPIDATION_METHOD_NOV2026, printsAgreement } from "../reportAgreement";
+import { dilapidationMethodFor, printsAgreement } from "../reportAgreement";
 import { InlineText } from "./InlineText";
 import { EditableText, ReportEditContext } from "./EditableText";
 
@@ -45,7 +45,7 @@ export interface DescriptionBlock {
  * so the editor offers exactly the sentences that print.
  */
 export function useDescriptionContent(inspection: Inspection, reportText: string) {
-  const paras = reportText
+  const rawParas = reportText
     .split(/\n{2,}|\n/)
     .map((p) => p.trim())
     .filter(Boolean);
@@ -55,6 +55,9 @@ export function useDescriptionContent(inspection: Inspection, reportText: string
   // straight off this same section's own "front_elevation" answer field.
   const description = inspection.sections.find((s) => (s.key ?? s.id).startsWith("description"));
   const wording = wordingFor(reportProfileOf(inspection.type, inspection.propertyType));
+  // What Job Information adds to the description's first sentence (Commercial: the business name / signage).
+  const jobInfo = (inspection.sections.find((s) => (s.key ?? s.id).startsWith("job-info"))?.answers as Record<string, unknown> | null | undefined) ?? {};
+  const paras = wording.descriptionLead && rawParas.length ? [wording.descriptionLead(rawParas[0]!, jobInfo), ...rawParas.slice(1)] : rawParas;
   // The Residential form's "front_elevation" photo; the Apartment form's is its "Building & street overview pics" (the first of them);
   // Public Assets' is the first of its "Site & Assets Overview" photo sequence; Commercial Properties' the first of its "Street views".
   const answers = (description?.answers as Record<string, unknown> | null | undefined) ?? {};
@@ -105,7 +108,7 @@ export function useDescriptionContent(inspection: Inspection, reportText: string
       placeholder: "The scope for inspection is external and internal to all structures / external and internal to part of the property at / internal only to all areas / external only to all areas. OR insert description of scope.",
     }),
     ...(printsAgreement(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? ""))
-      ? [block({ key: "method", label: "How the inspection was done", band: "Scope of Inspection and Comments", standard: DILAPIDATION_METHOD_NOV2026 })]
+      ? [block({ key: "method", label: "How the inspection was done", band: "Scope of Inspection and Comments", standard: dilapidationMethodFor(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "")) })]
       : []),
     block({
       key: "displayed", label: "Photographs note", band: "Scope of Inspection and Comments",

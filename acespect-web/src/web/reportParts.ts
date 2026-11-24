@@ -1,5 +1,6 @@
 import type { FormSection } from "./mockData";
 import type { ReportWording } from "./wording/types";
+import type { AnswerTree } from "./templateFields";
 
 /**
  * A report laid out the way its office template is, not the way its form is (Dilapidation / Apartment).
@@ -113,7 +114,7 @@ export function orderedPieces(sections: FormSection[], wording: ReportWording, k
   const pieces: (ReportPiece & { rank: number; order: number })[] = [];
   sections.forEach((s, order) => {
     const key = keyOf(s);
-    const name = wording.sectionTitle?.(key) ?? s.name;
+    const name = wording.sectionTitle?.(key, s.answers as AnswerTree | undefined) ?? s.name;
     if (key.startsWith("notes")) {
       pieces.push({ section: s, rank: Number.MAX_SAFE_INTEGER, order });
       return;

@@ -286,6 +286,14 @@ export const POOL_SPA_DISCLAIMER_NOV2026 =
 export const DILAPIDATION_METHOD_NOV2026 =
   "This dilapidation report is the result of a visual inspection on the date noted on the report and is compiled by the Inspector noted on the report. The dilapidation report methodology involves a systematic visual review inline with the scope and terms and conditions of the report. The report highlights inspection findings such as damaged areas, cracks, popped nails, and any other matters which the Inspector feels are noteworthy or material to the context of the report. The report findings within body are by exception – that is only items which are noteworthy or significant are reported on and where appropriate photographed and compiled in this report.";
 
+/**
+ * The method paragraph for a report type: the Industrial-Commercial template writes "in line with" where the Residential and Multi
+ * Level Office templates write "inline with".
+ */
+export function dilapidationMethodFor(profile: { inspectionType: string; propertyType: string }): string {
+  return profile.propertyType === "commercial_properties" ? DILAPIDATION_METHOD_NOV2026.replace("visual review inline with", "visual review in line with") : DILAPIDATION_METHOD_NOV2026;
+}
+
 /** What each grade means in the Nov 2026 template (clause 5.7(e)): the Condition Summary's legend uses the same words. */
 export const GRADE_MEANINGS_NOV2026: Record<string, string> = Object.fromEntries(
   AGREEMENT_BLOCKS.filter((b): b is { kind: "grade"; text: string } => b.kind === "grade").map((b) => {
@@ -296,6 +304,7 @@ export const GRADE_MEANINGS_NOV2026: Record<string, string> = Object.fromEntries
 
 /** The report types worded by the Nov 2026 template: they print this Agreement (instead of the older SCOPE and Conditions pages) and its other wording. */
 export function printsAgreement(profile: { inspectionType: string; propertyType: string }): boolean {
-  // Residential (Nov 2026 Residential template) and Apartment (Nov 2026 Multi Level Office Building template): the same Agreement.
-  return profile.inspectionType === "dilapidation" && (profile.propertyType === "residential_house" || profile.propertyType === "apartment");
+  // Residential (Nov 2026 Residential template), Apartment (Nov 2026 Multi Level Office Building template) and Commercial (Nov 2026
+  // Industrial-Commercial template): the same Agreement.
+  return profile.inspectionType === "dilapidation" && ["residential_house", "apartment", "commercial_properties"].includes(profile.propertyType);
 }

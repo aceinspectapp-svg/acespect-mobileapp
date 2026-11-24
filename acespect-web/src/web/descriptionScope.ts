@@ -7,6 +7,24 @@ const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
  * "internal only to {where}" / "external only to {where}" (the template's own default is "all areas"). Anything else is the inspector's choice, as picked.
  */
 export function scopePhrase(choice: string, detail: string): string {
+  // Several ticked (the form lets the inspector tick more than one): the widest scope ticked is the scope -- all structures, then part
+  // of the property, then internal and external together -- so the sentence still reads as one scope.
+  const choices = choice
+    .split(/\s*,\s*/)
+    .map((c) => c.toLowerCase().replace(/\s*&\s*/g, " and ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  if (choices.length > 1) {
+    const all = choices.find((c) => /all structures/.test(c));
+    if (all) return all;
+    const part = choices.find((c) => /part of (the )?property/.test(c));
+    if (part) return onePhrase(part, detail);
+    if (choices.some((c) => /^internal only to\b/.test(c)) && choices.some((c) => /^external only to\b/.test(c))) return `external and internal to ${detail || "all areas"}`;
+    return onePhrase(choices[0]!, detail);
+  }
+  return onePhrase(choice, detail);
+}
+
+function onePhrase(choice: string, detail: string): string {
   const c = choice.toLowerCase().replace(/\s*&\s*/g, " and ").replace(/\s+/g, " ").trim();
   if (/^(internal|external) only to\b/.test(c)) return `${c} ${detail || "all areas"}`;
   if (/part of (the )?property/.test(c)) return `external and internal to part of the property${detail ? ` at ${detail}` : ""}`;

@@ -74,8 +74,8 @@ export function defaultPurposeFor(inspection: { type?: string; propertyType?: st
   const profile = reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "");
   // Every other report: the standard paragraph, with the Industrial-Commercial template's rule -- "builder" except Trevor Scott, a "building consultant".
   if (profile.inspectionType !== "dilapidation" || profile.propertyType !== "public_assets") {
-    // The Nov 2026 Multi Level Office Building template (Apartment): "... in relation to the project works nearby ...".
-    const base = profile.inspectionType === "dilapidation" && profile.propertyType === "apartment" ? DEFAULT_PURPOSE.replace("in relation to project works", "in relation to the project works") : DEFAULT_PURPOSE;
+    // The Nov 2026 Multi Level Office Building (Apartment) and Industrial-Commercial templates: "... in relation to the project works nearby ...".
+    const base = profile.inspectionType === "dilapidation" && ["apartment", "commercial_properties"].includes(profile.propertyType) ? DEFAULT_PURPOSE.replace("in relation to project works", "in relation to the project works") : DEFAULT_PURPOSE;
     // "builder / building consultant / building practitioner": from the inspector's registration (an architect is a building consultant,
     // an inspection registration a building practitioner); with no registration on file, Trevor Scott is still a building consultant.
     const kind = registrationKind(registration);

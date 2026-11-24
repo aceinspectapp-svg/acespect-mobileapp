@@ -58,9 +58,13 @@ function describe(stage: StageId, fields: TemplateField[], a: AnswerTree, apartm
   const groundCombo = asString(a.groundCladdingCombo).trim();
   const firstCombo = asString(a.firstCladdingCombo).trim();
   if (ground.length || first.length) {
-    const g = ground.map((x) => (x === "combination of" ? groundCombo || x : x));
+    // What the inspector typed reads inside the sentence: its first letter lowered (not an acronym's), and a typed combination is
+    // introduced as one ("brick veneer and a combination of rendered brick and cement sheet").
+    const typed = (t: string) => (/^[A-Z][a-z]/.test(t) ? lower(t) : t).replace(/[.]+$/, "");
+    const combo = (t: string) => (/^(a )?combination\b/i.test(t) ? typed(t).replace(/^combination\b/, "a combination") : `a combination of ${typed(t)}`);
+    const g = ground.map((x) => (x === "combination of" ? (groundCombo ? combo(groundCombo) : x) : x));
     const firstOther = asString(a.firstCladdingOther).trim();
-    const fl = first.map((x) => (x === "combination of" ? firstCombo || x : x === "other" ? firstOther || x : x));
+    const fl = first.map((x) => (x === "combination of" ? (firstCombo ? combo(firstCombo) : x) : x === "other" ? (firstOther ? typed(firstOther) : x) : x));
     out.push(`Wall cladding is constructed of ${joinList(g)}${fl.length ? ` to the ground floor and ${joinList(fl)} to the first floor` : ""}.`);
   }
 
@@ -447,7 +451,12 @@ const NOTE_SENTENCES: Record<string, { answer: RegExp; note: string }> = {
  * The row an "Other" box belongs to, as the report names it: its group on the form ("Hebel", "Slab quality", "Roof"), else the row's own
  * name without "other" ("Stairwell/s — other" -> "Stairwell/s"). The PCI "Services & Other" group's own "Other" reads "Services and other".
  */
+/** "Other" boxes that belong to a whole section rather than the group they sit under on the form (the fit-out "Other?" is the last
+ * box of the Painting group, but it is for anything in Skirtings, Cabinets & Painting). */
+const OTHER_BOX_NAMES: Record<string, string> = { fitOutOther: "Skirtings, cabinets and painting" };
+
 function otherRowName(r: Row): string {
+  if (r.key && OTHER_BOX_NAMES[r.key]) return OTHER_BOX_NAMES[r.key]!;
   const own = r.heading.replace(/\s*[—–-]\s*other\??$/i, "").replace(/^other\??$/i, "").trim();
   const name = r.group && !/^other$/i.test(r.group) ? r.group : own || (r.group ? "Services and other" : "Other");
   return cap(name);

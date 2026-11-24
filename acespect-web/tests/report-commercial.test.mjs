@@ -57,11 +57,34 @@ describe("Commercial: Description and Overview", () => {
   });
 });
 
+describe("Commercial: the template's design, decade and extension", () => {
+  it("says the design and a decade as the template does", () => {
+    const d = draft("description", {
+      constructionIs: ["Warehouse"], buildingDesign: "Two storey", constructedYear: "1990s", streetFrontage: "North", blockSlope: "Mostly flat",
+      wallCladdingGround: ["Brick"], foundations: "Concrete slab", roofDesign: "Flat", roofCovering: ["Colorbond"], windows: "Aluminium",
+    });
+    assert.ok(d.reportText.startsWith("The property is a warehouse, facing north on a mostly flat block of land. It is of a two storey design and estimated to have been constructed around the 1990s."));
+  });
+
+  it("words an extension", () => {
+    const d = draft("description", {
+      constructionIs: ["Warehouse"], constructedYear: "1990",
+      extensionPresent: "yes", extensionLocation: "Rear", extensionYear: "2010", extensionWalls: ["Brick"], extensionFoundations: "Concrete slab", extensionRoofDesign: "Flat", extensionRoofCovering: ["Colorbond"],
+    });
+    assert.ok(d.reportText.includes("There is an extension to the rear built around 2010. It is constructed of brick walls on a concrete slab with a flat roof and a covering of Colorbond."));
+  });
+
+  it("does not take 'N/A' in the under-construction box as a stage", () => {
+    const d = draft("description", { constructionIs: ["Warehouse"], underConstructionStage: "N/A" });
+    assert.equal(d.reportText, "The property is a warehouse.");
+  });
+});
+
 describe("Commercial: driveway and paving", () => {
   it("says a good driveway is good, and a bad one what is wrong with it", () => {
     const bad = paras(draft("driveway", { present: "yes", locatedAt: "Front left", material: "Concrete", condition: "Fair", crackingSummary: "Several minor cracks", obscuredBy: ["Vegetation"], damages: [crack("near the gate")] }));
     assert.ok(bad.includes("The driveway is to the front left of the block and is constructed of concrete. It is in fair condition. Several minor cracks observed. Sections of the driveway were obscured by vegetation."));
-    assert.ok(bad.includes("DEFECT::0::Near the gate, there is a vertical fine crack. The crack is 3 millimetres wide and 500 millimetres long."), "external: the size is stated plainly");
+    assert.ok(bad.includes("DEFECT::0::Near the gate, there is a crack. The crack is 3 millimetres wide and 500 millimetres long."), "external: the size is stated plainly");
     const good = draft("driveway", { present: "yes", locatedAt: "Rear", material: "Asphalt", condition: SAT, crackingSummary: "No visible significant cracking", obscuredBy: [] }).reportText;
     assert.ok(good.includes("The driveway is to the rear of the block and is constructed of asphalt. It is in satisfactory condition with typical wear and tear."));
     assert.ok(!/crack|observed/i.test(good), "nothing about cracking when none was recorded");
@@ -85,7 +108,7 @@ describe("Commercial: driveway and paving", () => {
     assert.ok(p.includes("There is paving to the front of the block, constructed of concrete. It is in satisfactory condition with typical wear and tear. Sections of the paving were obscured by vegetation and stored goods."));
     assert.ok(p.includes("There is no paving to the left-hand side of property."));
     assert.ok(p.includes("There is paving to the rear of the block, constructed of pavers. It is in poor condition."));
-    assert.ok(p.some((x) => x.startsWith("DEFECT::0::At the loading apron, there is a vertical fine crack")), "no doubled 'the'");
+    assert.ok(p.some((x) => x.startsWith("DEFECT::0::At the loading apron, there is a crack")), "no doubled 'the'");
   });
 });
 
@@ -94,9 +117,9 @@ describe("Commercial: fences and retaining walls", () => {
     const d = draft("fences", { items: { front: { present: "no" }, left: { present: "yes", material: ["Brick"], condition: SAT, obscuredBy: ["Vegetation"] }, rear: { present: "yes", material: ["Metal sheets"], condition: "Poor", worstItem: "Rusted posts and leaning panels" } } });
     const p = paras(d);
     assert.equal(p[0], "There is no front fence.");
-    assert.ok(p.includes("The left-hand fence is constructed of brick and is in satisfactory condition with typical weathering. Sections of the fence were obscured by vegetation."));
-    assert.ok(p.includes("The rear fence is constructed of metal sheets and is in poor condition."));
-    assert.ok(p.includes("Rusted posts and leaning panels."));
+    assert.ok(p.includes("The left-hand fence is constructed of brick and is in satisfactory condition with typical weathering. Sections of the fence are obscured by vegetation."));
+    // The worst item ends the fence's paragraph, so the photo reference follows the whole description.
+    assert.ok(p.includes("The rear fence is constructed of metal sheets and is in poor condition. Rusted posts and leaning panels."));
     assert.equal(draft("fences", { items: { front: { present: "no" }, left: { present: "no" } } }).reportText, "There are no fences surrounding this property.");
   });
 
@@ -112,8 +135,7 @@ describe("Commercial: fences and retaining walls", () => {
 
   it("states a retaining wall and its worst item", () => {
     const p = paras(draft("retaining_walls", { present: "yes", items: [{ location: "Left", materials: ["Brick"], condition: "Fair", obscuredBy: ["Vegetation"], worstItem: "Bowing near the corner" }] }));
-    assert.ok(p.includes("There is a retaining wall to the left, constructed of brick. It is in fair condition. Sections of the wall were obscured by vegetation."));
-    assert.ok(p.includes("Bowing near the corner."));
+    assert.ok(p.includes("There is a retaining wall to the left, constructed of brick. It is in fair condition. Sections of the wall were obscured by vegetation. Bowing near the corner."));
   });
 });
 
@@ -127,12 +149,12 @@ describe("Commercial: garage, sheds and loading dock", () => {
       },
     });
     const p = paras(d);
-    assert.ok(p.includes("ROOMHEAD::Garage"));
+    assert.ok(p.includes("PART::Garage/Carport/Loading Bay"));
     assert.ok(p.includes("There is a garage located at the front of the property, constructed of brick with a metal roof and concrete hardstand, and is generally in satisfactory state of repair. Sections of the walls and hardstand were obscured by shelving and stored goods. A parked car obscured part of the hardstand."));
-    assert.ok(p.includes("ROOMHEAD::Sheds"));
+    assert.ok(p.includes("PART::Sheds / Loading dock and any other structures"));
     assert.ok(p.includes("There is a shed located at the rear of the property, constructed of metal with a metal roof and a gravel floor, and is generally in fair state of repair. Sections of the walls and floor were obscured by stored goods."));
-    assert.ok(p.some((x) => x.startsWith("DEFECT::0::At the slab near the door, there is a vertical fine crack")));
-    assert.ok(!p.some((x) => /loading dock/i.test(x)));
+    assert.ok(p.some((x) => x.startsWith("DEFECT::0::At the slab near the door, there is a crack")));
+    assert.ok(!p.some((x) => /There is a loading dock/i.test(x)), "the loading dock was not there");
   });
 
   it("words a basement garage without repeating 'basement' as its wall material", () => {
@@ -160,9 +182,26 @@ describe("Commercial: main structure", () => {
     assert.ok(p.includes("ROOMHEAD::Front Elevation (north)"));
     assert.ok(p.includes("Satisfactory and in typical condition. Sections were obscured by vegetation."), "good: just says so, nothing about damage");
     assert.ok(p.includes("ROOMHEAD::Left Elevation (west)"));
-    assert.ok(p.includes("The left elevation is a party wall abutting the next property at No. 12 and could not be inspected. Several minor gaps and cracks observed."));
-    assert.ok(p.includes("DEFECT::0::Above the window, there is a vertical fine crack. The crack is 3 millimetres wide and 500 millimetres long."));
-    assert.ok(p.includes("The right elevation is a party wall abutting the next property at No. 14 and could only be partly inspected to the rear which is in satisfactory and in typical condition."));
+    assert.ok(p.includes("The left elevation is a party wall abutting the next property at No. 12. It is in fair condition. Several minor gaps and cracks observed."));
+    assert.ok(p.includes("DEFECT::0::Above the window, there is a crack. The crack is 3 millimetres wide and 500 millimetres long."));
+    assert.ok(p.includes("The right elevation is a party wall abutting the next property at No. 14. Could only be partly inspected to the rear. Satisfactory and in typical condition."));
+  });
+
+  it("words a party wall as the Industrial-Commercial template does, with what it is constructed of", () => {
+    const p = paras(draft("elevations", { sides: { rear: { orientation: "South", partyWall: "yes", partyWallNumber: "12", partyWallConstruction: ["Brick"], condition: "Fair", damageSummary: "Several minor gaps and cracks" } } }));
+    assert.ok(p.includes("ROOMHEAD::Rear Elevation (south)"));
+    assert.ok(p.includes("The rear elevation is a party wall abutting the next property at No. 12. It is constructed of brick which is in fair condition. Several minor gaps and cracks observed."));
+  });
+
+  it("keeps the template's heading when the required rename box holds the standard name", () => {
+    const p = paras(draft("elevations", { sides: { front: { elevationName: "Front", orientation: "North", condition: SAT } } }));
+    assert.ok(p.includes("ROOMHEAD::Front Elevation (north)"));
+    const paving = paras(draft("paving_paths", { areas: { front: { areaName: "Front", present: "yes", material: ["Concrete"], condition: SAT } } })).join(" ");
+    assert.ok(paving.includes("There is paving to the front of the block, constructed of concrete."));
+    const offices = paras(draft("pool_spa", { areas: { wc_male_female: { areaName: "WC Male / Female", present: "yes", floorLevel: "Ground floor", generalCondition: SAT } } }));
+    assert.ok(offices.includes("ROOMHEAD::Toilets"));
+    const wall = paras(draft("retaining_walls", { present: "yes", items: [{ wallName: "Left retaining wall", location: "Left", materials: ["Brick"], condition: SAT }] })).join(" ");
+    assert.ok(wall.includes("There is a retaining wall to the left, constructed of brick."));
   });
 });
 
@@ -171,7 +210,7 @@ describe("Commercial: roof", () => {
     const sat = paras(draft("roof_chimneys", { inspectionStatus: ["Limited observations from ground level using camera zoom", "No chimney/s"], coveringType: ["Kliplock decking"], generalCondition: SAT, generalObservations: ["Satisfactory to fair with typical weathering", "Some surface rust"] })).join(" ");
     assert.ok(sat.includes("The roof covering of Kliplock decking appears to be in satisfactory to fair condition with typical weathering and some surface rust. Comments are based on limited observations from the ground only and using a camera zoom. There are no chimneys visible."));
     const poor = paras(draft("roof_chimneys", { inspectionStatus: ["Could not observe due to flat roof"], generalCondition: "Poor", generalObservations: ["Chimney appears unstable"] })).join(" ");
-    assert.ok(poor.includes("The roof covering appears to be in poor condition. Could not observe due to flat roof. Chimney appears unstable."));
+    assert.ok(poor.includes("The roof covering appears to be in poor condition. The roof covering could not be observed as the roof is flat. Chimney appears unstable."));
     const ladder = paras(draft("roof_chimneys", { inspectionStatus: ["Inspected from ladder", "Not inspected - multi-level building complex (common property)"], coveringType: ["Colorbond"], generalCondition: "Poor" })).join(" ");
     assert.ok(ladder.includes("The roof covering of Colorbond appears to be in poor condition. Comments are based on limited observations standing on a ladder to the lower roof and from the ground using a camera zoom."));
     assert.ok(ladder.includes("The roof could not be inspected as the building is a multi-level building complex. Roof coverings in a building complex are common property and need to be maintained through the Owners Corporation."));
@@ -180,24 +219,24 @@ describe("Commercial: roof", () => {
 });
 
 describe("Commercial: offices and staff facilities", () => {
-  it("groups areas under the floor they are on, each worded by its own condition", () => {
+  it("heads each area and its floor as the template does, each worded by its own condition", () => {
     const d = draft("pool_spa", {
       areas: {
         reception_foyer: { present: "yes", floorLevel: "Ground floor", generalCondition: SAT, damageSummary: "No visible significant damage" },
         offices: { present: "yes", floorLevel: "Ground floor", generalCondition: "Fair", damageSummary: "Several minor cracks and gaps", damages: [crack("ceiling cornice")] },
-        board_room: { present: "yes", floorLevel: "1st floor", generalCondition: SAT },
         wc_male_female: { present: "yes", floorLevel: "1st floor", generalCondition: "Poor" },
-        storerooms: { present: "yes", floorLevel: "Ground floor", generalCondition: SAT },
+        staff_rooms_kitchens: { present: "yes", floorLevel: "1st floor", generalCondition: SAT },
       },
     });
     const p = paras(d);
-    assert.deepEqual(p.filter((x) => /^(GROUND|FIRST) FLOOR$/.test(x)), ["GROUND FLOOR", "FIRST FLOOR"]);
-    assert.ok(p.includes("ROOMHEAD::Reception / Foyer"));
-    assert.ok(p.includes("The reception and foyer are in satisfactory and typical condition."), "good: nothing about damage");
-    assert.ok(p.includes("The offices are in fair condition. Several minor cracks and gaps observed."));
-    assert.ok(p.includes("The storerooms are in satisfactory and typical condition."));
-    assert.ok(p.includes("The board room is in satisfactory and typical condition."));
-    assert.ok(p.includes("The toilets are in poor condition."));
+    assert.deepEqual(
+      p.filter((x) => x.startsWith("ROOMHEAD::")).map((x) => x.slice(10)),
+      ["Reception / Foyer", "Ground Floor", "Offices", "Ground Floor", "Staff Rooms / Kitchens", "First Floor", "Toilets", "First Floor"],
+    );
+    for (const h of ["Reception / Foyer", "Offices", "Staff Rooms / Kitchens", "Toilets", "Ground Floor", "First Floor"]) assert.ok(p.includes(`ROOMHEAD::${h}`), h);
+    assert.ok(p.includes("Satisfactory and in typical condition."), "good: nothing about damage");
+    assert.ok(p.includes("It is in fair condition. Several minor cracks and gaps observed."));
+    assert.ok(p.includes("It is in poor condition."));
     assert.ok(!/pool|spa/i.test(d.reportText), "an office never reads as a pool or spa");
   });
 });
@@ -208,20 +247,28 @@ describe("Commercial: warehouse and production", () => {
     wh_floorLevel: "Ground floor", wh_obscuredBy: ["Shelving", "Pallets"], wh_generalCondition: "Fair", wh_damageSummary: "Several minor gaps and cracks", wh_damages: [crack("north wall, grid C")],
     prod_floorLevel: "Ground floor", prod_generalCondition: SAT, prod_damageSummary: "No visible significant damage",
     hard_floorLevel: "Ground floor", hard_generalCondition: "Poor", hard_damageSummary: "Multiple items of damage throughout", hard_damages: [crack("slab", { widthMm: 8, lengthMm: 2000 })],
+    pfl_floorLevel: "1st floor", pfl_generalCondition: "Average", pfl_scuffMarks: "yes", pfl_lineMarkings: "Worn",
     roofin_generalCondition: SAT, roofin_damageSummary: ["Water stains"], roofin_sarking: "yes",
   };
   const d = draft("internal_areas", answers);
   const p = paras(d);
 
   it("heads each area under the template's own headings", () => {
-    assert.ok(p.includes("ROOMHEAD::Warehouse and Production Areas – Walls, Windows and Doors"));
-    for (const h of ["Warehouse", "Production", "Hardstand / floors", "Underside Roof Covering & Frame"]) assert.ok(p.includes(`ROOMHEAD::${h}`), h);
+    assert.deepEqual(
+      p.filter((x) => /^(PART|ROOMHEAD)::/.test(x)),
+      [
+        "PART::WAREHOUSE AND PRODUCTION AREAS - WALLS, WINDOWS AND DOORS", "ROOMHEAD::Warehouse", "ROOMHEAD::Ground Floor", "ROOMHEAD::Production Area", "ROOMHEAD::Ground Floor",
+        "PART::WAREHOUSE AND PRODUCTION AREAS - FLOORS", "ROOMHEAD::Warehouse", "ROOMHEAD::Ground Floor", "ROOMHEAD::Production Area", "ROOMHEAD::First Floor",
+        "PART::WAREHOUSE ROOF UNDERSIDE AND FRAME",
+      ],
+    );
   });
 
   it("words each area by its condition, says the overview only when it records an issue, then the defects", () => {
-    assert.ok(p.includes("It is in fair condition. It is located on the ground floor. Several minor gaps and cracks observed. Sections were obscured by shelving and pallets."));
-    assert.ok(p.includes("Satisfactory and in typical condition. It is located on the ground floor."), "good: nothing about damage");
-    assert.ok(p.includes("It is in poor condition. It is located on the ground floor. Multiple items of damage observed throughout."));
+    assert.ok(p.includes("It is in fair condition. Several minor gaps and cracks observed. Sections were obscured by shelving and pallets."));
+    assert.ok(p.includes("Satisfactory and in typical condition."), "good: nothing about damage");
+    assert.ok(p.includes("It is in poor condition. Multiple items of damage observed throughout."));
+    assert.ok(p.includes("It is in average condition. There are scuff marks from forklifts. The painted line markings are worn."), "the production area's floors");
     assert.ok(p.includes("The roof is covered in sarking, obscuring inspection. From these limited observations, the roof underside appears to be in satisfactory and in typical condition. Water stains observed."));
     assert.equal(p.filter((x) => x.startsWith("DEFECT::")).length, 2);
     assert.deepEqual(p.filter((x) => x.startsWith("DEFECT::")).map((x) => Number(x.split("::")[1])), [0, 1]);
@@ -235,7 +282,7 @@ describe("Commercial: warehouse and production", () => {
 
   it("has one Condition Summary row per area", () => {
     assert.deepEqual(d.fields.conditionSummary.map((r) => [r.subLabel, r.conditionLabel]), [
-      ["Warehouse", "Fair"], ["Production", "Satisfactory"], ["Hardstand / floors", "Poor"], ["Underside Roof Covering & Frame", "Satisfactory"],
+      ["Warehouse", "Fair"], ["Production Area", "Satisfactory"], ["Warehouse Floors", "Poor"], ["Production Area Floors", "Average"], ["Roof Underside and Frame", "Satisfactory"],
     ]);
   });
 
@@ -244,7 +291,8 @@ describe("Commercial: warehouse and production", () => {
       wh_floorLevel: "Mezzanine", wh_generalCondition: SAT, wh_damageSummary: "No visible significant damage",
       roofin_coveringOf: ["Kliplock", "Corrugated metal"], roofin_frameOf: "Steel", roofin_generalCondition: SAT, roofin_damageSummary: [],
     }));
-    assert.ok(q.includes("Satisfactory and in typical condition. It is located on the mezzanine."));
+    assert.ok(q.includes("ROOMHEAD::Mezzanine"));
+    assert.ok(q.includes("Satisfactory and in typical condition."));
     assert.ok(q.some((x) => x.startsWith("The roof covering is Kliplock and corrugated metal, on a steel frame.")));
   });
 });
@@ -295,9 +343,23 @@ describe("Commercial: renamed elevations and post-project reports", () => {
 describe("Commercial: the Industrial-Commercial template's own rules", () => {
   it("states an external crack plainly and an internal one 'approximately', with where it starts and runs to", () => {
     const ext = paras(draft("driveway", { present: "yes", locatedAt: "Rear", material: "Asphalt", condition: SAT, damages: [crack("the gate", { crackStartLocation: "the kerb", crackEndLocation: "north", widthMm: 2, lengthMm: 800, direction: "Diagonal" })] }));
-    assert.ok(ext.includes("DEFECT::0::At the gate, there is a diagonal fine crack starting at the kerb and running to the north. The crack is 2 millimetres wide and 800 millimetres long."));
+    assert.ok(ext.includes("DEFECT::0::At the gate, there is a crack starting at the kerb and running to the north. The crack is 2 millimetres wide and 800 millimetres long."));
     const inside = paras(draft("pool_spa", { areas: { offices: { present: "yes", floorLevel: "Ground floor", generalCondition: SAT, damages: [crack("the cornice", { crackStartLocation: "the door", crackEndLocation: "east", widthMm: 1, lengthMm: 70 })] } } }));
-    assert.ok(inside.some((x) => x.endsWith("At the cornice, there is a vertical fine crack starting at the door and running to the east. The crack is approximately 1 millimetres wide and approximately 70 millimetres long.")));
+    assert.ok(inside.some((x) => x.endsWith("At the cornice, there is a crack starting at the door and running to the east. The crack is approximately 1 millimetre wide and approximately 70 millimetres long.")));
+  });
+
+  it("words a crack exactly as the template's line, with no severity, direction word, element or notes", () => {
+    const p = paras(draft("paving_paths", { areas: { front: { present: "yes", material: ["Concrete"], condition: SAT, damages: [crack("front left corner", { element: "slab", crackStartLocation: "edge", crackEndLocation: "corner", direction: "Diagonal", widthMm: 1.5, lengthMm: 900, notes: "Owner advised on the day" })] } } }));
+    assert.ok(p.includes("DEFECT::0::At the front left corner, there is a crack starting at the edge and running to the corner. The crack is 1.5 millimetres wide and 900 millimetres long."));
+    assert.ok(!p.join(" ").includes("Owner advised"), "the template's line has no notes");
+  });
+
+  it("puts a part's own photos straight after its sentence, before its defects", () => {
+    const photo = "https://example.test/p1.jpg";
+    const p = paras(draft("paving_paths", { areas: { front: { present: "yes", material: ["Concrete"], condition: SAT, photos: [photo], damages: [crack("corner")] } } }));
+    const i = p.findIndex((x) => x.startsWith("There is paving to the front of the block"));
+    assert.equal(p[i + 1], `PHOTOS::${photo}`);
+    assert.ok(p[i + 2].startsWith("DEFECT::0::At the corner, there is a crack."));
   });
 
   it("says a satisfactory elevation is satisfactory, with or without damage, and states any other grade", () => {
@@ -323,7 +385,8 @@ describe("Commercial: the Industrial-Commercial template's own rules", () => {
 
   it("words the floors' forklift scuff marks and line markings", () => {
     const p = paras(draft("internal_areas", { hard_floorLevel: "Ground floor", hard_generalCondition: SAT, hard_scuffMarks: "yes", hard_lineMarkings: "Satisfactory" }));
-    assert.ok(p.includes("Satisfactory and in typical condition. It is located on the ground floor. There are scuff marks from forklifts. The painted line markings are satisfactory."));
+    assert.ok(p.includes("ROOMHEAD::Ground Floor"));
+    assert.ok(p.includes("Satisfactory and in typical condition. There are scuff marks from forklifts. The painted line markings are satisfactory."));
   });
 });
 
