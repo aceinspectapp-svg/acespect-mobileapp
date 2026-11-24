@@ -100,6 +100,7 @@ jobs:
           cache: npm
           cache-dependency-path: acespect-mobile/package-lock.json
       - run: npm ci
-      # Known vulnerabilities rated high or critical in what ships (not dev tools) fail the build.
-      - run: npm audit --omit=dev --audit-level=high
+      # Known vulnerabilities rated high or critical in what ships (not dev tools) fail the build, except an advisory listed in
+      # audit-gate.mjs (no fixed version exists yet and the package does not run in the app; each entry lapses on its date).
+      - run: node ../.github/scripts/audit-gate.mjs
       - run: npx tsc --noEmit

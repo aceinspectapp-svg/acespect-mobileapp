@@ -155,7 +155,7 @@ for (const prop of PROPS) {
         const d = m.defectGroups[0].defects[0];
         assert.equal(d.no, 1);
         assert.match(d.text, /Level 1 hall/);
-        assert.match(d.text, /probe comment/);
+        assert.match(d.text, /Probe comment\./); // the inspector's sentence starts with a capital
         assert.equal(d.severity, "Minor");
         assert.equal(d.category, "Non-compliant with approved plans/specs");
         assert.equal(d.code, "2.04");
@@ -188,14 +188,14 @@ for (const prop of PROPS) {
           return printed(build(prop, prefix, answers));
         };
         const table = probeSection("_defects", () => ({ defects: [{ location: "Roof", description: "probe defect", photos: ["/a.jpg"] }] }));
-        assert.ok(table && table !== baseOut && /probe defect/.test(table), "Defects table rows print");
+        assert.ok(table && table !== baseOut && /Probe defect\./.test(table), "Defects table rows print");
         const prev = probeSection("_previous_defects", () => ({ previousDefectsStatus: "attached", previousDefectsUpdates: "probe previous", previousDefectsPhotos: ["/a.jpg"] }));
-        if (secs.some((s) => s.sectionKey.endsWith("_previous_defects"))) assert.ok(prev && /probe previous/.test(prev), "previous defects print");
+        if (secs.some((s) => s.sectionKey.endsWith("_previous_defects"))) assert.ok(prev && /probe previous/i.test(prev), "previous defects print");
         const client = probeSection("_client_issues", (t) => {
           const key = t.fields.find((f) => /Status$/.test(f.key)).key.replace(/Status$/, "");
           return { [`${key}Status`]: "attached", [`${key}Updates`]: "probe client", [`${key}Photos`]: ["/a.jpg"] };
         });
-        assert.ok(client && /probe client/.test(client), "client list prints");
+        assert.ok(client && /probe client/i.test(client), "client list prints");
         const typical = secs.find((s) => s.sectionKey.endsWith("_typical_defects"));
         if (typical) {
           const f = typical.fields.find((x) => x.type === "chip-multiselect");

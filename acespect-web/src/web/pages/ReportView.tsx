@@ -6,7 +6,9 @@ import { ArrowLeft, Printer, Download, FileText } from "lucide-react";
 import type { FormSection } from "../mockData";
 import { buildReportHeader, withExcludedPhotosRemoved } from "../report";
 import { useAppData, useInspectionDetail } from "../data";
-import { openReportFile, reportFileName } from "../reportFile";
+import { openReportFile, reportFileName, signInAgainHref, type ReadyReport } from "../reportFile";
+import { SignInAgainError } from "../reportJob";
+import { reportBackAction, reviewPagePath } from "../reportPage";
 import { ReportCover } from "../components/ReportCover";
 import { sectionPhotoArchiveUrl } from "../photoArchive";
 import { ReportDescription } from "../components/ReportDescription";
@@ -23,6 +25,7 @@ import type { AnswerTree, ConditionSummaryRow } from "../templateFields";
 import { DILAPIDATION_BRAND, PhotoNumberProvider, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 import { ConstructionReportBody, useConstructionReport } from "../construction/ConstructionReport";
 import { orderedPieces, type ReportPiece } from "../reportParts";
+import { PrePurchaseReportBody, usePrePurchaseSections } from "../prepurchase/PrePurchaseReport";
 
 /** Slug used to group sections — backend `key`, or `id` for mock data. */
 const slug = (s: Pick<FormSection, "id" | "key">): string => s.key ?? s.id;
@@ -42,8 +45,15 @@ export function ReportView() {
   const reportWording = wordingFor(reportProfileOf(inspection?.type ?? "", inspection?.propertyType ?? ""));
   // A Construction Stage inspection has its own report layout (undefined while its templates load).
   const construction = useConstructionReport(inspection);
+  // Pre-Purchase / Apartment is laid out as the Construction reports are (undefined while its templates load, null for any other report).
+  const prePurchase = usePrePurchaseSections(inspection);
   const [downloading, setDownloading] = useState(false);
+  // "Preparing report… loading photographs (120 of 250)" while the server makes the file in the background.
+  const [progress, setProgress] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  // The finished file, offered as a button here too ("Open PDF" / "Download Word"): the person clicks it, so the browser allows it.
+  const [ready, setReady] = useState<ReadyReport | null>(null);
+  const [signInAgain, setSignInAgain] = useState(false);
 
   // The actual branded PDF (real logo, per-page footer, page breaks) --
   // generated server-side by the backend's own Puppeteer pipeline, not the
@@ -55,24 +65,28 @@ export function ReportView() {
   // Opens in a new tab. The tab is opened straight away (inside the click, so the browser does not block it as a pop-up) and shows a
   // short "Preparing" note while the server builds the file; then a PDF shows in the browser's own viewer, and a Word file (which a
   // browser cannot show) is saved from that tab under its proper name. If the browser blocks new tabs, the file downloads here as before.
-  // (the body is openReportFile in reportFile.ts -- the reviewer page's Report button uses the same one)
+  // (the body is openReportFile in reportFile.ts)
   async function handleDownload(format: "pdf" | "docx") {
     if (!id) return;
     setDownloading(true);
     setDownloadError(null);
+    setReady(null);
+    setSignInAgain(false);
     try {
-      await openReportFile(id, format, reportFileName({ id, jobNo: inspection?.jobNo }, !!construction, format));
+      setReady(await openReportFile(id, format, reportFileName({ id, jobNo: inspection?.jobNo }, prePurchase ? "pre-purchase" : !!construction, format), setProgress));
     } catch (e) {
+      if (e instanceof SignInAgainError) setSignInAgain(true);
       setDownloadError(e instanceof Error ? e.message : "Failed to download the report");
     } finally {
       setDownloading(false);
+      setProgress(null);
     }
   }
 
-  if (!inspection || construction === undefined) {
+  if (!inspection || construction === undefined || prePurchase === undefined) {
     return (
       <div style={{ padding: "48px", textAlign: "center", color: "#94a3b8", fontFamily: "Inter, sans-serif" }}>
-        {loading || loadingDetail || (inspection && construction === undefined) ? "Loading…" : "Inspection not found."}
+        {loading || loadingDetail || (inspection && (construction === undefined || prePurchase === undefined)) ? "Loading…" : "Inspection not found."}
       </div>
     );
   }
@@ -149,7 +163,13 @@ export function ReportView() {
         }}
       >
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            // Opened in its own tab by the review page's Report button: close it (the review page is still open behind it).
+            if (reportBackAction(window.history.length) === "back") return navigate(-1);
+            window.close();
+            // The browser did not let the tab close: show the inspection's review page here.
+            if (!window.closed) navigate(reviewPagePath(currentUser?.role, inspection.id));
+          }}
           style={{
             display: "flex",
             alignItems: "center",
@@ -171,6 +191,23 @@ export function ReportView() {
           {downloadError && (
             <span style={{ fontSize: "12px", color: "#dc2626", fontWeight: 600 }}>{downloadError}</span>
           )}
+          {signInAgain && (
+            <a href={signInAgainHref()} data-report-sign-in="" style={{ fontSize: "12px", fontWeight: 700, color: reportTokens.accent }}>Sign in again</a>
+          )}
+          {ready && !downloading && (
+            <button
+              type="button"
+              onClick={() => ready.open()}
+              data-report-ready={ready.format}
+              title={`${ready.fileName} is ready`}
+              style={{ display: "flex", alignItems: "center", gap: "7px", padding: "9px 18px", borderRadius: "8px", border: "none", background: "#15803d", color: "white", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}
+            >
+              {ready.format === "pdf" ? <Download size={15} /> : <FileText size={15} />} {ready.label}
+            </button>
+          )}
+          {downloading && progress && (
+            <span role="status" data-report-progress="" style={{ fontSize: "12px", color: "#475569", fontWeight: 600 }}>{progress}</span>
+          )}
           <button
             onClick={() => handleDownload("pdf")}
             disabled={downloading}
@@ -191,7 +228,7 @@ export function ReportView() {
               boxShadow: "0 2px 8px rgba(26,42,74,0.3)",
             }}
           >
-            <Download size={15} /> {downloading ? "Generating…" : "Download PDF"}
+            <Download size={15} /> {downloading ? "Preparing report…" : "Download PDF"}
           </button>
           <button
             onClick={() => handleDownload("docx")}
@@ -212,7 +249,7 @@ export function ReportView() {
               opacity: downloading ? 0.7 : 1,
             }}
           >
-            <FileText size={15} /> {downloading ? "Generating…" : "Download Word"}
+            <FileText size={15} /> {downloading ? "Preparing report…" : "Download Word"}
           </button>
           <button
             onClick={() => window.print()}
@@ -247,11 +284,13 @@ export function ReportView() {
           borderRadius: "10px",
           boxShadow: "0 4px 28px rgba(0,0,0,0.12)",
           ...reportTextStyle(false),
-          ...(construction ? {} : DILAPIDATION_BRAND),
+          ...(construction || prePurchase ? {} : DILAPIDATION_BRAND),
         }}
       >
         {construction ? (
           <ConstructionReportBody inspection={inspection} model={construction} header={r} />
+        ) : prePurchase ? (
+          <PrePurchaseReportBody inspection={inspection} sections={prePurchase} header={r} />
         ) : (
           <>
         {/* Cover / front matter, generated from Job Information */}

@@ -40,6 +40,9 @@ export function createApp() {
     cors({
       origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(',').map((s) => s.trim()),
       credentials: true,
+      // Readable by the web app: Retry-After (how long to wait after a 429) and Content-Disposition (a download's file name). Without this the
+      // browser hides them from the page on a cross-origin call.
+      exposedHeaders: ['Retry-After', 'Content-Disposition'],
     }),
   );
   // Logged before body-parsing so a payload-too-large rejection below still

@@ -56,7 +56,7 @@ export function useConstructionReport(inspection?: Inspection, opts?: { includeU
     ).then((inputs) => {
       if (cancelled) return;
       const jobInfo = inspection.sections.find((s) => (s.key ?? s.id).startsWith("job-info"));
-      setModel(buildConstructionReport(inputs, (jobInfo?.answers as AnswerTree | null | undefined) ?? null));
+      setModel(buildConstructionReport(inputs, (jobInfo?.answers as AnswerTree | null | undefined) ?? null, { apartment: profile.propertyType === "apartment" }));
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,29 +83,30 @@ const STATUS: Record<ItemStatus, { label: string; sub: string; stripe: string; b
   na: { label: "NOT APPLICABLE", sub: "Does not apply to this build", stripe: "#b8c0cc", bg: "#f1f2f4", fg: "#4b5563" },
 };
 
-const page: CSSProperties = { fontFamily: C.font, color: C.ink, fontSize: "13px", lineHeight: 1.45 };
+export const page: CSSProperties = { fontFamily: C.font, color: C.ink, fontSize: "13px", lineHeight: 1.45 };
 
-function Heading({ children }: { children: ReactNode }) {
+export function Heading({ children }: { children: ReactNode }) {
   return (
     <h2 style={{ margin: "0 0 14px", paddingBottom: "6px", borderBottom: `2.5px solid ${C.red}`, color: C.navy, fontSize: "17px", fontWeight: 700, textTransform: "uppercase", breakAfter: "avoid" }}>
       {children}
     </h2>
   );
 }
-const SubHeading = ({ children }: { children: ReactNode }) => (
+export const SubHeading = ({ children }: { children: ReactNode }) => (
   <h3 style={{ margin: "18px 0 6px", color: C.navy, fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", breakAfter: "avoid" }}>{children}</h3>
 );
 /**
  * Prints its children on one page: a heading and the first thing under it, so a heading is never left alone at the bottom of a page
  * (Chrome's PDF does not honour break-after: avoid reliably; break-inside: avoid on a wrapper is honoured).
  */
-const KeepTogether = ({ children }: { children: ReactNode }) => <div style={{ breakInside: "avoid" }}>{children}</div>;
-const Back = () => (
+export const KeepTogether = ({ children }: { children: ReactNode }) => <div style={{ breakInside: "avoid" }}>{children}</div>;
+/** "↑ Back to summary" under a heading: to the Inspection Checklist (#checklist), or the summary `href` names (Pre-Purchase: #summary). */
+export const Back = ({ href = "#checklist" }: { href?: string }) => (
   <div style={{ textAlign: "right", margin: "-4px 0 12px" }}>
-    <a href="#checklist" style={{ color: "#2563eb", fontSize: "11.5px" }}>↑ Back to summary</a>
+    <a href={href} style={{ color: "#2563eb", fontSize: "11.5px" }}>↑ Back to summary</a>
   </div>
 );
-const Bullets = ({ items, lead }: { items: string[]; lead?: ReactNode }) => {
+export const Bullets = ({ items, lead }: { items: string[]; lead?: ReactNode }) => {
   const li = (t: string, i: number) => (
     <li key={i} style={{ display: "flex", gap: "10px", margin: "0 0 4px", breakInside: "avoid" }}>
       <span style={{ color: C.red, lineHeight: 1.45 }}>•</span>
@@ -226,8 +227,9 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
   );
   return (
     <div style={{ margin: "0 0 20px" }}>
-      {t.intro && !t.groups.length && <p style={{ margin: "0 0 8px" }}>{t.intro}</p>}
+      {t.intro && !t.introUnderTitle && !t.groups.length && <p style={{ margin: "0 0 8px" }}>{t.intro}</p>}
       {!t.groups.length && titleBar}
+      {t.intro && t.introUnderTitle && !t.groups.length && <p style={{ margin: "6px 0 8px" }}>{t.intro}</p>}
       {t.groups.map((g, gi) => (
         <Fragment key={gi}>
           {g.items.map((it, ii) => {
@@ -240,6 +242,7 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
                 <div style={{ padding: "6px 10px 7px" }}>
                   {/* Only the item's name: its status already shows in the right-hand column. */}
                   <div>{href ? <a href={href} style={{ textDecoration: "none" }}>{name}</a> : name}</div>
+                  {it.after && <div data-row-after="" style={{ fontSize: compact ? "11px" : "12px", lineHeight: 1.4, marginTop: "3px", color: C.ink }}>{it.after}</div>}
                 </div>
                 <div style={{ background: s.bg, color: s.fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: compact ? "8.5px" : "10px", fontWeight: 800, letterSpacing: compact ? "0.04em" : "0.1em", textAlign: "center", padding: "0 4px" }}>
                   {href ? <a href={href} style={{ color: s.fg, textDecoration: "underline" }}>{statusLabel(it)} ›</a> : statusLabel(it)}
@@ -251,8 +254,9 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
             // template's sentence above the table and the table's title bar -- so none of them is ever left alone at a page bottom.
             return (
               <KeepTogether key={it.id}>
-                {gi === 0 && t.intro && <p style={{ margin: "0 0 8px" }}>{t.intro}</p>}
+                {gi === 0 && t.intro && !t.introUnderTitle && <p style={{ margin: "0 0 8px" }}>{t.intro}</p>}
                 {gi === 0 && titleBar}
+                {gi === 0 && t.intro && t.introUnderTitle && <p style={{ margin: "6px 0 8px" }}>{t.intro}</p>}
                 {g.heading && (
                   <div style={{ background: C.band, color: C.navy, fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "4px 10px" }}>{g.heading}</div>
                 )}
@@ -260,9 +264,11 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
               </KeepTogether>
             );
           })}
+          {g.closing && <p data-group-closing="" style={{ margin: "6px 0 8px", fontSize: compact ? "11px" : "12px", lineHeight: 1.4, breakInside: "avoid" }}>{g.closing}</p>}
         </Fragment>
       ))}
       {t.footnote && <p style={{ margin: "8px 0 4px", fontStyle: "italic", fontSize: "12px", lineHeight: 1.4, breakInside: "avoid" }}>{t.footnote}</p>}
+      {t.closing?.map((c, i) => <p key={`closing-${i}`} data-table-closing="" style={{ margin: "8px 0 4px", breakInside: "avoid" }}>{c}</p>)}
       {t.photos.map((p, i) => <RowPhotos key={i} heading={p.heading} photos={p.photos} compact={compact} />)}
     </div>
   );
@@ -270,7 +276,7 @@ function Table({ t, compact }: { t: ChecklistTable; compact?: boolean }) {
 
 // ───────────────────────── Defects ─────────────────────────
 
-function Defect({ d, lead, compact }: { d: DefectEntry; lead?: ReactNode; compact?: boolean }) {
+function Defect({ d, lead, compact, withSeverity = true }: { d: DefectEntry; lead?: ReactNode; compact?: boolean; /** Lock-up & Fixing prints no Severity / Category line (its template has none). */ withSeverity?: boolean }) {
   const numbering = usePhotoNumbering(d.photos, `defect:${d.no}`);
   const small: CSSProperties = { fontSize: "11px", color: "#4b5563", marginTop: "2px" };
   // `lead` (the headings above the first defect of a topic) and the defect's card print on one page with the first row of its photos;
@@ -285,7 +291,7 @@ function Defect({ d, lead, compact }: { d: DefectEntry; lead?: ReactNode; compac
         <div style={{ background: C.red, color: "white", fontWeight: 700, fontSize: "12px", padding: "6px 0 0", textAlign: "center" }}>{d.no}</div>
         <div style={{ padding: "6px 10px 7px" }}>
           <div style={{ fontSize: "13.5px" }}>{[withItemName(d.description, d.item), photoReference(numbering.start, d.photos.length)].filter(Boolean).join(" ")}</div>
-          {(d.severity || d.category) && (
+          {withSeverity && (d.severity || d.category) && (
             <div style={small}>
               {d.severity && <><b style={{ color: C.ink }}>Severity:</b> {d.severity}</>}
               {d.severity && d.category && "   ·   "}
@@ -319,9 +325,15 @@ function Defects({ model, archiveUrl, lead }: { model: ConstructionReportModel; 
             {archiveUrl && <a href={archiveUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", fontSize: "11px", fontWeight: 700 }}>View additional photos ›</a>}
           </div>
         );
+        // Lock-up & Fixing: the template's EXTERNAL / INTERNAL heading, once, above the first topic under it.
+        const areaHead = g.area && groups[gi - 1]?.area !== g.area
+          ? <div data-defect-area="" style={{ color: C.navy, fontWeight: 700, fontSize: "15px", letterSpacing: "0.04em", margin: "16px 0 4px" }}>{g.area}</div>
+          : null;
+        // Lock-up & Fixing and Slab Down & Frame: no Severity / Category line (their templates have none).
+        const lockFix = model.stage === "lock_fix" || model.stage === "slab_frame";
         return (
-          <div key={g.heading}>
-            {g.defects.map((d, i) => <Defect key={d.no} d={d} lead={i === 0 ? <>{gi === 0 && lead}{topic}</> : undefined} />)}
+          <div key={`${g.area ?? ""}:${g.heading}`}>
+            {g.defects.map((d, i) => <Defect key={d.no} d={d} withSeverity={!lockFix} lead={i === 0 ? <>{gi === 0 && lead}{areaHead}{topic}</> : undefined} />)}
           </div>
         );
       })}
@@ -421,6 +433,28 @@ function TermsPages() {
 
 // ───────────────────────── The page ─────────────────────────
 
+/**
+ * The template's PHOTOGRAPHS paragraph and its note, under the General Description: one block, shared by every report laid out this way
+ * (Construction, and Pre-Purchase / Apartment -- prepurchase/PrePurchaseReport.tsx).
+ */
+export function PhotographsBlock({ fullDownloadUrl, originals }: { fullDownloadUrl?: string | null; originals: { url: string | null; pending: boolean } }) {
+  return (
+    <>
+      <KeepTogether>
+      <SubHeading>Photographs</SubHeading>
+      <OriginalPhotosPending pending={originals.pending} />
+      <p style={{ margin: "0 0 8px" }}>
+        Selected photographs are included in the body of this report. For a full download please{" "}
+        {fullDownloadUrl ? <a href={fullDownloadUrl} data-original-photos-link={originals.url ? "" : undefined} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>Click here</a> : "Click here"} to access. We recommend that you download the digital photographs immediately and save in a secure folder on your device, as the link will remain active for only a few months from the date of this report.
+      </p>
+      </KeepTogether>
+      <p style={{ margin: 0, fontStyle: "italic", fontSize: "10.5px", color: C.grey, lineHeight: 1.7 }}>
+        You may view/save individual photographs by clicking on a file in the list. To save a copy of all photographs, click the Download All button above the list of files and follow the prompts. The security settings on your computer may display a bar at the top of the window, indicating that you need to allow your browser to download from the site. If this message appears, please allow downloads temporarily from this site. If a window does not then appear asking where you would like the download saved, simply click on the Download All button again to commence the download.
+      </p>
+    </>
+  );
+}
+
 export function ConstructionReportBody({ inspection, model, header }: { inspection: Inspection; model: ConstructionReportModel; header: ReportHeader }) {
   const archive = inspection.photoArchiveUrl;
   // The Photographs "Click here" downloads every original photo of the inspection as one zip (the folder link is the fallback).
@@ -439,17 +473,7 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           {front && (
             <PhotoGrid photos={[front]} compact={false} maxHeight={7.5} />
           )}
-          <KeepTogether>
-          <SubHeading>Photographs</SubHeading>
-          <OriginalPhotosPending pending={originals.pending} />
-          <p style={{ margin: "0 0 8px" }}>
-            Selected photographs are included in the body of this report. For a full download please{" "}
-            {fullDownloadUrl ? <a href={fullDownloadUrl} data-original-photos-link={originals.url ? "" : undefined} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>Click here</a> : "Click here"} to access. We recommend that you download the digital photographs immediately and save in a secure folder on your device, as the link will remain active for only a few months from the date of this report.
-          </p>
-          </KeepTogether>
-          <p style={{ margin: 0, fontStyle: "italic", fontSize: "10.5px", color: C.grey, lineHeight: 1.7 }}>
-            You may view/save individual photographs by clicking on a file in the list. To save a copy of all photographs, click the Download All button above the list of files and follow the prompts. The security settings on your computer may display a bar at the top of the window, indicating that you need to allow your browser to download from the site. If this message appears, please allow downloads temporarily from this site. If a window does not then appear asking where you would like the download saved, simply click on the Download All button again to commence the download.
-          </p>
+          <PhotographsBlock fullDownloadUrl={fullDownloadUrl} originals={originals} />
         </div>
 
         <div className="report-page-break" id="checklist">
@@ -469,9 +493,11 @@ export function ConstructionReportBody({ inspection, model, header }: { inspecti
           )}
         </div>
 
-        {model.notes.length > 0 && (
+        {(model.notes.length > 0 || model.commonAreaNotes.length > 0) && (
           <div id="notes" style={{ marginTop: "26px" }}>
-            <Bullets items={model.notes} lead={<><Heading>Notes</Heading><Back /></>} />
+            {model.notes.length > 0 ? <Bullets items={model.notes} lead={<><Heading>Notes</Heading><Back /></>} /> : <><Heading>Notes</Heading><Back /></>}
+            {/* PCI Apartment: the template's COMMON AREAS notes, under their own sub-heading. */}
+            {model.commonAreaNotes.length > 0 && <Bullets items={model.commonAreaNotes} lead={<SubHeading>Common Areas</SubHeading>} />}
           </div>
         )}
 

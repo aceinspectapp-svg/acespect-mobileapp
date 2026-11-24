@@ -150,11 +150,14 @@ export function ReportConditionSummary({
   categories,
   compact = false,
   nov2026 = false,
+  legend = true,
 }: {
   categories: ConditionSummaryCategory[];
   compact?: boolean;
   /** Dilapidation / Residential House: the grade meanings as the Nov 2026 template words them. */
   nov2026?: boolean;
+  /** False for a report that prints the template's own Condition Definitions just above the table (Pre-Purchase / Apartment). */
+  legend?: boolean;
 }) {
   if (categories.length === 0) return null;
   return (
@@ -183,7 +186,7 @@ export function ReportConditionSummary({
       {categories.map((c, i) => (
         <CategoryBlock key={i} category={c} />
       ))}
-      <ConditionLegend nov2026={nov2026} />
+      {legend && <ConditionLegend nov2026={nov2026} />}
     </div>
   );
 }

@@ -65,6 +65,7 @@ type ParsedItem =
   | { kind: "defect"; index: number; text: string; line?: number }
   | { kind: "item"; heading: string; text: string; line?: number }
   | { kind: "photos"; keys: string[]; lead?: { text: string; line?: number } }
+  | { kind: "bullet"; text: string; line?: number }
   | { kind: "para"; text: string; line?: number };
 
 // Matches the report type's wording (src/web/wording/) damageSentences -- one tagged paragraph per recorded defect, where `index` is that defect's position in the section's damage list, so its own photos can be printed right under its sentence.
@@ -72,6 +73,8 @@ const DEFECT_RE = /^DEFECT::(\d+)::([\s\S]*)$/;
 // Construction Stage report text: one checklist row (its short name in bold, then its sentence), and a sentence that is printed under the report's Notes.
 const ITEM_RE = /^ITEM::(.+?)::(?:(?:ok|progress|defect|note|notcomplete|na)::)?([\s\S]*)$/;
 const NOTE_RE = /^NOTE::([\s\S]*)$/;
+// One sentence of a list of sentences, printed as a bullet (Pre-Purchase / Apartment: "General Comments", as the template's Notes are).
+const BULLET_RE = /^BULLET::([\s\S]*)$/;
 
 function renderParsedItem(item: ParsedItem, compact: boolean, key: number | string, section: Pick<FormSection, "photos" | "damages" | "answers">) {
   const damages = section.damages;
@@ -109,6 +112,13 @@ function renderParsedItem(item: ParsedItem, compact: boolean, key: number | stri
       );
     case "para":
       return <Para key={key}><LineText text={item.text} line={item.line} /></Para>;
+    case "bullet":
+      return (
+        <div key={key} data-bullet="" style={{ display: "flex", gap: "10px", margin: "0 0 4px", breakInside: "avoid" }}>
+          <span style={{ color: "#d1262b", lineHeight: 1.45 }}>•</span>
+          <span style={{ flex: 1, lineHeight: 1.45, color: reportTokens.ink }}><LineText text={item.text} line={item.line} /></span>
+        </div>
+      );
   }
 }
 
@@ -362,17 +372,23 @@ export function ReportSection({
       if (defectMatch) return { kind: "defect", index: Number(defectMatch[1]), text: defectMatch[2].trim(), line };
       const itemMatch = p.match(ITEM_RE);
       if (itemMatch) return { kind: "item", heading: itemMatch[1], text: itemMatch[2].trim(), line };
+      const bulletMatch = p.match(BULLET_RE);
+      if (bulletMatch) return { kind: "bullet", text: bulletMatch[1].trim(), line };
       const noteMatch = p.match(NOTE_RE);
       if (noteMatch) return { kind: "para", text: noteMatch[1].trim(), line };
       if (FLOOR_HEADINGS.includes(p) || FLOOR_LINE_RE.test(p)) return { kind: "floorband", text: p };
       return { kind: "para", text: p, line };
     }),
   ];
-  // A heading the same as the one just above it (two structures under the template's one "Sheds / Loading dock ..." heading, or
-  // that heading right under the section's own) is printed once.
+  // A heading the same as the one right above it (the template's heading right under the section's own) is printed once. In the
+  // Industrial-Commercial template (inline photo references) the same holds for the last heading above, with text in between: two
+  // structures sit under its one "Sheds / Loading dock ..." heading. Other report types keep every heading -- two rooms may share a name.
   let lastHeading = "";
   const deduped = parsedItems.filter((it) => {
-    if (it.kind !== "heading" && it.kind !== "roomhead") return true;
+    if (it.kind !== "heading" && it.kind !== "roomhead") {
+      if (!inlineRefs) lastHeading = "";
+      return true;
+    }
     const text = it.text.trim().toLowerCase();
     if (!text || text === lastHeading) return false;
     lastHeading = text;

@@ -80,9 +80,16 @@ export function withoutInstruction(name: string): string {
   return INSTRUCTION_TAILS.reduce((n, re) => n.replace(re, ""), name);
 }
 
-/** A line that opens with the item's name ("Slab formwork dimensions. Please refer …") with that name printed in Title Case; any other line as it is. */
+/**
+ * A line that opens with the item's name ("Slab formwork dimensions. Please refer …") with that name printed in Title Case; any other line
+ * as it is. When the name's own closing mark goes with an instruction the report leaves out ("Private Roof Terrace? If so, provide
+ * details." -> "Private Roof Terrace"), the name keeps a full stop, so the line still reads "Private Roof Terrace. Waterproof membrane …".
+ */
 export function withItemName(line: string, item: string): string {
-  return item && line.startsWith(item) ? `${itemName(item)}${line.slice(item.length)}` : line;
+  if (!item || !line.startsWith(item)) return line;
+  let name = itemName(item);
+  if (/[.!?]$/.test(item.trim()) && !/[.!?]$/.test(name.trim())) name = `${name.trim()}.`;
+  return `${name}${line.slice(item.length)}`;
 }
 
 /** The office templates' wording of each choice, by field: the forms store "sunny"; the template prints "Sunny". */

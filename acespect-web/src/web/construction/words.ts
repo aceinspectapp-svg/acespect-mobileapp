@@ -11,22 +11,71 @@ const TONE_BY_COLOR: Record<string, Tone> = { "#1FA463": "ok", "#E63329": "bad",
 export interface Chosen { label: string; tone: Tone; other: boolean }
 
 /** The option a stored value points at (its label and colour tone), or the typed "Other" text. */
+/**
+ * While on (the Lock-up & Fixing report, compose.ts): a stored answer the form no longer offers is printed as words ("parked_car" ->
+ * "Parked car"), never as its code. Off for the other stages, whose reports are left exactly as they are.
+ */
+let readableCodes = false;
+export function withReadableCodes<T>(make: () => T): T {
+  const was = readableCodes;
+  readableCodes = true;
+  try { return make(); } finally { readableCodes = was; }
+}
+/** "workmanship_outside_tolerance" -> "Workmanship outside tolerance"; anything that is not a code is left as it is. */
+export function readableCode(raw: string): string {
+  return /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/.test(raw) || /^[a-z]+$/.test(raw) ? cap(raw.replace(/[_-]+/g, " ")) : raw;
+}
+
 export function chosen(field: TemplateField, raw: string): Chosen {
   const other = otherAnswerText(raw);
   if (other !== undefined) return { label: other, tone: "plain", other: true };
   const opt = field.options?.find((o) => o.value === raw);
-  if (!opt) return { label: raw, tone: "plain", other: false };
+  if (!opt) return { label: readableCodes ? readableCode(raw) : raw, tone: "plain", other: false };
   return { label: opt.label, tone: (opt.color && TONE_BY_COLOR[opt.color]) || "plain", other: false };
 }
 
 export const toneOfOption = (color?: string): Tone => (color && TONE_BY_COLOR[color]) || "plain";
 
 export const lower = (s: string) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+
+/**
+ * What the inspector typed, ready to sit inside one of the report's sentences ("Wall cladding is constructed of … to the first floor."):
+ * no full stop or other closing mark of its own, and a small first letter -- unless the first word is a name the report keeps
+ * as written: an abbreviation ("AAC", "CSR"), a word with a capital inside it ("PlasterBoard"), or a numbered place ("Bed 3 window",
+ * "Level 1 balcony"). "Rendered foam cladding to the front." -> "rendered foam cladding to the front".
+ */
+export function inline(typed: string): string {
+  const t = typed.trim().replace(/[\s.;:,!]+$/, "");
+  const first = /^\S+/.exec(t)?.[0] ?? "";
+  const keep = /^[A-Z0-9]{2,}\b/.test(first) || /^.[^\s]*[A-Z]/.test(first) || /^\S+\s+\d/.test(t) || PROPER_NAMES.has(first.replace(/[^A-Za-z]/g, "").toLowerCase());
+  return keep ? t : lower(t);
+}
+
+/**
+ * Brand and builder names the forms offer as choices ("Hebel", "Colorbond", "Simonds"): a name keeps its capital wherever the report
+ * puts it inside a sentence ("Wall cladding is constructed of Hebel …"), as the office templates write it.
+ */
+export const PROPER_NAMES = new Set(["hebel", "colorbond", "zincalume", "kliplock", "simonds", "mirvac", "hacer"]);
+
+/**
+ * The template's own spelling for a few words the forms spell another way ("Eave linings / sofitt" -> "Eave linings / soffit",
+ * "furniture & finsishes" -> "furniture & finishes"). Applied to a label before the report uses it as a heading or a defect's name.
+ */
+const SPELLING: [RegExp, string][] = [[/\bsofitt\b/gi, "soffit"], [/\bfinsishes\b/gi, "finishes"]];
+export const spelled = (label: string): string => SPELLING.reduce((t, [re, to]) => t.replace(re, (m) => (m[0] === m[0]!.toUpperCase() ? to.charAt(0).toUpperCase() + to.slice(1) : to)), label);
 export const sentence = (s: string) => (/[.!?]$/.test(s.trim()) ? s.trim() : `${s.trim()}.`);
 export const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
+/**
+ * A checklist row's name as its defect is headed: without the form's "how it was checked" wording ("Lower level roof covering
+ * inspected from ladder" -> "Lower level roof covering", "Lower level guttering inspected from ladder is" -> "Lower level guttering").
+ * The checklist row keeps its full name.
+ */
+export const defectItemName = (heading: string): string => heading.replace(/\s+inspected\s+from\s+(the\s+)?ladder(\s+is)?\s*[.:]?$/i, "").trim() || heading;
+
 /** "Gutters; debris, lack of fall…" -> "Gutters": the report headings are the short names; the rest is the form's own guidance. */
-export function headingOf(label: string): string {
+export function headingOf(raw: string): string {
+  const label = spelled(raw);
   let depth = 0;
   let cut = label.length;
   for (let i = 0; i < label.length; i++) {
@@ -48,7 +97,7 @@ export function headingMap(fields: TemplateField[]): Map<string, string> {
   const out = new Map<string, string>();
   for (const f of fields) {
     const b = headingOf(f.label);
-    const full = f.label.replace(/\s*;\s*/, " — ").replace(/\s*\?$/, "");
+    const full = spelled(f.label).replace(/\s*;\s*/, " — ").replace(/\s*\?$/, "");
     const clipped = full.length <= 110 ? full : `${full.slice(0, 107).replace(/[\s,;(]+\S*$/, "")}…`;
     out.set(f.key, (base.get(b) ?? 0) > 1 ? clipped : b);
   }
@@ -90,10 +139,15 @@ export const SEVERITY_LABELS: Record<string, string> = {
 export const mapLabels = (v: AnswerValue, table: Record<string, string>) => {
   const order = Object.keys(table);
   const rank = (x: string) => { const i = order.indexOf(x); return i === -1 ? order.length : i; };
-  return [...asList(v)].sort((a, b) => rank(a) - rank(b)).map((x) => table[x] ?? x);
+  return [...asList(v)].sort((a, b) => rank(a) - rank(b)).map((x) => table[x] ?? (readableCodes ? readableCode(x) : x));
 };
 
 export type { AnswerTree };
 
 /** A group's sub-heading: its short name, without the form's own guidance after a colon ("Slab surface: pitted / …" -> "Slab surface"). */
-export const groupOf = (label: string): string => headingOf(label).replace(/:\s.*$/, "");
+export const groupOf = (label: string): string => {
+  const g = headingOf(label).replace(/:\s.*$/, "");
+  return GROUP_NAMES[g.toLowerCase()] ?? g;
+};
+/** A group the forms name differently from the office template: the PCI house form's "Doors, etc" is the template's "Windows and Doors". */
+const GROUP_NAMES: Record<string, string> = { "doors, etc": "Windows and Doors" };

@@ -12,7 +12,7 @@
  */
 import type { AnswerTree, TemplateField } from "../templateFields";
 import { asString } from "../templateFields";
-import { headingMap, headingOf, photosIn } from "./words";
+import { defectItemName, headingMap, headingOf, photosIn } from "./words";
 import { GENERAL, PURPOSE, SECTION_ORDER, STAGES, coverTitleOf, kindOfKey, stageOfSectionKeys, type StageId } from "./stages";
 import { ITEM_STATUSES, TAGS, type ItemStatus } from "./compose";
 import library from "./codeLibrary.json";
@@ -34,8 +34,15 @@ export interface ChecklistItem {
   defectNo?: number;
   /** How many of the report's numbered defects this row raised (a defect row only): printed as "REFER DEFECTS (2)". */
   defectCount?: number;
+  /** The template's sentence printed under the row (the roof OH&S sentences). */
+  after?: string;
 }
-export interface ChecklistGroup { heading?: string; items: ChecklistItem[] }
+export interface ChecklistGroup {
+  heading?: string;
+  items: ChecklistItem[];
+  /** The template's sentence printed after the group's rows (the services disclaimer under SERVICES). */
+  closing?: string;
+}
 export interface ChecklistTable {
   /** The section this table was built from (the reviewer portal shows one section at a time). */
   sectionKey: string;
@@ -46,12 +53,36 @@ export interface ChecklistTable {
   photos: { heading: string; photos: string[] }[];
   /** The template's fixed sentence printed above the table (Pre-pour: "These items were checked for construction and workmanship."). */
   intro?: string;
+  /** Print `intro` under the table's title bar instead of above it (Slab Down & Frame: the sentence sits under its SLAB heading). */
+  introUnderTitle?: boolean;
   /** The template's fixed note printed after the table's rows, in italics (Pre-pour: the land surveying note after the setbacks). */
   footnote?: string;
+  /** The template's own sentences printed after the table's rows, as plain text (PCI Apartment: the Owners Corporation roof note). */
+  closing?: string[];
 }
+
+/** Lock-up and PCI templates, under the SERVICES rows. */
+export const SERVICES_DISCLAIMER = "As the Houspect building inspector is not a licensed plumber, gas fitter technician nor licensed electrician the comments are observations by the inspector only.";
+/** The stages whose templates print SERVICES_DISCLAIMER (Lock-up, Lock-up and Fixing, PCI/Handover House and Apartment). */
+const SERVICES_DISCLAIMER_STAGES: StageId[] = ["lock_up", "lock_fix", "pci"];
+
+/** PCI Apartment template, under ROOF. */
+export const APARTMENT_ROOF_NOTE = "Roof coverings in an apartment complex are common property and need to be maintained through the Owners Corporation.";
+/** PCI Apartment template, after the COMMON AREAS checks. */
+export const APARTMENT_COMMON_AREAS_NOTE =
+  "Any comments regarding Common Areas are general only. The Inspector is not providing a pool safety barrier certification nor verifying the condition nor operation of any equipment to any of the Common Area facilities. Refer to the strata manager and owners corporation regarding the maintenance and safety of any common areas and facilities such as pools, gyms, BBQ’s, fire and security systems, basements and foyers.";
+/** PCI Apartment template, COMMON AREAS notes (the two that apply to every apartment, in the template's order). */
+export const APARTMENT_COMMON_AREA_NOTES = [
+  "Regular maintenance or repair work to the common areas of the apartment complex, such as roofing, driveways and fencing, should be coordinated and funded through the Owners Corporation.",
+  "Houspect’s inspection is focussed on the specific Apartment in scope, and whilst Common areas are observed we do not provide an assessment of the entire building during a Pre-settlement/Handover inspection.  The inspector may provide comments on common area concerns and incomplete works to assist owners with understanding the status of the construction and any general facilities.",
+];
 
 /** Pre-pour template: the sentence under the PRE POUR heading, before the first of its checks. */
 export const PRE_POUR_INTRO = "These items were checked for construction and workmanship.";
+/** Slab Down & Frame template: the sentence under the SLAB heading (the same as Pre-pour's). */
+export const SLAB_INTRO = PRE_POUR_INTRO;
+/** Slab Down & Frame template: the disclaimer after Services (the template's wording, kept exactly). */
+export const SF_SERVICES_DISCLAIMER = "As the Houspect building inspector is not licensed plumber, licensed gas fitter technician or licensed electrician, the comments are observations by the inspector only. It is recommended that all electrical circuits include RCD protection, with hard-wired smoke detectors.";
 /** Pre-pour template: the italic note after the four setback items (the template's wording, kept exactly). */
 export const SETBACK_NOTE =
   "Houspect Building Inspector is not a providing a land surveying service therefore the comments are observations by the inspector only. Note; pegs on site may sometimes be knocked over or inadvertently moved during base/slab preparation and concrete pour and the inspector is providing estimates only from site markers available on the day of inspection.";
@@ -99,7 +130,12 @@ export interface DefectEntry {
   /** The section that recorded it. */
   sectionKey: string;
 }
-export interface DefectGroup { heading: string; defects: DefectEntry[] }
+export interface DefectGroup {
+  heading: string;
+  defects: DefectEntry[];
+  /** Lock-up & Fixing: the template's EXTERNAL / INTERNAL heading the topic sits under (printed once, above its first topic). */
+  area?: "EXTERNAL" | "INTERNAL";
+}
 
 export interface AttachedList { attached: boolean; text: string; photos: string[] }
 
@@ -119,6 +155,8 @@ export interface ConstructionReportModel {
   defectGroups: DefectGroup[];
   defectCount: number;
   notes: string[];
+  /** PCI Apartment: the template's COMMON AREAS notes, printed under their own sub-heading after the Notes. */
+  commonAreaNotes: string[];
   /** The same notes by the section that wrote them (Summary, Site & Facilities), for the reviewer portal's one-section view. */
   notesBySection: Record<string, string[]>;
   previous: AttachedList;
@@ -148,6 +186,7 @@ export interface SectionInput {
 type Line =
   | { kind: "room"; text: string }
   | { kind: "item"; heading: string; status: ItemStatus; text: string }
+  | { kind: "after"; text: string }
   | { kind: "note"; text: string }
   | { kind: "defect"; index: number; text: string }
   | { kind: "para"; text: string };
@@ -160,6 +199,7 @@ export function parseLines(reportText: string): Line[] {
     const item = ITEM.exec(l);
     if (item) return { kind: "item", heading: item[1]!, status: (item[2] as ItemStatus | undefined) ?? "ok", text: item[3]!.trim() };
     if (l.startsWith(TAGS.note)) return { kind: "note", text: l.slice(TAGS.note.length) };
+    if (l.startsWith(TAGS.after)) return { kind: "after", text: l.slice(TAGS.after.length).trim() };
     const d = /^DEFECT::(\d+)::([\s\S]*)$/.exec(l);
     if (d) return { kind: "defect", index: Number(d[1]), text: d[2]!.trim() };
     return { kind: "para", text: l };
@@ -216,6 +256,49 @@ function pciStatus(jobInfo: AnswerTree | null): string {
   return raw.startsWith("__other__:") ? raw.slice(10) : raw.replace(/_/g, " ");
 }
 
+/**
+ * The PCI template's progress line, "Progress of the works to date is approaching practical completion / handover / defects liability.",
+ * with the phrase for the Stage chosen on Job Information; after handover (Defects Liability) the works are within that period. Any other
+ * answer keeps the template's line as it is.
+ */
+export function pciProgress(status: string): string {
+  if (/^defects liability/i.test(status)) return "The works are within the defects liability period.";
+  const phrase = /^practical completion/i.test(status) ? "practical completion" : /^(off the plan )?handover/i.test(status) ? "handover" : "";
+  return phrase ? `Progress of the works to date is approaching ${phrase}.` : STAGES.pci.progress;
+}
+
+/**
+ * The order of the PCI report's defect headings: the checklist's order, with the template's places that have no checklist heading of
+ * their own where they belong in it (Porch after Windows and Doors, Driveway & Paving after Garage, the rooms after Internal in the order
+ * of the Rooms checklist, Manhole … after Other). General is always last. A heading not listed stays after the one printed before it.
+ */
+const PCI_TOPIC_ORDER = [
+  "site and facilities", "roof", "walls", "windows and doors", "flyscreens and car bay", "basement", "porch", "garage", "driveway and paving", "balconies", "site", "common areas",
+  "internal", "front door", "hallway and entry", "kitchen and pantry", "living family", "lounge", "theatre room", "bedroom 1 and ensuite", "bedroom 2", "bedroom 3",
+  "bedroom 4", "study", "stairs and stairwell", "bathroom", "powder room", "laundry", "finishes", "utilities services", "other", "manhole roof cavity insulation",
+];
+export function pciTopicOrder(topics: string[]): string[] {
+  let last = -1;
+  const ranked = topics.map((t, i) => {
+    const k = placeKey(t);
+    if (k === "general") return { t, i, rank: Infinity };
+    const at = PCI_TOPIC_ORDER.indexOf(k);
+    last = at === -1 ? last + 0.001 : at;
+    return { t, i, rank: last };
+  });
+  return ranked.sort((x, y) => x.rank - y.rank || x.i - y.i).map((x) => x.t);
+}
+
+/**
+ * The defect topics that are one place on the report: the checklist's own heading and the PCI template's name for the same place
+ * ("Garage" and "Garage / Carport", "Balconies" and "Alfresco / Balcony"). Defects of one place print under one heading -- the first
+ * one used, which is the checklist's.
+ */
+const PLACE_ALIASES: Record<string, string> = {
+  "garage carport": "garage", "alfresco balcony": "balconies", "balconies private terrace": "balconies", "windows and doors": "windows and doors",
+};
+const placeKey = (topic: string) => { const k = norm(topic); return PLACE_ALIASES[k] ?? k; };
+
 function pciAppliances(status: string): string {
   if (/^practical completion/i.test(status)) return "Appliances such as the oven, cook top, rangehood, dishwasher and hot water service are not yet installed due to concerns about theft of appliances.";
   if (/^handover/i.test(status)) return "Appliances are installed, except for oven, cook top, rangehood, dishwasher and hot water service.";
@@ -242,7 +325,7 @@ const norm = (s: string) => s.toLowerCase().replace(/&/g, "and").replace(/[^a-z0
 
 // ───────────────────────── The whole report ─────────────────────────
 
-export function buildConstructionReport(sections: SectionInput[], jobInfo: AnswerTree | null): ConstructionReportModel | null {
+export function buildConstructionReport(sections: SectionInput[], jobInfo: AnswerTree | null, opts: { apartment?: boolean } = {}): ConstructionReportModel | null {
   const stage = stageOfSectionKeys(sections.map((s) => s.key));
   if (!stage) return null;
   const meta = STAGES[stage];
@@ -265,7 +348,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
   let previous = noList();
   let clientConcerns = noList();
 
-  interface Raised { key: string; sub: string; text: string; photos: string[]; fromId?: string; heading: string; description: string; item: string }
+  interface Raised { key: string; sub: string; text: string; photos: string[]; fromId?: string; heading: string; description: string; item: string; area: "EXTERNAL" | "INTERNAL" }
   const raised: Raised[] = [];
   /** Checklist rows that say "refer defects", per section, to be tied to their defects once those are numbered. */
   const pending: { item: ChecklistItem; raisedIndexes: number[] }[] = [];
@@ -280,21 +363,21 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
     // The defects this section records, each paired with its own photos.
     const firstRaised = raised.length;
     // The names of this section's checklist items, as the template's rows give them (not what an inspector typed for an "Other" row).
-    const rowNames = new Set<string>([...lines.flatMap((l) => (l.kind === "item" ? [l.heading] : [])), ...headingMap(s.fields).values(), ...s.fields.map((f) => headingOf(f.label))]);
+    const rowNames = new Set<string>([...lines.flatMap((l) => (l.kind === "item" ? [l.heading] : [])), ...headingMap(s.fields).values(), ...s.fields.map((f) => headingOf(f.label)), ...s.fields.map((f) => defectItemName(headingOf(f.label)))]);
     for (const l of lines) {
       if (l.kind !== "defect") continue;
       const dmg = s.damages[l.index];
       const where = (dmg?.location ?? "").trim();
       const item = (dmg?.item ?? "").trim();
       raised.push({
-        key: s.key, sub: dmg?.type || "General", text: l.text, photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)),
+        key: s.key, sub: dmg?.type || "General", area: dmg?.direction === "EXTERNAL" ? "EXTERNAL" : "INTERNAL", text: l.text, photos: (dmg?.photos ?? []).filter((u) => !excluded.includes(u)),
         heading: where || item, description: (dmg?.description ?? "").trim() || splitDefect(l.text).sentence, item: rowNames.has(item) ? item : "",
       });
     }
 
     if (kind === "description") {
       description = paragraphs(lines);
-      if (stage === "pci" && status) description = description.map((p) => (p === meta.progress ? `Progress of the works to date is ${status.split(" — ")[0]!.toLowerCase()}.` : p));
+      if (stage === "pci" && status) description = description.map((p) => (p === meta.progress ? pciProgress(status) : p));
       streetPhotos = a ? photosIn(a.streetPhotos, excluded) : [];
       otherPhotos = a ? [...photosIn(a.elevationPhotos, excluded), ...photosIn(a.neighbourPhotos, excluded)] : [];
     } else if (kind === "site" || kind === "stage") {
@@ -313,6 +396,7 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
           continue;
         }
         if (l.kind === "note") { siteNotes.push(l.text); (notesBySection[s.key] ??= []).push(l.text); continue; }
+        if (l.kind === "after") { const last = current?.items[current.items.length - 1]; if (!inDefects && last && l.text) last.after = l.text; continue; }
         if (inDefects || l.kind !== "item") continue;
         if (!current) { current = { items: [] }; groups.push(current); }
         const item: ChecklistItem = { id: `item-${++itemSeq}`, heading: l.heading, status: l.status, text: l.text };
@@ -331,7 +415,10 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
       const kept = groups.filter((g) => g.items.length > 0).map((g) => {
         const heading = g.heading ? cleanGroup(g.heading) : undefined;
         // A sub-heading that only repeats the table's own title says nothing.
-        return { ...g, heading: heading && norm(heading) !== norm(title) ? heading : undefined };
+        const shown = heading && norm(heading) !== norm(title) ? heading : undefined;
+        // The template's disclaimer under the SERVICES rows (the services group, or a SERVICES table of its own).
+        const services = SERVICES_DISCLAIMER_STAGES.includes(stage) && /\bservices\b/.test(norm(heading ?? title));
+        return { ...g, heading: shown, ...(services ? { closing: SERVICES_DISCLAIMER } : {}) };
       });
       // Photographs the inspector took against a row ("Photos with measurements", "Photo showing the digital level").
       const photos: ChecklistTable["photos"] = [];
@@ -355,6 +442,24 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
           // ... and closes its four setbacks with the land surveying note (not when the setbacks are not there or not applicable).
           if (kept.some((g) => g.items.some((it) => /setback/i.test(it.heading) && it.status !== "na"))) table.footnote = SETBACK_NOTE;
         }
+        if (stage === "slab_frame") {
+          // The Slab Down & Frame template: the sentence under the SLAB heading, above the first slab checks; the land surveying note
+          // after the setbacks; the services disclaimer after Services.
+          if (s.key === "sf_measurements" || (s.key === "sf_quality" && !tables.some((t) => t.intro === SLAB_INTRO))) { table.intro = SLAB_INTRO; table.introUnderTitle = true; }
+          const setbacks = kept.map((g, i) => (g.items.some((it) => /setback/i.test(it.heading) && it.status !== "na") ? i : -1)).filter((i) => i >= 0);
+          if (s.key === "sf_measurements" && setbacks.length) kept[setbacks[setbacks.length - 1]!]!.closing = SETBACK_NOTE;
+          if (s.key === "sf_services") table.closing = [SF_SERVICES_DISCLAIMER];
+        }
+        if (stage === "slab" && s.key === "sd_measurements") {
+          // Slab Down: its template (the Slab Down part of "Slab Down & Frame") closes the setbacks with the land surveying note.
+          const setbacks = kept.map((g, i) => (g.items.some((it) => /setback/i.test(it.heading) && it.status !== "na") ? i : -1)).filter((i) => i >= 0);
+          if (setbacks.length) kept[setbacks[setbacks.length - 1]!]!.closing = SETBACK_NOTE;
+        }
+        if (stage === "pci" && opts.apartment) {
+          // The PCI Apartment template's own sentences: the Owners Corporation note under ROOF, the disclaimer after the COMMON AREAS checks.
+          if (s.key === "pci_roof" && kept.length) table.closing = [APARTMENT_ROOF_NOTE];
+          if (kept.some((g) => g.heading && norm(g.heading) === "common areas")) table.closing = [...(table.closing ?? []), APARTMENT_COMMON_AREAS_NOTE];
+        }
         tables.push(table);
       }
     } else if (kind === "summary") {
@@ -371,14 +476,31 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
 
   // Defects: numbered in the order of the checklist, grouped under the topic they came from.
   const topicOrder: string[] = [];
-  for (const d of raised) { d.sub = cleanGroup(d.sub); if (!topicOrder.includes(d.sub)) topicOrder.push(d.sub); }
+  const shownAs = new Map<string, string>();
+  for (const d of raised) {
+    const sub = cleanGroup(d.sub);
+    const k = placeKey(sub);
+    if (!shownAs.has(k)) shownAs.set(k, sub);
+    d.sub = shownAs.get(k)!;
+    if (!topicOrder.includes(d.sub)) topicOrder.push(d.sub);
+  }
+  if (stage === "pci") topicOrder.splice(0, topicOrder.length, ...pciTopicOrder(topicOrder));
+  // Lock-up & Fixing: the template sorts the defects under EXTERNAL, then INTERNAL; under each, the checklist's sub-headings in order,
+  // and the general Defects list last. A heading with no defects is not printed.
+  const lockFix = stage === "lock_fix";
+  const placed: { topic: string; area?: "EXTERNAL" | "INTERNAL" }[] = lockFix
+    ? (["EXTERNAL", "INTERNAL"] as const).flatMap((area) => {
+      const here = topicOrder.filter((t) => raised.some((d) => d.sub === t && d.area === area));
+      return [...here.filter((t) => t !== "General"), ...here.filter((t) => t === "General")].map((topic) => ({ topic, area }));
+    })
+    : topicOrder.map((topic) => ({ topic }));
   const defectGroups: DefectGroup[] = [];
   const numberOf = new Map<number, number>();
   let n = 0;
-  for (const topic of topicOrder) {
-    const group: DefectGroup = { heading: topic, defects: [] };
+  for (const { topic, area } of placed) {
+    const group: DefectGroup = { heading: topic, defects: [], ...(area ? { area } : {}) };
     raised.forEach((d, i) => {
-      if (d.sub !== topic) return;
+      if (d.sub !== topic || (area && d.area !== area)) return;
       n += 1;
       numberOf.set(i, n);
       const parts = splitDefect(d.text);
@@ -404,6 +526,6 @@ export function buildConstructionReport(sections: SectionInput[], jobInfo: Answe
 
   return {
     stage, stageLabel, coverTitle: coverTitleOf(stage), purpose: PURPOSE, general: GENERAL, description, streetPhotos, otherPhotos, tables, totals,
-    defectGroups, defectCount: n, notes: printedNotes, notesBySection, previous, clientConcerns, waitingSections, attachedKeys,
+    defectGroups, defectCount: n, notes: printedNotes, commonAreaNotes: stage === "pci" && opts.apartment ? [...APARTMENT_COMMON_AREA_NOTES] : [], notesBySection, previous, clientConcerns, waitingSections, attachedKeys,
   };
 }

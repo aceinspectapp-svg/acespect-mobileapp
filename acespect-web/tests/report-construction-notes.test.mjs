@@ -152,8 +152,8 @@ const EXPECTED = [
   { field: "garageSlabStepResult", answer: /^Builder to re-check$/, note: /^The garage slab step down is to be re-checked by the builder\. On plan it is 1,?500 (mm|millimetres) and on site it is 1,?500 (mm|millimetres)\.$/ },
   { field: "porchSlabStepResult", answer: /^Builder to re-check$/, note: /^The porch slab step down is to be re-checked by the builder\. On plan it is .+ and on site it is .+\.$/ },
   { field: "alfrescoSlabStepResult", answer: /^Builder to re-check$/, note: /^The alfresco slab step down is to be re-checked by the builder\. On plan it is .+ and on site it is .+\.$/ },
-  { field: "upperRoofAppears", answer: /^Refer notes$/, note: "The upper roof covering was inspected from the scaffold. The upper roof covering is noted for attention. Lower level roofing was checked from the ladder and is satisfactory." },
-  { field: "lowerRoofLadder", answer: /^Refer notes$/, note: "The upper roof covering was inspected from the scaffold. The upper roof covering is satisfactory. Lower level roofing was checked from the ladder and is noted for attention." },
+  { field: "upperRoofAppears", answer: /^Refer notes$/, note: "The upper roof covering was inspected from the scaffold. The upper roof covering is noted for attention. Lower level roofing was checked and is satisfactory." },
+  { field: "lowerRoofLadder", answer: /^Refer notes$/, note: "The upper roof covering was inspected from the scaffold. The upper roof covering is satisfactory. Lower level roofing was checked and is noted for attention." },
   { field: "upperGutteringGround", answer: /^Refer notes$/, note: "Due to OH&S constraints the upper guttering could not be safely accessed. Observations from the ground indicate that the guttering is noted for attention. Lower level guttering was checked and is satisfactory." },
   { field: "lowerGutteringLadder", answer: /^Refer notes$/, note: /^(Due to OH&S constraints the upper guttering could not be safely accessed\. Observations from the ground indicate that the guttering is satisfactory\. )?Lower level guttering was checked and is noted for attention\.$/ },
   // The Summary's ticks, and the inspector's words after them.
@@ -166,10 +166,12 @@ const EXPECTED = [
 const OTHER_ROW = {
   generalOther: "General", qualityOther: "Slab quality", fitOutOther: "Skirtings, cabinets and painting", kerbOther: "Site and facilities", hebelOther: "Hebel",
   boardOther: "Blueboard, weatherboard, styrene foam, timber", stairwellOther: "Stairwell/s", finishes_other_note: "Finishes",
-  internal_other_note: "Internal", walls_other_note: "Walls", doors_other_note: "Doors, etc", garage_other_note: "Garage",
+  internal_other_note: "Internal", walls_other_note: "Walls", doors_other_note: "Windows and Doors", garage_other_note: "Garage",
   balconies_other_note: "Balconies", site_other_note: "Site", common_other_note: "Common areas", roof_other_note: "Roof",
   other_other_note: "Services and other",
 };
+/** Lock-up & Fixing: the "Other" boxes' names as its report prints them (the row's own name; none for a plain "Other"). */
+const LF_OTHER_ROW = { fitOutOther: "", kerbOther: "", hebelOther: "Hebel", boardOther: "Blueboard, weatherboard, styrene foam, timber", stairwellOther: "Stairwell/s" };
 /** The inspector's own words: an "Other" box (and its "Other" row's note), "Any other concerns", the ground falls detail. */
 const TYPED_AS_IS = /(^|_)other(_note)?$|Other$|^otherConcerns$|^groundFallsDetail$|^kerbOther$/;
 
@@ -188,7 +190,7 @@ describe("every note the checklists and the Summary print is a full sentence", (
     assert.deepEqual(bad.map(({ r, n }) => `${where(r)}: ${n}`), []);
   });
   it("has an expected sentence for every answer that prints a note (none left to a generic wording)", () => {
-    const own = /^(Due to ground falls|Sections of the security fence|Security fencing is|Site needs a clean-up|Final builder's clean|Damage was noted to the footpath|The (finish and )?workmanship|The works are|The inspector contacted|Agi drains are advised\.$|Roof access was limited\.$|Retaining walls are advised\.$)/;
+    const own = /^(Due to ground falls|Sections of the security fence|Security fencing is|Site appears to be well managed\.$|Site needs a clean-up|Final builder's clean|Damage was noted to the footpath|The (finish and )?workmanship|The works are|The inspector contacted|Agi drains are advised\.$|Roof access was limited\.$|Retaining walls are advised\.$)/;
     const unknown = ALL.filter((r) => r.added.some((n) => !own.test(n)) && !EXPECTED.some((e) => e.field === r.field.key) && !TYPED_AS_IS.test(r.field.key));
     assert.deepEqual(unknown.map((r) => `${where(r)}: ${r.added.join(" | ")}`), []);
   });
@@ -200,7 +202,11 @@ describe("each field prints the right sentence for each answer, and none for the
     it(`${e.field}: found in the templates`, () => assert.ok(runs.length > 0));
     for (const r of runs) {
       const asks = e.answer.test(r.option.label);
-      it(`${where(r)} -> ${asks ? "its note" : "no note"}`, () => {
+      // Lock-up & Fixing: the gutters' OH&S sentence (the upper guttering seen from the ground) is printed once, under the Roof gutters row,
+      // not again in Notes (report-lf-template-wording.test.mjs checks it is under the row).
+      const lfUnderRow = /^lf_/.test(r.key) && e.field === "upperGutteringGround";
+      it(`${where(r)} -> ${asks && !lfUnderRow ? "its note" : "no note"}`, () => {
+        if (lfUnderRow) { assert.ok(!r.added.some((n) => /guttering/i.test(n)), r.added.join(" | ")); return; }
         if (asks) {
           assert.equal(r.added.length, 1, r.added.join(" | "));
           if (typeof e.note === "string") assert.equal(r.added[0], e.note);
@@ -226,9 +232,14 @@ describe("each field prints the right sentence for each answer, and none for the
     const typed = ALL.filter((r) => TYPED_AS_IS.test(r.field.key) && r.option.label === "(typed)" && !/^(groundFallsDetail|otherConcerns)$/.test(r.field.key));
     assert.ok(typed.length > 10);
     for (const r of typed) {
-      const name = OTHER_ROW[r.field.key];
-      assert.ok(name, `a row name is expected for ${where(r)}`);
-      assert.deepEqual(r.added, [`${name}: ${TYPED}.`], where(r));
+      // Lock-up & Fixing: only the row's own name in front ("Hebel — other" -> "Hebel"), none for a plain "Other" box (the fit-out's
+      // "Other?", the site's box after the kerb row), never the group's name ("Painting: …").
+      const lockFix = /^lf_/.test(r.key);
+      const name = lockFix ? LF_OTHER_ROW[r.field.key] : OTHER_ROW[r.field.key];
+      assert.ok(name !== undefined, `a row name is expected for ${where(r)}`);
+      // A house PCI report leaves the unit form's Common Areas out, its "Other" box too.
+      const houseCommonArea = r.field.key === "common_other_note" && /House/.test(r.propName);
+      assert.deepEqual(r.added, houseCommonArea ? [] : [name ? `${name}: ${TYPED}.` : `${TYPED[0].toUpperCase()}${TYPED.slice(1)}.`], where(r));
     }
   });
   it("keeps the inspector's capitals and punctuation ('Hebel: some sheets cracked at the NE corner!')", () => {
@@ -267,13 +278,13 @@ describe("General Description: 'The street frontage is to the …'", () => {
 describe("General Description: a typed cladding combination reads inside the sentence", () => {
   const s = SECTIONS.find((x) => x.key === "fx_description" && x.apt);
   const line = (a) => composeConstructionSection(s.key, s.fields, a, true).text.split(/\n+/).find((l) => l.startsWith("Wall cladding"));
-  it("lowers the typed first letter and introduces it as a combination", () => {
+  it("lowers the typed first letter (the text reads as typed, as the office templates write it)", () => {
     assert.equal(line({ groundCladding: ["brick_veneer", "combination_of"], groundCladdingCombo: "Rendered brick and cement sheet" }),
-      "Wall cladding is constructed of brick veneer and a combination of rendered brick and cement sheet.");
+      "Wall cladding is constructed of brick veneer and rendered brick and cement sheet.");
   });
-  it("keeps an acronym and does not repeat 'combination'", () => {
+  it("keeps an acronym and the inspector's own 'combination of'", () => {
     assert.equal(line({ groundCladding: ["combination_of"], groundCladdingCombo: "Combination of FC sheet and render.", firstCladding: ["combination_of"], firstCladdingCombo: "AAC panels and brick" }),
-      "Wall cladding is constructed of a combination of FC sheet and render to the ground floor and a combination of AAC panels and brick to the first floor.");
+      "Wall cladding is constructed of combination of FC sheet and render to the ground floor and AAC panels and brick to the first floor.");
   });
 });
 

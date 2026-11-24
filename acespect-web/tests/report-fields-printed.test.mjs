@@ -99,6 +99,8 @@ const NOT_PRINTED_BY_DESIGN = {
 const { apartmentLeavesOut } = await server.ssrLoadModule("/src/web/wording/dilapidation.apartment.ts");
 const LEFT_OUT_BY_DESIGN = {
   "dilapidation/commercial_properties": (entry) => /^[^:]+: \S*damages\.(sub_cracking|direction|notes)\s/.test(entry),
+  // A house PCI report leaves the unit form's Common Areas checks out (fix/pci-template-wording); only a defect recorded there prints.
+  "construction_stage/residential_house": (entry) => entry.startsWith("pci_garage_site: common_"),
   "dilapidation/apartment": (entry) => {
     const m = /^([^:]+): (\S+)/.exec(entry);
     return !!m && apartmentLeavesOut(m[1], m[2]);

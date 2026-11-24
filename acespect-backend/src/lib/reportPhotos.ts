@@ -135,6 +135,8 @@ export interface ReportPhotoLog {
   missing: string[];
   /** Photograph requests not answered yet. */
   pending(): number;
+  /** Photographs asked for and answered so far, and when the first was asked for and the last answered (ms since epoch; 0 = none yet). */
+  stats(): { requested: number; loaded: number; firstAt: number; lastAt: number };
 }
 
 /**
@@ -144,7 +146,7 @@ export interface ReportPhotoLog {
 export async function routeReportPhotos(page: Page, inspectionId = ''): Promise<ReportPhotoLog> {
   const failed: ReportPhotoError[] = [];
   const missing: string[] = [];
-  let open = 0;
+  let open = 0, requested = 0, loaded = 0, firstAt = 0, lastAt = 0;
   await page.setRequestInterception(true);
   page.on('request', (req: HTTPRequest) => {
     if (req.isInterceptResolutionHandled()) return;
@@ -154,6 +156,8 @@ export async function routeReportPhotos(page: Page, inspectionId = ''): Promise<
       return;
     }
     open++;
+    requested++;
+    if (!firstAt) firstAt = Date.now();
     // The browser's own request headers (its Referer, Origin, User-Agent), less the ones that belong to its connection.
     const headers = Object.fromEntries(Object.entries(req.headers()).filter(([k]) => !/^(:|host$|connection$|keep-alive$|content-length$|accept-encoding$|transfer-encoding$|upgrade$|expect$)/i.test(k)));
     void fetchReportPhoto(url, headers)
@@ -172,13 +176,13 @@ export async function routeReportPhotos(page: Page, inspectionId = ''): Promise<
         },
       )
       .catch(() => undefined) // the page was closed meanwhile
-      .finally(() => { open--; });
+      .finally(() => { open--; loaded++; lastAt = Date.now(); });
   });
-  return { failed, missing, pending: () => open };
+  return { failed, missing, pending: () => open, stats: () => ({ requested, loaded, firstAt, lastAt }) };
 }
 
 /** The plain message for a report whose photographs did not all load. */
-export function photosFailedMessage(log: ReportPhotoLog): string | null {
+export function photosFailedMessage(log: Pick<ReportPhotoLog, 'failed' | 'missing' | 'pending'>): string | null {
   const ids = [...new Set(log.failed.map((f) => mediaIdOf(f.url)))];
   if (ids.length) {
     const shown = ids.slice(0, 5).join(', ') + (ids.length > 5 ? ` and ${ids.length - 5} more` : '');

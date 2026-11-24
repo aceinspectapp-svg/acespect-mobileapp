@@ -50,6 +50,10 @@ router.post('/:id/finalize', requireAuth, inspectionsController.finalize);
 router.get('/:id/baseline-sections', requireAuth, inspectionsController.getBaselineSections);
 router.get('/:id/report.pdf', requireAuth, inspectionsController.downloadReportPdf);
 router.get('/:id/report.docx', requireAuth, inspectionsController.downloadReportDocx);
+// The same files made in the background, for large reports (lib/reportJobs.ts): start, ask how it is going, download.
+router.post('/:id/report-jobs', requireAuth, inspectionsController.createReportJob);
+router.get('/:id/report-jobs/:jobId', requireAuth, inspectionsController.getReportJob);
+router.get('/:id/report-jobs/:jobId/file', requireAuth, inspectionsController.downloadReportJob);
 // "Download all photos": signed-in and allowed to see the inspection, or a short-lived signed link from /photos-link. Never public.
 router.get('/sections/:sectionId/photos-link', requireAuth, sectionPhotosZip.link);
 router.get('/sections/:sectionId/photos.zip', sectionPhotosZip.access, sectionPhotosZip.download);
