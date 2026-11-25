@@ -66,6 +66,27 @@ export function isGateSatisfied(field: TemplateField, scope: AnswerTree): boolea
 }
 
 /**
+ * `scope` without the answers of the questions that are hidden right now, so they neither open other questions nor trigger a required
+ * defect. A gate only reads one answer, so without this a chain broke: "Available for inspection? No" hid "Any damage?" and the
+ * condition, but their earlier "Yes" / "Average" stayed saved and still opened the damages list and demanded a defect. Repeats until
+ * nothing more hides (a chain of any length). Nothing is deleted: answering "Yes" again brings the saved answers back.
+ */
+export function withoutHiddenAnswers(fields: TemplateField[], scope: AnswerTree): AnswerTree {
+  let out = scope;
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const f of fields) {
+      if (f.gate && f.key in out && !isGateSatisfied(f, out)) {
+        if (out === scope) out = { ...scope };
+        delete out[f.key];
+        changed = true;
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * True when a repeating-group/damage-list's `repeat.requireWhen` condition is
  * satisfied -- i.e. either it doesn't apply (the trigger sibling isn't one of
  * the named values), or it applies and at least one instance has been added.
