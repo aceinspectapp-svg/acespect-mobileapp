@@ -6,6 +6,7 @@ import {
   asStringArray,
   displayValue,
   isGateSatisfied,
+  withoutHiddenAnswers,
   resolveInstances,
 } from "../templateFields";
 import { resolveMediaUrl } from "../api";
@@ -18,7 +19,7 @@ import { resolveMediaUrl } from "../api";
  * damage-list was invisible here even though it was captured on mobile).
  */
 export function SectionFieldView({ fields, scope }: { fields: TemplateField[]; scope: AnswerTree }) {
-  const visible = [...fields].filter((f) => isGateSatisfied(f, scope)).sort((a, b) => a.order - b.order);
+  const visible = [...fields].filter((f) => isGateSatisfied(f, withoutHiddenAnswers(fields, scope))).sort((a, b) => a.order - b.order);
   if (visible.length === 0) {
     return <p style={{ padding: "16px", fontSize: "13px", color: "#94a3b8", textAlign: "center" }}>No data recorded</p>;
   }

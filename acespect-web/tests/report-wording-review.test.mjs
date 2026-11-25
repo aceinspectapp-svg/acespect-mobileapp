@@ -62,6 +62,10 @@ describe("wording review: sentences that read wrongly", () => {
     assert.equal(scopePhrase("External and internal to all structures", ""), "external and internal to all structures");
     assert.equal(scopePhrase("Internal only to", ""), "internal only to all areas");
     assert.equal(scopePhrase("External only to", "the common areas"), "external only to the common areas");
+    // Several ticked: the widest scope is the scope, as one sentence.
+    assert.equal(scopePhrase("Internal only to, External & internal to part of property", "the warehouse"), "external and internal to part of the property at the warehouse");
+    assert.equal(scopePhrase("Internal only to, External and internal to all structures", "the warehouse"), "external and internal to all structures");
+    assert.equal(scopePhrase("Internal only to, External only to", "the warehouse"), "external and internal to the warehouse");
   });
 
   it("does not say 'walls walls', and does not call a mix of materials a kind of wall", () => {

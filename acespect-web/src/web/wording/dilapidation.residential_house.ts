@@ -681,6 +681,8 @@ export function roofStatusSentence(status: string): string {
   if (/^not applicable/.test(s)) return "";
   if (/^no chimney/.test(s)) return "There are no chimneys visible.";
   if (/limited observations from ground level using camera zoom/.test(s)) return "Comments are based on limited observations from the ground only and using a camera zoom.";
+  // The choice "Could not observe due to flat roof", as a sentence.
+  if (/^could not observe due to flat roof/.test(s)) return "The roof covering could not be observed as the roof is flat.";
   return `${capitalize(status)}.`;
 }
 

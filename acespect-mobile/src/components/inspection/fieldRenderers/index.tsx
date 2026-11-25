@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../../theme';
 import { Button, ProgressBar } from '../../ui';
 import type { TemplateField, TemplateFieldType, TemplateLayout } from '../../../services/templateApi';
-import { AnswerTree, AnswerValue, FieldRendererProps, isGateSatisfied, isRepeatRequirementMet } from './types';
+import { AnswerTree, AnswerValue, FieldRendererProps, isGateSatisfied, isRepeatRequirementMet, withoutHiddenAnswers } from './types';
 import { DEFECT_DETAIL_FIELDS, defectKey, defectScope, isDefectOpen } from './defectDetail';
 import {
   ChipMultiSelectFieldRenderer,
@@ -42,7 +42,9 @@ export function FieldListRenderer({
   path: string[];
   showMissing?: boolean;
 }) {
-  const visible = [...fields].filter((f) => isGateSatisfied(f, scope)).sort((a, b) => a.order - b.order);
+  // Hidden questions' saved answers set aside, so a chain of gates hides all the way down (see withoutHiddenAnswers).
+  const shown = withoutHiddenAnswers(fields, scope);
+  const visible = [...fields].filter((f) => isGateSatisfied(f, shown)).sort((a, b) => a.order - b.order);
   // A section-letter band only earns its place when it's actually dividing
   // this list into more than one named group -- a template where every
   // field shares the same letter (e.g. Job Information's whole form under
@@ -72,8 +74,8 @@ export function FieldListRenderer({
               value={scope[field.key]}
               onChange={(v) => onChange(field.key, v)}
               path={[...path, field.key]}
-              scope={scope}
-              missing={!!showMissing && isFieldMissing(field, visible, scope)}
+              scope={shown}
+              missing={!!showMissing && isFieldMissing(field, visible, shown)}
               showMissing={showMissing}
             />
             {isDefectOpen(field, scope) && (
@@ -305,7 +307,9 @@ function FixedTabsRenderer({ field, value, onChange, path, showMissing, missing 
         )}
       </ScrollView>
       {active && (
-        <View style={styles.instanceCard}>
+        // Keyed by the tab, so each elevation / room gets its own inputs: without it React reused one set of inputs for every tab and a
+        // box's local text (and any open damage form) carried over from the tab before ("repeats from Left").
+        <View key={active.key} style={styles.instanceCard}>
           <FieldListRenderer
             fields={itemFields}
             // `__instanceKey` is synthetic -- not a real template field, never
@@ -574,7 +578,13 @@ function FixedListRenderer({ field, value, onChange, path, showMissing, missing 
                     ? { ...(record[open.key] ?? {}), [titleKey]: open.label }
                     : record[open.key] ?? {}
                 }
-                onChange={(k, v) => onChange({ ...record, [open.key]: { ...(record[open.key] ?? {}), [k]: v } })}
+                // The standard name shown in the title box is saved with the room's first answer, so the office sees the same name the
+                // inspector saw (a blank title used to reach the server, and a template marking it required held the section open).
+                onChange={(k, v) => {
+                  const inst = { ...(record[open.key] ?? {}), [k]: v };
+                  if (titleKey && k !== titleKey && !customName(open.key)) inst[titleKey] = open.label;
+                  onChange({ ...record, [open.key]: inst });
+                }}
                 path={[...path, open.key]}
                 showMissing={showMissing}
               />
@@ -633,7 +643,12 @@ function StripListRenderer({ field, value, onChange, path, scope, showMissing, m
 
   function updateInstance(idx: number, k: string, v: AnswerValue) {
     const next = [...list];
-    next[idx] = { ...(next[idx] ?? {}), [k]: v };
+    const inst: AnswerTree = { ...(next[idx] ?? {}), [k]: v };
+    // The default name shown in the title box ("Part A") is saved with the instance's first answer, as FixedListRenderer does.
+    const titleKey = field.repeat?.titleFieldKey;
+    // Only where that default is shown (the instance opens in its own window), so other lists keep their old blank-title behaviour.
+    if (openInModal && titleKey && k !== titleKey && field.type !== 'damage-list' && !(inst[titleKey] as string | undefined)?.trim()) inst[titleKey] = defaultInstanceLabel(idx);
+    next[idx] = inst;
     onChange(next);
   }
   function addInstance() {

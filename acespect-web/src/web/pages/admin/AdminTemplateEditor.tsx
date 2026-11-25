@@ -158,6 +158,15 @@ export function FieldListEditor({
     const next = [...fields];
     [next[idx], next[swap]] = [next[swap], next[idx]];
     onChange(next.map((f, i) => ({ ...f, order: i })));
+    // The open/closed state belongs to the field, not the row position: swap it along with the fields.
+    setExpanded((prev) => {
+      const out = new Set(prev);
+      out.delete(idx);
+      out.delete(swap);
+      if (prev.has(idx)) out.add(swap);
+      if (prev.has(swap)) out.add(idx);
+      return out;
+    });
   }
   function addField() {
     // Inside a repeating group's itemFields, every field -- new or old --
@@ -175,6 +184,8 @@ export function FieldListEditor({
   }
   function removeField(idx: number) {
     onChange(fields.filter((_, i) => i !== idx).map((f, i) => ({ ...f, order: i })));
+    // Fields below the removed one move up a row; their open/closed state moves with them.
+    setExpanded((prev) => new Set([...prev].filter((i) => i !== idx).map((i) => (i > idx ? i - 1 : i))));
   }
   function addOption(idx: number) {
     updateField(idx, { options: [...(fields[idx].options ?? []), { value: "", label: "" }] });

@@ -21,7 +21,7 @@ import { ReportConditionSummary, type ConditionSummaryCategory } from "../compon
 import { ReportPoolSpaDisclaimer } from "../components/ReportPoolSpaDisclaimer";
 import { reportProfileOf } from "../wording/profile";
 import { wordingFor } from "../wording/registry";
-import type { ConditionSummaryRow } from "../templateFields";
+import type { AnswerTree, ConditionSummaryRow } from "../templateFields";
 import { DILAPIDATION_BRAND, PhotoNumberProvider, ReportWordingStyleContext, reportTextStyle, reportTokens, SectionBand } from "../components/reportKit";
 import { ConstructionReportBody, useConstructionReport } from "../construction/ConstructionReport";
 import { orderedPieces, type ReportPiece } from "../reportParts";
@@ -139,7 +139,7 @@ export function ReportView() {
   // needing their own filter here.
   const conditionSummaryCategories: ConditionSummaryCategory[] = bodySections
     .map((s) => ({
-      sectionName: reportWording.sectionTitle?.(slug(s)) ?? s.name,
+      sectionName: reportWording.sectionTitle?.(slug(s), s.answers as AnswerTree | undefined) || s.name,
       anchorId: sectionAnchorId(s.id),
       rows: (s.fields as unknown as { conditionSummary?: ConditionSummaryRow[] }).conditionSummary ?? [],
     }))
@@ -304,7 +304,7 @@ export function ReportView() {
             report's per-item photo cross-referencing instead of one vague
             "Please refer to Photographs:" line repeated everywhere. */}
         <PhotoNumberProvider>
-          <ReportWordingStyleContext.Provider value={{ nov2026: printsAgreement(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "")) }}>
+          <ReportWordingStyleContext.Provider value={{ nov2026: printsAgreement(reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "")), inlineRefs: reportWording.photoRefsInline === true }}>
           {/* 1-3. Description and Overview, Photographs, Scope of Inspection
               and Comments -- all rendered by ReportDescription, straight after
               the cover and ABOVE the Condition Summary. */}
@@ -436,7 +436,7 @@ export function ReportView() {
             <ReportSection
               // The heading the report type's template uses for this section, where it differs from the form's name (a part of a
               // section laid out as the template is already carries its heading).
-              section={{ ...withExcludedPhotosRemoved(s), name: reportWording.reportParts ? s.name : reportWording.sectionTitle?.(slug(s)) ?? s.name }}
+              section={{ ...withExcludedPhotosRemoved(s), name: reportWording.reportParts ? s.name : reportWording.sectionTitle?.(slug(s), s.answers as AnswerTree | undefined) ?? s.name }}
               hideDamageText={slug(s) in reportWording.composers}
               // A part printed under its own heading: the photos and defects it does not mark itself print with the section's last part.
               generalPhotos={piece?.generalPhotos?.filter((url) => withExcludedPhotosRemoved(s).photos.includes(url))}

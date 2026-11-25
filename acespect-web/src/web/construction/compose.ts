@@ -699,7 +699,12 @@ const NOTE_SENTENCES: Record<string, { answer: RegExp; note: string; /** What a 
  * The row an "Other" box belongs to, as the report names it: its group on the form ("Hebel", "Slab quality", "Roof"), else the row's own
  * name without "other" ("Stairwell/s — other" -> "Stairwell/s"). The PCI "Services & Other" group's own "Other" reads "Services and other".
  */
+/** "Other" boxes that belong to a whole section rather than the group they sit under on the form (the fit-out "Other?" is the last
+ * box of the Painting group, but it is for anything in Skirtings, Cabinets & Painting). */
+const OTHER_BOX_NAMES: Record<string, string> = { fitOutOther: "Skirtings, cabinets and painting" };
+
 function otherRowName(r: Row, lockFix = false): string {
+  if (!lockFix && r.key && OTHER_BOX_NAMES[r.key]) return OTHER_BOX_NAMES[r.key]!;
   const own = r.heading.replace(/\s*[—–-]\s*other\??$/i, "").replace(/^other\??$/i, "").trim();
   // Lock-up & Fixing: a group's name in front reads wrong ("Painting: Kitchen island end panel …" from the fit-out's "Other?"): only the
   // row's own name ("Hebel — other" -> "Hebel"), and no name when the box is just "Other".

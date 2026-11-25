@@ -8,6 +8,7 @@ import {
   asStringArray,
   isFieldMissing,
   isGateSatisfied,
+  withoutHiddenAnswers,
   isRepeatRequirementMet,
   resolveInstances,
 } from "../templateFields";
@@ -62,7 +63,7 @@ export function SectionFieldEditor({
    */
   disablePhotoEditing?: boolean;
 }) {
-  const visible = [...fields].filter((f) => isGateSatisfied(f, scope)).sort((a, b) => a.order - b.order);
+  const visible = [...fields].filter((f) => isGateSatisfied(f, withoutHiddenAnswers(fields, scope))).sort((a, b) => a.order - b.order);
   let lastLetter: string | undefined;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>

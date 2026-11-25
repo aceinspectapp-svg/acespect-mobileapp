@@ -52,7 +52,9 @@ export interface ReportWording {
    */
   descriptionBlocks?(input: { fields: Record<string, unknown>; areaCount: number; areaNames?: string[] }): { works?: string; scope?: string; areas?: string[] };
   /** The heading a section prints under, where this report type's template names it differently from the form ("External" -> "Main structure"). Undefined: the form's name. */
-  sectionTitle?(sectionKey: string): string | undefined;
+  sectionTitle?(sectionKey: string, answers?: AnswerTree): string | undefined;
+  /** The Description's first paragraph with what Job Information adds to it (Commercial: "The property is a warehouse signed as ..."). */
+  descriptionLead?(paragraph: string, jobInfo: Record<string, unknown>): string;
   /** False for a report type whose template has no Pool and Spa Safety Disclaimer (Apartment). Default: printed after the pool section. */
   poolSpaDisclaimer?: boolean;
   /** The template's own placeholder for the front-of-property photo when none was taken, and how wide that photo prints ("page": to fit the page, centred). */
@@ -64,6 +66,11 @@ export interface ReportWording {
    * after this heading.
    */
   reportParts?: { title: string; band: "EXTERNAL" | "INTERNAL"; structures?: boolean; heading?: false }[];
+  /**
+   * True for a report type whose template ends each defect's and each part's sentence with its photo reference ("... 500 millimetres
+   * long. Please refer to Photographs 9 to 12."), the photos under it, instead of a separate "Please refer to Photographs" line.
+   */
+  photoRefsInline?: boolean;
   /** False for a report type whose template has no Condition Summary page. */
   conditionSummary?: boolean;
   /**

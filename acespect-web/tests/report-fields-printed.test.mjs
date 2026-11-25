@@ -85,6 +85,9 @@ const NOT_PRINTED_BY_DESIGN = {
   "construction_stage/residential_house": CONSTRUCTION_NOT_PRINTED,
   "construction_stage/apartment": CONSTRUCTION_NOT_PRINTED,
   "dilapidation/residential_house": ["description: proposedWorksTypeOther"],
+  // The Industrial-Commercial template's crack line ("At the {location}, there is a crack starting at ... and running to the ... The
+  // crack is ... wide and ... long.") has no severity, no direction word and no notes: recorded, not printed.
+  // crack is ... wide and ... long.") has no severity, no direction word and no notes: recorded, not printed (see LEFT_OUT_BY_DESIGN).
   "dilapidation/commercial_properties": ["description: proposedWorksTypeOther"],
   // The Multi Level Office template words a crack without its severity, and says where it runs with "starting at ... and running to ..."
   // instead of a direction word: recorded, not printed. (The Pre-Purchase checklist's questions: see apartmentLeavesOut below.)
@@ -95,6 +98,7 @@ const NOT_PRINTED_BY_DESIGN = {
 // The Apartment form's Pre-Purchase checklist questions, which the Multi Level Office template has no sentence for.
 const { apartmentLeavesOut } = await server.ssrLoadModule("/src/web/wording/dilapidation.apartment.ts");
 const LEFT_OUT_BY_DESIGN = {
+  "dilapidation/commercial_properties": (entry) => /^[^:]+: \S*damages\.(sub_cracking|direction|notes)\s/.test(entry),
   // A house PCI report leaves the unit form's Common Areas checks out (fix/pci-template-wording); only a defect recorded there prints.
   "construction_stage/residential_house": (entry) => entry.startsWith("pci_garage_site: common_"),
   "dilapidation/apartment": (entry) => {

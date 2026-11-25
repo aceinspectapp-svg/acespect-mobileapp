@@ -12,7 +12,7 @@ import { createServer } from "vite";
 const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const server = await createServer({ root: webRoot, server: { middlewareMode: true }, logLevel: "error" });
 after(() => server.close());
-const { AGREEMENT_BLOCKS, AGREEMENT_TITLE, GRADE_MEANINGS_NOV2026, POOL_SPA_DISCLAIMER_NOV2026, DILAPIDATION_METHOD_NOV2026, printsAgreement } =
+const { AGREEMENT_BLOCKS, AGREEMENT_TITLE, GRADE_MEANINGS_NOV2026, POOL_SPA_DISCLAIMER_NOV2026, DILAPIDATION_METHOD_NOV2026, dilapidationMethodFor, printsAgreement } =
   await server.ssrLoadModule("/src/web/reportAgreement.ts");
 const { reportProfileOf } = await server.ssrLoadModule("/src/web/wording/profile.ts");
 
@@ -55,11 +55,13 @@ describe("Dilapidation / Residential House Agreement (Nov 2026 template)", () =>
     assert.equal(GRADE_MEANINGS_NOV2026.Average, "Working but needs maintenance within 6 months.");
   });
 
-  it("prints for Dilapidation / Residential House and Apartment only", () => {
+  it("prints for Dilapidation / Residential House, Apartment and Commercial Properties only", () => {
     assert.equal(printsAgreement(reportProfileOf("Dilapidation", "Residential House")), true);
     // Apartment follows the Nov 2026 Multi Level Office Building template, whose terms are the same Agreement.
     assert.equal(printsAgreement(reportProfileOf("Dilapidation", "Apartment")), true);
-    for (const [type, property] of [["Dilapidation", "Commercial Properties"], ["Dilapidation", "Public Assets"], ["Pre-Purchase", "Residential House"]]) {
+    // Commercial follows the Nov 2026 Industrial-Commercial template: the same Agreement.
+    assert.equal(printsAgreement(reportProfileOf("Dilapidation", "Commercial Properties")), true);
+    for (const [type, property] of [["Dilapidation", "Public Assets"], ["Pre-Purchase", "Residential House"]]) {
       assert.equal(printsAgreement(reportProfileOf(type, property)), false, `${type} / ${property}`);
     }
   });
@@ -68,5 +70,8 @@ describe("Dilapidation / Residential House Agreement (Nov 2026 template)", () =>
     assert.match(POOL_SPA_DISCLAIMER_NOV2026, /^The Houspect building inspector’s comments are observations only/);
     assert.match(POOL_SPA_DISCLAIMER_NOV2026, /\(licensed by the VBA\)\. Pool safety is important and requirements vary\. Please seek advice from your local council\. Houspect does not inspect pool pumps/);
     assert.match(DILAPIDATION_METHOD_NOV2026, /^This dilapidation report is the result of a visual inspection on the date noted on the report/);
+    // The Residential and Multi Level Office templates write "inline with"; the Industrial-Commercial template "in line with".
+    assert.match(dilapidationMethodFor(reportProfileOf("Dilapidation", "Residential House")), /systematic visual review inline with the scope/);
+    assert.match(dilapidationMethodFor(reportProfileOf("Dilapidation", "Commercial Properties")), /systematic visual review in line with the scope/);
   });
 });

@@ -74,7 +74,7 @@ describe("published templates: Driveway (flat, present yes/no)", () => {
       crackingSummary: "numerous_cracking_throughout",
       obscuredBy: ["vegetation", "stored_goods"],
     });
-    assert.ok(out.includes("Numerous cracking observed throughout."));
+    assert.ok(out.includes("Numerous cracks observed throughout."));
     assert.ok(out.includes("Sections of the driveway were obscured by vegetation and stored goods."));
   });
 
@@ -434,6 +434,30 @@ describe("what is still pending in a section", () => {
     assert.ok(out.some((m) => m.startsWith("Left: ")), "slots nobody touched are pending too");
   });
 
+  it("never asks for a room's name box, even when the template marks it required (blank keeps the standard name)", () => {
+    const rooms = {
+      key: "rooms", type: "repeating-group", label: "Rooms", order: 0,
+      repeat: { presentation: "fixed-tabs", collapsible: true, titleFieldKey: "roomName", fixedInstances: [{ key: "lounge", label: "Lounge" }, { key: "kitchen", label: "Kitchen" }] },
+      itemFields: [
+        { key: "roomName", type: "text", label: "Room name (leave blank to keep the standard name)", order: 0, required: true },
+        { key: "present", type: "yesno", label: "Present / inspected?", order: 1, required: true },
+      ],
+    };
+    const out = listMissingItems([rooms], { rooms: { lounge: { present: "yes" }, kitchen: {} } });
+    assert.deepEqual(out, ["Kitchen: Present / inspected?"]);
+  });
+
+  it("asks nothing more of an elevation answered 'not available', even with answers left from before", () => {
+    const pp = snapshot.find((t) => t.inspectionType === "pre_purchase" && t.propertyType === "apartment" && t.sectionKey === "elevations").fields;
+    const sides = pp.find((f) => f.key === "sides");
+    // The Right elevation was graded Average with damage before the inspector found it was not there.
+    const right = { available: "no", condition: "average", hasDamage: "yes" };
+    const out = listMissingItems([sides], { sides: { right } }).filter((m) => m.startsWith("Right: "));
+    assert.deepEqual(out, []);
+    const yes = listMissingItems([sides], { sides: { right: { ...right, available: "yes" } } }).filter((m) => m.startsWith("Right: "));
+    assert.ok(yes.includes("Right: record at least one defect"), "the same answers still demand a defect on Yes");
+  });
+
   it("asks for a defect when the condition demands one", () => {
     const out = missing("driveway", { present: "yes", locatedAt: "front_left", material: "concrete", condition: "poor", crackingSummary: "several_minor_cracks", obscuredBy: ["vegetation"], notes: "x" });
     assert.ok(out.includes("record at least one defect"));
@@ -636,7 +660,7 @@ describe("House wording aligned to the reference document", () => {
   it("prints the cracking / damage overview only when the inspector recorded an issue", () => {
     const drive = (crackingSummary) => reportText("driveway", { present: "yes", locatedAt: "front_left", material: "concrete", condition: "fair", crackingSummary });
     assert.ok(drive("several_minor_cracks").includes("Several minor cracks observed."));
-    assert.ok(drive("numerous_cracking_throughout").includes("Numerous cracking observed throughout."));
+    assert.ok(drive("numerous_cracking_throughout").includes("Numerous cracks observed throughout."));
     assert.ok(!/crack/i.test(drive("no_visible_significant_cracking")), "good condition says nothing about cracking");
     assert.ok(!/crack/i.test(drive(undefined)));
     const side = (damageSummary) => reportText("elevations", { sides: { front: { orientation: "north", condition: "fair", damageSummary } } });

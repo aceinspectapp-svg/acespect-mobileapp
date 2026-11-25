@@ -456,7 +456,11 @@ export function PhotoNumberProvider({ children }: { children: ReactNode }) {
  * Which wording the report body uses. `nov2026`: Houspect's Nov 2026 Dilapidation Residential template, which refers to photographs as
  * "Please refer to Photographs 9 to 12." (a full stop, and no "General photographs —" in front).
  */
-export const ReportWordingStyleContext = createContext<{ nov2026: boolean }>({ nov2026: false });
+/**
+ * `nov2026`: the Nov 2026 templates' "Please refer to Photographs 9 to 12." (a full stop). `inlineRefs`: that reference ends the
+ * sentence the photos belong to (a defect's, a part's) instead of being a line of its own -- the Industrial-Commercial template.
+ */
+export const ReportWordingStyleContext = createContext<{ nov2026: boolean; inlineRefs?: boolean }>({ nov2026: false });
 
 /** "Please refer to Photographs 9 to 12:" / "Please refer to Photograph 9:" / falls back to the old generic line when no PhotoNumberProvider is in scope (e.g. the reviewer's isolated single-section preview, which doesn't represent the whole document's running order). */
 export function usePhotoNumbering(photos: string[], where: string): { start?: number; label: string } {

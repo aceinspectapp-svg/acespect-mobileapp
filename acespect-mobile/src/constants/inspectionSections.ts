@@ -159,32 +159,26 @@ const PROPERTY_SECTION_CONFIG: Record<string, PropertySectionConfig> = {
     },
   },
   /**
-   * Dilapidation / Apartment, in the order of Houspect's Nov 2026 "Multi Level Office Building" office template: the driveway,
-   * paving, fences and retaining walls, garage / carport / loading bay / shed, the four elevations, the roof, the rooms floor by
-   * floor, then the notes. (The other apartment inspections keep the `apartment` walk below.)
+   * Dilapidation / Apartment, in the order of Houspect's Nov 2026 "Multi Level Office Building" office template: fences and
+   * retaining walls, garage / carport / loading bay / shed, the rooms floor by floor, then the notes. An apartment inspection covers
+   * the unit, not the building around it, so there is no Driveway, Paving, Main structure (Elevations, which holds the eaves) or
+   * Roof section. (The other apartment inspections keep the `apartment` walk below.)
    */
   'dilapidation:apartment': {
     order: [
       'job_information',
       'description_overview',
-      'driveway',
-      'paving_paths',
       'fences',
       'retaining_walls',
       'garage_carport_sheds',
-      'elevations',
-      'roof_chimneys',
       'internal_areas',
       'notes_defects',
       'report_signoff',
     ],
     titles: {
-      paving_paths: { group: 'External', section: 'Paving / Parking areas / Basement car parks' },
       fences: { group: 'External', section: 'Fences' },
       retaining_walls: { group: 'External', section: 'Retaining Walls' },
       garage_carport_sheds: { group: 'External', section: 'Garage / Carport / Loading Bay / Shed' },
-      elevations: { group: 'Main structure', section: 'Main structure (Elevations)' },
-      roof_chimneys: { group: 'Roof', section: 'Roof Covering and Chimney' },
       internal_areas: { group: 'Internal', section: 'Internal (rooms by floor)' },
       notes_defects: { group: 'Notes', section: 'Notes' },
     },

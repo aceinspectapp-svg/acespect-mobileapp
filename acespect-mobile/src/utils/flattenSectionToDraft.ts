@@ -1,7 +1,7 @@
 import type { TemplateField } from '../services/templateApi';
 import type { DraftDamage } from '../context/InspectionDraftContext';
 import type { AnswerTree, AnswerValue } from '../components/inspection/fieldRenderers/types';
-import { isGateSatisfied, isRepeatRequirementMet } from '../components/inspection/fieldRenderers/types';
+import { isGateSatisfied, isRepeatRequirementMet, withoutHiddenAnswers } from '../components/inspection/fieldRenderers/types';
 import { CATEGORY_OPTIONS, DEFECT_DETAIL_FIELDS, SEVERITY_OPTIONS, defectScope, isDefectOpen } from '../components/inspection/fieldRenderers/defectDetail';
 
 interface FlattenResult {
@@ -159,7 +159,8 @@ function walk(templateFields: TemplateField[], scope: AnswerTree, ancestorLabels
  * `required` field check, reusing the exact same instance-walking as
  * flattening so nested scopes line up identically.
  */
-export function meetsAllRequireWhen(templateFields: TemplateField[], scope: AnswerTree): boolean {
+export function meetsAllRequireWhen(templateFields: TemplateField[], answers: AnswerTree): boolean {
+  const scope = withoutHiddenAnswers(templateFields, answers);
   for (const field of templateFields) {
     if (!isGateSatisfied(field, scope)) continue;
     const value = scope[field.key];
@@ -197,7 +198,18 @@ function isFilled(v: AnswerValue): boolean {
  * exactly what makes "Paving" only complete once all four sides have been
  * visited, not just one.
  */
-export function meetsAllRequiredFields(templateFields: TemplateField[], scope: AnswerTree): boolean {
+/**
+ * A repeating group's item fields for the completeness check. The instance's name box (`repeat.titleFieldKey`, e.g. "Room name (leave
+ * blank to keep the standard name)") is never required: blank means the standard name, so a template that marks it required must not
+ * hold the section open over it.
+ */
+export function instanceItemFields(field: TemplateField): TemplateField[] {
+  const titleKey = field.repeat?.titleFieldKey;
+  return (field.itemFields ?? []).map((f) => (titleKey && f.key === titleKey && f.required ? { ...f, required: false } : f));
+}
+
+export function meetsAllRequiredFields(templateFields: TemplateField[], answers: AnswerTree): boolean {
+  const scope = withoutHiddenAnswers(templateFields, answers);
   const required = templateFields.filter((f) => f.required && isGateSatisfied(f, scope));
   const grouped = new Map<string, TemplateField[]>();
   const ungrouped: TemplateField[] = [];
@@ -225,7 +237,7 @@ export function meetsAllRequiredFields(templateFields: TemplateField[], scope: A
     if (field.type !== 'repeating-group') continue;
     if (!isGateSatisfied(field, scope)) continue;
     for (const { scope: inst } of resolveInstances(field, scope[field.key])) {
-      if (!meetsAllRequiredFields(field.itemFields ?? [], inst)) return false;
+      if (!meetsAllRequiredFields(instanceItemFields(field), inst)) return false;
     }
   }
   return true;
