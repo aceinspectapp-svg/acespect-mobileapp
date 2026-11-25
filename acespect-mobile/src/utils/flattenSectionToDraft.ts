@@ -199,12 +199,22 @@ function isFilled(v: AnswerValue): boolean {
  * visited, not just one.
  */
 /**
+ * True when an instance's name box (`repeat.titleFieldKey`) has a standard name to fall back on: a room / side / area of a fixed list
+ * ("Front Elevation", "Kitchen"), or an item of a list that opens in its own window, which is named "Part A", "Wall B" ... Blank then
+ * means "keep the standard name". "No Access Areas -> Area" and the house retaining walls' "Location" have no standard name: they are
+ * what the inspector writes, so they stay required.
+ */
+export function hasStandardName(field: TemplateField): boolean {
+  return (field.repeat?.fixedInstances?.length ?? 0) > 0 || !!field.repeat?.collapsible;
+}
+
+/**
  * A repeating group's item fields for the completeness check. The instance's name box (`repeat.titleFieldKey`, e.g. "Room name (leave
- * blank to keep the standard name)") is never required: blank means the standard name, so a template that marks it required must not
- * hold the section open over it.
+ * blank to keep the standard name)") is never required where it has a standard name (hasStandardName): blank means the standard name,
+ * so a template that marks it required must not hold the section open over it.
  */
 export function instanceItemFields(field: TemplateField): TemplateField[] {
-  const titleKey = field.repeat?.titleFieldKey;
+  const titleKey = hasStandardName(field) ? field.repeat?.titleFieldKey : undefined;
   return (field.itemFields ?? []).map((f) => (titleKey && f.key === titleKey && f.required ? { ...f, required: false } : f));
 }
 

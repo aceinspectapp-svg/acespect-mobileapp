@@ -246,11 +246,22 @@ export function meetsAllRequiredFields(templateFields: TemplateField[], answers:
 }
 
 /**
- * A repeating group's item fields for the completeness checks. The instance's name box (`repeat.titleFieldKey`, "Room name (leave
- * blank to keep the standard name)") is never required: blank means the standard name, even when the template marks it required.
+ * True when an instance's name box (`repeat.titleFieldKey`) has a standard name to fall back on: a room / side / area of a fixed list
+ * ("Front Elevation", "Kitchen"), or an item of a list that opens in its own window, which is named "Part A", "Wall B" ... Blank then
+ * means "keep the standard name". "No Access Areas -> Area" and the house retaining walls' "Location" have no standard name: they are
+ * what the inspector writes, so they stay required.
+ */
+export function hasStandardName(field: TemplateField): boolean {
+  return (field.repeat?.fixedInstances?.length ?? 0) > 0 || !!field.repeat?.collapsible;
+}
+
+/**
+ * A repeating group's item fields for the completeness checks. The instance's name box (`repeat.titleFieldKey`, e.g. "Room name (leave
+ * blank to keep the standard name)") is never required where it has a standard name (hasStandardName): blank means the standard name,
+ * so a template that marks it required must not hold the section open over it.
  */
 export function instanceItemFields(field: TemplateField): TemplateField[] {
-  const titleKey = field.repeat?.titleFieldKey;
+  const titleKey = hasStandardName(field) ? field.repeat?.titleFieldKey : undefined;
   return (field.itemFields ?? []).map((f) => (titleKey && f.key === titleKey && f.required ? { ...f, required: false } : f));
 }
 
@@ -271,8 +282,8 @@ export function listMissingItems(templateFields: TemplateField[], answers: Answe
     if (!isGateSatisfied(field, scope)) continue;
     const value = scope[field.key];
     if (field.type === "repeating-group") {
-      // The instance's name box (repeat.titleFieldKey, "Room name (leave blank to keep the standard name)") is never missing: blank
-      // means the standard name, even when the template marks it required.
+      // The instance's name box (repeat.titleFieldKey, "Room name (leave blank to keep the standard name)") is never missing where it
+      // has a standard name: blank means the standard name, even when the template marks it required (instanceItemFields).
       const itemFields = instanceItemFields(field);
       for (const { label, scope: inst } of resolveInstances(field, value)) {
         out.push(...listMissingItems(itemFields, inst, context ? `${context} / ${label}` : label));

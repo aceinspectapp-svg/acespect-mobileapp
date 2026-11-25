@@ -1,7 +1,7 @@
 import type { TemplateField } from '../services/templateApi';
 import type { DraftDamage } from '../context/InspectionDraftContext';
 import type { AnswerTree, AnswerValue } from '../components/inspection/fieldRenderers/types';
-import { isGateSatisfied, isNothingValid, isRepeatRequirementMet } from '../components/inspection/fieldRenderers/types';
+import { isGateSatisfied, isNothingValid, isRepeatRequirementMet, withoutHiddenAnswers } from '../components/inspection/fieldRenderers/types';
 import { CATEGORY_OPTIONS, DEFECT_DETAIL_FIELDS, SEVERITY_OPTIONS, defectScope, isDefectOpen } from '../components/inspection/fieldRenderers/defectDetail';
 
 interface FlattenResult {
@@ -159,7 +159,8 @@ function walk(templateFields: TemplateField[], scope: AnswerTree, ancestorLabels
  * `required` field check, reusing the exact same instance-walking as
  * flattening so nested scopes line up identically.
  */
-export function meetsAllRequireWhen(templateFields: TemplateField[], scope: AnswerTree): boolean {
+export function meetsAllRequireWhen(templateFields: TemplateField[], answers: AnswerTree): boolean {
+  const scope = withoutHiddenAnswers(templateFields, answers);
   for (const field of templateFields) {
     if (!isGateSatisfied(field, scope)) continue;
     const value = scope[field.key];
@@ -197,7 +198,28 @@ function isFilled(v: AnswerValue): boolean {
  * exactly what makes "Paving" only complete once all four sides have been
  * visited, not just one.
  */
-export function meetsAllRequiredFields(templateFields: TemplateField[], scope: AnswerTree): boolean {
+/**
+ * True when an instance's name box (`repeat.titleFieldKey`) has a standard name to fall back on: a room / side / area of a fixed list
+ * ("Front Elevation", "Kitchen"), or an item of a list that opens in its own window, which is named "Part A", "Wall B" ... Blank then
+ * means "keep the standard name". "No Access Areas -> Area" and the house retaining walls' "Location" have no standard name: they are
+ * what the inspector writes, so they stay required.
+ */
+export function hasStandardName(field: TemplateField): boolean {
+  return (field.repeat?.fixedInstances?.length ?? 0) > 0 || !!field.repeat?.collapsible;
+}
+
+/**
+ * A repeating group's item fields for the completeness check. The instance's name box (`repeat.titleFieldKey`, e.g. "Room name (leave
+ * blank to keep the standard name)") is never required where it has a standard name (hasStandardName): blank means the standard name,
+ * so a template that marks it required must not hold the section open over it.
+ */
+export function instanceItemFields(field: TemplateField): TemplateField[] {
+  const titleKey = hasStandardName(field) ? field.repeat?.titleFieldKey : undefined;
+  return (field.itemFields ?? []).map((f) => (titleKey && f.key === titleKey && f.required ? { ...f, required: false } : f));
+}
+
+export function meetsAllRequiredFields(templateFields: TemplateField[], answers: AnswerTree): boolean {
+  const scope = withoutHiddenAnswers(templateFields, answers);
   const required = templateFields.filter((f) => f.required && !isNothingValid(f) && isGateSatisfied(f, scope));
   const grouped = new Map<string, TemplateField[]>();
   const ungrouped: TemplateField[] = [];
@@ -231,10 +253,7 @@ export function meetsAllRequiredFields(templateFields: TemplateField[], scope: A
       // A side they did start still has to be finished.
       if (fixedTabs && Object.keys(inst).every((k) => k === field.repeat?.titleFieldKey)) continue; // naming a room is not inspecting it
       opened += 1;
-      // The instance's title field (a room's name) shows its standard name on screen without saving it, so it can never count as missing.
-      const titleKey = field.repeat?.titleFieldKey;
-      const itemFields = titleKey ? (field.itemFields ?? []).filter((f) => f.key !== titleKey) : field.itemFields ?? [];
-      if (!meetsAllRequiredFields(itemFields, inst)) return false;
+      if (!meetsAllRequiredFields(instanceItemFields(field), inst)) return false;
     }
     // ...but at least one side has to be recorded, or the section is empty.
     if (fixedTabs && field.required && opened === 0) return false;

@@ -372,7 +372,8 @@ export function JobInformationScreen({
               accent="purple"
             >
               <SegmentedToggle
-                options={(field.options ?? []).map((o) => ({ value: o.value, label: o.label }))}
+                // A yes/no question usually carries no option list in the template ("Occupied?"): Yes / No, as YesNoFieldRenderer does.
+                options={(field.options?.length ? field.options : [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]).map((o) => ({ value: o.value, label: o.label }))}
                 value={typeof answers[field.key] === 'string' ? (answers[field.key] as string) : null}
                 onChange={setAnswer(field.key)}
               />

@@ -93,7 +93,15 @@ export function InspectorFormEditor() {
   // on the section's row and, with red outlines, in its detail panel so an
   // admin can tell the inspector what to finish instead of just "Pending".
   function isSectionPending(section: FormSection): boolean {
-    return isDraft && section.status !== "complete";
+    return isDraft && !readsComplete(section);
+  }
+  // A section reads Complete when the app saved it complete -- or when its saved answers meet every rule. The second covers a draft the
+  // app saved as unfinished only because a "leave blank to keep the standard name" box was blank (an older app counted it as required),
+  // so drafts like that show Complete without anything being changed in them.
+  function readsComplete(section: FormSection): boolean {
+    if (section.status === "complete") return true;
+    const answers = answerEdits[sectionKeyOf(section)] ?? (section.answers as AnswerTree | null | undefined) ?? {};
+    return !!templates[sectionKeyOf(section)] && Object.keys(answers).length > 0 && isSectionComplete(section);
   }
   function pendingItems(section: FormSection): string[] {
     const template = templates[sectionKeyOf(section)];
@@ -430,8 +438,8 @@ export function InspectorFormEditor() {
                           section reads as Complete regardless of its own
                           stored status -- "Pending" only means anything while
                           the inspector is still actively drafting. */}
-                      <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: (!isDraft || section.status === "complete") ? "#dcfce7" : "#f1f5f9", color: (!isDraft || section.status === "complete") ? "#15803d" : "#64748b" }}>
-                        {(!isDraft || section.status === "complete") ? "Complete" : "Pending"}
+                      <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: (!isDraft || readsComplete(section)) ? "#dcfce7" : "#f1f5f9", color: (!isDraft || readsComplete(section)) ? "#15803d" : "#64748b" }}>
+                        {(!isDraft || readsComplete(section)) ? "Complete" : "Pending"}
                       </span>
                       <span style={{ fontSize: "16px", color: isActive ? "#2563eb" : "#d1d5db", transform: isActive ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>›</span>
                     </button>
@@ -459,8 +467,8 @@ export function InspectorFormEditor() {
                           <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#1a2a4a", margin: 0 }}>{selectedSection.name}</h4>
                           <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0 0" }}>Inspector's recorded data</p>
                         </div>
-                        <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: (!isDraft || selectedSection.status === "complete") ? "#dcfce7" : "#f1f5f9", color: (!isDraft || selectedSection.status === "complete") ? "#15803d" : "#64748b" }}>
-                          {(!isDraft || selectedSection.status === "complete") ? "Complete" : "Pending"}
+                        <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "10px", background: (!isDraft || readsComplete(selectedSection)) ? "#dcfce7" : "#f1f5f9", color: (!isDraft || readsComplete(selectedSection)) ? "#15803d" : "#64748b" }}>
+                          {(!isDraft || readsComplete(selectedSection)) ? "Complete" : "Pending"}
                         </span>
                       </div>
                       {template ? (
