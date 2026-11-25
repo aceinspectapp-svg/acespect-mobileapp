@@ -2,7 +2,7 @@
  * The GLOSSARY, MAINTENANCE and "Terms and Conditions – Pre-Purchase Building Inspection" of Houspect's office template
  * "ACESPECT Building (Pre-Purchase)_House and Commercial Nov 2026.dotm", word for word, with the template's clause numbering (generated
  * from that file's text and numbering; do not reword here -- update the template, then regenerate). Printed by the Pre-Purchase /
- * Commercial report (PrePurchaseReport.tsx). The template's own wording is kept as it is, including its "HEREAS:" (sic).
+ * Commercial report (PrePurchaseReport.tsx). The template's own wording is kept as it is, except its "HEREAS:", corrected to "WHEREAS:".
  */
 import type { ScopeBlock } from "./scopeText";
 
@@ -257,7 +257,7 @@ export const PPI_MAINTENANCE_BLOCKS: ScopeBlock[] = [
 ];
 
 export const PPI_TERMS_BLOCKS: ScopeBlock[] = [
-  {"kind": "para", "text": "HEREAS: The Client has requested the Inspector and the Inspector has agreed to carry out an inspection of the Property on the Inspection Date for the purposes of preparing the Report for the Inspection Fee on the terms and conditions set out below (“the Agreement”)."},
+  {"kind": "para", "text": "WHEREAS: The Client has requested the Inspector and the Inspector has agreed to carry out an inspection of the Property on the Inspection Date for the purposes of preparing the Report for the Inspection Fee on the terms and conditions set out below (“the Agreement”)."},
   {"kind": "para", "text": "Payment is required prior to release of the Report unless otherwise agreed in writing by the Inspector."},
   {"kind": "para", "text": "This Agreement is sent to the Client with the Quotation email. No signature is required. The Client is deemed to have accepted the Quotation and this Agreement when the Client replies to and confirms the Quotation by email (see clause 17). The Quotation is valid for 30 days from the date of the Quotation."},
   {"kind": "para", "text": "Standards and guidance referred to in this Agreement: AS 4349.0–2007 Inspection of buildings – General requirements; AS 4349.1–2007 Inspection of buildings – Pre-purchase inspections – Residential buildings; and the Guide to Standards and Tolerances 2026 (Victorian Government, Building and Plumbing Commission)."},

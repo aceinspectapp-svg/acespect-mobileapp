@@ -43,19 +43,27 @@ export function prePurchaseCoverTitle(inspection: Pick<Inspection, "type" | "pro
   return propertyTitle(p.propertyType) || inspection.propertyType;
 }
 
+/** The Summary's fixed sentences, as the House and Commercial template has them. */
+export const PPI_SUMMARY_FIXED =
+  "With any dwelling of a similar vintage, due to its age and general wear and tear, the property will require a degree of maintenance. " +
+  "With a decision to include a program of general maintenance and the repairs mentioned in this report, the property is considered " +
+  "satisfactory for future use. Properties built prior to 1983 may contain asbestos.";
+
 /**
- * The House and Commercial template's "Summary", with only the part a form field decides: "In consideration of its age, it is / is not
- * structurally sound and free of major defects." -- "is" when Notes answers both "The property is considered structurally sound" and
- * "is the property free of major defects" Yes, "is not" when either is No. The template's "constructed around the ..." has no field, so it
- * is left out; with either question unanswered there is no Summary. (Commercial only: the Apartment template's cover is printed as before.)
+ * The House and Commercial template's "Summary". "In consideration of its age, it is / is not structurally sound and free of major
+ * defects." -- "is" when Notes answers both "The property is considered structurally sound" and "is the property free of major defects"
+ * Yes, "is not" when either is No; left out while either is unanswered. The template's fixed sentences follow it always. Its
+ * "constructed around the ..." has no field, so it is left out. (Commercial only: the Apartment template's cover is printed as before.)
  */
 export function prePurchaseSummary(inspection: Pick<Inspection, "sections">): string {
   const notes = inspection.sections.find((s) => (s.key ?? s.id) === "notes");
   const a = (notes?.answers as Record<string, unknown> | null | undefined) ?? {};
   const sound = a.structural_structurallySound, free = a.majordefects_freeOfMajorDefects;
   const known = (v: unknown) => v === "yes" || v === "no";
-  if (!known(sound) || !known(free)) return "";
-  return `In consideration of its age, it ${sound === "yes" && free === "yes" ? "is" : "is not"} structurally sound and free of major defects.`;
+  const decided = known(sound) && known(free)
+    ? `In consideration of its age, it ${sound === "yes" && free === "yes" ? "is" : "is not"} structurally sound and free of major defects. `
+    : "";
+  return decided + PPI_SUMMARY_FIXED;
 }
 
 /** Where page 1 ends: the details from row `row` on (that row from word `words` on) carry on at the top of page 2. */

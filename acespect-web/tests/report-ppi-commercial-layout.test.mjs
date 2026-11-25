@@ -1,5 +1,5 @@
 // Pre-Purchase / Commercial ("ACESPECT Building (Pre-Purchase)_House and Commercial Nov 2026"): laid out as the Pre-Purchase / Apartment
-// report is -- the shared cover ("PRE-PURCHASE REPORT", "Commercial", the template's purpose, General and the Summary a field decides),
+// report is -- the shared cover ("PRE-PURCHASE REPORT", "Commercial", the template's purpose, General and the Summary (the sentence a field decides plus the template's fixed sentences)),
 // SCOPE, DEFECTS, Condition Definitions, the Condition Summary and Site Access Conditions, then the template's order (GENERAL DESCRIPTION,
 // PHOTOGRAPHS, ROOF, EXTERNAL, INTERNAL, STRUCTURAL DEFECTS, MAJOR DEFECTS, SAFETY HAZARDS, NOTES, GLOSSARY, MAINTENANCE, Terms and
 // Conditions), every main title on a new page and none empty; no option code anywhere in the printed report; the Pool/Spa paragraph only
@@ -104,12 +104,20 @@ describe("PPI Commercial: the shared construction-style cover", () => {
     assert.ok(!/dilapidation/i.test(cover) && !/This dilapidation report|purpose of this dilapidation/i.test(text), "no dilapidation purpose");
     assert.match(cover, /Dinuke De Coonghe\nDirector – Houspect Victoria/);
   });
-  it("Summary: only the part a field decides (is / is not structurally sound and free of major defects)", () => {
+  it("Summary: the field-decided sentence (is / is not structurally sound and free of major defects), then the template's fixed sentences", () => {
     const summary = (a, b) => report(0, { patch: { notes: { structural_structurallySound: a, majordefects_freeOfMajorDefects: b } } }).text;
-    assert.match(summary("yes", "yes"), /Summary\nIn consideration of its age, it is structurally sound and free of major defects\.\n/);
-    for (const [a, b] of [["yes", "no"], ["no", "yes"], ["no", "no"]]) assert.match(summary(a, b), /Summary\nIn consideration of its age, it is not structurally sound and free of major defects\.\n/);
-    assert.ok(!/\nSummary\n/.test(summary(undefined, "yes")), "no Summary when a question is unanswered");
+    const FIXED = "With any dwelling of a similar vintage, due to its age and general wear and tear, the property will require a degree of maintenance. With a decision to include a program of general maintenance and the repairs mentioned in this report, the property is considered satisfactory for future use. Properties built prior to 1983 may contain asbestos.";
+    const flat = (t) => t.replace(/\s+/g, " ");
+    assert.ok(flat(summary("yes", "yes")).includes(`Summary In consideration of its age, it is structurally sound and free of major defects. ${FIXED}`));
+    for (const [a, b] of [["yes", "no"], ["no", "yes"], ["no", "no"]]) assert.ok(flat(summary(a, b)).includes(`Summary In consideration of its age, it is not structurally sound and free of major defects. ${FIXED}`), `${a}/${b}`);
+    const open = flat(summary(undefined, "yes"));
+    assert.ok(open.includes(`Summary ${FIXED}`) && !/In consideration of its age/.test(open), "a question unanswered: the fixed sentences only");
     assert.ok(!/constructed around the/.test(summary("yes", "yes")), "no field holds the year");
+  });
+  it("Terms: 'WHEREAS:' (the template's 'HEREAS:' corrected)", () => {
+    const t = report(0).text;
+    assert.match(t, /WHEREAS: The Client has requested the Inspector/);
+    assert.ok(!/(^|[^W])HEREAS:/.test(t));
   });
 });
 
