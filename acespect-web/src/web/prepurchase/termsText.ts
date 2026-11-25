@@ -1,8 +1,8 @@
 /**
  * The GLOSSARY, MAINTENANCE and "Terms and Conditions – Pre-Purchase Building Inspection" of Houspect's office template
  * "ACESPECT Building (Pre-Purchase)_House and Commercial Nov 2026.dotm", word for word, with the template's clause numbering (generated
- * from that file's text and numbering; do not reword here -- update the template, then regenerate). Printed by the Pre-Purchase /
- * Commercial report (PrePurchaseReport.tsx). The template's own wording is kept as it is, except its "HEREAS:", corrected to "WHEREAS:".
+ * from that file's text and numbering; do not reword here -- update the template, then regenerate). Printed by the Pre-Purchase
+ * reports laid out in PrePurchaseReport.tsx. The template's own wording is kept as it is, except its "HEREAS:", corrected to "WHEREAS:".
  */
 import type { ScopeBlock } from "./scopeText";
 
