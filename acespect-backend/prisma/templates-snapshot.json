@@ -124137,7 +124137,7 @@
     "propertyType": "apartment",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 11,
+    "version": 12,
     "fields": [
       {
         "key": "jobNumber",
@@ -124346,7 +124346,11 @@
         "label": "Describe safety issues",
         "order": 15,
         "required": true,
-        "maxLength": 500
+        "maxLength": 500,
+        "gate": {
+          "fieldKey": "safetyIssues",
+          "equals": "yes"
+        }
       },
       {
         "key": "clientListOfIssues",
@@ -144557,7 +144561,7 @@
     "propertyType": "commercial_properties",
     "sectionKey": "job-info",
     "name": "Job Information",
-    "version": 11,
+    "version": 12,
     "fields": [
       {
         "key": "jobNumber",
@@ -144752,7 +144756,11 @@
         "label": "Describe safety issues",
         "order": 13,
         "required": true,
-        "maxLength": 500
+        "maxLength": 500,
+        "gate": {
+          "fieldKey": "safetyIssues",
+          "equals": "yes"
+        }
       },
       {
         "key": "clientListOfIssues",
