@@ -1,5 +1,5 @@
 {
- "note": "sha256 of every report type except Pre-Purchase / Apartment as main 1dc7a6b printed it (updated for fix/commercial-report-wording: Commercial layout, Numerous cracks, the repeated Apartment heading, the Fixing fit-out Other name, and the form updates), printed as of 1 Nov 2026 in UTC (the Construction cover prints the day it is made). Made by tests/fixtures/render-other-reports.mjs; only Pre-Purchase / Apartment may differ.",
+ "note": "sha256 of every report type except Pre-Purchase / Apartment and Pre-Purchase / Commercial as main 1dc7a6b printed it (updated for fix/commercial-report-wording: Commercial layout, Numerous cracks, the repeated Apartment heading, the Fixing fit-out Other name, and the form updates), printed as of 1 Nov 2026 in UTC (the Construction cover prints the day it is made). Made by tests/fixtures/render-other-reports.mjs; only Pre-Purchase / Apartment may differ. Pre-Purchase / Commercial left out for fix/ppi-commercial-layout (it is laid out as its own template now); nothing else changed.",
  "hashes": {
   "construction_stage|apartment|fr|v0": "f73296dd783296f51a64defb39d1952b063129b9a4c1dd3500b765135ff347bd",
   "construction_stage|apartment|fr|v1": "c36f2980f4d877f5e101554b264693b4fb4d3dfaf579f426dcd1a52e0ee0f584",
@@ -70,9 +70,6 @@
   "investigations|residential_house|v0": "553ff572727f2c71396d778a0221a263f128deaa17ed0ac6bf0260bf2b51dfea",
   "investigations|residential_house|v1": "d7bd0471240ce16e61eb6415f7e6a2fee04f8e44d36642c203488466dfa25805",
   "investigations|residential_house|v2": "6618dcc9a868492b1e91ef0f68917979e68dcf2e6408c155c495e34e6f87c986",
-  "pre_purchase|commercial_properties|v0": "bb630ace831f12ba13adff112de09d0744fbcaea8f38c39618dd3af75bc3700c",
-  "pre_purchase|commercial_properties|v1": "1c9360af9142ab2bd737f5e3684f883a4115d3a5294e30810d2e4ce5e4c77e2b",
-  "pre_purchase|commercial_properties|v2": "e73e1410f12e65d0e04c6c9038315fbf59523131fa91b06e0a2d66faa3b37f6a",
   "pre_purchase|residential_house|v0": "d412667b8c7d6752c3121bd2ceea6d87db776293e908fa50a690810b7e3109a5",
   "pre_purchase|residential_house|v1": "4f720a57d090f0102be4915033222e2acae618adb5e8c328da8049ed3e5c6613",
   "pre_purchase|residential_house|v2": "73b34cef37bb6e93398b5430e32cd82b76835e2428ffc0001f61ef407d518008"

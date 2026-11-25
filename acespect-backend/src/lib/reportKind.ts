@@ -1,6 +1,7 @@
 /**
  * Which kind of report an inspection makes, as its file name and Word title say it: "construction", "pre-purchase" (Pre-Purchase /
- * Apartment, laid out as its own template -- acespect-web/src/web/prepurchase/) or "dilapidation" (every other report type, as before).
+ * Apartment and Pre-Purchase / Commercial, laid out as their own templates -- acespect-web/src/web/prepurchase/) or "dilapidation" (every
+ * other report type, Pre-Purchase / House included, as before).
  * The inspection's type and property type are stored as titles ("Pre-Purchase", "Apartment") or slugs ("pre_purchase", "apartment").
  */
 export type ReportKind = 'construction' | 'pre-purchase' | 'dilapidation';
@@ -9,7 +10,7 @@ const slug = (v: string | null | undefined) => (v ?? '').trim().toLowerCase().re
 
 export function reportKind(inspectionType: string | null | undefined, propertyType: string | null | undefined): ReportKind {
   if (/construction/i.test(inspectionType ?? '')) return 'construction';
-  if (slug(inspectionType) === 'pre_purchase' && slug(propertyType) === 'apartment') return 'pre-purchase';
+  if (slug(inspectionType) === 'pre_purchase' && (slug(propertyType) === 'apartment' || slug(propertyType) === 'commercial_properties')) return 'pre-purchase';
   return 'dilapidation';
 }
 

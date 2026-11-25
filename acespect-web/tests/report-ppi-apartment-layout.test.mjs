@@ -170,8 +170,8 @@ describe("PPI Apartment: moisture observations in rooms", () => {
   });
 });
 
-describe("Only Pre-Purchase / Apartment words lists and stops its own way", () => {
-  for (const p of ["dilapidation/residential_house", "dilapidation/apartment", "pre_purchase/residential_house", "pre_purchase/commercial_properties", "investigations/apartment", "construction_stage/apartment"]) {
+describe("Only Pre-Purchase / Apartment (and Pre-Purchase / Commercial, laid out the same way) words lists and stops its own way", () => {
+  for (const p of ["dilapidation/residential_house", "dilapidation/apartment", "pre_purchase/residential_house", "investigations/apartment", "construction_stage/apartment"]) {
     const [inspectionType, propertyType] = p.split("/");
     it(p, () => {
       const w = wordingFor({ inspectionType, propertyType });
