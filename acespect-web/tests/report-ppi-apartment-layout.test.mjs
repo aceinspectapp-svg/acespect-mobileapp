@@ -129,7 +129,8 @@ describe("PPI Apartment: no option codes anywhere in the report", () => {
 describe("PPI Apartment: punctuation", () => {
   for (const v of [0, 1, 2]) {
     it(`no ".," and no full stop after a stop (answers set ${v + 1})`, () => {
-      const { text } = report(v);
+      // The report's own sentences (the template's Glossary, Maintenance and Terms are its own words, "etc.," included).
+      const text = report(v).text.split("\nGLOSSARY\n")[0];
       assert.doesNotMatch(text, /\.,/);
       assert.doesNotMatch(text, /[.!?]\.(\s|$)/m);
     });

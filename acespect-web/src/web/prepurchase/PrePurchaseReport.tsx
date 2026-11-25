@@ -19,7 +19,6 @@ import { PrePurchaseCover } from "./PrePurchaseCover";
 import { PhotoGrid, PhotoMetaContext, PhotoNumberProvider, ReportWordingStyleContext } from "../components/reportKit";
 import { ReportSection } from "../components/ReportSection";
 import { PrePurchaseSummary, type SummarySection } from "./PrePurchaseSummary";
-import { ReportConditions } from "../components/ReportConditions";
 import { useOriginalPhotosLink } from "../components/OriginalPhotosLink";
 import { Back, Bullets, Heading, KeepTogether, PhotographsBlock, page } from "../construction/ConstructionReport";
 import { ScopeBlocks } from "./ScopeBlocks";
@@ -261,9 +260,18 @@ export function PrePurchaseReportBody({ inspection, sections, header }: { inspec
             </div>
           ))}
 
-          {/* The Terms and Conditions (the Nov 2026 template's own text comes with its GLOSSARY and MAINTENANCE). */}
+          {/* The template's GLOSSARY, MAINTENANCE and "Terms and Conditions – Pre-Purchase Building Inspection", word for word. */}
+          <div className="report-page-break" data-ppi-title="Glossary">
+            <Heading>{PPI_GLOSSARY_TITLE}</Heading>
+            <ScopeBlocks blocks={PPI_GLOSSARY_BLOCKS} />
+          </div>
+          <div className="report-page-break" data-ppi-title="Maintenance">
+            <Heading>{PPI_MAINTENANCE_TITLE}</Heading>
+            <ScopeBlocks blocks={PPI_MAINTENANCE_BLOCKS} />
+          </div>
           <div className="report-page-break" data-ppi-title="Terms and Conditions">
-            <ReportConditions />
+            <Heading>{PPI_TERMS_TITLE}</Heading>
+            <ScopeBlocks blocks={PPI_TERMS_BLOCKS} />
           </div>
         </ReportWordingStyleContext.Provider>
       </PhotoNumberProvider>
