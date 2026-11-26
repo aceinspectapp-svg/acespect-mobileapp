@@ -8,6 +8,8 @@
 //   - an element's "Applicability" (Assessed / Not applicable / There is no garage ...) is never printed as a "Applicability: ..." line: an
 //     element answered "Assessed" prints its own answers, one answered "Not applicable" prints nothing. (The sub-floor's answer is printed in
 //     the Site Access Conditions, where the template has a sentence for it.)
+//   - "noted" is said once: an option or typed answer that already ends with "noted" ("No defects noted") is not followed by a second
+//     "noted" ("No defects noted noted to windows/doors" -> "No defects noted to windows/doors");
 //   - Driveway and Pool / Spa use the standard lines, not the house sentences: those read the house form's questions ("Is there a
 //     driveway?"), which this form does not ask, and said "There is no driveway." of a driveway that was assessed.
 import type { Composer } from "./shared";
@@ -33,6 +35,9 @@ export const APPLICABILITY_FIELDS: Record<string, string[]> = {
   pool_spa: ["pool_applicability"],
 };
 
+/** "No defects noted noted to windows/doors" -> "No defects noted to windows/doors": a sentence's "... noted" after a choice that already ends with "noted". */
+export const notedOnce = (text: string): string => text.replace(/\b(noted)(?:\s+noted\b)+/gi, "$1");
+
 const { driveway: _driveway, pool_spa: _poolSpa, ...composers } = base.composers;
 
 export const prePurchaseCommercialProperties: ReportWording = {
@@ -44,7 +49,7 @@ export const prePurchaseCommercialProperties: ReportWording = {
   // The Notes' typed comments are said as typed, not as "If Other — specify: ...".
   plainFields: { ...base.plainFields, notes: [...(base.plainFields?.notes ?? []), "generalCommentsOther"] },
   listLine,
-  finish: (_sectionKey, text) => tidyFullStops(text),
+  finish: (_sectionKey, text) => tidyFullStops(notedOnce(text)),
   // The template's Pool/Spa paragraph is printed by the report itself, and only when a pool or spa was assessed (PrePurchaseReport.tsx).
   poolSpaDisclaimer: false,
 };

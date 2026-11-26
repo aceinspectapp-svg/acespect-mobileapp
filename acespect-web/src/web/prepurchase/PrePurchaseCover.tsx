@@ -36,10 +36,10 @@ export const PPI_GENERAL =
   "This report is the result of a visual inspection only and is intended to be read as a whole. Please read the detailed inspection information and the scope section. Whilst all defects have been investigated to confirm cause and significance, some minor defects have not been detailed as they were considered a normal occurrence or general wear and tear for a building of this age.";
 
 
-/** The cover's big title: the inspection's property type, as the app names it ("Apartment", "Residential House"); "Commercial" for Commercial Properties. */
+/** The cover's big title: the inspection's property type, as the app names it ("Apartment", "Residential House"); "Commercial Property" for Commercial Properties. */
 export function prePurchaseCoverTitle(inspection: Pick<Inspection, "type" | "propertyType">): string {
   const p = reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "");
-  if (p.propertyType === "commercial_properties") return "Commercial";
+  if (p.propertyType === "commercial_properties") return "Commercial Property";
   return propertyTitle(p.propertyType) || inspection.propertyType;
 }
 
