@@ -795,10 +795,13 @@ export function internalElementOf(text: string): string {
     [/roof frame|rafter|truss|purlin/, "Roof Frame"],
     [/party wall/, "Party Walls"],
     [/ceiling|cornice/, "Ceilings"],
-    [/cabinet|cupboard|robe|drawer|bench|vanity|pantry|joinery/, "Cabinets"],
+    // A rangehood is printed with the cabinets (the office's decision: the template has no element of its own for it).
+    [/cabinet|cupboard|robe|drawer|bench|vanity|pantry|joinery|range ?hood/, "Cabinets"],
     [/window|glazing|glass|flyscreen|fly screen|flywire|servery/, "Windows"],
     [/door|latch/, "Doors"],
     [/stair|tread|riser|nosing|balustrade|handrail/, "Stairs"],
+    // A waste, drain, grate or trap is plumbing, even in a floor ("Floor waste grate").
+    [/waste|drain|grate|\btrap\b/, "Plumbing"],
     [/floor|tile|tiling|slab|carpet|vinyl|laminate|skirting|joint/, "Floors"],
     [/wall|plaster|render/, "Walls"],
     [/tap|toilet|shower|basin|sink|plumb|pipe|drain|waste|cistern|hot water|water heater/, "Plumbing"],

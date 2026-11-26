@@ -255,7 +255,7 @@ describe("PPI Commercial: INTERNAL -- by element, the areas' defects under them"
   const internalAreas = {
     rooms: {
       warehouse: area({ general_damages: [{ location: "aisle 2", element: "Concrete floor slab", damageType: "cracking", sub_cracking: "fine", notes: "Shrinkage crack" }], notes: "Racking to the north wall" }),
-      mezzanine: area({ hasDamage: "yes", damages: [{ location: "", element: "Rangehood", damageType: "operational_defects", sub_operational: "other_movable_elements", notes: "Fan does not start" }] }),
+      mezzanine: area({ hasDamage: "yes", damages: [{ location: "", element: "Signage bracket", damageType: "operational_defects", sub_operational: "other_movable_elements", notes: "Bracket loose" }] }),
       loading_dock: { available: "no" },
     },
     partywalls_applicability: "applicable", partywalls_location: "north", partywalls_extendsToRoof: "yes", partywalls_fireBarrier: "no",
@@ -302,7 +302,7 @@ describe("PPI Commercial: INTERNAL -- by element, the areas' defects under them"
   });
   it("a defect whose element names no template element, and an area's own notes, print at the end of INTERNAL with no heading", () => {
     const end = text.slice(text.lastIndexOf("As the Houspect Building Inspector is not a licensed electrician"));
-    has(end, "At the Mezzanine, there are operational defects (other movable elements) to the Rangehood.");
+    has(end, "At the Mezzanine, there are operational defects (other movable elements) to the Signage bracket.");
     has(end, "At the Warehouse, racking to the north wall.");
     hasNot(text, /~unplaced/);
   });
@@ -399,5 +399,30 @@ describe("PPI Commercial: an inspection started on the earlier form", () => {
     has(mainPart(html, "Internal"), "At the Kitchen (Staff kitchenette), there are operational defects (doors tight/not closing) to the Sink cupboard door.");
     has(mainPart(html, "External"), "The spa on the property is constructed of fibreglass and situated above ground. There are no signs of subsidence around the spa. The spa appears inadequately fenced.");
     hasNot(html, /Warehouse &amp; Production Areas \d/);
+  });
+});
+
+describe("PPI Commercial: where an area's defect goes, by its element (the office's decisions)", () => {
+  const defect = (element) => ({ available: "yes", generalCondition: "fair", hasDamage: "yes", damages: [{ location: "", element, damageType: "operational_defects", sub_operational: "other_movable_elements", notes: "Recorded" }] });
+  // Offices & Staff Facilities areas (the pool_spa slot), printed under INTERNAL's elements.
+  const internal = (rooms) => mainPart(report({ pool_spa: { rooms } }).html, "Internal");
+  const under = (text, heading) => {
+    const at = text.indexOf(`\n${heading}\n`);
+    assert.ok(at >= 0, `no ${heading} heading`);
+    const next = W.COMMERCIAL_INTERNAL_PARTS.slice(W.COMMERCIAL_INTERNAL_PARTS.indexOf(heading) + 1).map((h) => text.indexOf(`\n${h}\n`, at + 1)).filter((x) => x > at);
+    return text.slice(at, next.length ? Math.min(...next) : undefined);
+  };
+  it("a rangehood under Cabinets, as 'At the <area>'", () => {
+    const t = internal({ staff_room_kitchen: defect("Rangehood") });
+    assert.equal(W.internalElementOf("Rangehood"), "Cabinets");
+    assert.equal(W.internalElementOf("range hood fan"), "Cabinets");
+    has(under(t, "Cabinets"), "At the Staff Room/Kitchen, there are operational defects (other movable elements) to the Rangehood.");
+  });
+  it("a waste, drain, grate or trap under Plumbing, even in a floor", () => {
+    for (const e of ["Floor waste grate", "Shower drain", "Sink trap", "Waste pipe"]) assert.equal(W.internalElementOf(e), "Plumbing", e);
+    assert.equal(W.internalElementOf("Shower floor tiles"), "Floors");
+    const t = internal({ toilets_amenities: defect("Floor waste grate") });
+    has(under(t, "Plumbing"), "At the Toilets/Amenities, there are operational defects (other movable elements) to the Floor waste grate.");
+    hasNot(t.slice(t.indexOf("\nFloors\n") >= 0 ? t.indexOf("\nFloors\n") : t.length, t.indexOf("\nPlumbing\n")), /Floor waste grate/);
   });
 });
