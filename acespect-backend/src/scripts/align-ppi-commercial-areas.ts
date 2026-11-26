@@ -217,7 +217,8 @@ async function main() {
   }
 }
 
-if (require.main === module) {
+// Run from the command line only (the report's tests load this file as a module to apply it to the snapshot's templates).
+if (typeof require !== 'undefined' && require.main === module) {
   main().catch((e) => {
     console.error(e);
     process.exit(1);
