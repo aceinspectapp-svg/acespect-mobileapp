@@ -48,9 +48,9 @@ function report(answers = ANSWERS) {
 const headings = (html) => [...html.matchAll(/<h([23])[^>]*>(.*?)<\/h\1>/g)].map((m) => m[2].replace(/<[^>]+>/g, ""));
 
 describe("PPI Apartment: the template's section order", () => {
-  it("Scope, Defects, Condition Definitions, Condition Summary, Site Access, General Description, Photographs, Roof, External, Internal, Structural & Safety, Common Areas, Terms", () => {
+  it("Scope, Defects, Condition Definitions, Condition Summary, Site Access, General Description, Photographs, Roof, External, Internal, Structural & Safety, Common Areas, Glossary, Maintenance, Terms", () => {
     const h = headings(report().html);
-    assert.deepEqual(h, ["SCOPE", "Condition Definitions", "Condition Summary", "Site Access Conditions", "General Description", "Photographs", "Roof", "External", "Internal", "Structural &amp; Safety", "Common Areas", "CONDITIONS FOR THE PROVISION OF THE REPORT"]);
+    assert.deepEqual(h, ["SCOPE", "Condition Definitions", "Condition Summary", "Site Access Conditions", "General Description", "Photographs", "Roof", "External", "Internal", "Structural &amp; Safety", "Common Areas", "GLOSSARY", "MAINTENANCE", "Terms and Conditions – Pre-Purchase Building Inspection"]);
     const { text } = report();
     const at = (s) => { const i = text.indexOf(s); assert.ok(i >= 0, s); return i; };
     assert.ok(at("PURPOSE OF INSPECTION") < at("SCOPE OF INSPECTION") && at("SCOPE OF INSPECTION") < at("DEFECTS\n") && at("DEFECTS\n") < at("Condition Definitions"));
@@ -121,4 +121,17 @@ describe("Download file name", () => {
     assert.equal(reportFileName(insp, true, "pdf"), "Yasiru-Test-8-PPI-AP-construction-report.pdf");
     assert.equal(reportFileName(insp, false, "docx"), "Yasiru-Test-8-PPI-AP-dilapidation-report.docx");
   });
+});
+
+describe("PPI Apartment: the report ends with the template's Glossary, Maintenance and Terms (termsText.ts)", () => {
+  const { text } = report();
+  it("GLOSSARY, MAINTENANCE, then 'Terms and Conditions – Pre-Purchase Building Inspection', last", () => {
+    const at = (s) => { const i = text.indexOf(s); assert.ok(i >= 0, s); return i; };
+    assert.ok(at("\nCommon Areas\n") < at("\nGLOSSARY\n") && at("\nGLOSSARY\n") < at("\nMAINTENANCE\n") && at("\nMAINTENANCE\n") < at("\nTerms and Conditions – Pre-Purchase Building Inspection\n"));
+  });
+  it("the Terms read 'WHEREAS:' (the template's 'HEREAS:' corrected)", () => {
+    assert.match(text, /WHEREAS: The Client has requested the Inspector/);
+    assert.ok(!/(^|[^W])HEREAS:/m.test(text));
+  });
+  it("no 'CONDITIONS FOR THE PROVISION OF THE REPORT'", () => assert.ok(!/CONDITIONS FOR THE PROVISION OF THE REPORT/i.test(text)));
 });

@@ -109,7 +109,7 @@ describe("Pre-Purchase: every main title starts a new page", () => {
   const html = report();
   const titles = [...html.matchAll(/<div ([^>]*)data-ppi-title="([^"]+)"/g)].map((m) => [m[2], /class="([^"]*)"/.exec(m[1])?.[1] ?? ""]);
   it("in the template's order", () =>
-    assert.deepEqual(titles.map((t) => t[0]), ["SCOPE", "DEFECTS", "Condition Definitions", "Condition Summary", "Site Access Conditions", "General Description", "Photographs", "Roof", "External", "Internal", "Structural &amp; Safety", "Common Areas", "Terms and Conditions"]));
+    assert.deepEqual(titles.map((t) => t[0]), ["SCOPE", "DEFECTS", "Condition Definitions", "Condition Summary", "Site Access Conditions", "General Description", "Photographs", "Roof", "External", "Internal", "Structural &amp; Safety", "Common Areas", "Glossary", "Maintenance", "Terms and Conditions"]));
   it("each on a new page (the PDF and the Word file both break there)", () => {
     for (const [t, cls] of titles) assert.ok(cls.split(" ").includes("report-page-break"), t);
   });
