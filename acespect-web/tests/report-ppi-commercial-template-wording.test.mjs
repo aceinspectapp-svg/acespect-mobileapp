@@ -426,3 +426,57 @@ describe("PPI Commercial: where an area's defect goes, by its element (the offic
     hasNot(t.slice(t.indexOf("\nFloors\n") >= 0 ? t.indexOf("\nFloors\n") : t.length, t.indexOf("\nPlumbing\n")), /Floor waste grate/);
   });
 });
+
+describe("PPI Commercial: report polish (from the Test-9 PDF)", () => {
+  const part = (html, main, heading) => {
+    const t = mainPart(html, main);
+    const at = t.indexOf(`\n${heading}\n`);
+    assert.ok(at >= 0, `no ${heading} under ${main}`);
+    const list = main === "External" ? W.COMMERCIAL_EXTERNAL_PARTS : W.COMMERCIAL_INTERNAL_PARTS;
+    const next = list.slice(list.indexOf(heading) + 1).map((h) => t.indexOf(`\n${h}\n`, at + 1)).filter((x) => x > at);
+    return t.slice(at, next.length ? Math.min(...next) : undefined);
+  };
+  it("1. an elevation's defect goes under Walls (or Cladding), unless it is a window or a door", () => {
+    for (const e of ["Precast concrete panel base", "Precast panel joint", "Painted panel faces", "Panel base"]) assert.equal(W.externalElementOf(e), "Walls", e);
+    assert.equal(W.externalElementOf("Metal cladding sheet"), "Cladding");
+    for (const e of ["Broken glass pane", "Window frame", "Glazing seal"]) assert.equal(W.externalElementOf(e), "Windows/Window Frames", e);
+    const d = (element) => ({ location: "", element, damageType: "moisture_evidence", sub_moisture: "efflorescence", notes: "Recorded" });
+    const sides = { rear: { available: "yes", windowDoorObs: ["seal_failure"], hasDamage: "yes", damages: [d("Precast panel joint"), d("Window seal")] } };
+    const { html } = report({ elevations: { sides, extwalls_material: "Precast concrete panels", extwalls_condition: "fair" } });
+    has(part(html, "External", "Walls"), "At the rear elevation, there is moisture-related evidence (efflorescence) to the Precast panel joint.");
+    const windows = part(html, "External", "Windows/Window Frames");
+    has(windows, "Seal failure noted to the windows and doors at the rear elevation.");
+    has(windows, "to the Window seal.");
+    assert.ok(!windows.includes("Precast panel joint"));
+  });
+  it("2. smoke alarms: the counts, singular or plural; 'the locations are appropriate' only when they are", () => {
+    const alarms = (x) => part(report({ internal_areas: { electrical_powerOn: "yes", electrical_rcdCount: "item1", ...x } }).html, "Internal", "Electrical");
+    has(alarms({ electrical_batteryAlarms: "yes", electrical_batteryAlarmsCount: "item0", electrical_hardwiredAlarms: "yes", electrical_hardwiredCount: "item2", electrical_alarmsLocated: "yes" }), "1 battery smoke alarm and 3 hardwired smoke alarms are installed and the locations are appropriate.");
+    const no = alarms({ electrical_batteryAlarms: "yes", electrical_batteryAlarmsCount: "item0", electrical_hardwiredAlarms: "no", electrical_alarmsLocated: "no" });
+    has(no, "1 battery smoke alarm is installed.");
+    assert.ok(!/locations are appropriate/.test(no));
+    has(alarms({ electrical_hardwiredAlarms: "yes", electrical_hardwiredCount: "item1" }), "2 hardwired smoke alarms are installed.");
+  });
+  it("3. area names as their labels: 'At the Other Area', 'Staining noted at the Other Area.'", () => {
+    const { html } = report({ internal_areas: { rooms: { other: { available: "yes", generalCondition: "fair", hasDamage: "yes", notes: "Racking", moistureObservations: ["staining"], damages: [{ location: "", element: "Signage bracket", damageType: "operational_defects", sub_operational: "other_movable_elements", notes: "Loose" }] } } } });
+    const t = mainPart(html, "Internal");
+    has(t, "At the Other Area, racking.");
+    has(t, "Staining noted at the Other Area.");
+    has(t, "At the Other Area, there are operational defects (other movable elements) to the Signage bracket.");
+    assert.ok(!/the other area/.test(t));
+  });
+  it("4. an area or a side marked not present: its notes and photos print with its name -- no lone photos at the end of INTERNAL", () => {
+    const rooms = { bedroom: { available: "no", notes: "There are no bedrooms in this commercial building.", photos: ["/api/v1/media/bedroom-photo"] }, warehouse: { available: "yes", generalCondition: "fair", hasDamage: "no" } };
+    const sides = { left: { available: "no", notes: "Not accessible", photos: ["/api/v1/media/left-photo"] } };
+    const { html } = report({ internal_areas: { rooms, ceilings_condition: "fair" }, elevations: { sides, extwalls_material: "Brick", extwalls_condition: "fair" } });
+    const internal = mainPart(html, "Internal");
+    const at = internal.indexOf("At the Bedroom, there are no bedrooms in this commercial building.");
+    assert.ok(at > 0, internal);
+    assert.match(internal.slice(at), /^At the Bedroom, there are no bedrooms in this commercial building\.\nPlease refer to Photograph \d+\./);
+    const lines = internal.trim().split("\n");
+    assert.ok(!/^Please refer to Photograph/.test(lines[lines.length - 3] ?? "") || /At the/.test(lines[lines.length - 4] ?? ""), "the last photos follow their area's line");
+    has(part(html, "External", "Walls"), "At the left elevation, not accessible.");
+    const srcs = [...html.matchAll(/<img src="([^"]+)"/g)].map((x) => x[1]);
+    for (const p of ["bedroom-photo", "left-photo"]) assert.equal(srcs.filter((x) => x.endsWith(p)).length, 1, p);
+  });
+});

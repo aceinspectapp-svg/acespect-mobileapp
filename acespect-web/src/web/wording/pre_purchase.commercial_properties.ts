@@ -439,7 +439,8 @@ function roofSpace(ctx: Ctx): string {
 export function externalElementOf(text: string): string {
   const t = text.toLowerCase();
   if (/front door/.test(t)) return "Front Door / Door Frames";
-  if (/window|glazing|glass|pane/.test(t)) return "Windows/Window Frames";
+  // "pane" as a word: a precast "panel" is the walls, not a window.
+  if (/window|glazing|glass|\bpanes?\b/.test(t)) return "Windows/Window Frames";
   if (/door/.test(t)) return "Other External Doors";
   if (/lintel/.test(t)) return "Lintels";
   if (/clad/.test(t)) return "Cladding";
@@ -457,8 +458,13 @@ function elevations(ctx: Ctx): string {
     const itemFields = sidesField.itemFields ?? [];
     for (const item of resolveInstances(sidesField, a.sides)) {
       const s = item.scope;
-      if (isNotPresent(s)) continue;
       const side = `${item.label.toLowerCase()} elevation`;
+      // A side not available for inspection says nothing more -- but its own notes and photos, kept from before, still print.
+      if (isNotPresent(s)) {
+        const notes = typedText(s, "notes");
+        add("Walls", notes ? `At the ${side}, ${afterComma(notes)}` : "", ...photoList(asStringArray(s.photos)));
+        continue;
+      }
       const cladding = observationWords(itemFields, s, "claddingObs");
       if (cladding) add("Cladding", `${capitalize(cladding)} noted to the ${side}.`);
       const windows = observationWords(itemFields, s, "windowDoorObs");
@@ -842,22 +848,29 @@ function areaFindings(ctx: Ctx, groupKey: string): { byElement: Map<string, stri
   const itemFields = group.itemFields ?? [];
   for (const item of resolveInstances(group, ctx.a[groupKey])) {
     const s = item.scope;
-    if (isNotPresent(s) || !Object.entries(s).some(([k, v]) => k !== INSTANCE_KEY && (Array.isArray(v) ? v.length > 0 : typeof v === "string" && v !== ""))) continue;
+    if (!Object.entries(s).some(([k, v]) => k !== INSTANCE_KEY && (Array.isArray(v) ? v.length > 0 : typeof v === "string" && v !== ""))) continue;
+    // The area's name as its label has it ("At the Other Area", "At the Warehouse").
     const name = areaName(item, group);
-    const isOther = /^other\b/i.test(name);
+    // An area marked not present says nothing more -- but its own notes and photos still print, with its name.
+    if (isNotPresent(s)) {
+      const notes = typedText(s, "notes");
+      if (notes) unplaced.push(`At the ${name}, ${afterComma(notes)}`);
+      unplaced.push(...photoList(asStringArray(s.photos)));
+      continue;
+    }
     for (const listKey of ["general_damages", "damages"]) {
       const listField = fieldOf(itemFields, listKey);
       const list = listField && isGateSatisfied(listField, s) && Array.isArray(s[listKey]) ? (s[listKey] as AnswerTree[]) : [];
       list.forEach((d, j) => {
         const loc = asString(d.location).trim();
-        const where = isOther ? loc || "other area" : `${name}${loc ? ` (${loc})` : ""}`;
+        const where = `${name}${loc ? ` (${loc})` : ""}`;
         const text = defects(ctx, itemFields, s, listKey, { area: item.key ?? item.label, only: j, where });
         const el = internalElementOf(asString(d.element));
         if (el) byElement.set(el, [...(byElement.get(el) ?? []), ...text]);
         else unplaced.push(...text);
       });
     }
-    const at = isOther ? "other area" : name;
+    const at = name;
     const notes = typedText(s, "notes");
     if (notes) unplaced.push(`At the ${at}, ${afterComma(notes)}`);
     // The template's words for "None observed" (Pre-Purchase / Apartment), and findings listed ("Staining noted at the Warehouse.").
@@ -1034,9 +1047,12 @@ function internal(ctx: Ctx): string {
   const battery = asString(a.electrical_batteryAlarms) === "yes" ? pick(a, "electrical_batteryAlarmsCount", { item0: "1", item1: "2", item2: "3" }) : "";
   const hardwired = asString(a.electrical_hardwiredAlarms) === "yes" ? pick(a, "electrical_hardwiredCount", { item0: "1", item1: "2", item2: "3" }) : "";
   const located = asString(a.electrical_alarmsLocated) === "yes";
-  const alarms = !located ? "" : battery && hardwired ? `${battery} battery smoke alarms and ${hardwired} hardwired smoke alarms are installed and the locations are appropriate.`
-    : battery ? `${battery} battery smoke alarms are installed and the locations are appropriate.`
-    : hardwired ? `${hardwired} hardwired smoke alarms are installed and the locations are appropriate.` : "";
+  // "[n] battery smoke alarms and [n] hardwired smoke alarms are installed and the locations are appropriate." -- the counts with their
+  // own singular or plural, and "and the locations are appropriate" only when the inspector answered that they are.
+  const alarmCount = (n: string, kind: string) => (n ? `${n} ${kind} smoke alarm${n === "1" ? "" : "s"}` : "");
+  const installed = [alarmCount(battery, "battery"), alarmCount(hardwired, "hardwired")].filter(Boolean);
+  const several = installed.length > 1 || Number(battery) > 1 || Number(hardwired) > 1;
+  const alarms = installed.length ? `${installed.join(" and ")} ${several ? "are" : "is"} installed${located ? " and the locations are appropriate" : ""}.` : "";
   const electrical = element({
     title: "Electrical",
     sentences: powerOff ? ["Electricity was switched off at the time of inspection."] : [rcd ? `The circuit board has ${rcd} RCD (residual current device) safety ${rcd === "1" ? "switch" : "switches"}.` : ""],
