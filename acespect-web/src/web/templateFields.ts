@@ -338,7 +338,7 @@ export function withPeriod(s: string): string {
   return /[.!?]$/.test(s) ? s : `${s}.`;
 }
 
-const INSTANCE_KEY = "__instanceKey";
+export const INSTANCE_KEY = "__instanceKey";
 
 export function resolveInstances(
   field: TemplateField,
@@ -568,8 +568,10 @@ export function flattenSectionToDraft(
   // The report type is resolved first; the sentences come from that report type's own wording, never from the section name alone.
   const wording = wordingFor(profile);
   const draft = walk(templateFields, answers, [], sectionKey, wording);
+  // A report type that writes the whole section itself (Pre-Purchase / Commercial) replaces only the text.
+  const own = sectionKey && wording.sectionText ? wording.sectionText(sectionKey, answers, templateFields, draft.damages) : undefined;
   // The wording marks the capitals of typed names and places so `lower` keeps them (wording/shared.ts); the finished text has no marks.
-  const reportText = stripKeepMarks(draft.reportText);
+  const reportText = stripKeepMarks(own ?? draft.reportText);
   return { ...draft, reportText: wording.finish ? wording.finish(sectionKey ?? "", reportText) : reportText, fields: scrubMarks(draft.fields) as Record<string, unknown> };
 }
 

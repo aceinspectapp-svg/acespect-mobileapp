@@ -4,6 +4,7 @@
 // PHOTOGRAPHS, ROOF, EXTERNAL, INTERNAL, STRUCTURAL DEFECTS, MAJOR DEFECTS, SAFETY HAZARDS, NOTES, GLOSSARY, MAINTENANCE, Terms and
 // Conditions), every main title on a new page and none empty; no option code anywhere in the printed report; the Pool/Spa paragraph only
 // with a pool; and the "-pre-purchase-report" file name. Pre-Purchase / House is not touched (report-other-stages-unchanged.test.mjs).
+// Each section's template sentences: report-ppi-commercial-template-wording.test.mjs.
 //
 // Run with: npm test
 import { after, describe, it } from "node:test";
@@ -137,19 +138,19 @@ describe("PPI Commercial: the template's order, every main title on a new page, 
       assert.ok(inner.length > m[1].length + 5, `"${m[1]}" has content`);
     }
   });
-  it("Warehouse & Production under INTERNAL with its name; the other sections under EXTERNAL / ROOF", () => {
+  it("each main title holds the template's element headings: the roof's under ROOF, the building's under EXTERNAL, the rooms' elements under INTERNAL", () => {
     const { html } = report(0);
     const part = (title) => html.slice(html.indexOf(`data-ppi-title="${title}"`), html.indexOf('data-ppi-title="', html.indexOf(`data-ppi-title="${title}"`) + 10));
-    assert.match(part("Internal"), /data-ppi-section="Warehouse &amp; Production"/);
-    for (const name of ["Elevations", "Garage &amp; Other Structures", "Driveway", "Paving / Car Park", "Fences", "Retaining Walls"]) assert.ok(part("External").includes(`data-ppi-section="${name}"`), name);
-    assert.match(part("Roof"), /Roof/);
+    for (const name of ["Roof Covering", "Eaves", "Downpipes"]) assert.ok(part("Roof").includes(`data-ppi-section="${name}"`), name);
+    for (const name of ["Walls", "Lintels", "Carport/Garage", "Driveway", "External Paving", "Fences", "Retaining Walls"]) assert.ok(part("External").includes(`data-ppi-section="${name}"`), name);
+    for (const name of ["Roof Covering (underside)", "Ceilings", "Floors", "Electrical"]) assert.ok(part("Internal").includes(`data-ppi-section="${name}"`), name);
   });
   it("the Notes print under STRUCTURAL DEFECTS, MAJOR DEFECTS, SAFETY HAZARDS and NOTES by their questions", () => {
     const { text } = report(0);
     const between = (a, b) => text.slice(text.indexOf(`\n${a}\n`), text.indexOf(`\n${b}\n`));
-    assert.match(between("Structural Defects", "Major Defects"), /structurally sound/);
-    assert.match(between("Major Defects", "Safety Hazards"), /free of major defects/);
-    assert.match(between("Safety Hazards", "Notes"), /safety matters/i);
+    assert.match(between("Structural Defects", "Major Defects"), /There are (no )?structural defects evident at the time of inspection\./);
+    assert.match(between("Major Defects", "Safety Hazards"), /There are (no )?major defects evident at the time of inspection\./);
+    assert.match(between("Safety Hazards", "Notes"), /It is recommended that a smoke detector is located within 1\.5 metres outside each bedroom\/sleeping area\./);
     assert.match(text.slice(text.lastIndexOf("\nNotes\n"), text.indexOf("\nGLOSSARY\n")), /No access was granted|observed/);
   });
   it("GLOSSARY, MAINTENANCE and the template's Terms and Conditions close the report", () => {
@@ -185,7 +186,7 @@ describe("PPI Commercial: no option codes anywhere, no '..', lists of sentences 
   it("moisture: 'None observed' in the template's words", () => {
     const rooms = Object.fromEntries((latest.get("internal_areas").fields[0].repeat.fixedInstances).map((fi) => [fi.key, { available: "yes", floorLevel: "ground", obstruction: ["furniture"], generalCondition: "fair", hasDamage: "no", moistureObservations: ["other", "__other__:None observed"] }]));
     const { text } = report(0, { patch: { internal_areas: { rooms } } });
-    assert.ok(text.includes(NO_MOISTURE));
+    assert.ok(text.toLowerCase().includes(NO_MOISTURE.toLowerCase()));
     assert.ok(!/None observed noted/.test(text));
   });
 });
@@ -244,10 +245,10 @@ describe("PPI Commercial: 'noted' is said once", () => {
     assert.ok(text.includes(typed), "the typed answer is printed");
     assert.doesNotMatch(text, /\bnoted\s+noted\b/i);
   });
-  it("Yasiru-Test-9's windows/doors: 'No defects noted to windows/doors.'", () => {
+  it("Yasiru-Test-9's windows/doors: 'No defects noted to the windows and doors at the right elevation.'", () => {
     const sides = { right: { available: "yes", orientation: "north", condition: "fair", generalDamage: "multiple", windowDoorObs: ["other", `__other__:${typed}`], hasDamage: "no" } };
     const { text } = report(0, { patch: { elevations: { sides } } });
-    assert.match(text, /No defects noted to windows\/doors\./);
+    assert.match(text, /No defects noted to the windows and doors at the right elevation\./);
     assert.doesNotMatch(text, /noted noted/i);
   });
 });

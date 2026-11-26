@@ -78,6 +78,13 @@ export interface ReportWording {
    * (Pre-Purchase / Apartment: a list of sentences prints as one bullet per sentence). Undefined, or returning undefined: the standard line.
    */
   listLine?(sectionKey: string, field: TemplateField, labels: string[]): string | undefined;
+  /**
+   * A section's whole report text, for a report type that writes each section from its template element by element (Pre-Purchase /
+   * Commercial) instead of item by item. Given the section's answers, its fields and the defect records the walk made from them (in
+   * their order, so a sentence can name its defect's photos as DEFECT::<n>::). Undefined, or returning undefined: the walk's own text.
+   * Everything else the walk works out (the defects, the Condition Summary rows, the fields) is kept.
+   */
+  sectionText?(sectionKey: string, answers: AnswerTree, templateFields: TemplateField[], damages: { notes: string; photos: string[] }[]): string | undefined;
   /** A last pass over a section's finished report text, for a report type that tidies it (Pre-Purchase / Apartment). Undefined: as written. */
   finish?(sectionKey: string, reportText: string): string;
 }
