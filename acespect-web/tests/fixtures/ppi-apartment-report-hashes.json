@@ -1,17 +1,31 @@
 {
- "note": "sha256 of the whole Pre-Purchase / Apartment report body as main d19f81a printed it (tests/fixtures/render-ppi-apartment.mjs). Made for fix/ppi-commercial-layout.",
+ "note": "sha256 of the Pre-Purchase / Apartment report body (tests/fixtures/render-ppi-apartment.mjs). before: everything before the closing Glossary / Maintenance / Terms, as main fa7e735 printed it (before its CONDITIONS FOR THE PROVISION OF THE REPORT). hashes: the whole body with the template ending, made for fix/ppi-apartment-terms.",
+ "before": {
+  "v0|builder": "8e1e482b030c52c74258459874f96d91b9b8c03dda018cb5d69572180d42b253",
+  "v0|architect": "a9ebc2971181e44deec46e0fddee72ff7f90fcff9849a666e7ecadbff753b46c",
+  "v0|not-occupied": "2f9093cb0e6e3c9f8565bbaa3d621ccd185115ec5c6492659f2090a4706187ee",
+  "v0|no-registration": "6e477815e3c30eb6d7cc7afa1f4cd8ec2e9928a6fee958de2ae4bcde8fcb7f05",
+  "v1|builder": "b33b55cbf5afd5cff32e6bd83bb3ca8c47f7f1ed5fa49b65122935053f1419bc",
+  "v1|architect": "e119b49e6bb0a50517187ecbafaaa464dce91dac15c8355992ca5f365dee5840",
+  "v1|not-occupied": "d5183b34102edf88f572fe530f31761095637766d52504fc3f49bace82b62b48",
+  "v1|no-registration": "6d515b13727c48d41f438050037602a358aa7af01d9e0141f592a952fa38838f",
+  "v2|builder": "90dc128777e5b0daa5110dd4aa9471672a22f382acfdd435a10e06e9b3630744",
+  "v2|architect": "3f1e51d4c60264c9f53f3f044774ef98b44a483777a2adc52ce5151764172048",
+  "v2|not-occupied": "bcfb4dbd3fcb6062a8d5df1d23aeed156e186b4f3c8f7085f6991fa456e925b6",
+  "v2|no-registration": "6876862f60af5195c897df86953de223137faeeba3b9b95480afbf42e75bc9eb"
+ },
  "hashes": {
-  "v0|builder": "bda0f179158eea9baf02f5ffd46aad1e38b7e781b11ebcda7e89679263abdd33",
-  "v0|architect": "c68fceaaff2388d9ae26a5a1641905997235c4b12e80c2f0f456d78aaae06114",
-  "v0|not-occupied": "18cdcd183301d9a2bc37a07b245646baf1979466b71ac6fc99abaca634706d8c",
-  "v0|no-registration": "6b79d1da373f648d5f066d26a2f38d182ac584951a71f6d8e1c1fb84c5e72bc7",
-  "v1|builder": "bbd213d3a0cb76ddac4af194918e93dd3b317f470f9a201cd2484d72ac7155fb",
-  "v1|architect": "479b23d9bb351161b50a53f2a0eba0e0c86ab5a89ac0bd0d9b7f2957eae95aec",
-  "v1|not-occupied": "044eda5cc9aef2cca5d2eb38b4752e967264244004c071625c1aeaa14ef5b9b4",
-  "v1|no-registration": "e882d99513d099c1b10df07078c2423517c1966531c3df306a981a6a8017f6b3",
-  "v2|builder": "a9e51bf636e8766961cf9821cab8a2567a5fa3fc20c51efedd085a492bd8d434",
-  "v2|architect": "4bf23b0db4abcc30f43d08569bcad4ef77d70fbc0d1be23015f91d6343186ad8",
-  "v2|not-occupied": "4bfdc89787981aa35921031e66e3d7d4d8ec5f8bbcb1f133536748783d47b0dc",
-  "v2|no-registration": "3b39acb5e1df50e8796c6829f6e87b168cc31833e316fd0ce4a4320c4ee4f992"
+  "v0|builder": "adcd899c9daa13defd79302726ab530406cfcca170982310ea24a03c50f6cea6",
+  "v0|architect": "4461918eb52f9d743b26b1781f2118cce8b0f4a87f86f37456f69e12900f864b",
+  "v0|not-occupied": "f6587a74a1e411daf621896fbc7f26f7d9be9c3c2a5224f5a395acb8c8b5876f",
+  "v0|no-registration": "e078d130d42470ccd328a89093af749912662d8671a978e89f5b5a8c263e1a22",
+  "v1|builder": "d241a0c0f54f2b4892a8a47d49c5bb8e1b1e14fcf8d032adeda4accbc5c07528",
+  "v1|architect": "b63d3d71d7e41e33b2194e33caece57779c96b41ca99b7e641f397d34844a101",
+  "v1|not-occupied": "74437a91b70f2f9f955491d31242c3a720391964ba0547dd70ece699664fc473",
+  "v1|no-registration": "c507bfda8a2c8a80cbca7cdc3e352b6f2f50eb0dc4af53309b9197fd031c3dec",
+  "v2|builder": "98f06e72ce1f88ff039991974c6377e26ee8cebcda12799d051b9cca37c2a010",
+  "v2|architect": "580ff8a7448e406a61f9dbfe968368fc8edeff252fcc1ea80970f7c83170aadd",
+  "v2|not-occupied": "0344f9fe6f2349331ebe8b0d9dd31b1afb5198d407a2f393ae8672a532039a37",
+  "v2|no-registration": "3865ed1dcd60191e0c3aba2187552b140c0f8a29125327b9302884a85cf6605b"
  }
 }
