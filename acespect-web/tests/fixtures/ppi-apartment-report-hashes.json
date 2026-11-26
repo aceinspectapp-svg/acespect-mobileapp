@@ -1,0 +1,17 @@
+{
+ "note": "sha256 of the whole Pre-Purchase / Apartment report body as main d19f81a printed it (tests/fixtures/render-ppi-apartment.mjs). Made for fix/ppi-commercial-layout.",
+ "hashes": {
+  "v0|builder": "bda0f179158eea9baf02f5ffd46aad1e38b7e781b11ebcda7e89679263abdd33",
+  "v0|architect": "c68fceaaff2388d9ae26a5a1641905997235c4b12e80c2f0f456d78aaae06114",
+  "v0|not-occupied": "18cdcd183301d9a2bc37a07b245646baf1979466b71ac6fc99abaca634706d8c",
+  "v0|no-registration": "6b79d1da373f648d5f066d26a2f38d182ac584951a71f6d8e1c1fb84c5e72bc7",
+  "v1|builder": "bbd213d3a0cb76ddac4af194918e93dd3b317f470f9a201cd2484d72ac7155fb",
+  "v1|architect": "479b23d9bb351161b50a53f2a0eba0e0c86ab5a89ac0bd0d9b7f2957eae95aec",
+  "v1|not-occupied": "044eda5cc9aef2cca5d2eb38b4752e967264244004c071625c1aeaa14ef5b9b4",
+  "v1|no-registration": "e882d99513d099c1b10df07078c2423517c1966531c3df306a981a6a8017f6b3",
+  "v2|builder": "a9e51bf636e8766961cf9821cab8a2567a5fa3fc20c51efedd085a492bd8d434",
+  "v2|architect": "4bf23b0db4abcc30f43d08569bcad4ef77d70fbc0d1be23015f91d6343186ad8",
+  "v2|not-occupied": "4bfdc89787981aa35921031e66e3d7d4d8ec5f8bbcb1f133536748783d47b0dc",
+  "v2|no-registration": "3b39acb5e1df50e8796c6829f6e87b168cc31833e316fd0ce4a4320c4ee4f992"
+ }
+}

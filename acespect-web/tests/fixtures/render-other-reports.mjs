@@ -1,6 +1,6 @@
-// Prints every report type except Pre-Purchase / Apartment from the same made-up answers, for
+// Prints every report type except Pre-Purchase / Apartment and Pre-Purchase / Commercial (laid out as their own templates, prepurchase/) from the same made-up answers, for
 // tests/report-other-stages-unchanged.test.mjs: each construction stage (house and apartment) as its whole report, and each other
-// report type (Dilapidation, Investigations, Pre-Purchase House / Commercial) as its cover and every section's text, defects and printed
+// report type (Dilapidation, Investigations, Pre-Purchase / House) as its cover and every section's text, defects and printed
 // section. Three sets of answers walk through every option, with text and numbers present and empty.
 //
 // `webRoot` is the acespect-web folder to print with, so the same answers can be printed with main (to make the fixture) and with a branch.
@@ -91,11 +91,11 @@ async function printAll(webRoot, server) {
     }
   }
 
-  // Every other report type, except Pre-Purchase / Apartment: its cover, and each section's text, defects and printed section.
+  // Every other report type, except Pre-Purchase / Apartment and Commercial: its cover, and each section's text, defects and printed section.
   const TITLES = { dilapidation: "Dilapidation", investigations: "Investigations", pre_purchase: "Pre-Purchase" };
   const PROPS = { residential_house: "Residential House", apartment: "Apartment", commercial_properties: "Commercial Properties", public_assets: "Public Assets" };
   const profiles = [...new Set([...latest.keys()].map((k) => k.split("|").slice(0, 2).join("|")))]
-    .filter((p) => !p.startsWith("construction_stage|") && p !== "pre_purchase|apartment")
+    .filter((p) => !p.startsWith("construction_stage|") && p !== "pre_purchase|apartment" && p !== "pre_purchase|commercial_properties")
     .sort();
   for (const p of profiles) {
     const [inspectionType, propertyType] = p.split("|");

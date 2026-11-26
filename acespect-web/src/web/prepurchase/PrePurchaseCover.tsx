@@ -36,10 +36,34 @@ export const PPI_GENERAL =
   "This report is the result of a visual inspection only and is intended to be read as a whole. Please read the detailed inspection information and the scope section. Whilst all defects have been investigated to confirm cause and significance, some minor defects have not been detailed as they were considered a normal occurrence or general wear and tear for a building of this age.";
 
 
-/** The cover's big title: the inspection's property type, as the app names it ("Apartment", "Residential House", "Commercial Properties"). */
+/** The cover's big title: the inspection's property type, as the app names it ("Apartment", "Residential House"); "Commercial" for Commercial Properties. */
 export function prePurchaseCoverTitle(inspection: Pick<Inspection, "type" | "propertyType">): string {
   const p = reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "");
+  if (p.propertyType === "commercial_properties") return "Commercial";
   return propertyTitle(p.propertyType) || inspection.propertyType;
+}
+
+/** The Summary's fixed sentences, as the House and Commercial template has them. */
+export const PPI_SUMMARY_FIXED =
+  "With any dwelling of a similar vintage, due to its age and general wear and tear, the property will require a degree of maintenance. " +
+  "With a decision to include a program of general maintenance and the repairs mentioned in this report, the property is considered " +
+  "satisfactory for future use. Properties built prior to 1983 may contain asbestos.";
+
+/**
+ * The House and Commercial template's "Summary". "In consideration of its age, it is / is not structurally sound and free of major
+ * defects." -- "is" when Notes answers both "The property is considered structurally sound" and "is the property free of major defects"
+ * Yes, "is not" when either is No; left out while either is unanswered. The template's fixed sentences follow it always. Its
+ * "constructed around the ..." has no field, so it is left out. (Commercial only: the Apartment template's cover is printed as before.)
+ */
+export function prePurchaseSummary(inspection: Pick<Inspection, "sections">): string {
+  const notes = inspection.sections.find((s) => (s.key ?? s.id) === "notes");
+  const a = (notes?.answers as Record<string, unknown> | null | undefined) ?? {};
+  const sound = a.structural_structurallySound, free = a.majordefects_freeOfMajorDefects;
+  const known = (v: unknown) => v === "yes" || v === "no";
+  const decided = known(sound) && known(free)
+    ? `In consideration of its age, it ${sound === "yes" && free === "yes" ? "is" : "is not"} structurally sound and free of major defects. `
+    : "";
+  return decided + PPI_SUMMARY_FIXED;
 }
 
 /** Where page 1 ends: the details from row `row` on (that row from word `words` on) carry on at the top of page 2. */
@@ -122,6 +146,10 @@ export function PrePurchaseCover({ r, inspection, compact = false }: { r: Report
     ["Report Purpose", prePurchasePurpose(r.inspectorRegistration, r.inspector)],
     ["General", PPI_GENERAL],
   ];
+  if (reportProfileOf(inspection.type ?? "", inspection.propertyType ?? "").propertyType === "commercial_properties") {
+    const summary = prePurchaseSummary(inspection);
+    if (summary) rows.push(["Summary", summary]);
+  }
   const props: Omit<CoverPageProps, "rows"> = {
     compact,
     reportDate: r.reportDate,

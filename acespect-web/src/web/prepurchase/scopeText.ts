@@ -10,7 +10,11 @@ export type ScopeBlock =
   | { kind: "item"; n: string; text: string }
   | { kind: "subheading"; text: string }
   | { kind: "bullet"; text: string }
-  | { kind: "para"; text: string };
+  | { kind: "para"; text: string }
+  /** A glossary entry: "AG LINE - A perforated pipe ..." (the term in bold). */
+  | { kind: "term"; term: string; text: string }
+  /** A defined term of the Terms and Conditions: "“ACL” means ..." (the term in bold). */
+  | { kind: "definition"; term: string; text: string };
 
 /** "SCOPE": 1 Purpose of inspection, 2 Scope of inspection. */
 export const PPI_SCOPE_TITLE = "SCOPE";
@@ -134,3 +138,10 @@ export const SITE_ACCESS = {
   subfloorSlab: "The subfloor space was not inspected due to slab on ground conditions.",
   roofCavityRaked: "The roof cavity was not accessed because the roof design is lined on rake with no roof cavity.",
 } as const;
+
+/**
+ * The House and Commercial template's Pool/Spa paragraph (under EXTERNAL, after the pool's own sentence), word for word. The Commercial
+ * report prints it only when a pool or spa was assessed.
+ */
+export const PPI_POOL_SPA_TEXT =
+  "The Houspect building inspector’s comments are general observations only, and any comments offered about the pool area are of a general nature and should not be relied upon. It is recommended you check that the pool/spa is registered with the local Council as required under Victorian legislation and that the pool safety fencing has a current certificate of barrier compliance (CBC). All pool and spa pool safety barriers must be certified every 4 years by a building surveyor or registered pool inspector (IN-PS) as licensed by the VBA. Pool safety is important and it is the owner’s responsibility. Houspect does not inspect pool pumps, filters, solar panels, pool cleaning equipment, play equipment, etc. It is recommended that all electrical circuits and equipment to the pool area be checked by a licensed electrician or pool specialist for function and performance.";

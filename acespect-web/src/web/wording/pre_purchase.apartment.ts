@@ -43,23 +43,27 @@ export function moistureSentence(raw: unknown, field: TemplateField | undefined)
   return nothing ? NO_MOISTURE : "";
 }
 
+/** A room composer with the moisture observations worded as above (also used by Pre-Purchase / Commercial). */
+export function withMoistureWording(room: Composer): Composer {
+  return (inst, itemFields, label) => {
+    if (asStringArray(inst.moistureObservations).length === 0) return room(inst, itemFields, label);
+    const sentence = moistureSentence(inst.moistureObservations, itemFields.find((f) => f.key === "moistureObservations"));
+    // The room composer writes "<observations> noted." at the end of the room's paragraph: given the mark, it writes "<mark> noted.".
+    const text = room({ ...inst, moistureObservations: [`__other__:${MOISTURE_MARK}`] }, itemFields, label);
+    return text
+      .replace(new RegExp(`[ ]*${MOISTURE_MARK} noted\\.`, "g"), sentence ? ` ${sentence}` : "")
+      .split("\n\n")
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .join("\n\n");
+  };
+}
+
 /** The rooms: the provisional sentences, with the moisture observations worded as above. */
-const internalAreas: Composer = (inst, itemFields, label) => {
-  const room = base.composers.internal_areas!;
-  if (asStringArray(inst.moistureObservations).length === 0) return room(inst, itemFields, label);
-  const sentence = moistureSentence(inst.moistureObservations, itemFields.find((f) => f.key === "moistureObservations"));
-  // The room composer writes "<observations> noted." at the end of the room's paragraph: given the mark, it writes "<mark> noted.".
-  const text = room({ ...inst, moistureObservations: [`__other__:${MOISTURE_MARK}`] }, itemFields, label);
-  return text
-    .replace(new RegExp(`[ ]*${MOISTURE_MARK} noted\\.`, "g"), sentence ? ` ${sentence}` : "")
-    .split("\n\n")
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .join("\n\n");
-};
+const internalAreas: Composer = withMoistureWording(base.composers.internal_areas!);
 
 /** "A., B." -> one bullet per sentence, when every chosen answer is a sentence of its own. */
-function listLine(_sectionKey: string, _field: TemplateField, labels: string[]): string | undefined {
+export function listLine(_sectionKey: string, _field: TemplateField, labels: string[]): string | undefined {
   if (labels.length === 0 || !labels.every((l) => /[.!?]$/.test(l.trim()))) return undefined;
   return labels.map((l) => `BULLET::${l.trim()}`).join("\n\n");
 }

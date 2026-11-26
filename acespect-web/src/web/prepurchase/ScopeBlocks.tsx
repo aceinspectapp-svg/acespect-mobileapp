@@ -43,6 +43,10 @@ function Block({ b }: { b: ScopeBlock }) {
       );
     case "para":
       return <p data-scope="para" style={{ ...para, margin: "0 0 8px" }}>{b.text}</p>;
+    case "term":
+      return <p data-scope="term" style={{ ...para, margin: "0 0 8px" }}><strong>{b.term}</strong> - {b.text}</p>;
+    case "definition":
+      return <p data-scope="definition" style={{ ...para, margin: "0 0 5px", paddingLeft: `${ITEM_INDENT}px` }}><strong>{b.term}</strong> {b.text}</p>;
   }
 }
 
