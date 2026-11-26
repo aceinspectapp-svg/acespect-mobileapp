@@ -54,7 +54,7 @@ describe("Pre-Purchase cover", () => {
   });
   it("the same rule for the other property types", () => {
     assert.equal(Cv.prePurchaseCoverTitle({ type: "Pre-Purchase", propertyType: "Residential House" }), "Residential House");
-    assert.equal(Cv.prePurchaseCoverTitle({ type: "pre_purchase", propertyType: "commercial_properties" }), "Commercial");
+    assert.equal(Cv.prePurchaseCoverTitle({ type: "pre_purchase", propertyType: "commercial_properties" }), "Commercial Property");
     assert.equal(Cv.prePurchaseCoverTitle({ type: "Pre-Purchase", propertyType: "Apartment" }), "Apartment");
   });
   it("prints the signature on the cover page", () => {

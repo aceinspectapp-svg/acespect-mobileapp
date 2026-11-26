@@ -1,5 +1,5 @@
 // Pre-Purchase / Commercial ("ACESPECT Building (Pre-Purchase)_House and Commercial Nov 2026"): laid out as the Pre-Purchase / Apartment
-// report is -- the shared cover ("PRE-PURCHASE REPORT", "Commercial", the template's purpose, General and the Summary (the sentence a field decides plus the template's fixed sentences)),
+// report is -- the shared cover ("PRE-PURCHASE REPORT", "Commercial Property", the template's purpose, General and the Summary (the sentence a field decides plus the template's fixed sentences)),
 // SCOPE, DEFECTS, Condition Definitions, the Condition Summary and Site Access Conditions, then the template's order (GENERAL DESCRIPTION,
 // PHOTOGRAPHS, ROOF, EXTERNAL, INTERNAL, STRUCTURAL DEFECTS, MAJOR DEFECTS, SAFETY HAZARDS, NOTES, GLOSSARY, MAINTENANCE, Terms and
 // Conditions), every main title on a new page and none empty; no option code anywhere in the printed report; the Pool/Spa paragraph only
@@ -93,8 +93,8 @@ const titles = (html) => [...html.matchAll(/data-ppi-title="([^"]+)"/g)].map((m)
 describe("PPI Commercial: the shared construction-style cover", () => {
   const { text } = report(0);
   const cover = text.slice(0, text.indexOf("SCOPE"));
-  it("small 'Pre-Purchase Report', big title 'Commercial', the template's rows", () => {
-    assert.match(cover, /Pre-Purchase Report\nCommercial\n/);
+  it("small 'Pre-Purchase Report', big title 'Commercial Property', the template's rows", () => {
+    assert.match(cover, /Pre-Purchase Report\nCommercial Property\n/);
     for (const row of ["Property", "Inspection Date", "Occupied", "Weather Conditions", "Inspector", "Report Purpose", "General"]) assert.ok(cover.includes(`\n${row}\n`), row);
     assert.match(cover, /The purpose of this report is to identify the action required to rectify major defects or structural faults in the building, insofar as a licensed builder can reasonably identify those defects or faults\./);
     assert.match(cover, /This report is the result of a visual inspection only and is intended to be read as a whole\./);
@@ -219,5 +219,35 @@ describe("PPI Commercial: the file name", () => {
     assert.equal(R.isPrePurchaseLayout({ type: "Pre-Purchase", propertyType: "Residential House" }), false);
     assert.equal(R.isPrePurchaseLayout({ type: "Pre-Purchase", propertyType: "Commercial Properties" }), true);
     assert.equal(R.isPrePurchaseLayout({ type: "Pre-Purchase", propertyType: "Apartment" }), true);
+  });
+});
+
+describe("PPI Commercial: 'noted' is said once", () => {
+  // Every multi-choice answered with its options plus a typed "Other: No defects noted", every typed box "No defects noted" -- the
+  // composers' "... noted to windows/doors." must not follow it with a second "noted".
+  const typed = "No defects noted";
+  function notedAnswers(fields, v, depth = 0) {
+    const a = answersFor(fields, v, depth);
+    for (const f of fields ?? []) {
+      if (f.type === "chip-multiselect" || f.type === "tile-multiselect") a[f.key] = [...(a[f.key] ?? []), "other", `__other__:${typed}`];
+      else if (f.type === "text" || f.type === "textarea") a[f.key] = typed;
+      else if (f.type === "repeating-group" && depth < 3) {
+        const r = f.repeat ?? { presentation: "strip" };
+        a[f.key] = r.presentation === "strip" ? [notedAnswers(f.itemFields, v, depth + 1)] : Object.fromEntries((r.fixedInstances ?? []).map((fi) => [fi.key, notedAnswers(f.itemFields, v, depth + 1)]));
+      }
+    }
+    return a;
+  }
+  for (const v of [0, 1, 2]) it(`no "noted noted" anywhere (answers set ${v + 1})`, () => {
+    const patch = Object.fromEntries(KEYS.filter((k) => k !== "job-info").map((k) => [k, notedAnswers(latest.get(k).fields, v)]));
+    const { text } = report(v, { patch });
+    assert.ok(text.includes(typed), "the typed answer is printed");
+    assert.doesNotMatch(text, /\bnoted\s+noted\b/i);
+  });
+  it("Yasiru-Test-9's windows/doors: 'No defects noted to windows/doors.'", () => {
+    const sides = { right: { available: "yes", orientation: "north", condition: "fair", generalDamage: "multiple", windowDoorObs: ["other", `__other__:${typed}`], hasDamage: "no" } };
+    const { text } = report(0, { patch: { elevations: { sides } } });
+    assert.match(text, /No defects noted to windows\/doors\./);
+    assert.doesNotMatch(text, /noted noted/i);
   });
 });
