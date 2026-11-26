@@ -4,9 +4,9 @@
  * (construction/ConstructionReport.tsx, components/CoverPage.tsx, components/reportKit.tsx). Only what belongs to this inspection type differs.
  *
  * Pre-Purchase / Commercial ("ACESPECT Building (Pre-Purchase)_House and Commercial Nov 2026") is laid out the same way, in its template's
- * order: ROOF, EXTERNAL, INTERNAL (with the form's Warehouse & Production and Offices & Staff Facilities under their own names), STRUCTURAL
- * DEFECTS, MAJOR DEFECTS, SAFETY HAZARDS and NOTES (the form's Notes section, split by its questions), then the template's GLOSSARY,
- * MAINTENANCE and Terms and Conditions.
+ * order: GENERAL DESCRIPTION, ROOF, EXTERNAL and INTERNAL -- each with the template's element headings in the template's order, wherever the
+ * form asks about the element (wording/pre_purchase.commercial_properties.ts marks them) -- then STRUCTURAL DEFECTS, MAJOR DEFECTS, SAFETY
+ * HAZARDS and NOTES (the form's Notes section, split by its questions), then the template's GLOSSARY, MAINTENANCE and Terms and Conditions.
  *
  * Every other report type keeps its own layout (pages/ReportView.tsx), Pre-Purchase / House included.
  */
@@ -24,11 +24,16 @@ import { Back, Bullets, Heading, KeepTogether, PhotographsBlock, page } from "..
 import { ScopeBlocks } from "./ScopeBlocks";
 import { siteAccessSentences } from "./siteAccess";
 import {
-  PPI_CONDITION_DEFINITIONS_BLOCKS, PPI_CONDITION_DEFINITIONS_TITLE, PPI_DEFECTS_BLOCKS, PPI_POOL_SPA_TEXT, PPI_SCOPE_BLOCKS, PPI_SCOPE_TITLE, PPI_SITE_ACCESS_TITLE,
+  PPI_CONDITION_DEFINITIONS_BLOCKS, PPI_CONDITION_DEFINITIONS_TITLE, PPI_DEFECTS_BLOCKS, PPI_SCOPE_BLOCKS, PPI_SCOPE_TITLE, PPI_SITE_ACCESS_TITLE,
 } from "./scopeText";
 import { PPI_GLOSSARY_BLOCKS, PPI_GLOSSARY_TITLE, PPI_MAINTENANCE_BLOCKS, PPI_MAINTENANCE_TITLE, PPI_TERMS_BLOCKS, PPI_TERMS_TITLE } from "./termsText";
 import { SubHeading } from "../construction/ConstructionReport";
 import { commercialElementRows } from "./commercialSummary";
+import { generalPhotosOf } from "../components/ReportSection";
+import { markedKeys, markedPhotos, photoKey, splitParts } from "../reportParts";
+import {
+  commercialGeneralDescription, COMMERCIAL_EXTERNAL_PARTS, COMMERCIAL_INTERNAL_INTRO, COMMERCIAL_NOTES_STANDARD, withRetiredAreas, COMMERCIAL_INTERNAL_PARTS, COMMERCIAL_ROOF_PARTS, COMMERCIAL_ROOF_SPACE_PARTS, COMMERCIAL_UNPLACED,
+} from "../wording/pre_purchase.commercial_properties";
 import type { ConditionSummaryRow } from "../templateFields";
 
 /** True for the report this file lays out: Pre-Purchase / Apartment. */
@@ -85,7 +90,9 @@ export function splitCommercialNotes(section: FormSection, fields: TemplateField
   const named = COMMERCIAL_NOTES_PARTS.filter((p) => p.prefix).map((p) => p.prefix!);
   return COMMERCIAL_NOTES_PARTS.map((p) => {
     const own = fields.filter((f) => (p.prefix ? f.key.startsWith(p.prefix) : !named.some((x) => f.key.startsWith(x))));
-    const text = prePurchaseSectionText(section, own, profile);
+    let text = prePurchaseSectionText(section, own, profile);
+    // NOTES opens with the template's standard paragraphs, then the form's own Notes answers.
+    if (p.part === "notes" && profile.propertyType === "commercial_properties") text = { ...text, reportText: [...COMMERCIAL_NOTES_STANDARD, text.reportText].filter((x) => x.trim()).join("\n\n") };
     const ids = photosIn(own.map((f) => answers[f.key]));
     return asPart(text, p.part, p.heading, section.photos.filter((u) => ids.has(mediaId(u))));
   });
@@ -99,6 +106,8 @@ export function splitCommercialNotes(section: FormSection, fields: TemplateField
 export function prePurchaseSectionText(section: FormSection, fields: TemplateField[] | undefined, profile: ReportProfile): FormSection {
   const answers = (section.answers as AnswerTree | null | undefined) ?? null;
   if (!fields || !answers || Object.keys(answers).length === 0) return section;
+  // Commercial: the rooms of an inspection started on the earlier form keep that form's names.
+  if (profile.propertyType === "commercial_properties") fields = withRetiredAreas(fields, answers);
   const derived = flattenSectionToDraft(fields, answers, slug(section), profile);
   const overridden = (section.fields as Record<string, unknown> | undefined)?.reportTextOverride === true;
   return {
@@ -134,15 +143,30 @@ export function usePrePurchaseSections(inspection?: Inspection, opts?: { include
     let cancelled = false;
     const profile = reportProfileOf(inspection.type, inspection.propertyType);
     const commercial = isPrePurchaseCommercial(inspection);
+    const templates = new Map<string, Promise<TemplateField[] | undefined>>();
+    const fieldsOf = (key: string) => {
+      if (!templates.has(key)) templates.set(key, fetchActiveTemplate(inspection.type, inspection.propertyType, key).then((t) => (t?.fields ?? undefined) as TemplateField[] | undefined).catch(() => undefined));
+      return templates.get(key)!;
+    };
     Promise.all(
       inspection.sections.map(async (s): Promise<FormSection | FormSection[]> => {
         if (slug(s).startsWith("job-info")) return s;
-        const t = await fetchActiveTemplate(inspection.type, inspection.propertyType, slug(s)).catch(() => null);
-        const fields = (t?.fields ?? undefined) as TemplateField[] | undefined;
+        let fields = await fieldsOf(slug(s));
         if (commercial && slug(s) === "notes") return splitCommercialNotes(s, fields, profile);
+        // Commercial: an inspection started on the earlier form saved its Pool / Spa answers in this slot; the form now asks them in External.
+        if (commercial && isPoolSlot(s) && !fields?.some((f) => f.key === "pool_applicability")) fields = (await fieldsOf("elevations"))?.filter((f) => f.key.startsWith("pool_"));
         return prePurchaseSectionText(s, fields, profile);
       }),
-    ).then((out) => { if (!cancelled) setSections(out.flat().filter((s) => all || slug(s).startsWith("job-info") || s.reviewStatus === "approved")); });
+    ).then(async (out) => {
+      const printed = out.flat();
+      // Commercial: the General Description's sentences, from Job Information and the front elevation (wording/pre_purchase.commercial_properties.ts).
+      if (commercial) {
+        const answersOf = (key: string) => ((inspection.sections.find((x) => slug(x) === key)?.answers ?? {}) as AnswerTree);
+        const lines = commercialGeneralDescription(answersOf("job-info"), (await fieldsOf("job-info")) ?? [], answersOf("elevations"), (await fieldsOf("elevations")) ?? []);
+        printed.forEach((x, i) => { if (slug(x).startsWith("description")) printed[i] = { ...x, reportText: lines.join("\n\n") }; });
+      }
+      if (!cancelled) setSections(printed.filter((s) => all || slug(s).startsWith("job-info") || s.reviewStatus === "approved"));
+    });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
@@ -308,6 +332,93 @@ export function commercialParts(rest: FormSection[]): { title: string; sections:
   return [...parts, ...others].filter((p) => p.sections.length > 0);
 }
 
+/** One piece of a Commercial main title: a section's part under one of the template's headings. */
+export interface CommercialPiece {
+  /** The section, with only this part's text. */
+  section: FormSection;
+  /** The template's heading it prints under (none: printed straight under the main title). */
+  heading?: string;
+  /** The anchor the Condition Summary links to (the section's first piece). */
+  anchor?: string;
+  /** The photos printed after it: on a section's last piece, its photos no part names and no defect holds; none on the others. */
+  generalPhotos: string[];
+  /** The section's defects no sentence names: printed with its last piece. */
+  untaggedDefects: boolean;
+}
+
+const COMMERCIAL_MAINS = [
+  { title: "Roof", headings: COMMERCIAL_ROOF_PARTS },
+  { title: "External", headings: COMMERCIAL_EXTERNAL_PARTS },
+  { title: "Internal", headings: COMMERCIAL_INTERNAL_PARTS },
+] as const;
+
+/** The main title a section's part prints under: the roof space and the areas under INTERNAL, the rest of the roof under ROOF. */
+function commercialMainOf(section: FormSection, heading: string | undefined): string {
+  const key = placeKey(section);
+  if (heading && COMMERCIAL_ROOF_SPACE_PARTS.includes(heading)) return "Internal";
+  if (key === "roof_chimneys") return "Roof";
+  if (key === "internal_areas" || key === "pool_spa:offices") return "Internal";
+  return COMMERCIAL_PARTS.find((p) => p.keys.includes(key))?.title ?? section.name;
+}
+
+/**
+ * The Commercial body (not the Notes) under ROOF, EXTERNAL and INTERNAL: every section cut at its template headings (PART marks), each part
+ * placed under its main title at its heading's place in the template's order, parts from different sections under the same heading one
+ * after another. A section with no marks (text the reviewer typed over) prints whole under its own name. Each part prints its own photos
+ * and defects; the section's other photos and its untagged defects print with its last part.
+ */
+export function commercialPieces(printable: FormSection[]): { title: string; pieces: CommercialPiece[] }[] {
+  const ranked: (CommercialPiece & { main: string; rank: number; order: number; index: number })[] = [];
+  printable.forEach((raw, order) => {
+    if (slug(raw).startsWith("notes")) return;
+    const s = withExcludedPhotosRemoved(raw);
+    const parts = splitParts(s.reportText);
+    const titled = parts.some((p) => p.title !== undefined);
+    const list = titled ? parts : [{ title: undefined, text: s.reportText }];
+    const marked = new Set(markedPhotos(s, markedKeys(s.reportText)).map(photoKey));
+    const rest = generalPhotosOf(s).filter((u) => !marked.has(photoKey(u)));
+    // A defect a part's sentence names prints there with its photos; the last part prints only those no part names.
+    const named = (text: string) => new Set([...text.matchAll(/(?:^|\n)DEFECT::(\d+)::/g)].map((m) => Number(m[1])));
+    const namedAnywhere = named(s.reportText);
+    list.forEach((p, i) => {
+      const unplaced = p.title === COMMERCIAL_UNPLACED;
+      const heading = unplaced ? undefined : titled ? p.title : placeKey(s) === "pool_spa:pool" ? "Pool/Spa" : COMMERCIAL_PARTS.find((x) => x.keys.includes(placeKey(s)))?.named ? s.name : undefined;
+      const main = commercialMainOf(s, p.title);
+      const headings: readonly string[] = COMMERCIAL_MAINS.find((m) => m.title === main)?.headings ?? [];
+      // The text before a section's first heading (INTERNAL's opening sentence) comes first; what has no place comes last; a heading the
+      // template does not have comes after the template's own.
+      const known = heading ? headings.indexOf(heading) : -1;
+      const rank = p.title === undefined && titled ? -1 : unplaced ? Number.MAX_SAFE_INTEGER : known >= 0 ? known : headings.length;
+      const last = i === list.length - 1;
+      const here = named(p.text);
+      // The last part's own list keeps every defect in its place (each sentence names its defect by its position), without the photos of
+      // those another part prints.
+      const damages = last ? s.damages.map((d, n) => (namedAnywhere.has(n) && !here.has(n) ? { ...d, photos: [] } : d)) : s.damages;
+      ranked.push({
+        section: { ...s, id: `${s.id}:${i}`, name: heading ?? "", reportText: p.text, damages },
+        heading,
+        anchor: i === 0 ? `section-${raw.id}` : undefined,
+        generalPhotos: last ? rest : [],
+        untaggedDefects: last,
+        main,
+        rank,
+        order,
+        index: i,
+      });
+    });
+  });
+  const mains = [...COMMERCIAL_MAINS.map((m) => m.title), ...new Set(ranked.map((p) => p.main).filter((m) => !COMMERCIAL_MAINS.some((x) => x.title === m)))];
+  return mains
+    .map((title) => ({
+      title,
+      pieces: ranked
+        .filter((p) => p.main === title)
+        .sort((a, b) => a.rank - b.rank || a.order - b.order || a.index - b.index)
+        .map(({ main: _m, rank: _r, order: _o, index: _i, ...piece }) => piece),
+    }))
+    .filter((m) => m.pieces.some((p) => p.section.reportText.trim() || p.generalPhotos.length || (p.untaggedDefects && p.section.damages.length)));
+}
+
 function PrePurchaseCommercialBody({ inspection, sections, header }: { inspection: Inspection; sections: FormSection[]; header: ReportHeader }) {
   const originals = useOriginalPhotosLink(inspection.id);
   const fullDownloadUrl = originals.url || inspection.photoArchiveUrl;
@@ -317,6 +428,8 @@ function PrePurchaseCommercialBody({ inspection, sections, header }: { inspectio
   // Every other section with something to print (no heading is printed with nothing under it); Pool/Spa only when one was assessed.
   const printable = body.filter((s) => s !== description && (s.reportText.trim() || s.photos.length > 0 || s.damages.length > 0) && !(slug(s) === "pool_spa" && isPoolSlot(s) && !poolAssessed(s)));
   const parts = commercialParts(printable);
+  const placed = commercialPieces(printable);
+  const generalDescription = (description?.reportText ?? "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   const summary: SummarySection[] = parts.flatMap((p) => p.sections.map(({ section: s, name }) => ({
     heading: name ?? p.title, anchorId: `section-${s.id}`, rows: (s.fields as unknown as { conditionSummary?: ConditionSummaryRow[] }).conditionSummary ?? [],
   })));
@@ -351,13 +464,16 @@ function PrePurchaseCommercialBody({ inspection, sections, header }: { inspectio
               <Bullets items={siteAccess} lead={<Heading>{PPI_SITE_ACCESS_TITLE}</Heading>} />
             </div>
           )}
-          {front && (
+          {(front || generalDescription.length > 0) && (
             <div className="report-page-break" data-ppi-title="General Description">
               <KeepTogether>
                 <Heading>General Description</Heading>
-                <PhotoMetaContext.Provider value={description?.photoMeta ?? {}}>
-                  <PhotoGrid photos={[front]} compact={false} maxHeight={7.5} />
-                </PhotoMetaContext.Provider>
+                {generalDescription.map((p, i) => <p key={i} data-ppi="general-description" style={{ margin: "0 0 8px", textAlign: "justify" }}>{p}</p>)}
+                {front && (
+                  <PhotoMetaContext.Provider value={description?.photoMeta ?? {}}>
+                    <PhotoGrid photos={[front]} compact={false} maxHeight={7.5} />
+                  </PhotoMetaContext.Provider>
+                )}
               </KeepTogether>
             </div>
           )}
@@ -365,24 +481,39 @@ function PrePurchaseCommercialBody({ inspection, sections, header }: { inspectio
             <PhotographsBlock fullDownloadUrl={fullDownloadUrl} originals={originals} />
           </div>
 
-          {parts.map((p) => (
+          {placed.map((p) => (
             <div key={p.title} className="report-page-break" data-ppi-title={p.title}>
-              {p.sections.map(({ section: s, name }, i) => {
-                const title = i === 0 ? (
-                  <KeepTogether>
-                    <Heading>{p.title}</Heading>
-                    {hasSummary && <Back href="#summary" />}
-                  </KeepTogether>
-                ) : null;
+              <KeepTogether>
+                <Heading>{p.title}</Heading>
+                {hasSummary && <Back href="#summary" />}
+              </KeepTogether>
+              {/* The template's sentence at the top of INTERNAL. */}
+              {p.title === "Internal" && <p data-ppi="internal-intro" style={{ margin: "0 0 8px", textAlign: "justify" }}>{COMMERCIAL_INTERNAL_INTRO}</p>}
+              {p.pieces.map((piece, i) => {
+                const sub = piece.heading && piece.heading !== p.pieces[i - 1]?.heading ? piece.heading : undefined;
                 return (
-                  <div key={s.id} id={`section-${s.id}`} data-ppi-section={name ?? p.title}>
-                    {title}
-                    {name && <SubHeading>{name}</SubHeading>}
-                    <ReportSection section={withExcludedPhotosRemoved(s)} showHeading={false} hideDamageText />
-                    {slug(s) === "pool_spa" && isPoolSlot(s) && poolAssessed(s) && <p data-ppi="pool-spa-text" style={{ margin: "8px 0 0", textAlign: "justify" }}>{PPI_POOL_SPA_TEXT}</p>}
+                  <div key={piece.section.id} id={piece.anchor} data-ppi-section={piece.heading ?? p.title}>
+                    {sub && <SubHeading>{sub}</SubHeading>}
+                    <ReportSection section={piece.section} showHeading={false} hideDamageText generalPhotos={piece.generalPhotos} untaggedDefects={piece.untaggedDefects} />
                   </div>
                 );
               })}
+            </div>
+          ))}
+
+          {parts.filter((p) => COMMERCIAL_NOTES_PARTS.some((n) => n.heading === p.title)).map((p) => (
+            <div key={p.title} className="report-page-break" data-ppi-title={p.title}>
+              {p.sections.map(({ section: s }, i) => (
+                <div key={s.id} id={`section-${s.id}`} data-ppi-section={p.title}>
+                  {i === 0 && (
+                    <KeepTogether>
+                      <Heading>{p.title}</Heading>
+                      {hasSummary && <Back href="#summary" />}
+                    </KeepTogether>
+                  )}
+                  <ReportSection section={withExcludedPhotosRemoved(s)} showHeading={false} hideDamageText />
+                </div>
+              ))}
             </div>
           ))}
 
