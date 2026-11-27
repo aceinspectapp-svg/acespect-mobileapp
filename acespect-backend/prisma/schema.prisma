@@ -74,6 +74,8 @@ model User {
   refreshTokens         RefreshToken[]
   inspections           Inspection[]           @relation("InspectorInspections")
   assignedReviews       Inspection[]           @relation("ReviewerInspections")
+  finalReportUploads    ReportFinalVersion[]   @relation("FinalReportUploadedBy")
+  finalReportReplaces   ReportFinalVersion[]   @relation("FinalReportReplacedBy")
   reviewDecisions       ReviewDecision[]       @relation("ReviewerDecisions")
   createdTemplates      InspectionTemplate[]
   templateAcceptances   TemplateAcceptance[]
@@ -249,6 +251,7 @@ model Inspection {
   reviewJobs       ReviewJob[]
   reviewSummary    ReviewSummary?
   transferRequests InspectionTransferRequest[]
+  finalVersions    ReportFinalVersion[]
 
   @@index([inspectorId])
   @@index([reviewerId])
@@ -1412,4 +1415,32 @@ model AuditAnchor {
   createdAt  DateTime @default(now())
 
   @@map("audit_anchors")
+}
+
+/// A Word report edited by hand and uploaded as the inspection's final report (web: "Final Report Versions"). Version 0 is the report the
+/// system makes from the inspection data and is never stored here. A "replace" keeps the replaced row and its file (replacedAt set) and adds
+/// a new row with the same version number; only rows with replacedAt null are listed. At most one such row per (inspection, version): a
+/// partial unique index in the migration (Prisma cannot express it here).
+model ReportFinalVersion {
+  /// Also the upload id in the file's path: final-reports/<inspectionId>/v<n>-<id>.docx
+  id                 String     @id @default(uuid())
+  inspection         Inspection @relation(fields: [inspectionId], references: [id], onDelete: Restrict)
+  inspectionId       String
+  versionNumber      Int
+  blobPath           String     @unique
+  fileName           String
+  sizeBytes          Int
+  contentType        String
+  note               String?
+  uploadedBy         User       @relation("FinalReportUploadedBy", fields: [uploadedById], references: [id])
+  uploadedById       String
+  uploadedAt         DateTime   @default(now())
+  replacedAt         DateTime?
+  replacedBy         User?      @relation("FinalReportReplacedBy", fields: [replacedById], references: [id])
+  replacedById       String?
+  /// The id of the upload that replaced this one.
+  replacedByUploadId String?
+
+  @@index([inspectionId, versionNumber])
+  @@map("report_final_versions")
 }

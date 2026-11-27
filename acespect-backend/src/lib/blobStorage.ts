@@ -1,5 +1,6 @@
 import { BlobServiceClient, type ContainerClient } from '@azure/storage-blob';
 import { DefaultAzureCredential } from '@azure/identity';
+import { createReadStream } from 'fs';
 import { env } from '../config/env';
 
 /**
@@ -46,6 +47,11 @@ export async function ensureContainer(): Promise<void> {
 
 export async function putBlob(key: string, buffer: Buffer, contentType: string): Promise<void> {
   await containerClient().getBlockBlobClient(blobName(key)).uploadData(buffer, { blobHTTPHeaders: { blobContentType: contentType } });
+}
+
+/** Uploads a file from disk in blocks (a large file is never held in memory whole). */
+export async function putBlobFile(key: string, filePath: string, contentType: string): Promise<void> {
+  await containerClient().getBlockBlobClient(blobName(key)).uploadStream(createReadStream(filePath), 4 * 1024 * 1024, 4, { blobHTTPHeaders: { blobContentType: contentType } });
 }
 
 /** The blob's bytes, or null when it does not exist. Large files are streamed, small ones read whole so the caller can cache them. */

@@ -10,6 +10,7 @@ import { openReportFile, reportFileName, signInAgainHref, type ReadyReport } fro
 import { SignInAgainError } from "../reportJob";
 import { reportBackAction, reviewPagePath } from "../reportPage";
 import { ReportCover } from "../components/ReportCover";
+import { FinalReportVersions } from "../components/FinalReportVersions";
 import { sectionPhotoArchiveUrl } from "../photoArchive";
 import { ReportDescription } from "../components/ReportDescription";
 import { ReportScope } from "../components/ReportScope";
@@ -272,6 +273,12 @@ export function ReportView() {
           </button>
         </div>
       </div>
+
+      {/* Final Report Versions (admin / reviewer; on screen only -- never in the PDF / Word file the server makes from this page). Version 0's
+          Download is this page's own Download Word. */}
+      {currentUser && !(typeof navigator !== "undefined" && navigator.webdriver) && (
+        <FinalReportVersions inspectionId={inspection.id} role={currentUser.role} onDownloadLive={() => handleDownload("docx")} liveBusy={downloading} />
+      )}
 
       {/* The document page */}
       <div
