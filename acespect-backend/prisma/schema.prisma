@@ -76,6 +76,7 @@ model User {
   assignedReviews       Inspection[]           @relation("ReviewerInspections")
   finalReportUploads    ReportFinalVersion[]   @relation("FinalReportUploadedBy")
   finalReportReplaces   ReportFinalVersion[]   @relation("FinalReportReplacedBy")
+  finalReportDeletes    ReportFinalVersion[]   @relation("FinalReportDeletedBy")
   reviewDecisions       ReviewDecision[]       @relation("ReviewerDecisions")
   createdTemplates      InspectionTemplate[]
   templateAcceptances   TemplateAcceptance[]
@@ -1419,7 +1420,7 @@ model AuditAnchor {
 
 /// A Word report edited by hand and uploaded as the inspection's final report (web: "Final Report Versions"). Version 0 is the report the
 /// system makes from the inspection data and is never stored here. A "replace" keeps the replaced row and its file (replacedAt set) and adds
-/// a new row with the same version number; only rows with replacedAt null are listed. At most one such row per (inspection, version): a
+/// a new row with the same version number; only rows with replacedAt and deletedAt null are listed. At most one such row per (inspection, version): a
 /// partial unique index in the migration (Prisma cannot express it here).
 model ReportFinalVersion {
   /// Also the upload id in the file's path: final-reports/<inspectionId>/v<n>-<id>.docx
@@ -1440,6 +1441,10 @@ model ReportFinalVersion {
   replacedById       String?
   /// The id of the upload that replaced this one.
   replacedByUploadId String?
+  /// Soft delete (ADMIN): the row and its file are kept, only hidden. A deleted version's number is never used again.
+  deletedAt          DateTime?
+  deletedBy          User?      @relation("FinalReportDeletedBy", fields: [deletedById], references: [id])
+  deletedById        String?
 
   @@index([inspectionId, versionNumber])
   @@map("report_final_versions")

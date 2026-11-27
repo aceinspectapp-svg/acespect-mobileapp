@@ -34,10 +34,11 @@ async function docx(text: string): Promise<Buffer> {
 interface Row {
   id: string; inspectionId: string; versionNumber: number; blobPath: string; fileName: string; sizeBytes: number; contentType: string; note: string | null;
   uploadedById: string; uploadedAt: Date; replacedAt: Date | null; replacedById: string | null; replacedByUploadId: string | null;
+  deletedAt?: Date | null; deletedById?: string | null;
 }
 
 /** The real router and rules, with the database, storage, audit trail and sign-in replaced by in-memory fakes. */
-async function start() {
+async function start(inspection: { jobNo: string | null; inspectionType: string; hasBaseline: boolean } = { jobNo: 'VIC-260105', inspectionType: 'Dilapidation', hasBaseline: false }) {
   const express = (await import('express')).default;
   const { makeFinalReportsRouter } = await import('./finalReports.routes');
   const { planUpload, samePlan } = await import('./finalReports.rules');
@@ -49,7 +50,8 @@ async function start() {
     const u = Object.values(USERS).find((x) => x.id === r.uploadedById)!;
     return { ...r, uploadedBy: { id: u.id, name: u.name, email: u.email } };
   };
-  const current = (inspectionId: string) => rows.filter((r) => r.inspectionId === inspectionId && !r.replacedAt);
+  const current = (inspectionId: string) => rows.filter((r) => r.inspectionId === inspectionId && !r.replacedAt && !r.deletedAt);
+  const highest = (inspectionId: string) => rows.filter((r) => r.inspectionId === inspectionId).reduce((n, r) => Math.max(n, r.versionNumber), 0);
   const uploadDir = mkdtempSync(join(tmpdir(), 'final-reports-test-'));
   const router = makeFinalReportsRouter({
     uploadDir,
@@ -66,11 +68,19 @@ async function start() {
       discard: async (path) => { blobs.delete(path); },
     },
     repo: {
-      assertCanView: async (id) => { if (id !== INSPECTION) throw ApiError.notFound('Inspection not found'); return { jobNo: 'J-1' }; },
+      assertCanView: async (id) => { if (id !== INSPECTION) throw ApiError.notFound('Inspection not found'); return inspection; },
       listCurrent: async (id) => current(id).sort((a, b) => b.versionNumber - a.versionNumber).map(view),
+      highestVersion: async (id) => highest(id),
+      softDelete: async (id, vid, actorId) => {
+        const r = current(id).find((x) => x.id === vid);
+        if (!r) throw ApiError.notFound('That version was not found');
+        Object.assign(r, { deletedAt: new Date(), deletedById: actorId });
+        return { deleted: view(r), remaining: current(id).length };
+      },
       findVersion: async (id, vid) => { const r = current(id).find((x) => x.id === vid); return r ? view(r) : null; },
       commit: async ({ plan, mode, seenLatest, row }) => {
-        if (!samePlan(plan, planUpload(current(row.inspectionId), mode, seenLatest))) throw new ApiError(409, 'changed', 'VERSIONS_CHANGED');
+        const wasLocked = current(row.inspectionId).length > 0;
+        if (!samePlan(plan, planUpload(current(row.inspectionId), mode, seenLatest, highest(row.inspectionId)))) throw new ApiError(409, 'changed', 'VERSIONS_CHANGED');
         let replaced: Row | null = null;
         if (plan.kind === 'replace') {
           replaced = rows.find((r) => r.id === plan.replaces.id)!;
@@ -78,7 +88,7 @@ async function start() {
         }
         const saved: Row = { ...row, versionNumber: plan.versionNumber, uploadedAt: new Date(), replacedAt: null, replacedById: null, replacedByUploadId: null };
         rows.push(saved);
-        return { saved: view(saved), replaced: replaced ? view(replaced) : null };
+        return { saved: view(saved), replaced: replaced ? view(replaced) : null, wasLocked };
       },
     },
   });
@@ -97,10 +107,11 @@ async function start() {
     return fetch(base, { method: 'POST', body: form, headers: { 'x-test-role': role } });
   };
   const list = async (role = 'ADMIN') => fetch(base, { headers: { 'x-test-role': role } });
-  return { base, rows, blobs, events, send, list, uploadDir, close: () => { server.close(); rmSync(uploadDir, { recursive: true, force: true }); } };
+  const remove = async (role: string, versionId: string) => fetch(`${base}/${versionId}`, { method: 'DELETE', headers: { 'x-test-role': role } });
+  return { base, rows, blobs, events, send, list, remove, uploadDir, close: () => { server.close(); rmSync(uploadDir, { recursive: true, force: true }); } };
 }
 
-type ListBody = { latestVersion: number; versions: { id: string; versionNumber: number; fileName: string; current: boolean; note: string | null; uploadedBy: { name: string; email: string } }[] };
+type ListBody = { latestVersion: number; locked: boolean; unassigned: boolean; versions: { id: string; versionNumber: number; fileName: string; current: boolean; note: string | null; uploadedBy: { name: string; email: string } }[] };
 
 test('ADMIN and REVIEWER may list, upload and download', async () => {
   const s = await start();
@@ -169,7 +180,7 @@ test('first upload is v1 without asking; "Yes" makes v2; "No" replaces v2, keeps
     assert.equal(old.replacedByUploadId, body.version.id);
     assert.ok(s.blobs.has(old.blobPath), 'the replaced file is still in storage');
     assert.deepEqual(s.rows.find((r) => r.versionNumber === 1), v1Row, 'Version 1 untouched');
-    assert.match(s.rows.find((r) => r.id === body.version.id)!.blobPath, new RegExp(`^final-reports/${INSPECTION}/v2-${body.version.id}\\.docx$`));
+    assert.match(s.rows.find((r) => r.id === body.version.id)!.blobPath, new RegExp(`^final-reports/VIC-260105/Pre-Dilapidation-v2-${body.version.id}\\.docx$`));
 
     const listed = (await (await s.list()).json()) as ListBody;
     assert.equal(listed.latestVersion, 2);
@@ -230,9 +241,9 @@ test('each upload, replace and download writes one audit event', async () => {
     await s.send('ADMIN', { bytes: await docx('v2'), name: 'v2.docx' }, { mode: 'new', basedOn: '1' });
     await s.send('REVIEWER', { bytes: await docx('v2b'), name: 'v2b.docx' }, { mode: 'replace', basedOn: '2' });
     await fetch(`${s.base}/${a.version.id}/file`, { headers: { 'x-test-role': 'REVIEWER' } }).then((r) => r.arrayBuffer());
-    assert.deepEqual(s.events.map((e) => e.action), ['report.final_version.upload', 'report.final_version.upload', 'report.final_version.replace', 'report.final_version.download']);
+    assert.deepEqual(s.events.map((e) => e.action), ['report.final_version.upload', 'report.locked', 'report.final_version.upload', 'report.final_version.replace', 'report.final_version.download']);
     assert.ok(s.events.every((e) => e.inspectionId === INSPECTION));
-    assert.equal(s.events[3]!.target?.id, a.version.id);
+    assert.equal(s.events[4]!.target?.id, a.version.id);
   } finally { s.close(); }
 });
 
@@ -244,4 +255,98 @@ test('the temporary upload files are removed after every request', async () => {
     await s.send('ADMIN', { bytes: Buffer.alloc(50 * 1024 * 1024 + 1), name: 'big.docx' });
     assert.deepEqual(readdirSync(s.uploadDir), []);
   } finally { s.close(); }
+});
+
+test('only ADMIN can delete: REVIEWER, INSPECTOR, CLIENT and FIELD_USER get 403 and nothing changes', async () => {
+  const s = await start();
+  try {
+    const v1 = ((await (await s.send('ADMIN', { bytes: await docx('v1'), name: 'v1.docx' })).json()) as { version: { id: string } }).version;
+    const events = s.events.length;
+    for (const role of ['REVIEWER', 'INSPECTOR', 'CLIENT', 'FIELD_USER']) assert.equal((await s.remove(role, v1.id)).status, 403, role);
+    assert.equal(s.rows[0]!.deletedAt ?? null, null);
+    assert.equal(s.events.length, events);
+    assert.equal((await s.remove('ADMIN', v1.id)).status, 200);
+  } finally { s.close(); }
+});
+
+test('delete: hidden and marked deleted, the file stays, the next newest becomes Current final, numbers are never reused, audited', async () => {
+  const s = await start();
+  try {
+    await s.send('ADMIN', { bytes: await docx('v1'), name: 'v1.docx' });
+    const v2 = ((await (await s.send('ADMIN', { bytes: await docx('v2'), name: 'v2.docx' }, { mode: 'new', basedOn: '1' })).json()) as { version: { id: string } }).version;
+    const res = await s.remove('ADMIN', v2.id);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { deletedId: v2.id, remaining: 1 });
+
+    const row = s.rows.find((r) => r.id === v2.id)!;
+    assert.ok(row.deletedAt, 'marked deleted');
+    assert.equal(row.deletedById, USERS.ADMIN!.id);
+    assert.ok(s.blobs.has(row.blobPath), 'the file is kept in storage');
+
+    const listed = (await (await s.list()).json()) as ListBody;
+    assert.deepEqual(listed.versions.map((v) => [v.versionNumber, v.current]), [[1, true]], 'v2 hidden; v1 is now Current final');
+    assert.equal(listed.latestVersion, 1);
+    assert.equal((await fetch(`${s.base}/${v2.id}/file`, { headers: { 'x-test-role': 'ADMIN' } })).status, 404, 'a deleted version is not offered');
+    assert.equal((await s.remove('ADMIN', v2.id)).status, 404, 'cannot be deleted twice');
+
+    // A new version after the delete is Version 3, never Version 2 again.
+    const next = await s.send('ADMIN', { bytes: await docx('v3'), name: 'v3.docx' }, { mode: 'new', basedOn: '1' });
+    assert.equal(((await next.json()) as { version: { versionNumber: number } }).version.versionNumber, 3);
+
+    const del = s.events.find((e) => e.action === 'report.final_version.delete')!;
+    assert.ok(del, 'the delete is audited');
+    assert.equal(del.target?.id, v2.id);
+    assert.equal((del.before as { id: string }).id, v2.id);
+  } finally { s.close(); }
+});
+
+test('lock and unlock are audited: the first listed version locks, deleting the last one unlocks; numbers still never reused', async () => {
+  const s = await start();
+  try {
+    const v1 = ((await (await s.send('ADMIN', { bytes: await docx('v1'), name: 'v1.docx' })).json()) as { version: { id: string } }).version;
+    assert.equal(((await (await s.list()).json()) as ListBody).locked, true);
+    const v2 = ((await (await s.send('ADMIN', { bytes: await docx('v2'), name: 'v2.docx' }, { mode: 'new', basedOn: '1' })).json()) as { version: { id: string } }).version;
+    await s.remove('ADMIN', v2.id);
+    assert.equal(s.events.filter((e) => e.action === 'report.unlocked').length, 0, 'still one version left: still locked');
+    await s.remove('ADMIN', v1.id);
+    assert.equal(((await (await s.list()).json()) as ListBody).locked, false);
+    assert.deepEqual(s.events.filter((e) => e.action.startsWith('report.') && !e.action.startsWith('report.final_version')).map((e) => e.action), ['report.locked', 'report.unlocked']);
+
+    // Everything deleted: the next upload asks nothing, and is Version 3 (1 and 2 are never used again). It locks again.
+    const again = await s.send('ADMIN', { bytes: await docx('v3'), name: 'v3.docx' });
+    assert.equal(again.status, 201);
+    assert.equal(((await again.json()) as { version: { versionNumber: number } }).version.versionNumber, 3);
+    assert.equal(s.events.filter((e) => e.action === 'report.locked').length, 2);
+  } finally { s.close(); }
+});
+
+test('storage path: final-reports/<JOB NUMBER>/<Inspection-Type>-v<n>-<uploadId>.docx', async () => {
+  const { finalReportPath, jobFolder, inspectionTypeLabel } = await import('./finalReports.rules');
+  const id = INSPECTION;
+  const up = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  assert.equal(finalReportPath({ id, jobNo: 'VIC-260105', inspectionType: 'Dilapidation', hasBaseline: false }, 1, up), `final-reports/VIC-260105/Pre-Dilapidation-v1-${up}.docx`);
+  assert.equal(finalReportPath({ id, jobNo: 'VIC-260105', inspectionType: 'Dilapidation', hasBaseline: true }, 1, up), `final-reports/VIC-260105/Post-Dilapidation-v1-${up}.docx`, 'pre and post with the same job number stay apart');
+  assert.equal(jobFolder('  vic 260105 '), 'VIC-260105', 'trimmed, upper-cased, a space becomes "-"');
+  assert.equal(jobFolder('vic/26.01#05'), 'VIC-26-01-05', 'anything but letters, digits and "-" becomes "-"');
+  assert.equal(jobFolder('../etc'), '---ETC', 'no path can escape the folder');
+  assert.equal(finalReportPath({ id, jobNo: ' vic 260105 ', inspectionType: 'pre_purchase', hasBaseline: false }, 2, up), `final-reports/VIC-260105/Pre-Purchase-v2-${up}.docx`);
+  for (const none of [null, '', '   ']) {
+    assert.equal(finalReportPath({ id, jobNo: none, inspectionType: 'construction_stage', hasBaseline: false }, 1, up), `final-reports/_Unassigned/${id}/Construction-Stage-v1-${up}.docx`, String(none));
+  }
+  assert.equal(inspectionTypeLabel('Construction Stage', false), 'Construction-Stage');
+});
+
+test('uploads are stored under the job number folder, or _Unassigned/<inspectionId>/ with the list saying so', async () => {
+  const withJob = await start({ jobNo: 'vic 260105', inspectionType: 'Dilapidation', hasBaseline: true });
+  try {
+    await withJob.send('ADMIN', { bytes: await docx('v1'), name: 'v1.docx' });
+    assert.match(withJob.rows[0]!.blobPath, /^final-reports\/VIC-260105\/Post-Dilapidation-v1-[0-9a-f-]{36}\.docx$/);
+    assert.equal(((await (await withJob.list()).json()) as ListBody).unassigned, false);
+  } finally { withJob.close(); }
+  const noJob = await start({ jobNo: null, inspectionType: 'Dilapidation', hasBaseline: false });
+  try {
+    await noJob.send('ADMIN', { bytes: await docx('v1'), name: 'v1.docx' });
+    assert.match(noJob.rows[0]!.blobPath, new RegExp(`^final-reports/_Unassigned/${INSPECTION}/Pre-Dilapidation-v1-[0-9a-f-]{36}\\.docx$`));
+    assert.equal(((await (await noJob.list()).json()) as ListBody).unassigned, true);
+  } finally { noJob.close(); }
 });

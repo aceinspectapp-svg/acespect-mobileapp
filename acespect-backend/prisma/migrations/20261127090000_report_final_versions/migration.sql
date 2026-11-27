@@ -16,6 +16,8 @@ CREATE TABLE "report_final_versions" (
     "replacedAt" TIMESTAMP(3),
     "replacedById" TEXT,
     "replacedByUploadId" TEXT,
+    "deletedAt" TIMESTAMP(3),
+    "deletedById" TEXT,
 
     CONSTRAINT "report_final_versions_pkey" PRIMARY KEY ("id")
 );
@@ -38,3 +40,6 @@ ALTER TABLE "report_final_versions" ADD CONSTRAINT "report_final_versions_upload
 
 -- AddForeignKey
 ALTER TABLE "report_final_versions" ADD CONSTRAINT "report_final_versions_replacedById_fkey" FOREIGN KEY ("replacedById") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "report_final_versions" ADD CONSTRAINT "report_final_versions_deletedById_fkey" FOREIGN KEY ("deletedById") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;

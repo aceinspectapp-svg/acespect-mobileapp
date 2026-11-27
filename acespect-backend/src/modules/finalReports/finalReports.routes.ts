@@ -8,8 +8,9 @@ import { ApiError } from '../../utils/ApiError';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { audit, rebindAuditContext } from '../../lib/auditTrail';
 import { webService } from '../web/web.service';
+import { isReportLocked } from '../../lib/reportLock';
 import {
-  assertDocx, cleanFileName, cleanNote, DOCX_CONTENT_TYPE, FINAL_REPORT_ROLES, finalReportPath, latestOf, MAX_FINAL_REPORT_BYTES, parseBasedOn,
+  assertDocx, cleanFileName, cleanNote, DOCX_CONTENT_TYPE, FINAL_REPORT_ROLES, finalReportPath, jobFolder, latestOf, MAX_FINAL_REPORT_BYTES, parseBasedOn,
   parseMode, planUpload, tooLarge,
 } from './finalReports.rules';
 import { defaultStore, prismaRepo, type FinalReportRepo, type FinalReportStore, type FinalVersionRow } from './finalReports.service';
@@ -20,10 +21,13 @@ import { defaultStore, prismaRepo, type FinalReportRepo, type FinalReportStore, 
  *   GET  /                    the uploaded versions, newest first (Version 0, the live generated report, is the existing report-jobs download)
  *   POST /                    upload a .docx (multipart: file, note?, mode = new | replace, basedOn = the latest version number seen)
  *   GET  /:versionId/file     download one version, through the API (never a storage link)
+ *   DELETE /:versionId        soft delete (ADMIN only): hidden and marked deleted; the row and the file are kept; its number is never reused
+ *
+ * and /api/v1/inspections/:id/report-lock: whether the generated report is locked (anyone who may open the inspection; see lib/reportLock.ts).
  *
  * Every route checks the role on the server (403 for INSPECTOR, CLIENT and FIELD_USER) before anything else -- the upload is refused before
  * its body is read. A reviewer must also be allowed to open the inspection (the review page's rule). Each upload, replace and download is
- * written to the audit trail.
+ * written to the audit trail, as is the inspection becoming locked (its first listed version) and unlocked (its last one deleted).
  */
 export interface FinalReportDeps {
   repo: FinalReportRepo;
@@ -60,6 +64,7 @@ function contentDisposition(name: string): string {
 export function makeFinalReportsRouter(deps: FinalReportDeps) {
   const router = Router({ mergeParams: true });
   const allowed = requireRole(...FINAL_REPORT_ROLES);
+  const adminOnly = requireRole('ADMIN');
   const upload = multer({ dest: deps.uploadDir ?? tmpdir(), limits: { fileSize: MAX_FINAL_REPORT_BYTES, files: 1, fields: 10 } });
 
   const inspectionIdOf = (req: Request): string => {
@@ -80,11 +85,17 @@ export function makeFinalReportsRouter(deps: FinalReportDeps) {
 
   router.get('/', deps.requireAuth, allowed, asyncHandler(async (req, res) => {
     const id = inspectionIdOf(req);
-    await deps.repo.assertCanView(id, req.user!);
+    const inspection = await deps.repo.assertCanView(id, req.user!);
     const rows = await deps.repo.listCurrent(id);
     const latest = latestOf(rows)?.versionNumber ?? 0;
     res.setHeader('Cache-Control', 'private, no-store');
-    res.json({ latestVersion: latest, versions: rows.sort((a, b) => b.versionNumber - a.versionNumber).map((v) => serialize(v, latest)) });
+    res.json({
+      latestVersion: latest,
+      locked: rows.length > 0,
+      // No job number: files go under final-reports/_Unassigned/<inspectionId>/ (the section says so).
+      unassigned: !jobFolder(inspection.jobNo).replace(/^-+|-+$/g, ''),
+      versions: rows.sort((a, b) => b.versionNumber - a.versionNumber).map((v) => serialize(v, latest)),
+    });
   }));
 
   router.post('/', deps.requireAuth, allowed, receiveFile, rebindAuditContext, asyncHandler(async (req, res) => {
@@ -101,9 +112,9 @@ export function makeFinalReportsRouter(deps: FinalReportDeps) {
 
       const current = await deps.repo.listCurrent(id);
       const seenLatest = latestOf(current)?.versionNumber ?? 0;
-      const plan = planUpload(current, mode, basedOn);
+      const plan = planUpload(current, mode, basedOn, await deps.repo.highestVersion(id));
       const uploadId = randomUUID();
-      const blobPath = finalReportPath(id, plan.versionNumber, uploadId);
+      const blobPath = finalReportPath({ id, ...inspection }, plan.versionNumber, uploadId);
       await deps.store.put(blobPath, file.path, DOCX_CONTENT_TYPE);
 
       let result: Awaited<ReturnType<FinalReportRepo['commit']>>;
@@ -117,7 +128,7 @@ export function makeFinalReportsRouter(deps: FinalReportDeps) {
         await deps.store.discard(blobPath).catch(() => undefined);
         throw err;
       }
-      const { saved, replaced } = result;
+      const { saved, replaced, wasLocked } = result;
       await deps.audit({
         req,
         category: 'web',
@@ -130,6 +141,13 @@ export function makeFinalReportsRouter(deps: FinalReportDeps) {
         after: summary(saved),
         metadata: { versionNumber: saved.versionNumber, bytes: saved.sizeBytes, note: saved.note, mode: plan.kind, ...(replaced ? { replacedUploadId: replaced.id } : {}) },
       });
+      if (!wasLocked) {
+        await deps.audit({
+          req, category: 'web', action: 'report.locked', inspectionId: id, jobNo: inspection.jobNo,
+          target: { type: 'Inspection', id, label: inspection.jobNo }, message: 'Generated report locked: a final version was uploaded',
+          metadata: { versionNumber: saved.versionNumber, finalVersionId: saved.id },
+        });
+      }
       res.status(201).json({ version: serialize(saved, saved.versionNumber), replacedId: replaced?.id ?? null });
     } finally {
       if (file) await unlink(file.path).catch(() => undefined);
@@ -163,11 +181,49 @@ export function makeFinalReportsRouter(deps: FinalReportDeps) {
     blob.stream.pipe(res);
   }));
 
+  router.delete('/:versionId', deps.requireAuth, adminOnly, asyncHandler(async (req, res) => {
+    const id = inspectionIdOf(req);
+    const versionId = req.params.versionId;
+    if (!versionId || !UUID_RE.test(versionId)) throw ApiError.badRequest('Invalid version id');
+    const inspection = await deps.repo.assertCanView(id, req.user!);
+    const { deleted, remaining } = await deps.repo.softDelete(id, versionId, req.user!.id);
+    await deps.audit({
+      req, category: 'web', action: 'report.final_version.delete', inspectionId: id, jobNo: inspection.jobNo,
+      target: { type: 'ReportFinalVersion', id: deleted.id, label: `v${deleted.versionNumber} ${deleted.fileName}` },
+      message: `Final report Version ${deleted.versionNumber} deleted`, before: summary(deleted),
+      metadata: { versionNumber: deleted.versionNumber, remaining, fileKept: deleted.blobPath },
+    });
+    if (remaining === 0) {
+      await deps.audit({
+        req, category: 'web', action: 'report.unlocked', inspectionId: id, jobNo: inspection.jobNo,
+        target: { type: 'Inspection', id, label: inspection.jobNo }, message: 'Generated report unlocked: every final version was deleted',
+        metadata: { lastDeletedVersion: deleted.versionNumber },
+      });
+    }
+    res.json({ deletedId: deleted.id, remaining });
+  }));
+
   return router;
 }
 
+/** GET /api/v1/inspections/:id/report-lock -> { locked }: for the report page, so it can show the lock instead of the report. */
+export function makeReportLockRouter(deps: Pick<FinalReportDeps, 'repo' | 'requireAuth'> & { isLocked?: (id: string) => Promise<boolean> }) {
+  const router = Router({ mergeParams: true });
+  router.get('/', deps.requireAuth, asyncHandler(async (req, res) => {
+    const id = req.params.id;
+    if (!id || !UUID_RE.test(id)) throw ApiError.badRequest('Invalid inspection id');
+    await deps.repo.assertCanView(id, req.user!);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({ locked: await (deps.isLocked ?? isReportLocked)(id) });
+  }));
+  return router;
+}
+
+const prodRepo = prismaRepo(webService.assertCanViewInspection);
+export const reportLockRouter = makeReportLockRouter({ repo: prodRepo, requireAuth });
+
 export const finalReportsRouter = makeFinalReportsRouter({
-  repo: prismaRepo(webService.assertCanViewInspection),
+  repo: prodRepo,
   get store() { return defaultStore(); },
   audit,
   requireAuth,

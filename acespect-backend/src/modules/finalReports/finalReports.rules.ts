@@ -47,21 +47,23 @@ export function parseBasedOn(raw: unknown): number | undefined {
 }
 
 /**
- * What an upload does, given the versions listed now (replaced rows excluded).
- *  - nothing uploaded yet: Version 1, whatever was asked (the question is not asked for a first upload).
- *  - otherwise the person must have answered "Save as a new version?": Yes -> the next number, No -> replace the latest.
- *  - `basedOn` must match the latest version now, so an upload never lands on a version someone else added in the meantime.
+ * What an upload does, given the versions listed now (replaced and deleted rows excluded) and the highest version number this inspection has
+ * ever used (deleted and replaced rows included -- a number is never used twice).
+ *  - nothing listed: no question; the next unused number (Version 1 for an inspection's very first upload).
+ *  - otherwise the person must have answered "Save as a new version?": Yes -> the next unused number, No -> replace the latest listed one.
+ *  - `basedOn` must match the latest listed version now, so an upload never lands on a version someone else added in the meantime.
  */
-export function planUpload(current: CurrentVersion[], mode: UploadMode | undefined, basedOn: number | undefined): UploadPlan {
+export function planUpload(current: CurrentVersion[], mode: UploadMode | undefined, basedOn: number | undefined, highestEver = 0): UploadPlan {
   if (Number.isNaN(basedOn)) throw ApiError.badRequest('basedOn must be a whole number');
   const latest = latestOf(current);
   const latestNumber = latest?.versionNumber ?? 0;
+  const next = Math.max(highestEver, latestNumber) + 1;
   if (basedOn !== undefined && basedOn !== latestNumber) {
     throw new ApiError(409, 'The versions changed while you were uploading. Reload the list and upload again.', 'VERSIONS_CHANGED');
   }
-  if (!latest) return { kind: 'first', versionNumber: 1 };
+  if (!latest) return next === 1 ? { kind: 'first', versionNumber: 1 } : { kind: 'new', versionNumber: next };
   if (!mode) throw new ApiError(409, 'Choose whether to save this as a new version or replace the latest one.', 'VERSION_CHOICE_REQUIRED');
-  if (mode === 'new') return { kind: 'new', versionNumber: latest.versionNumber + 1 };
+  if (mode === 'new') return { kind: 'new', versionNumber: next };
   return { kind: 'replace', versionNumber: latest.versionNumber, replaces: latest };
 }
 
@@ -69,9 +71,40 @@ export function planUpload(current: CurrentVersion[], mode: UploadMode | undefin
 export const samePlan = (a: UploadPlan, b: UploadPlan): boolean =>
   a.kind === b.kind && a.versionNumber === b.versionNumber && (a.kind !== 'replace' || (b.kind === 'replace' && a.replaces.id === b.replaces.id));
 
-/** final-reports/<inspectionId>/v<n>-<uploadId>.docx */
-export const finalReportPath = (inspectionId: string, versionNumber: number, uploadId: string): string =>
-  `final-reports/${inspectionId}/v${versionNumber}-${uploadId}.docx`;
+/** A job number as a folder name: trimmed, upper-case, only letters, digits and "-" (anything else becomes "-"). Empty when there is none. */
+export function jobFolder(jobNo: string | null | undefined): string {
+  return (jobNo ?? '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '-');
+}
+
+/**
+ * The inspection type for the file name, so a Pre- and a Post-Dilapidation with the same job number stay apart. A Post-Dilapidation job is a
+ * Dilapidation inspection with a baseline (see the Inspection model). "pre_purchase" -> "Pre-Purchase", "Construction Stage" -> "Construction-Stage".
+ */
+export function inspectionTypeLabel(inspectionType: string | null | undefined, hasBaseline: boolean): string {
+  const words = (inspectionType ?? '').trim().toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  if (words.join('-') === 'dilapidation' || words.join('-') === 'pre-dilapidation') return hasBaseline ? 'Post-Dilapidation' : 'Pre-Dilapidation';
+  if (words.join('-') === 'post-dilapidation') return 'Post-Dilapidation';
+  const label = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('-');
+  return label || 'Inspection';
+}
+
+export interface PathInspection {
+  id: string;
+  jobNo: string | null;
+  inspectionType: string | null;
+  hasBaseline: boolean;
+}
+
+/**
+ * Where a version's file goes, for people browsing the storage (the database links versions by inspection id, not by this path):
+ *   final-reports/<JOB NUMBER>/<Inspection-Type>-v<n>-<uploadId>.docx
+ *   final-reports/_Unassigned/<inspectionId>/<Inspection-Type>-v<n>-<uploadId>.docx   (no job number)
+ */
+export function finalReportPath(inspection: PathInspection, versionNumber: number, uploadId: string): string {
+  const job = jobFolder(inspection.jobNo).replace(/^-+|-+$/g, '');
+  const folder = job ? job : `_Unassigned/${inspection.id}`;
+  return `final-reports/${folder}/${inspectionTypeLabel(inspection.inspectionType, inspection.hasBaseline)}-v${versionNumber}-${uploadId}.docx`;
+}
 
 /** The file name as shown and as saved on download: no path, no control characters, at most 200 characters, always ending .docx. */
 export function cleanFileName(name: string): string {

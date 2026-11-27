@@ -13,7 +13,7 @@ import { clientIp } from './middleware/clientIp';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { authRouter } from './modules/auth/auth.routes';
 import { inspectionsRouter } from './modules/inspections/inspections.routes';
-import { finalReportsRouter } from './modules/finalReports/finalReports.routes';
+import { finalReportsRouter, reportLockRouter } from './modules/finalReports/finalReports.routes';
 import { reviewRouter } from './modules/review/review.routes';
 import { templatesRouter } from './modules/templates/templates.routes';
 import { webRouter } from './modules/web/web.routes';
@@ -95,6 +95,7 @@ export function createApp() {
   app.use('/api/v1/auth', authRouter);
   // Final Report Versions (ADMIN / REVIEWER): its own router, so the inspection routes above are untouched.
   app.use('/api/v1/inspections/:id/final-versions', finalReportsRouter);
+  app.use('/api/v1/inspections/:id/report-lock', reportLockRouter);
   app.use('/api/v1/inspections', inspectionsRouter);
   app.use('/api/v1/review', reviewRouter);
   app.use('/api/v1/templates', templatesRouter);

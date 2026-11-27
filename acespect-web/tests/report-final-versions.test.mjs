@@ -112,3 +112,84 @@ describe("file checks and display", () => {
     assert.doesNotMatch(api, /blob\.core\.windows\.net|sas|sig=/i);
   });
 });
+
+describe("collapsible version list", () => {
+  const list = [version(4, true), version(3), version(1)];
+  it("is collapsed by default to the Current final (Version 0 is always shown)", () => {
+    assert.match(component, /const \[expanded, setExpanded\] = useState\(false\);/);
+    assert.deepEqual(fr.visibleVersions(list, false).map((v) => v.versionNumber), [4]);
+    assert.match(render("admin"), /data-final-version="0"/);
+  });
+
+  it('"Show all versions (n)" shows the rest, and collapses them again', () => {
+    assert.equal(fr.toggleLabel(list, false), "Show all versions (3)");
+    assert.deepEqual(fr.visibleVersions(list, true).map((v) => v.versionNumber), [4, 3, 1]);
+    assert.equal(fr.toggleLabel(list, true), "Hide older versions");
+    assert.equal(fr.toggleLabel([version(1, true)], false), null, "no toggle when there is nothing more");
+    assert.equal(fr.toggleLabel([], false), null);
+    assert.match(component, /data-final-toggle="" aria-expanded=\{expanded\} onClick=\{\(\) => setExpanded\(\(x\) => !x\)\}/);
+  });
+
+  it("remembers the choice only for the open page (no storage)", () => {
+    assert.doesNotMatch(component, /localStorage|sessionStorage|indexedDB/);
+  });
+});
+
+describe("deleting a version", () => {
+  it("is offered to admins only (the server refuses everyone else)", () => {
+    assert.equal(fr.canDeleteFinalVersions("admin"), true);
+    for (const role of ["reviewer", "inspector", undefined]) assert.equal(fr.canDeleteFinalVersions(role), false, String(role));
+    assert.match(component, /canDelete=\{canDeleteFinalVersions\(role\)\}/);
+    assert.match(component, /\{canDelete && \(\s*<button type="button" data-final-delete=\{v\.versionNumber\}/);
+  });
+
+  it("is on uploaded versions only, never on Version 0", () => {
+    const v0 = component.slice(component.indexOf('data-final-version="0"'));
+    assert.doesNotMatch(v0, /data-final-delete/);
+  });
+
+  it("asks first, naming the version", () => {
+    assert.match(component, /Delete Version \{confirmDelete\.versionNumber\} \(\{confirmDelete\.fileName\}\)\?/);
+    assert.match(component, /data-final-delete-yes="" disabled=\{deleting\} onClick=\{\(\) => void remove\(confirmDelete\)\}/);
+    assert.match(src("src/web/finalReports.ts"), /method: "DELETE"/);
+  });
+});
+
+describe("no job number", () => {
+  it('says "No job number: saved under Unassigned"', () => {
+    assert.match(component, /\{unassigned && <p data-final-unassigned="" [^>]*>No job number: saved under Unassigned<\/p>\}/);
+  });
+});
+
+describe("the generated report is locked once a final version exists", () => {
+  it("the report page asks the server and starts closed (nothing rendered until it knows)", () => {
+    assert.match(reportView, /getReportLock\(id\)\.then\(/);
+    assert.match(reportView, /useState<"checking" \| "locked" \| "unlocked" \| "error">\(printer \? "unlocked" : "checking"\)/);
+  });
+
+  it("hides Download PDF / Download Word / Print while locked", () => {
+    const start = reportView.indexOf('{reportLock === "unlocked" && (<>');
+    const end = reportView.indexOf("</>)}", start);
+    assert.ok(start > 0 && end > start);
+    const guarded = reportView.slice(start, end);
+    for (const b of ['handleDownload("pdf")', 'handleDownload("docx")', "window.print()"]) assert.ok(guarded.includes(b), b);
+    assert.match(reportView, /if \(!id \|\| reportLock !== "unlocked"\) return;/, "and the download itself refuses");
+  });
+
+  it("shows the lock message and does not render the report body", () => {
+    assert.match(reportView, /\{reportLock === "locked" \? \(/);
+    assert.match(reportView, /data-report-locked-message="" [^>]*>\{REPORT_LOCKED_MESSAGE\}/);
+    assert.equal(fr.REPORT_LOCKED_MESSAGE, "A final report has been uploaded for this inspection. Download it from Final Report Versions.");
+    const body = reportView.indexOf('className="report-page"');
+    const guard = reportView.lastIndexOf('{reportLock === "unlocked" && (', body);
+    assert.ok(guard > 0 && body - guard < 200, "the document page is inside the unlocked guard");
+  });
+
+  it("Final Report Versions stays, with the uploads downloadable and Version 0 locked", () => {
+    assert.match(component, /Locked: a final version has been uploaded/);
+    assert.match(component, /data-final-live="" onClick=\{onDownloadLive\} disabled=\{locked \|\| liveBusy\}/);
+    assert.match(reportView, /onLockChange=\{\(locked\) => setReportLock\(locked \? "locked" : "unlocked"\)\}/);
+    const lockedBox = reportView.indexOf("data-report-lock=");
+    assert.ok(reportView.indexOf("<FinalReportVersions") < lockedBox, "the section is shown above the lock message");
+  });
+});

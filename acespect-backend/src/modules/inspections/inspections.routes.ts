@@ -5,6 +5,7 @@ import { inspectionsService } from './inspections.service';
 import { inspectionsController } from './inspections.controller';
 import { validate } from '../../middleware/validate';
 import { requireAuth } from '../../middleware/auth';
+import { requireReportUnlocked } from '../../lib/reportLock';
 import { stripSignedMediaLinks } from '../../middleware/stripMediaSignatures';
 import { makeOriginalPhotosZip, makeSectionPhotosZip } from './photosZip';
 import { webService } from '../web/web.service';
@@ -48,12 +49,13 @@ router.get('/assigned', requireAuth, inspectionsController.listAssigned);
 router.patch('/:id', requireAuth, validate(updateInspectionSchema), inspectionsController.update);
 router.post('/:id/finalize', requireAuth, inspectionsController.finalize);
 router.get('/:id/baseline-sections', requireAuth, inspectionsController.getBaselineSections);
-router.get('/:id/report.pdf', requireAuth, inspectionsController.downloadReportPdf);
-router.get('/:id/report.docx', requireAuth, inspectionsController.downloadReportDocx);
+router.get('/:id/report.pdf', requireAuth, requireReportUnlocked, inspectionsController.downloadReportPdf);
+router.get('/:id/report.docx', requireAuth, requireReportUnlocked, inspectionsController.downloadReportDocx);
 // The same files made in the background, for large reports (lib/reportJobs.ts): start, ask how it is going, download.
-router.post('/:id/report-jobs', requireAuth, inspectionsController.createReportJob);
+// Every route that makes or hands out the generated report answers 423 once a final version is uploaded (lib/reportLock.ts).
+router.post('/:id/report-jobs', requireAuth, requireReportUnlocked, inspectionsController.createReportJob);
 router.get('/:id/report-jobs/:jobId', requireAuth, inspectionsController.getReportJob);
-router.get('/:id/report-jobs/:jobId/file', requireAuth, inspectionsController.downloadReportJob);
+router.get('/:id/report-jobs/:jobId/file', requireAuth, requireReportUnlocked, inspectionsController.downloadReportJob);
 // "Download all photos": signed-in and allowed to see the inspection, or a short-lived signed link from /photos-link. Never public.
 router.get('/sections/:sectionId/photos-link', requireAuth, sectionPhotosZip.link);
 router.get('/sections/:sectionId/photos.zip', sectionPhotosZip.access, sectionPhotosZip.download);

@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { InlineText } from "../components/InlineText";
 import { canEditInspection } from "../reviewerQueue";
-import { ArrowLeft, Printer, Download, FileText } from "lucide-react";
+import { ArrowLeft, Printer, Download, FileText, Lock } from "lucide-react";
 import type { FormSection } from "../mockData";
 import { buildReportHeader, withExcludedPhotosRemoved } from "../report";
 import { useAppData, useInspectionDetail } from "../data";
@@ -11,6 +11,7 @@ import { SignInAgainError } from "../reportJob";
 import { reportBackAction, reviewPagePath } from "../reportPage";
 import { ReportCover } from "../components/ReportCover";
 import { FinalReportVersions } from "../components/FinalReportVersions";
+import { getReportLock, REPORT_LOCKED_MESSAGE } from "../finalReports";
 import { sectionPhotoArchiveUrl } from "../photoArchive";
 import { ReportDescription } from "../components/ReportDescription";
 import { ReportScope } from "../components/ReportScope";
@@ -55,6 +56,20 @@ export function ReportView() {
   // The finished file, offered as a button here too ("Open PDF" / "Download Word"): the person clicks it, so the browser allows it.
   const [ready, setReady] = useState<ReadyReport | null>(null);
   const [signInAgain, setSignInAgain] = useState(false);
+  // Locked once a final version is uploaded (Final Report Versions): no download buttons and no report body, so it cannot be printed from
+  // the browser either -- the server refuses the report files for every role anyway. The report printer (headless, navigator.webdriver) is
+  // only ever sent here while unlocked (the server checks first), so it does not ask.
+  const printer = typeof navigator !== "undefined" && !!navigator.webdriver;
+  const [reportLock, setReportLock] = useState<"checking" | "locked" | "unlocked" | "error">(printer ? "unlocked" : "checking");
+  useEffect(() => {
+    if (printer || !id) return;
+    let live = true;
+    getReportLock(id).then(
+      (locked) => { if (live) setReportLock(locked ? "locked" : "unlocked"); },
+      () => { if (live) setReportLock("error"); },
+    );
+    return () => { live = false; };
+  }, [id, printer]);
 
   // The actual branded PDF (real logo, per-page footer, page breaks) --
   // generated server-side by the backend's own Puppeteer pipeline, not the
@@ -68,7 +83,7 @@ export function ReportView() {
   // browser cannot show) is saved from that tab under its proper name. If the browser blocks new tabs, the file downloads here as before.
   // (the body is openReportFile in reportFile.ts)
   async function handleDownload(format: "pdf" | "docx") {
-    if (!id) return;
+    if (!id || reportLock !== "unlocked") return;
     setDownloading(true);
     setDownloadError(null);
     setReady(null);
@@ -195,7 +210,7 @@ export function ReportView() {
           {signInAgain && (
             <a href={signInAgainHref()} data-report-sign-in="" style={{ fontSize: "12px", fontWeight: 700, color: reportTokens.accent }}>Sign in again</a>
           )}
-          {ready && !downloading && (
+          {ready && !downloading && reportLock === "unlocked" && (
             <button
               type="button"
               onClick={() => ready.open()}
@@ -209,6 +224,7 @@ export function ReportView() {
           {downloading && progress && (
             <span role="status" data-report-progress="" style={{ fontSize: "12px", color: "#475569", fontWeight: 600 }}>{progress}</span>
           )}
+          {reportLock === "unlocked" && (<>
           <button
             onClick={() => handleDownload("pdf")}
             disabled={downloading}
@@ -271,16 +287,35 @@ export function ReportView() {
           >
             <Printer size={15} /> Print
           </button>
+          </>)}
         </div>
       </div>
 
       {/* Final Report Versions (admin / reviewer; on screen only -- never in the PDF / Word file the server makes from this page). Version 0's
           Download is this page's own Download Word. */}
       {currentUser && !(typeof navigator !== "undefined" && navigator.webdriver) && (
-        <FinalReportVersions inspectionId={inspection.id} role={currentUser.role} onDownloadLive={() => handleDownload("docx")} liveBusy={downloading} />
+        <FinalReportVersions inspectionId={inspection.id} role={currentUser.role} onDownloadLive={() => handleDownload("docx")} liveBusy={downloading}
+          onLockChange={(locked) => setReportLock(locked ? "locked" : "unlocked")} />
       )}
 
-      {/* The document page */}
+      {reportLock !== "unlocked" && (
+        <div className="report-toolbar" data-report-lock={reportLock} role={reportLock === "locked" ? "alert" : "status"}
+          style={{ maxWidth: "820px", margin: "0 auto", background: "white", borderRadius: "10px", border: `1px solid ${reportLock === "locked" ? "#fcd34d" : "#e5e7eb"}`, padding: "28px 24px", textAlign: "center", color: "#1a2a4a", fontFamily: "Inter, system-ui, sans-serif" }}>
+          {reportLock === "locked" ? (
+            <>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: 800 }}><Lock size={16} /> Report locked</div>
+              <p data-report-locked-message="" style={{ margin: "8px 0 0", fontSize: "14px", color: "#334155" }}>{REPORT_LOCKED_MESSAGE}</p>
+            </>
+          ) : reportLock === "error" ? (
+            <p style={{ margin: 0, fontSize: "14px", color: "#b91c1c" }}>Could not check whether this report is locked. Reload the page to try again.</p>
+          ) : (
+            <p style={{ margin: 0, fontSize: "14px", color: "#94a3b8" }}>Loading…</p>
+          )}
+        </div>
+      )}
+
+      {/* The document page (not rendered while the report is locked, or until that is known) */}
+      {reportLock === "unlocked" && (
       <div
         className="report-page"
         style={{
@@ -387,6 +422,7 @@ export function ReportView() {
           </>
         )}
       </div>
+      )}
     </div>
   );
 

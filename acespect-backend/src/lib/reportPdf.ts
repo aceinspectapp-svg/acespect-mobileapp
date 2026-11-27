@@ -5,6 +5,7 @@ import { ApiError } from '../utils/ApiError';
 import { reportBrowserPath } from './reportBrowserSetup';
 import { HOUSPECT_LOGO_DATA_URI } from './assets/houspectLogoBase64';
 import { photosFailedMessage, routeReportPhotos, type ReportPhotoLog } from './reportPhotos';
+import { assertReportUnlocked } from './reportLock';
 
 /**
  * Renders the inspection report to a real PDF by pointing a headless browser
@@ -154,6 +155,8 @@ export async function withReportPage<T>(
   use: (page: Page) => Promise<T>,
   options: ReportPageOptions = {},
 ): Promise<T> {
+  // Locked once a final version is uploaded (lib/reportLock.ts): the printer refuses before opening anything, whoever asks.
+  await assertReportUnlocked(inspectionId);
   const timer = new ReportTimer();
   // 'waiting' only when this report really has to wait for others to finish (at most REPORT_MAX_CONCURRENT run at once).
   if (running >= MAX_RUNNING) options.onStage?.('waiting');
@@ -162,6 +165,8 @@ export async function withReportPage<T>(
   options.onStage?.('opening');
   let outcome = 'failed';
   try {
+    // Asked again after waiting its turn: a final version may have been uploaded meanwhile.
+    await assertReportUnlocked(inspectionId);
     const result = await withReportPageNow(inspectionId, authToken, use, options, timer);
     outcome = Buffer.isBuffer(result) ? `${(result.length / 1048576).toFixed(1)} MB` : 'done';
     return result;

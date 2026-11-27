@@ -66,7 +66,16 @@ async function failure(res: Response): Promise<Error & { status?: number; code?:
   return Object.assign(new Error(message), { status: res.status, code });
 }
 
-export async function listFinalVersions(inspectionId: string): Promise<{ latestVersion: number; versions: FinalVersion[] }> {
+export interface FinalVersionList {
+  latestVersion: number;
+  /** At least one uploaded version: the generated report is locked (no role can make or download it). */
+  locked: boolean;
+  /** The inspection has no job number: files are saved under final-reports/_Unassigned/<inspectionId>/. */
+  unassigned: boolean;
+  versions: FinalVersion[];
+}
+
+export async function listFinalVersions(inspectionId: string): Promise<FinalVersionList> {
   const res = await fetchWithRefresh(base(inspectionId), { headers: headers() });
   if (!res.ok) throw await failure(res);
   return res.json();
@@ -107,6 +116,37 @@ export async function uploadFinalVersion(inspectionId: string, r: UploadRequest,
     };
     xhr.send(form);
   });
+}
+
+/** Soft delete (ADMIN only; the server refuses everyone else). The file is kept; the version is hidden and its number never reused. */
+export async function deleteFinalVersion(inspectionId: string, versionId: string): Promise<{ remaining: number }> {
+  const res = await fetchWithRefresh(`${base(inspectionId)}/${encodeURIComponent(versionId)}`, { method: "DELETE", headers: headers() });
+  if (!res.ok) throw await failure(res);
+  return res.json();
+}
+
+/** Whether the generated report is locked (for anyone who may open the inspection). */
+export async function getReportLock(inspectionId: string): Promise<boolean> {
+  const res = await fetchWithRefresh(`${API_BASE}/inspections/${encodeURIComponent(inspectionId)}/report-lock`, { headers: headers() });
+  if (!res.ok) throw await failure(res);
+  return !!(await res.json()).locked;
+}
+
+/** The server's words when the report is locked (also on its 423 answers). */
+export const REPORT_LOCKED_MESSAGE = "A final report has been uploaded for this inspection. Download it from Final Report Versions.";
+
+/** Only an admin may delete a version (the server refuses everyone else). */
+export const canDeleteFinalVersions = (role: string | null | undefined): boolean => role === "admin";
+
+/** Collapsed: only the Current final row (Version 0 is always shown). Expanded: every uploaded version, newest first. */
+export const visibleVersions = (versions: readonly FinalVersion[], expanded: boolean): FinalVersion[] =>
+  expanded ? [...versions] : versions.filter((v) => v.current);
+
+/** How many uploaded versions the toggle reveals, and its words. Null when there is nothing more to show. */
+export function toggleLabel(versions: readonly FinalVersion[], expanded: boolean): string | null {
+  const more = versions.filter((v) => !v.current).length;
+  if (more === 0) return null;
+  return expanded ? "Hide older versions" : `Show all versions (${versions.length})`;
 }
 
 /** Downloads one uploaded version through the API (signed in; the server checks the role) and saves it under its file name. */
